@@ -1,0 +1,257 @@
+package router
+
+import (
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
+
+	"strong-fish-api/internal/handlers"
+	"strong-fish-api/internal/middleware"
+	"strong-fish-api/internal/store"
+)
+
+// Handlers bundles every handler the router wires up, so adding one doesn't mean
+// threading another positional argument through main.
+type Handlers struct {
+	User     *handlers.UserHandler
+	MFA      *handlers.MFAHandler
+	OIDC     *handlers.OIDCHandler
+	Club     *handlers.ClubHandler
+	Exercise *handlers.ExerciseHandler
+	Program  *handlers.ProgramHandler
+	Training *handlers.TrainingHandler
+	Social   *handlers.SocialHandler
+	Profile  *handlers.ProfileHandler
+	Admin    *handlers.AdminHandler
+	Config   *handlers.ConfigHandler
+}
+
+// Options carries the settings the middleware chain needs.
+type Options struct {
+	JWTSecret          string
+	ActivationMode     string
+	CorsEnabled        bool
+	CorsAllowedOrigins []string
+	ManifestPath       string
+}
+
+func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) http.Handler {
+	r := chi.NewRouter()
+
+	if o.CorsEnabled {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins: o.CorsAllowedOrigins,
+			AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders: []string{"Authorization", "Content-Type"},
+		}))
+	}
+
+	// authenticated wraps a route group in "logged in and not disabled/banned".
+	authenticated := func(fn func(chi.Router)) func(chi.Router) {
+		return func(r chi.Router) {
+			r.Use(middleware.Auth(o.JWTSecret))
+			r.Use(middleware.RequireActiveUser(users, o.ActivationMode))
+			fn(r)
+		}
+	}
+
+	r.Route("/v1", func(r chi.Router) {
+		// --- public ---
+		r.Get("/health", handlers.Health)
+		r.Get("/manifest", handlers.NewManifestHandler(o.ManifestPath))
+		r.Get("/config", h.Config.Get)
+		r.Get("/assets/logo.png", handlers.AssetsLogo)
+
+		r.Route("/oidc", func(r chi.Router) {
+			r.Get("/", h.OIDC.ListProviders)
+			r.Get("/callback", h.OIDC.FrontendCallback)
+			r.Get("/{provider}/login", h.OIDC.Login)
+			r.Get("/{provider}/callback", h.OIDC.Callback)
+		})
+
+		r.Get("/user/confirmation", h.User.Confirm)
+
+		r.Route("/users", func(r chi.Router) {
+			r.Post("/", h.User.Register)
+			r.Post("/login", h.User.Login)
+			r.Post("/forgot-password", h.User.ForgotPassword)
+			r.Post("/reset-password", h.User.ResetPassword)
+
+			// Finishing a login gated by MFA: these carry their own short-lived
+			// challenge/ceremony token instead of a session, so they sit outside
+			// the authenticated group.
+			r.Route("/login/mfa", func(r chi.Router) {
+				r.Post("/totp", h.MFA.LoginTOTP)
+				r.Post("/webauthn/begin", h.MFA.LoginWebAuthnBegin)
+				r.Post("/webauthn/finish", h.MFA.LoginWebAuthnFinish)
+			})
+
+			// /me needs a session but must stay reachable by a disabled account,
+			// so it can be told why it's blocked.
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.Auth(o.JWTSecret))
+				r.Get("/me", h.User.Me)
+			})
+
+			r.Group(authenticated(func(r chi.Router) {
+				r.Put("/me", h.User.UpdateProfile)
+				r.Put("/me/picture", h.User.UpdatePicture)
+				r.Get("/search", h.User.Search)
+
+				r.Route("/me/mfa", func(r chi.Router) {
+					r.Get("/", h.MFA.Status)
+					r.Post("/totp/setup", h.MFA.TOTPSetup)
+					r.Post("/totp/confirm", h.MFA.TOTPConfirm)
+					r.Delete("/totp", h.MFA.TOTPDisable)
+					r.Post("/webauthn/begin", h.MFA.WebAuthnRegisterBegin)
+					r.Post("/webauthn/finish", h.MFA.WebAuthnRegisterFinish)
+					r.Delete("/webauthn/{credentialId}", h.MFA.WebAuthnDelete)
+				})
+			}))
+		})
+
+		// Public profiles are readable logged out when their owner opted in, so
+		// a shared link works; OptionalAuth still identifies a logged-in caller
+		// so their own follow state and club-only posts come through.
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.OptionalAuth(o.JWTSecret))
+			r.Get("/profiles/{handle}", h.Profile.Get)
+			r.Get("/profiles/{handle}/posts", h.Profile.Posts)
+			r.Get("/profiles/{handle}/follows", h.Social.ListFollows)
+		})
+
+		// --- authenticated ---
+		r.Group(authenticated(func(r chi.Router) {
+			r.Post("/profiles/{handle}/follow", h.Social.Follow)
+			r.Delete("/profiles/{handle}/follow", h.Social.Unfollow)
+
+			// The exercise catalog is shared across every club: any member can
+			// read it (it names the movements in their program), and any coach
+			// can extend it.
+			r.Route("/exercises", func(r chi.Router) {
+				r.Get("/", h.Exercise.List)
+
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireCoach(users))
+					r.Post("/", h.Exercise.Create)
+					r.Put("/{exerciseId}", h.Exercise.Update)
+					r.Delete("/{exerciseId}", h.Exercise.Delete)
+				})
+			})
+
+			// A member's own 1RMs. Updating one is what recomputes every set of
+			// every program they're running.
+			r.Route("/one-rms", func(r chi.Router) {
+				r.Get("/", h.Exercise.ListOneRMs)
+				r.Put("/{exerciseId}", h.Exercise.SetOneRM)
+				r.Delete("/{exerciseId}", h.Exercise.DeleteOneRM)
+			})
+
+			r.Route("/clubs", func(r chi.Router) {
+				r.Get("/", h.Club.List)
+
+				r.With(middleware.RequireCoach(users)).Post("/", h.Club.Create)
+
+				r.Route("/{clubId}", func(r chi.Router) {
+					r.Use(middleware.ClubMembership(clubs, users))
+
+					// manager restricts one endpoint to the club's owner and
+					// admins. It's applied per-route rather than by wrapping a
+					// whole group, because a group and a plain route can't both
+					// claim the same path prefix - mounting a "/programs"
+					// subrouter alongside a "/programs" handler makes the
+					// handler unreachable.
+					manager := func(r chi.Router) chi.Router { return r.With(middleware.RequireClubManager) }
+
+					r.Get("/", h.Club.Get)
+					manager(r).Put("/", h.Club.Update)
+					manager(r).Delete("/", h.Club.Delete)
+					manager(r).Post("/transfer", h.Club.TransferOwnership)
+					manager(r).Get("/feedback", h.Program.ListFeedback)
+					r.Get("/feed", h.Social.ClubFeed)
+
+					r.Route("/members", func(r chi.Router) {
+						r.Get("/", h.Club.ListMembers)
+						r.Delete("/me", h.Club.Leave)
+						manager(r).Post("/", h.Club.AddMember)
+						manager(r).Put("/{userId}", h.Club.SetMemberRole)
+						manager(r).Delete("/{userId}", h.Club.RemoveMember)
+					})
+
+					r.Route("/programs", func(r chi.Router) {
+						r.Get("/", h.Program.List)
+						manager(r).Post("/import", h.Program.Import)
+
+						r.Route("/{programId}", func(r chi.Router) {
+							r.Get("/", h.Program.Get)
+							manager(r).Put("/", h.Program.Update)
+							manager(r).Delete("/", h.Program.Delete)
+							manager(r).Post("/days/{dayId}/sets", h.Program.AddSet)
+							manager(r).Put("/sets/{setId}", h.Program.UpdateSet)
+							manager(r).Delete("/sets/{setId}", h.Program.DeleteSet)
+							manager(r).Get("/assignments", h.Program.ListAssignments)
+							manager(r).Post("/assignments", h.Program.Assign)
+							manager(r).Delete("/assignments/{assignmentId}", h.Program.Unassign)
+						})
+					})
+				})
+			})
+
+			// The member's own training: the programs assigned to them, and the
+			// feedback they leave on each set.
+			r.Route("/training", func(r chi.Router) {
+				r.Get("/", h.Training.ListAssignments)
+				r.Route("/{assignmentId}", func(r chi.Router) {
+					r.Get("/", h.Training.Get)
+					r.Put("/status", h.Training.SetStatus)
+					r.Put("/sets/{setId}/log", h.Training.LogSet)
+					r.Delete("/sets/{setId}/log", h.Training.DeleteLog)
+				})
+			})
+
+			// The social feed.
+			r.Route("/posts", func(r chi.Router) {
+				r.Get("/", h.Social.Feed)
+				r.Get("/discover", h.Social.Discover)
+				r.Post("/", h.Social.CreatePost)
+
+				r.Route("/{postId}", func(r chi.Router) {
+					r.Get("/", h.Social.GetPost)
+					r.Put("/", h.Social.UpdatePost)
+					r.Delete("/", h.Social.DeletePost)
+					r.Post("/like", h.Social.Like)
+					r.Delete("/like", h.Social.Unlike)
+
+					r.Route("/comments", func(r chi.Router) {
+						r.Get("/", h.Social.ListComments)
+						r.Post("/", h.Social.CreateComment)
+						r.Put("/{commentId}", h.Social.UpdateComment)
+						r.Delete("/{commentId}", h.Social.DeleteComment)
+					})
+				})
+			})
+
+			r.Post("/reports", h.Social.Report)
+
+			// --- superadmin ---
+			r.Route("/admin", func(r chi.Router) {
+				r.Use(middleware.RequireSuperadmin(users))
+
+				r.Get("/stats", h.Admin.Stats)
+				r.Get("/clubs", h.Club.ListAll)
+				r.Get("/reports", h.Social.ListReports)
+				r.Put("/reports/{reportId}", h.Social.ResolveReport)
+
+				r.Route("/users", func(r chi.Router) {
+					r.Get("/", h.Admin.ListUsers)
+					r.Put("/{userId}", h.Admin.UpdateUser)
+					r.Delete("/{userId}", h.Admin.DeleteUser)
+					r.Delete("/{userId}/mfa", h.Admin.ClearMFA)
+				})
+			})
+		}))
+	})
+
+	return r
+}

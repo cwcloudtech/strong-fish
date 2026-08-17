@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16-alpine
+    env_file:
+      - .env.example
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-strongfish} -d ${POSTGRES_DB:-strongfish}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  flyway:
+    image: flyway/flyway:10-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      -url=jdbc:postgresql://db:5432/${POSTGRES_DB:-strongfish}
+      -user=${POSTGRES_USER:-strongfish}
+      -password=${POSTGRES_PASSWORD:-strongfish}
+      -connectRetries=10
+      migrate
+    volumes:
+      - ./sf-db:/flyway/sql
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+    env_file:
+      - .env.example
+    ports:
+      - "8080:8080"
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ui
+    env_file:
+      - .env.example
+    depends_on:
+      - api
+    ports:
+      - "3000:80"
+
+volumes:
+  db-data:
