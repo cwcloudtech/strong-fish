@@ -1,0 +1,226 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../api/api_client.dart';
+import '../api/api_exception.dart';
+import '../api/services.dart';
+import '../i18n/app_localizations.dart';
+import '../models/models.dart';
+
+/// The default API URL. It's overridable at runtime (see [SessionNotifier.setApiUrl])
+/// because a club typically runs its own server, so a single build has to be
+/// able to point anywhere.
+const String defaultApiUrl = String.fromEnvironment('SF_API_URL', defaultValue: 'https://api.strong-fish.app');
+
+const _tokenKey = 'sf.token';
+const _apiUrlKey = 'sf.apiUrl';
+const _localeKey = 'sf.locale';
+const _themeKey = 'sf.theme';
+
+final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
+
+final apiProvider = Provider<SfApi>((ref) => SfApi(ref.watch(apiClientProvider)));
+
+/// restoring (checking storage at boot) | missing (no usable session, show the
+/// login screen) | connected (ready for the app).
+enum SessionStatus { restoring, missing, connected }
+
+class SessionState {
+  final SessionStatus status;
+  final User? user;
+  final String apiUrl;
+
+  const SessionState({
+    this.status = SessionStatus.restoring,
+    this.user,
+    this.apiUrl = defaultApiUrl,
+  });
+
+  SessionState copyWith({SessionStatus? status, User? user, String? apiUrl, bool clearUser = false}) =>
+      SessionState(
+        status: status ?? this.status,
+        user: clearUser ? null : (user ?? this.user),
+        apiUrl: apiUrl ?? this.apiUrl,
+      );
+}
+
+/// Holds the session. The token lives in secure storage (it is a credential);
+/// the API URL and UI preferences live in shared preferences.
+class SessionNotifier extends Notifier<SessionState> {
+  static const _storage = FlutterSecureStorage();
+
+  @override
+  SessionState build() => const SessionState();
+
+  ApiClient get _client => ref.read(apiClientProvider);
+  SfApi get _api => ref.read(apiProvider);
+
+  /// Runs once at boot: restores a saved session and confirms the token is
+  /// still accepted, since it may have expired or the account may have been
+  /// banned since it was issued.
+  Future<void> restore() async {
+    final prefs = await SharedPreferences.getInstance();
+    final apiUrl = prefs.getString(_apiUrlKey) ?? defaultApiUrl;
+    _client.setApiUrl(apiUrl);
+
+    final token = await _readToken();
+    if (token == null || token.isEmpty) {
+      state = state.copyWith(status: SessionStatus.missing, apiUrl: apiUrl);
+      return;
+    }
+
+    _client.setToken(token);
+    try {
+      final user = await _api.me();
+      state = SessionState(status: SessionStatus.connected, user: user, apiUrl: apiUrl);
+    } catch (_) {
+      // Any failure here means the stored token is unusable; drop it rather
+      // than leaving the app in a half-signed-in state.
+      await logout();
+      state = state.copyWith(apiUrl: apiUrl);
+    }
+  }
+
+  /// Reads the token, tolerating a secure-storage backend that isn't available
+  /// (a device without a keystore) rather than crashing the launch.
+  Future<String?> _readToken() async {
+    try {
+      return await _storage.read(key: _tokenKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> setApiUrl(String url) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_apiUrlKey, url);
+    _client.setApiUrl(url);
+    state = state.copyWith(apiUrl: url);
+  }
+
+  Future<User> completeLogin(String token) async {
+    try {
+      await _storage.write(key: _tokenKey, value: token);
+    } catch (_) {
+      // A device without secure storage still gets a working session for this
+      // run; it just won't survive a restart.
+    }
+    _client.setToken(token);
+    final user = await _api.me();
+    state = state.copyWith(status: SessionStatus.connected, user: user);
+    return user;
+  }
+
+  Future<void> refresh() async {
+    if (!_client.hasSession) return;
+    try {
+      state = state.copyWith(user: await _api.me());
+    } on Object catch (error) {
+      if (asApiException(error).isUnauthorized) await logout();
+    }
+  }
+
+  Future<void> logout() async {
+    try {
+      await _storage.delete(key: _tokenKey);
+    } catch (_) {
+      // Nothing to clean up if secure storage was never available.
+    }
+    _client.clearSession();
+    state = SessionState(status: SessionStatus.missing, apiUrl: state.apiUrl);
+  }
+}
+
+final sessionProvider = NotifierProvider<SessionNotifier, SessionState>(SessionNotifier.new);
+
+/// The app's language, persisted and defaulting to the device's.
+class LocaleNotifier extends Notifier<String> {
+  @override
+  String build() => 'en';
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString(_localeKey);
+    if (stored != null && dictionaries.containsKey(stored)) {
+      state = stored;
+      return;
+    }
+    final device = WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+    state = dictionaries.containsKey(device) ? device : 'en';
+  }
+
+  Future<void> set(String locale) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_localeKey, locale);
+    state = locale;
+  }
+}
+
+final localeProvider = NotifierProvider<LocaleNotifier, String>(LocaleNotifier.new);
+
+/// A translate function bound to the current locale, so widgets call `t('...')`.
+final tProvider = Provider<String Function(String, [Map<String, String>?])>((ref) {
+  final locale = ref.watch(localeProvider);
+  return (key, [vars]) => translate(locale, key, vars);
+});
+
+/// Translates an API failure into the current locale.
+final tErrorProvider = Provider<String Function(Object)>((ref) {
+  final locale = ref.watch(localeProvider);
+  return (error) => translateError(locale, asApiException(error));
+});
+
+class ThemeModeNotifier extends Notifier<ThemeMode> {
+  @override
+  ThemeMode build() => ThemeMode.system;
+
+  Future<void> load() async {
+    final prefs = await SharedPreferences.getInstance();
+    switch (prefs.getString(_themeKey)) {
+      case 'light':
+        state = ThemeMode.light;
+      case 'dark':
+        state = ThemeMode.dark;
+      default:
+        state = ThemeMode.system;
+    }
+  }
+
+  Future<void> set(ThemeMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_themeKey, mode.name);
+    state = mode;
+  }
+}
+
+final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
+
+/// The exercise catalog, loaded once and reused by the 1RM screen.
+final exercisesProvider = FutureProvider<List<Exercise>>((ref) async {
+  // Rebuilds when the session changes, so signing in as someone else doesn't
+  // serve the previous account's cached list.
+  ref.watch(sessionProvider.select((session) => session.user?.id));
+  return ref.watch(apiProvider).exercises();
+});
+
+final oneRmsProvider = FutureProvider<List<OneRm>>((ref) async {
+  ref.watch(sessionProvider.select((session) => session.user?.id));
+  return ref.watch(apiProvider).oneRms();
+});
+
+final assignmentsProvider = FutureProvider<List<Assignment>>((ref) async {
+  ref.watch(sessionProvider.select((session) => session.user?.id));
+  return ref.watch(apiProvider).assignments();
+});
+
+final assignmentProvider =
+    FutureProvider.family<AssignmentDetail, String>((ref, assignmentId) async {
+  return ref.watch(apiProvider).assignment(assignmentId);
+});
+
+final clubsProvider = FutureProvider<List<Club>>((ref) async {
+  ref.watch(sessionProvider.select((session) => session.user?.id));
+  return ref.watch(apiProvider).clubs();
+});

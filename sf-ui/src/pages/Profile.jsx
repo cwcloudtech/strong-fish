@@ -1,0 +1,155 @@
+import { useCallback, useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+
+import { profiles } from "../api/services";
+import Avatar from "../components/common/Avatar";
+import PostCard from "../components/feed/PostCard";
+import { EmptyState, ErrorMessage, Spinner } from "../components/common/Feedback";
+import { useAuth } from "../context/AuthContext";
+import { useI18n } from "../i18n/I18nContext";
+
+const ROLE_LABELS = { coach: "profile.coach", superadmin: "profile.superadmin", confirmed: "profile.athlete" };
+
+/**
+ * A member's or coach's public profile. It works logged out - that's the point
+ * of a shareable link - so nothing here assumes a session; the follow button and
+ * the club-only posts simply don't appear for an anonymous visitor.
+ */
+export default function Profile() {
+  const { t, locale } = useI18n();
+  const { user } = useAuth();
+  const { handle } = useParams();
+
+  const [profile, setProfile] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(() => {
+    profiles.get(handle).then(setProfile).catch(setError);
+    profiles
+      .posts(handle)
+      .then((page) => setPosts(page.results))
+      .catch(() => setPosts([]));
+  }, [handle]);
+
+  useEffect(load, [load]);
+
+  const toggleFollow = async () => {
+    try {
+      if (profile.followed) await profiles.unfollow(handle);
+      else await profiles.follow(handle);
+      setProfile(await profiles.get(handle));
+    } catch (err) {
+      setError(err);
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="sf-page">
+        <EmptyState title={t("profile.notFound")} />
+        <div style={{ textAlign: "center" }}>
+          <Link className="sf-button" to={user ? "/dashboard/feed" : "/login"}>
+            {user ? t("nav.feed") : t("auth.login")}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+  if (!profile) return <Spinner />;
+
+  const isSelf = user?.id === profile.id;
+
+  return (
+    <div className="sf-page" style={{ maxWidth: 720 }}>
+      <div className="sf-card">
+        <div className="sf-profile-header">
+          <Avatar user={profile} size="sf-avatar-lg" />
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div className="sf-row-between">
+              <div>
+                <h1 style={{ marginBottom: 0 }}>
+                  {profile.name} {profile.surname}
+                </h1>
+                <div className="sf-muted">
+                  @{profile.handle} · {t(ROLE_LABELS[profile.role] || "profile.athlete")}
+                  {profile.bodyweight ? ` · ${profile.bodyweight} ${t("common.kg")}` : ""}
+                </div>
+              </div>
+              {user && !isSelf ? (
+                <button className={`sf-button ${profile.followed ? "sf-button-secondary" : ""}`} onClick={toggleFollow}>
+                  {profile.followed ? t("profile.unfollow") : t("profile.follow")}
+                </button>
+              ) : null}
+              {isSelf ? (
+                <Link className="sf-button sf-button-secondary" to="/dashboard/settings">
+                  {t("common.edit")}
+                </Link>
+              ) : null}
+            </div>
+
+            {profile.bio ? <p>{profile.bio}</p> : null}
+
+            <div className="sf-profile-stats">
+              <div>
+                <span className="sf-stat-value">{profile.followers}</span>
+                <span className="sf-stat-label">{t("profile.followers")}</span>
+              </div>
+              <div>
+                <span className="sf-stat-value">{profile.following}</span>
+                <span className="sf-stat-label">{t("profile.following")}</span>
+              </div>
+              {profile.clubs?.length ? (
+                <div>
+                  <span className="sf-stat-value">{profile.clubs.length}</span>
+                  <span className="sf-stat-label">{t("profile.clubs")}</span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {profile.bests?.length ? (
+          <div className="sf-bests">
+            {profile.bests.map((best) => (
+              <div key={best.exerciseId} className="sf-best">
+                <span className="sf-best-value">
+                  {best.value} {t("common.kg")}
+                </span>
+                <span className="sf-stat-label">{best.labels?.[locale] || best.labels?.en || best.slug}</span>
+              </div>
+            ))}
+            <div className="sf-best">
+              <span className="sf-best-value">
+                {profile.total} {t("common.kg")}
+              </span>
+              <span className="sf-stat-label">{t("profile.total")}</span>
+            </div>
+          </div>
+        ) : null}
+
+        {profile.clubs?.length ? (
+          <p className="sf-muted" style={{ marginTop: "0.9rem", marginBottom: 0 }}>
+            {t("profile.clubs")}: {profile.clubs.map((club) => `${club.name} (${t(`clubs.${club.role}`)})`).join(", ")}
+          </p>
+        ) : null}
+      </div>
+
+      <h2>{t("profile.posts")}</h2>
+      {posts.length === 0 ? (
+        <EmptyState message={t("profile.noPosts")} />
+      ) : (
+        posts.map((post) => (
+          <PostCard
+            key={post.id}
+            post={post}
+            onChanged={(updated) => setPosts((current) => current.map((item) => (item.id === updated.id ? updated : item)))}
+            onDeleted={(postId) => setPosts((current) => current.filter((item) => item.id !== postId))}
+          />
+        ))
+      )}
+
+      <ErrorMessage error={error} />
+    </div>
+  );
+}

@@ -1,0 +1,23 @@
+.DS_Store
+.env
+*.log
+
+# sf-api
+sf-api/sf-api
+sf-api/dist/
+
+# sf-ui
+node_modules/
+sf-ui/build/
+
+# sf-mobile
+sf-mobile/.dart_tool/
+sf-mobile/build/
+sf-mobile/.flutter-plugins
+sf-mobile/.flutter-plugins-dependencies
+sf-mobile/android/.gradle/
+sf-mobile/android/local.properties
+sf-mobile/android/app/debug/
+sf-mobile/android/app/release/
+*.keystore
+!mobile-release.keystore

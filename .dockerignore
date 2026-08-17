@@ -1,0 +1,5 @@
+**/node_modules
+**/build
+**/.dart_tool
+**/.git
+ai-gen
