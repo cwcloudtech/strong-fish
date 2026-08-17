@@ -9,6 +9,8 @@ The stack will be based on the one used by `~/cwclock`:
 * React for the web-frontend (`sf-ui` folder)
 * Flutter for the mobile app (`sf-mobile` folder)
 
+I want I18N in English and French.
+
 The app will have the following rules:
 * everyone can subscribe (as `~/cwclock` I want to use the `cwcloud` email api with the righ environment variable)
 * there's superadmin role and coach role
@@ -46,3 +48,9 @@ Picture can be uploaded and stored as b64 in the payload.
 I want MFA with USB device as yubikey and TOPT apps like in `~/cwclock`.
 
 I want OIDC optional variables for Google, Github and keycloack.
+
+# Exercice
+
+Each coach can add a type of exercice (larsen press, deadlift, etc), and it'll be seen with autocomplete for filling program to every other coach or superuser.
+
+In a SQL migration I want you to prepare the existing exercices from [`./assets/program.xlsx`](./assets/program.xlsx) and in the data's jsonb payload I want fr and en labels.
