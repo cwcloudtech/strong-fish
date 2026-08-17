@@ -2,6 +2,7 @@
   "name": "strong-fish-ui",
   "version": "1.0.0",
   "private": true,
+  "//typescript": "This app is plain JavaScript and never imports TypeScript. The devDependency pin exists because react-scripts' own fork-ts-checker-webpack-plugin declares a non-optional 'typescript >= 2.7' peer, so npm resolves the latest major (7.x) - which violates react-scripts' own peer range of '^3.2.1 || ^4'. `npm install` tolerates the conflict, but `npm ci` validates it and refuses, which breaks the Docker build. Pinning to 4.x satisfies both ranges.",
   "proxy": "http://localhost:8080",
   "dependencies": {
     "axios": "^1.7.7",
@@ -13,6 +14,9 @@
     "react-router-dom": "^6.26.2",
     "react-scripts": "5.0.1",
     "react-toastify": "^10.0.5"
+  },
+  "devDependencies": {
+    "typescript": "^4.9.5"
   },
   "scripts": {
     "start": "react-scripts start",
