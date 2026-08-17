@@ -54,3 +54,9 @@ I want OIDC optional variables for Google, Github and keycloack.
 Each coach can add a type of exercice (larsen press, deadlift, etc), and it'll be seen with autocomplete for filling program to every other coach or superuser.
 
 In a SQL migration I want you to prepare the existing exercices from [`./assets/program.xlsx`](./assets/program.xlsx) and in the data's jsonb payload I want fr and en labels.
+
+# Logo
+
+The logo is [here](./assets/logo.png).
+
+I want you to use it in web and mobile app (including favicon).
