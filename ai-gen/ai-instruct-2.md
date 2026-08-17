@@ -1,8 +1,8 @@
 # AI instruct 2
 
-## UX/UI sf-ui
+## UX/UI
 
-I want the same UI design as `~/cwclock` for dark-mode, whitemode, icons, toast for messages, etc.
+I want the same UI design as `~/cwclock` for dark-mode, whitemode, icons, toast for messages, etc. For web version and mobile app.
 
 The logo has to be updated with a darkmode version (white) and this version if for whitemod.
 
