@@ -35,7 +35,6 @@ type eventData struct {
 	Kind        string `json:"kind"`
 	StartsAt    string `json:"startsAt"`
 	EndsAt      string `json:"endsAt,omitempty"`
-	AllDay      bool   `json:"allDay,omitempty"`
 	Visibility  string `json:"visibility"`
 }
 
@@ -74,7 +73,6 @@ func scanEvent(row pgx.Row) (models.Event, error) {
 	e.Location = d.Location
 	e.URL = d.URL
 	e.Kind = models.NormalizeEventKind(d.Kind)
-	e.AllDay = d.AllDay
 	e.Visibility = d.Visibility
 	if e.Visibility != models.VisibilityPublic {
 		e.Visibility = models.VisibilityClub
@@ -107,14 +105,13 @@ type EventFields struct {
 	Kind        string
 	StartsAt    time.Time
 	EndsAt      time.Time
-	AllDay      bool
 	Visibility  string
 }
 
 func (f EventFields) payload() eventData {
 	data := eventData{
 		Title: f.Title, Description: f.Description, Location: f.Location, URL: f.URL,
-		Kind: models.NormalizeEventKind(f.Kind), AllDay: f.AllDay,
+		Kind:     models.NormalizeEventKind(f.Kind),
 		StartsAt: f.StartsAt.UTC().Format(time.RFC3339),
 	}
 	if !f.EndsAt.IsZero() {

@@ -28,6 +28,7 @@ const (
 	driveUploadAPIBase = "https://www.googleapis.com/upload/drive/v3/files"
 	driveAPIBase       = "https://www.googleapis.com/drive/v3/files"
 	driveScope         = "https://www.googleapis.com/auth/drive"
+	driveFolderMime    = "application/vnd.google-apps.folder"
 	defaultTokenURI    = "https://oauth2.googleapis.com/token"
 )
 
@@ -88,6 +89,7 @@ type driveTarget struct {
 	key        serviceAccountKey
 	privateKey *rsa.PrivateKey
 	folderID   string
+	basePath   string
 	httpClient *http.Client
 }
 
@@ -100,6 +102,7 @@ func newDriveTarget(conn models.StorageConnection) (*driveTarget, error) {
 		key:        key,
 		privateKey: privateKey,
 		folderID:   conn.FolderID,
+		basePath:   cleanBasePath(conn.Path),
 		httpClient: &http.Client{Timeout: 120 * time.Second},
 	}, nil
 }
@@ -117,7 +120,16 @@ func (d *driveTarget) Upload(ctx context.Context, key string, data []byte, conte
 		name = name[index+1:]
 	}
 
-	fileID, err := d.createFile(ctx, token, name, data, contentType)
+	// Drive addresses folders by id, not by a path string, so a subfolder has
+	// to be walked one level at a time - and created where it does not exist
+	// yet, since a member typing "strong-fish/videos" means "put them there",
+	// not "fail unless I made those folders by hand first".
+	parent, err := d.ensureBaseFolder(ctx, token)
+	if err != nil {
+		return utils.EMPTY, err
+	}
+
+	fileID, err := d.createFile(ctx, token, name, parent, data, contentType)
 	if err != nil {
 		return utils.EMPTY, err
 	}
@@ -181,11 +193,129 @@ func (d *driveTarget) accessToken(ctx context.Context) (string, error) {
 	return body.AccessToken, nil
 }
 
-func (d *driveTarget) createFile(ctx context.Context, token, name string, data []byte, contentType string) (string, error) {
+// ensureBaseFolder walks the configured subfolder down from the root folder,
+// creating whichever level is missing, and returns the folder uploads go into.
+// An empty path is simply the root.
+func (d *driveTarget) ensureBaseFolder(ctx context.Context, token string) (string, error) {
+	folder := d.folderID
+	if utils.IsBlank(d.basePath) {
+		return folder, nil
+	}
+
+	for _, segment := range strings.Split(d.basePath, "/") {
+		next, err := d.ensureFolder(ctx, token, segment, folder)
+		if err != nil {
+			return utils.EMPTY, err
+		}
+		folder = next
+	}
+	return folder, nil
+}
+
+func (d *driveTarget) ensureFolder(ctx context.Context, token, name, parentID string) (string, error) {
+	query := fmt.Sprintf(
+		"name = '%s' and '%s' in parents and mimeType = '%s' and trashed = false",
+		escapeDriveQuery(name), escapeDriveQuery(parentID), driveFolderMime,
+	)
+
+	id, found, err := d.searchOne(ctx, token, query)
+	if err != nil {
+		return utils.EMPTY, err
+	}
+	if found {
+		return id, nil
+	}
+	return d.createFolder(ctx, token, name, parentID)
+}
+
+func (d *driveTarget) searchOne(ctx context.Context, token, query string) (string, bool, error) {
+	params := url.Values{
+		"q":                         {query},
+		"fields":                    {"files(id)"},
+		"supportsAllDrives":         {"true"},
+		"includeItemsFromAllDrives": {"true"},
+		"spaces":                    {"drive"},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, driveAPIBase+"?"+params.Encode(), nil)
+	if err != nil {
+		return utils.EMPTY, false, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return utils.EMPTY, false, fmt.Errorf("storage google_drive: search failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return utils.EMPTY, false, fmt.Errorf("storage google_drive: search returned %d: %s",
+			resp.StatusCode, strings.TrimSpace(string(message)))
+	}
+
+	var list struct {
+		Files []struct {
+			ID string `json:"id"`
+		} `json:"files"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		return utils.EMPTY, false, fmt.Errorf("storage google_drive: invalid search response: %w", err)
+	}
+	if len(list.Files) == 0 {
+		return utils.EMPTY, false, nil
+	}
+	return list.Files[0].ID, true, nil
+}
+
+func (d *driveTarget) createFolder(ctx context.Context, token, name, parentID string) (string, error) {
+	payload, _ := json.Marshal(map[string]any{
+		"name":     name,
+		"mimeType": driveFolderMime,
+		"parents":  []string{parentID},
+	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		driveAPIBase+"?fields=id&supportsAllDrives=true", bytes.NewReader(payload))
+	if err != nil {
+		return utils.EMPTY, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return utils.EMPTY, fmt.Errorf("storage google_drive: creating a folder failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return utils.EMPTY, fmt.Errorf("storage google_drive: creating a folder returned %d: %s",
+			resp.StatusCode, strings.TrimSpace(string(message)))
+	}
+
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil || utils.IsBlank(created.ID) {
+		return utils.EMPTY, fmt.Errorf("storage google_drive: creating a folder returned no id")
+	}
+	return created.ID, nil
+}
+
+// escapeDriveQuery quotes a value for Drive's query language, where a bare
+// apostrophe in a folder name would otherwise end the string and change what
+// the query means.
+func escapeDriveQuery(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	return strings.ReplaceAll(value, `'`, `\'`)
+}
+
+func (d *driveTarget) createFile(ctx context.Context, token, name, parentID string, data []byte, contentType string) (string, error) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
-	metadata, _ := json.Marshal(map[string]any{"name": name, "parents": []string{d.folderID}})
+	metadata, _ := json.Marshal(map[string]any{"name": name, "parents": []string{parentID}})
 	metaPart, err := writer.CreatePart(textproto.MIMEHeader{"Content-Type": {"application/json; charset=UTF-8"}})
 	if err != nil {
 		return utils.EMPTY, err

@@ -115,7 +115,9 @@ class _EventCard extends ConsumerWidget {
   String _when(Event event) {
     final start = event.startsAt;
     final day = '${_pad(start.day)}/${_pad(start.month)}/${start.year}';
-    if (event.allDay) return day;
+    // Birthdays occupy a day rather than a time of day, and they are generated
+    // rather than authored - everything somebody creates happens at an hour.
+    if (event.kind == 'birthday') return day;
     return '$day  ${_pad(start.hour)}:${_pad(start.minute)}';
   }
 

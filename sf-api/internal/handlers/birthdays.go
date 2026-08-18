@@ -84,12 +84,13 @@ func birthdayEvents(ctx context.Context, users *store.UserStore, clubs *store.Cl
 			// Synthetic, and stable across years on purpose: the ICS feed emits
 			// this once with a yearly recurrence rule, so a UID carrying the
 			// year would make every January look like a brand-new event.
-			ID:         "birthday-" + mate.ID,
-			Title:      name,
-			Kind:       models.EventKindBirthday,
-			StartsAt:   next,
+			ID:       "birthday-" + mate.ID,
+			Title:    name,
+			Kind:     models.EventKindBirthday,
+			StartsAt: next,
+			// A whole day, and the ICS renders it as one because of the kind
+			// (see models.Event.WholeDay) rather than a flag on the entry.
 			EndsAt:     next.AddDate(0, 0, 1),
-			AllDay:     true,
 			Visibility: models.VisibilityClub,
 			Author: models.UserSummary{
 				ID: mate.ID, Handle: mate.Handle, Name: mate.Name,

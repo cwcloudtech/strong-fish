@@ -69,14 +69,20 @@ type Event struct {
 }
 
 // End returns the instant the event finishes, defaulting to an hour after it
-// starts (a day, for an all-day event) when the author gave no end - a
-// calendar entry with no duration renders as a zero-length blip in Outlook.
+// starts when the author gave no end - a calendar entry with no duration
+// renders as a zero-length blip in Outlook.
 func (e Event) End() time.Time {
 	if !e.EndsAt.IsZero() && e.EndsAt.After(e.StartsAt) {
 		return e.EndsAt
 	}
-	if e.AllDay {
-		return e.StartsAt.AddDate(0, 0, 1)
-	}
 	return e.StartsAt.Add(time.Hour)
+}
+
+// WholeDay reports whether this entry occupies a day rather than a time of day.
+//
+// It is derived from the kind, not chosen: a birthday is the only whole-day
+// thing in this calendar, and it is generated rather than authored. Events
+// people create always happen at a stated time - a meet starts when it starts.
+func (e Event) WholeDay() bool {
+	return e.Kind == EventKindBirthday
 }

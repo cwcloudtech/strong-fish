@@ -61,7 +61,11 @@ l'API S3.
 4. Dans l'application : **Paramètres → Stockage des vidéos**, choisissez
    *Dossier Google Drive*.
 5. Téléversez le fichier de clé JSON et collez l'identifiant du dossier.
-6. Enregistrez.
+6. Indiquez éventuellement un **sous-dossier** — `strong-fish/videos`, par
+   exemple. Il est créé dans le dossier partagé s'il n'existe pas encore : vous
+   n'avez pas à le créer à la main. Laissez vide pour écrire directement dans le
+   dossier.
+7. Enregistrez.
 
 strong-fish accorde à chaque fichier déposé un accès en lecture « toute personne
 disposant du lien » au moment de l'écriture, et publie le lecteur Drive.
