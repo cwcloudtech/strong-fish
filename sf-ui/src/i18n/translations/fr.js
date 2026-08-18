@@ -106,6 +106,10 @@ const fr = {
     bodyweight: "Poids de corps",
     visibility: "Qui peut voir mon profil",
     visibilityPublic: "Tout le monde",
+    postUnavailable: "Cette publication n'est pas disponible. Elle a peut-être été supprimée, ou partagée uniquement avec un club.",
+    joinToReply: "Rejoignez strong-fish pour aimer cette publication et y répondre.",
+    likes: "{{count}} j'aime",
+    comments: "{{count}} commentaires",
     visibilityClubs: "Mes clubs",
     visibilityPrivate: "Mes coachs uniquement",
     visibilityHelp: {

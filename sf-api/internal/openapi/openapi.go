@@ -86,6 +86,7 @@ var publicRoutes = map[string]bool{
 	"GET /v1/mobile-app":                  true,
 	"POST /v1/contact":                    true,
 	"GET /v1/public/programs/{programId}": true,
+	"GET /v1/public/posts/{postId}":       true,
 	"GET /v1/calendar/{token}":            true,
 	// The calendar is readable logged out; writing it is not.
 	"GET /v1/events":                   true,

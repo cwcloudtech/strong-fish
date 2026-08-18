@@ -113,6 +113,10 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		// visibility predicate, not this route, that decides what may be read.
 		r.Get("/public/programs/{programId}", h.Program.GetPublic)
 
+		// A post its author published to everybody. Unauthenticated by design:
+		// a link shared to Instagram is opened by people with no account.
+		r.Get("/public/posts/{postId}", h.Social.GetPublicPost)
+
 		// The ICS feed Outlook and Google Calendar poll. Unauthenticated by
 		// necessity - neither can send an Authorization header - so the token
 		// in the path is the whole credential.

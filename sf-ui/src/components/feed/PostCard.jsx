@@ -8,6 +8,7 @@ import { social } from "../../api/services";
 import Avatar from "../common/Avatar";
 import Modal, { ConfirmModal } from "../common/Modal";
 import ShareButtons from "../common/ShareButtons";
+import { postShareUrl, shareTextFor } from "../../utils/shareText";
 import { ErrorMessage } from "../common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -154,15 +155,20 @@ export default function PostCard({ post, onChanged, onDeleted }) {
         <button type="button" className="sf-button-ghost" onClick={() => setShowComments((open) => !open)}>
           <FiMessageSquare /> {post.comments || 0}
         </button>
-        <button
-          type="button"
-          className="sf-button-ghost"
-          onClick={() => setSharing((open) => !open)}
-          aria-label={t("share.label")}
-          aria-expanded={sharing}
-        >
-          <FiShare2 />
-        </button>
+        {/* Only a public post can be shared. A club-only post's link would
+            answer 404 to whoever opened it, so offering the button would be
+            offering something that cannot work. */}
+        {post.visibility === "public" ? (
+          <button
+            type="button"
+            className="sf-button-ghost"
+            onClick={() => setSharing((open) => !open)}
+            aria-label={t("share.label")}
+            aria-expanded={sharing}
+          >
+            <FiShare2 />
+          </button>
+        ) : null}
         <span className="sf-spacer" />
         {post.editable ? (
           <button type="button" className="sf-button-ghost" onClick={() => setEditing(true)} aria-label={t("common.edit")}>
@@ -185,8 +191,13 @@ export default function PostCard({ post, onChanged, onDeleted }) {
           would outweigh the post. */}
       {sharing ? (
         <ShareButtons
-          url={`${window.location.origin}/profile/${post.author.handle || ""}`}
-          text={post.content ? post.content.slice(0, 180) : t("share.postText")}
+          // The post itself, not its author's profile: somebody following a
+          // shared link is coming for the thing that was shared.
+          url={postShareUrl(post.id)}
+          // The links come out of the text - one of them is the post's own
+          // embed, and sending a reader to that instead of to the post is
+          // exactly what sharing should not do.
+          text={shareTextFor(post.content, t("share.postText"))}
         />
       ) : null}
 

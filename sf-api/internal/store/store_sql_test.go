@@ -217,6 +217,14 @@ func TestReadQueriesExecute(t *testing.T) {
 		{"ListFeed", func() error { _, _, err := social.ListFeed(ctx, caller, []string{}, 0, 20); return err }},
 		{"ListDiscoverFeed/anonymous", func() error { _, _, err := social.ListDiscoverFeed(ctx, "", 0, 20); return err }},
 		{"ListDiscoverFeed", func() error { _, _, err := social.ListDiscoverFeed(ctx, caller, 0, 20); return err }},
+		// The shared-link path: a stranger with no session opening a post.
+		{"FindPublicPost", func() error {
+			_, err := social.FindPublicPost(ctx, "00000000-0000-0000-0000-000000000000")
+			if err == ErrNotFound {
+				return nil
+			}
+			return err
+		}},
 		{"ListProfilePosts/anonymous", func() error {
 			_, _, err := social.ListProfilePosts(ctx, caller, "", []string{}, 0, 20)
 			return err
