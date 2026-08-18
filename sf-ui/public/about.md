@@ -1,79 +1,109 @@
 # About us
 
-We are a team of French powerlifter and engineers who volunteer working on the development of a powerlifting app social network.
+We are a team of French powerlifters and engineers who volunteer their time to
+develop a powerlifting app and social network.
 
-## Terms of Use of strong-fish
+## Terms of use of strong-fish
 
-Using this application as a guest or registered member, you must observe the following rules. If one of the following rules has not been respected , you risk incurring sanctions (like call to odre, be banished or prosecution).
+When you use this application, whether as a guest or as a registered member, you
+must observe the following rules. If any of them is not respected, you risk
+incurring sanctions (such as a warning, a ban, or prosecution).
 
 ### Terminology
 
-Throughout the document:
+Throughout this document:
 
-* The words "you" and "user" means any user (logged or not) ;
-* the words "team", "we", "managers" and "moderatiors" means members with an administrator account ans employees or owners of Comwork ;
-* the words "StrongFish", "the application", and "the product" means all our codes, compiled/interpreted executables and resources hosted by CWCloud in all servers accessible at strong-fish.com ;
+* the words "you" and "user" mean any user, logged in or not;
+* the words "team", "we", "managers" and "moderators" mean members holding an
+  administrator account, and the employees or owners of Comwork;
+* the words "strong-fish", "the application" and "the product" mean all of our
+  code, compiled or interpreted executables and resources hosted by CWCloud on
+  every server reachable at strong-fish.com.
 
-#### Generality and security
+### General conduct and security
 
-It is strictly forbidden:
+It is strictly forbidden to:
 
-* Injecting viruses or other malwares ;
-* Alter the correct functioning of the application ;
-* Attack the site (deny of service) ;
-* Steal or retrieve informations from our databases using other means than those that are offered by the application functionalities ;
-* Use robots or spiders to change the values ​​of points received on the application (or for any other reason) ;
-* Create another type of account those provided for this purpose ;
-* Access to services or options forbidden for your type of account ;
-* Save files whose format is not supported by the application (executable for example).
+* inject viruses or other malware;
+* interfere with the correct functioning of the application;
+* attack the site (denial of service);
+* steal or retrieve information from our databases by any means other than the
+  features the application offers;
+* use robots or crawlers to alter the values recorded by the application (or for
+  any other reason);
+* create a type of account other than those provided for that purpose;
+* access services or options that your type of account is not entitled to;
+* upload files in a format the application does not support (an executable, for
+  example).
 
-#### Using a strong-fish account
-
-The following points must be strictly observed:
-
-* You can not create more than one account or profile. ;
-* You must save only real maintained informations ;
-* You must not create profile for a company or association that does not exist or which you are not responsible ;
-* You must not create news, accomplishments, clubs that do not exist or which you are not responsible ;
-* You must not give your password or another personal information to another person. ;
-* You must not allow another person to use your account or change your profiles ;
-* You must not share informations that are not related to the subject of the application (Work of the audiovisual and multimedia) ;
-* The accuracy of informations must be respected in the content of training.
-
-#### Respect for the rights of others
+### Using a strong-fish account
 
 The following points must be strictly observed:
 
-* You must not divulge any information about a person without his consent, especially if this information violates the privacy of this person ;
-* You must not use any abusive or discriminatory language ;
-* You must not defame account or send false complaints against an account ;
-* You must not harass someone by sending unnecessary messages(spam) ;
-* You must not share news, accomplishments, projects or events that do not belong to you or which you are not responsible.
+* you may not create more than one account or profile;
+* you must record only real, up-to-date information;
+* you must not create a profile for a club or organisation that does not exist,
+  or that you are not responsible for;
+* you must not create posts, achievements or clubs that do not exist, or that
+  you are not responsible for;
+* you must not give your password or any other personal information to anyone
+  else;
+* you must not let anyone else use your account or edit your profile;
+* you must not share content unrelated to the subject of the application
+  (powerlifting and strength training);
+* the accuracy of the information recorded in training content must be
+  respected.
+
+### Respecting the rights of others
+
+The following points must be strictly observed:
+
+* you must not disclose information about a person without their consent,
+  especially where doing so would breach their privacy;
+* you must not use abusive or discriminatory language;
+* you must not defame an account or file false reports against one;
+* you must not harass anyone by sending unwanted messages (spam);
+* you must not share posts, achievements, programs or events that do not belong
+  to you, or that you are not responsible for.
 
 ## Privacy policy
 
-Depending on their nature, informations in the application are not accessible in the same way:
+Depending on its nature, information held in the application is not accessible in
+the same way:
 
-* Your private messages will be visible only to you and your correspondent, except in the case where a message is indicated as spam. In this situation, the message will be readable by the moderators of the application ;
-* Your contact details and profile informations will be visible to all registered users and visitors ;
-* Your training , news, events or achievements will be viewable by all registered users and visitors ;
-* The data relating to the area of a project or a relationship between a business and a customer will not be visible to non concerned users ;
-* Your current projects can be seen by all or not according to your choice and settings ;
-* For safety reasons, your IPs connections are registered but visible only by the team.
+* your contact details and profile information are visible to registered users
+  and visitors when you have made your profile public, and to nobody else
+  otherwise;
+* your posts, events and achievements are visible according to the audience you
+  chose for them: everyone, or the members of the club you posted to;
+* your training data — your one-rep maxes, the loads computed from them, and the
+  feedback you leave on a set — is visible to you and to the coaches of the club
+  the program belongs to;
+* a report you file is readable only by the moderators of the application;
+* for security reasons, the IP addresses you connect from are recorded and are
+  visible only to the team.
 
-## Responsibilities and conflicts
+## Responsibilities and disputes
 
-We are not responsible :
+We are not responsible:
 
-* For the messages and false informations registered by members ; 
-* in the case of a conflict between two members.
+* for messages or false information recorded by members;
+* in the event of a dispute between two members.
 
-The contracts generated by the application must be completed and signed by the members in a institution provided for this purpose to have a legal value. 
+The training programs generated by the application are guidance, not medical or
+coaching advice: the loads it computes come from the one-rep maxes each member
+records, and it is up to the member and their coach to judge whether they are
+appropriate. Train within your ability, and consult a professional where your
+health is concerned.
 
-However, the points system on profiles, achievements and CVs allows to assess the veracity of informations about a member. In addition, the reporting system also helps prevent moderators that there is a fraud.
+The reporting system lets moderators know when something is wrong, and the
+account and club roles make it clear who is responsible for a given piece of
+content.
 
-## Legal Notices
+## Legal notices
 
-_StrongFish_ is an OpenSource app (MIT licence) which can be self-hosted by everyone.
+_strong-fish_ is an open-source application (MIT licence) which anyone can
+self-host.
 
-The www.strong-fish.com main instance is provided and hosted by [CWCloud](https://www.cwcloud.tech).
+The main instance at www.strong-fish.com is provided and hosted by
+[CWCloud](https://www.cwcloud.tech).

@@ -221,12 +221,16 @@ rather than a styled `<select>`, because a native one can't take that layout -
 and because the sidebar's dropdowns sit on the navy chrome, where a browser's
 own select styling looks out of place.
 
-The signed-out screens are split: a public-domain photograph from a powerlifting
-meet fills the left, the form sits on the right. Below 900px the photo is
-dropped rather than letterboxed above the form - a thin strip of image earns
+The signed-out screens are split: a photograph of a deadlift at an IPF European
+Championships fills the left, the form sits on the right. Below 900px the photo
+is dropped rather than letterboxed above the form - a thin strip of image earns
 nothing on a phone - and the form takes the navy gradient as its own background.
-See [`sf-ui/public/CREDITS.md`](./sf-ui/public/CREDITS.md) for the photo's
-provenance.
+
+That photograph is CC BY-SA 4.0, so the screen carries a real attribution
+linking the author and the licence. The ShareAlike term attaches to the image
+and to adaptations of it, **not** to the software that displays it - the project's
+own code stays MIT. See [`sf-ui/public/CREDITS.md`](./sf-ui/public/CREDITS.md)
+for the full provenance and what swapping the file would change.
 
 ## The About page
 

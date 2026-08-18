@@ -69,7 +69,7 @@ const en = {
     mfaVerify: "Verify",
     heroTitle: "Train the numbers, not the guesswork.",
     heroSubtitle: "RPE-based programs whose loads follow your own current 1RM - written by your coach, recomputed for you.",
-    photoCredit: "Photo: U.S. Air Force / Senior Airman Haiden Morris - public domain",
+    photoCreditBy: "Deadlift at the IPF European Championships. Photo by",
   },
   profile: {
     title: "Public profile",

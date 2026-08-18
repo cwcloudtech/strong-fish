@@ -69,7 +69,7 @@ const fr = {
     mfaVerify: "Vérifier",
     heroTitle: "Des chiffres, pas des approximations.",
     heroSubtitle: "Des programmes en RPE dont les charges suivent votre propre 1RM du moment - écrits par votre coach, recalculés pour vous.",
-    photoCredit: "Photo : U.S. Air Force / Senior Airman Haiden Morris - domaine public",
+    photoCreditBy: "Soulevé de terre aux Championnats d'Europe IPF. Photo de",
   },
   profile: {
     title: "Profil public",

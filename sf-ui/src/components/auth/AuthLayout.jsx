@@ -25,7 +25,23 @@ export default function AuthLayout({ children }) {
           <h2>{t("auth.heroTitle")}</h2>
           <p>{t("auth.heroSubtitle")}</p>
         </div>
-        <span className="sf-auth-art-credit">{t("auth.photoCredit")}</span>
+        {/* The photograph is CC BY-SA, which requires naming the author and
+            linking the licence - so the credit is a real attribution with
+            reachable links, not a line of grey text. */}
+        <p className="sf-auth-art-credit">
+          {t("auth.photoCreditBy")}{" "}
+          <a
+            href="https://commons.wikimedia.org/wiki/File:Alessio_Pavone_deadlift_European_Championship2022.jpg"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            FactNoter
+          </a>{" "}
+          &middot;{" "}
+          <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">
+            CC BY-SA 4.0
+          </a>
+        </p>
       </aside>
 
       <main className="sf-auth-panel">

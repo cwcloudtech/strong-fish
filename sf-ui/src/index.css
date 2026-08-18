@@ -591,19 +591,20 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  /* The source is landscape and the panel is portrait, so `cover` crops
-     horizontally. Biasing slightly right of centre keeps the lifter framed at
-     every viewport ratio the panel takes. */
-  object-position: 58% 50%;
+  /* The source is portrait, like the panel, so `cover` barely crops it at any
+     viewport ratio - a plain centre keeps the lifter framed throughout. */
+  object-position: 50% 50%;
 }
 
 /* A navy wash ties the photograph to the brand and keeps the overlaid copy
-   legible whatever the crop lands on. */
+   legible whatever the crop lands on. It deepens toward the bottom, where the
+   headline and the attribution sit - the meet backdrop behind the lifter is
+   pale, so white text needs the extra cover down there. */
 .sf-auth-art::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(6, 42, 78, 0.45) 0%, rgba(6, 42, 78, 0.82) 100%);
+  background: linear-gradient(180deg, rgba(6, 42, 78, 0.5) 0%, rgba(6, 42, 78, 0.9) 100%);
 }
 
 .sf-auth-art-content {
@@ -632,10 +633,20 @@ button {
   position: absolute;
   right: var(--sf-spacing);
   bottom: var(--sf-spacing-xs);
+  left: var(--sf-spacing);
   z-index: 1;
   font-size: 0.68rem;
-  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.5;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.55);
 }
+
+.sf-auth-art-credit a {
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: underline;
+}
+
+.sf-auth-art-credit a:hover { color: #fff; }
 
 .sf-auth-panel {
   display: flex;
