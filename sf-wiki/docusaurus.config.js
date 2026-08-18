@@ -10,8 +10,8 @@ const config = {
   url: "https://doc.strong-fish.com",
   baseUrl: "/",
 
-  organizationName: "cwcloud",
-  projectName: "strong-fish",
+  organizationName: "StrongFish",
+  projectName: "StrongFish wiki",
 
   // A broken link here is a page somebody clicks and lands nowhere, so it
   // fails the build rather than the reader.
@@ -78,9 +78,9 @@ const config = {
         },
       ],
       navbar: {
-        title: "strong-fish",
+        title: "StrongFish wiki",
         logo: {
-          alt: "strong-fish",
+          alt: "StrongFish",
           src: "img/logo192.png",
           // The stock mark is inked in navy and all but disappears on a dark
           // background, so dark mode gets the light-inked variant - the same
