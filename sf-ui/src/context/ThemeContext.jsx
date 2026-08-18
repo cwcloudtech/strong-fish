@@ -36,6 +36,14 @@ export function ThemeProvider({ children }) {
 
   const theme = explicitTheme || systemTheme;
 
+  // setTheme picks a theme outright (the sidebar dropdown lists both), while
+  // toggleTheme flips the current one - the same persisted explicit choice
+  // either way.
+  const setTheme = useCallback((next) => {
+    localStorage.setItem(STORAGE_KEY, next);
+    setExplicitTheme(next);
+  }, []);
+
   const toggleTheme = useCallback(() => {
     setExplicitTheme((current) => {
       const next = (current || getSystemTheme()) === "dark" ? "light" : "dark";
@@ -44,7 +52,7 @@ export function ThemeProvider({ children }) {
     });
   }, []);
 
-  const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
+  const value = useMemo(() => ({ theme, setTheme, toggleTheme }), [theme, setTheme, toggleTheme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

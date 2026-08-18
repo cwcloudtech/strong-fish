@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import AuthLayout from "../components/auth/AuthLayout";
 import { mfa } from "../api/services";
 import MfaChallenge from "../components/auth/MfaChallenge";
-import Logo from "../components/common/Logo";
 import { ErrorMessage, Spinner } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
@@ -56,9 +56,7 @@ export default function OidcCallback() {
   }, [params, login, navigate, t]);
 
   return (
-    <div className="sf-auth">
-      <div className="sf-auth-card">
-        <Logo className="sf-auth-logo" />
+    <AuthLayout>
 
         {challenge ? (
           <MfaChallenge
@@ -82,7 +80,6 @@ export default function OidcCallback() {
         ) : (
           <Spinner />
         )}
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

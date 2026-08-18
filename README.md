@@ -32,6 +32,8 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   the mobile app.
 * **Light/dark mode**, following the OS by default and switchable from the
   sidebar. The logo ships in two inks so the wordmark stays legible either way.
+* **An About page** you can write without touching the build - it renders
+  `public/about.md` (and `about.fr.md`) at runtime.
 
 ## Technologies
 
@@ -208,7 +210,39 @@ one product.
 The brand hues come from the logo: a deep navy for chrome and a steel blue for
 action. The logo itself ships in two inks - the stock navy one would all but
 disappear on a dark background, so dark mode gets a light-inked variant, and the
-favicon follows `prefers-color-scheme` the same way.
+favicon follows `prefers-color-scheme` the same way. The sidebar shows the mark
+alone, at size: the logo already carries the name, so repeating it as text
+beside it only crowds the rail.
+
+Dropdowns follow [uprodit](https://uprodit.com)'s language picker: a pill toggle
+carrying an icon, a short code and a caret, opening a popup list whose rows show
+a code chip, the full label and a check on the current one. It's a real listbox
+rather than a styled `<select>`, because a native one can't take that layout -
+and because the sidebar's dropdowns sit on the navy chrome, where a browser's
+own select styling looks out of place.
+
+The signed-out screens are split: a public-domain photograph from a powerlifting
+meet fills the left, the form sits on the right. Below 900px the photo is
+dropped rather than letterboxed above the form - a thin strip of image earns
+nothing on a phone - and the form takes the navy gradient as its own background.
+See [`sf-ui/public/CREDITS.md`](./sf-ui/public/CREDITS.md) for the photo's
+provenance.
+
+## The About page
+
+[`sf-ui/public/about.md`](./sf-ui/public/about.md) is rendered as the `/about`
+route. It's fetched at runtime rather than compiled in, so the text can be
+rewritten by dropping a new file next to the built assets - no rebuild, no
+redeploy of the frontend. A French translation goes in `about.fr.md`; the page
+loads `about.<locale>.md` first and falls back to `about.md`, so translating is
+optional.
+
+## Cookies
+
+strong-fish only ever puts functional data in local storage - the session token,
+the chosen theme and the chosen language. There are no third-party tracking or
+analytics cookies, so the banner (ported from cwclock, with its wording) is a
+one-time informational notice rather than an accept/reject consent flow.
 
 ## The i18n dictionaries
 

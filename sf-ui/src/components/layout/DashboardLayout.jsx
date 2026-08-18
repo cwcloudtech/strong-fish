@@ -4,7 +4,7 @@ import {
   FiActivity,
   FiAward,
   FiBarChart2,
-  FiGlobe,
+  FiInfo,
   FiLogOut,
   FiMenu,
   FiMoon,
@@ -16,14 +16,16 @@ import {
 
 import { admin } from "../../api/services";
 import Avatar from "../common/Avatar";
+import Dropdown from "../common/Dropdown";
+import LanguageDropdown from "../common/LanguageDropdown";
 import Logo from "../common/Logo";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function DashboardLayout() {
-  const { t, locale, setLocale, locales } = useI18n();
-  const { theme, toggleTheme } = useTheme();
+  const { t } = useI18n();
+  const { theme, setTheme } = useTheme();
   const { user, logout, isCoach, isSuperadmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -55,6 +57,7 @@ export default function DashboardLayout() {
   ];
   if (isCoach) links.push({ to: "/dashboard/exercises", label: t("nav.exercises"), icon: <FiActivity /> });
   links.push({ to: "/dashboard/settings", label: t("nav.settings"), icon: <FiUser /> });
+  links.push({ to: "/about", label: t("nav.about"), icon: <FiInfo /> });
   if (isSuperadmin) {
     links.push({ to: "/dashboard/admin", label: t("nav.admin"), icon: <FiShield />, count: openReports });
   }
@@ -62,11 +65,12 @@ export default function DashboardLayout() {
   return (
     <div className="sf-shell">
       <aside className={`sf-sidebar ${menuOpen ? "open" : ""}`}>
-        {/* The sidebar is navy in both themes, so its mark is pinned to the
-            light-inked variant rather than following the app's theme. */}
-        <Link className="sf-sidebar-brand" to="/dashboard/feed">
-          <Logo mark on="dark" alt="" />
-          {t("app.name")}
+        {/* The mark alone: the logo carries the name, so repeating it as text
+            beside it only crowds the rail. The sidebar is navy in both themes,
+            so the mark is pinned to the light-inked variant rather than
+            following the app's theme. */}
+        <Link className="sf-sidebar-brand" to="/dashboard/feed" aria-label={t("app.name")}>
+          <Logo mark on="dark" alt={t("app.name")} />
         </Link>
 
         <nav>
@@ -88,33 +92,19 @@ export default function DashboardLayout() {
           ) : null}
 
           <div className="sf-sidebar-actions">
-            <button
-              type="button"
-              className="sf-icon-button"
-              onClick={toggleTheme}
-              title={t("common.theme")}
-              aria-label={t("common.theme")}
-            >
-              {theme === "dark" ? <FiSun /> : <FiMoon />}
-              {theme === "dark" ? t("common.light") : t("common.dark")}
-            </button>
-
-            <label className="sf-icon-button" style={{ position: "relative", cursor: "pointer" }}>
-              <FiGlobe />
-              {locale.toUpperCase()}
-              <select
-                value={locale}
-                onChange={(event) => setLocale(event.target.value)}
-                aria-label={t("common.language")}
-                style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
-              >
-                {locales.map((option) => (
-                  <option key={option.code} value={option.code}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <Dropdown
+              icon={theme === "dark" ? <FiMoon /> : <FiSun />}
+              value={theme}
+              onChange={setTheme}
+              variant="dark"
+              align="left"
+              ariaLabel={t("common.theme")}
+              options={[
+                { value: "light", code: <FiSun />, label: t("common.light") },
+                { value: "dark", code: <FiMoon />, label: t("common.dark") },
+              ]}
+            />
+            <LanguageDropdown variant="dark" />
           </div>
 
           <button

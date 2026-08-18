@@ -39,6 +39,7 @@ const fr = {
     profile: "Profil",
     admin: "Administration",
     settings: "Paramètres",
+    about: "À propos",
   },
   auth: {
     login: "Se connecter",
@@ -66,6 +67,9 @@ const fr = {
     mfaCodeHelp: "Saisissez le code à 6 chiffres de votre application d'authentification.",
     mfaUseKey: "Utiliser ma clé de sécurité",
     mfaVerify: "Vérifier",
+    heroTitle: "Des chiffres, pas des approximations.",
+    heroSubtitle: "Des programmes en RPE dont les charges suivent votre propre 1RM du moment - écrits par votre coach, recalculés pour vous.",
+    photoCredit: "Photo : U.S. Air Force / Senior Airman Haiden Morris - domaine public",
   },
   profile: {
     title: "Profil public",
@@ -419,6 +423,15 @@ const fr = {
     accountDisabledEmail: "Veuillez confirmer votre compte avec le lien reçu par email.",
     accountBanned: "Votre compte a été banni par un administrateur.",
     network: "Le serveur est injoignable. Veuillez réessayer.",
+  },
+  about: {
+    title: "À propos",
+    unavailable: "Cette page n'a pas encore été rédigée.",
+  },
+  cookieBanner: {
+    title: "Avis relatif aux cookies",
+    message: "strong-fish est un produit open-source. Les cookies et le stockage local qu'il utilise sont nécessaires uniquement au fonctionnement de l'application (connexion, thème et langue) - jamais pour le suivi ou l'analyse.",
+    understand: "J'ai compris",
   },
 };
 

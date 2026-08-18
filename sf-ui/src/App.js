@@ -3,11 +3,13 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import DashboardLayout from "./components/layout/DashboardLayout";
+import CookieBanner from "./components/common/CookieBanner";
 import RequireAuth from "./components/layout/RequireAuth";
 import { AuthProvider } from "./context/AuthContext";
 import { I18nProvider } from "./i18n/I18nContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
+import About from "./pages/About";
 import Admin from "./pages/dashboard/Admin";
 import ClubDetail from "./pages/dashboard/ClubDetail";
 import Clubs from "./pages/dashboard/Clubs";
@@ -56,6 +58,7 @@ function AppRoutes() {
             {/* Public profiles are readable without a session, which is what
                 makes a shared profile link work. */}
             <Route path="/profile/:handle" element={<Profile />} />
+            <Route path="/about" element={<About />} />
 
             <Route
               path="/dashboard"
@@ -88,7 +91,8 @@ function AppRoutes() {
             <Route path="*" element={<Navigate to="/dashboard/feed" replace />} />
           </Routes>
 
-      <ToastContainer position="top-right" theme={theme} />
+          <ToastContainer position="top-right" theme={theme} />
+          <CookieBanner />
     </AuthProvider>
   );
 }
