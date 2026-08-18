@@ -143,6 +143,23 @@ export const profiles = {
   unfollow: (handle) => body(client.delete(`/profiles/${handle}/follow`)),
 };
 
+// --- search and invitations ---
+
+export const search = {
+  // Readable logged out, but a logged-out caller only ever gets public
+  // profiles: the visibility rules run inside the API's query.
+  members: (params) => body(client.get("/search/members", { params })),
+};
+
+export const invitations = {
+  mine: () => body(client.get("/users/me/invitations")),
+  accept: (invitationId) => body(client.post(`/users/me/invitations/${invitationId}/accept`)),
+  decline: (invitationId) => body(client.post(`/users/me/invitations/${invitationId}/decline`)),
+  forClub: (clubId) => body(client.get(`/clubs/${clubId}/invitations`)),
+  invite: (clubId, payload) => body(client.post(`/clubs/${clubId}/invitations`, payload)),
+  withdraw: (clubId, invitationId) => body(client.delete(`/clubs/${clubId}/invitations/${invitationId}`)),
+};
+
 // --- media, events and the calendar feed ---
 
 export const media = {
@@ -225,6 +242,9 @@ export const admin = {
   updateUser: (userId, payload) => body(client.put(`/admin/users/${userId}`, payload)),
   removeUser: (userId) => body(client.delete(`/admin/users/${userId}`)),
   clearMfa: (userId) => body(client.delete(`/admin/users/${userId}/mfa`)),
+  coachRequests: () => body(client.get("/admin/coach-requests")),
+  decideCoachRequest: (userId, status, motive) =>
+    body(client.put(`/admin/coach-requests/${userId}`, { status, motive })),
   reports: (status, page = 0) =>
     body(client.get("/admin/reports", { params: { status: status || undefined, page, size: PAGE_SIZE } })),
   resolveReport: (reportId, status, deleteTarget) =>

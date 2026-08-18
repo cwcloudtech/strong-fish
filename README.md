@@ -22,13 +22,23 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   coach gets it in their autocomplete, with English and French labels. A
   superadmin curates it: editing and deleting entries, and flagging which ones
   are competition movements (see [Exercise administration](#exercise-administration)).
+* **Profiles you control.** Three visibility levels - everyone, your clubs, or
+  your coaches only - applied everywhere a profile can be reached, including the
+  search (see [Profile visibility](#profile-visibility)). An optional birthdate
+  becomes a calendar entry for your club-mates.
+* **Finding people.** Search by name, surname or email, returning only the
+  profiles their owners let you see.
+* **Club invitations.** A coach invites anybody by email; the invitation waits
+  in the app - and survives the invitee not having an account yet (see
+  [Club invitations](#club-invitations)).
 * **Public profiles and a feed.** Follow, post, like, comment and report;
   posts are public or club-only, carry inline pictures, and embed the first URL
   in their text with a player - no separate link field to keep in step. Videos
   can be uploaded to the member's own bucket (see [Video uploads](#video-uploads)).
 * **A calendar.** Meets, club sessions and camps, subscribable from Outlook or
   Google Calendar (see [The calendar](#the-calendar)).
-* **Authentication.** Anyone can sign up. MFA with TOTP authenticator apps and
+* **Authentication.** Anyone can sign up - as an athlete, or as a coach, which
+  a superadmin has to confirm (see [Coach confirmation](#coach-confirmation)). MFA with TOTP authenticator apps and
   WebAuthn security keys (YubiKey and friends). Optional OIDC login with Google,
   GitHub and Keycloak. **API keys** for scripts, and for signing the mobile app
   in by scanning a QR code (see [API keys](#api-keys)).
@@ -240,7 +250,9 @@ cd sf-mobile && flutter analyze
 ```
 
 The API's tests cover the load calculation against the reference spreadsheet's
-own numbers, the spreadsheet importer against both real files, and the router (a
+own numbers, the spreadsheet importer against both real files, the profile
+visibility rules (every widening there is a privacy regression nothing else
+would catch), the ICS generator, and the router (a
 subrouter silently shadowing a route is not a startup error in chi, so every
 endpoint is asserted to resolve).
 
@@ -366,6 +378,93 @@ deliberately not the authenticated handler with the membership check skipped:
 
 Turning sharing back off breaks the link immediately; nothing about it is
 cached or signed.
+
+## Profile visibility
+
+A profile is readable at one of three levels, and the rule is one function -
+`models.CanSeeProfile` - applied by the profile endpoint, the profile's posts,
+and the search:
+
+| Level | Who can read it |
+| --- | --- |
+| `public` | Anybody, signed in or not. This is what makes a shared profile link work. |
+| `clubs` | Members of the clubs its owner belongs to. |
+| `private` | A superadmin, and the owner or admin of a club its owner belongs to - their coach. |
+
+The owner always sees themselves and a superadmin always sees everything, at
+every level. A value the app doesn't recognize - including the empty string an
+account written before this existed carries - normalizes to `private`: an
+unknown level must never widen an audience, and there is a test that says so.
+
+Two consequences worth stating plainly:
+
+* **`clubs` cannot be evaluated for a logged-out visitor.** Knowing whether
+  somebody shares a club with the owner requires knowing who they are, so an
+  anonymous reader is refused. Only `public` is genuinely readable without
+  authentication.
+* **A hidden profile answers 404, not 403.** The difference would confirm that a
+  handle exists to somebody guessing them.
+
+The V5 migration maps the old `publicProfile` boolean exactly - `true` became
+`public`, `false` became `private` - and moves nobody into `clubs`. Widening an
+audience is not a migration's decision to make.
+
+The **search** (`GET /v1/search/members`) takes `terms`, `name`, `surname` and
+`email`, combined with AND, the way uprodit's own search composes its query
+parameters. The visibility predicate lives inside the query rather than
+filtering the results, for two reasons: a caller-side filter makes the page
+counts wrong (a page of 20 comes back with 3), and it puts the enforcement in
+whichever handler remembered it rather than in the one place every search goes
+through. Disabled and banned accounts never appear.
+
+An optional **birthdate** becomes a calendar entry, derived on read rather than
+stored as a row: a birthday has no author, cannot be edited, and has to vanish
+the moment its owner clears the date or narrows their profile. The audience is
+deliberately narrower than "everyone who may see the profile" - it is the
+owner's **club-mates**, and only those who may see the profile at all. A
+birthdate is personal, and a public profile is readable by the whole internet;
+filling one in should not put your date of birth into strangers' calendars. In
+the ICS feed it is emitted once with `RRULE:FREQ=YEARLY` and a UID that carries
+no year, so a client expands it forever instead of accumulating one entry per
+January.
+
+## Club invitations
+
+Adding a member and inviting one are different acts, and both exist. A coach
+entering their own athletes **adds** them; reaching out to somebody who has to
+agree - or who has no account here yet - **invites** them.
+
+An invitation is keyed by **email address**, not by a user id. That is most of
+the point: `POST /v1/clubs/{clubId}/invitations` works for an address with no
+account behind it, and `GET /v1/users/me/invitations` matches on the address at
+read time, so an account created a week later still finds the invitation
+waiting. It also means the invitation carries nothing anybody could guess their
+way into - an id from somebody else's invitation resolves to a 404, not to a
+membership.
+
+The invitee gets an email with a link to the invitations page and sees the same
+invitation in the app (web and mobile), badged in the sidebar. Accepting writes
+the membership and marks the invitation accepted **in one transaction**: an
+accepted invitation whose membership failed to write would leave somebody
+convinced they had joined a club they are not in.
+
+A partial unique index keeps one *pending* invitation per club and address -
+inviting twice updates rather than stacking a second one to decline - while
+still allowing a fresh invitation after a declined one.
+
+## Coach confirmation
+
+Signing up asks which of the two this is: an athlete, or a coach. Choosing
+coach records a **claim, never a grant** - coaching means creating clubs and
+writing other people's training - so the account is created as an ordinary
+athlete with a pending request, and every superadmin is emailed.
+
+The queue is `GET /v1/admin/coach-requests`, with the decision at
+`PUT /v1/admin/coach-requests/{userId}`. Approving is what actually grants the
+role, and only to an account that is already confirmed: one still waiting on its
+activation link keeps waiting, and a banned one stays banned. Rejecting
+**requires a motive**, because it is emailed to the applicant and "no" on its
+own tells them nothing about whether to ask again.
 
 ## Video uploads
 

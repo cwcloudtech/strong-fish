@@ -141,7 +141,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         'handle': user.handle,
                         'bio': user.bio,
                         'locale': value,
-                        'publicProfile': user.publicProfile,
+                        'profileVisibility': user.profileVisibility,
+                        'birthdate': user.birthdate,
                         'bodyweight': user.bodyweight,
                       });
                       await ref.read(sessionProvider.notifier).refresh();
@@ -167,13 +168,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       value == null ? null : ref.read(themeModeProvider.notifier).set(value),
                 ),
               ),
+              // Three levels rather than a public/private switch: "my clubs"
+              // is the one most athletes actually want, and a toggle cannot
+              // express it.
               ListTile(
-                leading: const Icon(Icons.public),
-                title: Text(t('profile.public')),
-                subtitle: Text(t('profile.publicHelp')),
-                trailing: Switch(
-                  value: user.publicProfile,
+                leading: const Icon(Icons.visibility_outlined),
+                title: Text(t('profile.visibility')),
+                subtitle: Text(t('profile.visibilityHelp.${user.profileVisibility}')),
+                trailing: DropdownButton<String>(
+                  value: user.profileVisibility,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    DropdownMenuItem(value: 'public', child: Text(t('profile.visibilityPublic'))),
+                    DropdownMenuItem(value: 'clubs', child: Text(t('profile.visibilityClubs'))),
+                    DropdownMenuItem(value: 'private', child: Text(t('profile.visibilityPrivate'))),
+                  ],
                   onChanged: (value) async {
+                    if (value == null) return;
                     try {
                       await ref.read(apiProvider).updateProfile({
                         'name': user.name,
@@ -181,7 +192,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         'handle': user.handle,
                         'bio': user.bio,
                         'locale': user.locale,
-                        'publicProfile': value,
+                        'profileVisibility': value,
+                        'birthdate': user.birthdate,
                         'bodyweight': user.bodyweight,
                       });
                       await ref.read(sessionProvider.notifier).refresh();

@@ -66,7 +66,10 @@ class User {
   final String role;
   final String picture;
   final String locale;
-  final bool publicProfile;
+  /// Who may read this profile: 'public', 'clubs' or 'private'. An unknown
+  /// value reads as the narrowest, matching the API.
+  final String profileVisibility;
+  final String birthdate;
   final double bodyweight;
   final bool mfaEnabled;
   final String i18nCode;
@@ -81,7 +84,8 @@ class User {
     this.role = '',
     this.picture = '',
     this.locale = '',
-    this.publicProfile = false,
+    this.profileVisibility = 'private',
+    this.birthdate = '',
     this.bodyweight = 0,
     this.mfaEnabled = false,
     this.i18nCode = '',
@@ -97,7 +101,8 @@ class User {
         role: _toString(json['role']),
         picture: _toString(json['picture']),
         locale: _toString(json['locale']),
-        publicProfile: json['publicProfile'] == true,
+        profileVisibility: _toString(json['profileVisibility'], 'private'),
+        birthdate: _toString(json['birthdate']),
         bodyweight: _toDouble(json['bodyweight']),
         mfaEnabled: json['mfaEnabled'] == true,
         i18nCode: _toString(json['i18nCode']),
@@ -472,6 +477,43 @@ class AssignmentDetail {
             .whereType<Map<String, dynamic>>()
             .map(Exercise.fromJson)
             .toList(),
+      );
+}
+
+/// A club asking somebody to join it.
+///
+/// Invitations are addressed by email rather than by user id, so one sent
+/// before the account existed is still waiting when it does.
+class Invitation {
+  final String id;
+  final String clubId;
+  final String clubName;
+  final String inviterName;
+  final String role;
+  final String status;
+  final String message;
+  final int memberCount;
+
+  const Invitation({
+    required this.id,
+    this.clubId = '',
+    this.clubName = '',
+    this.inviterName = '',
+    this.role = 'member',
+    this.status = 'pending',
+    this.message = '',
+    this.memberCount = 0,
+  });
+
+  factory Invitation.fromJson(Map<String, dynamic> json) => Invitation(
+        id: _toString(json['id']),
+        clubId: _toString(json['clubId']),
+        clubName: _toString(json['clubName']),
+        inviterName: _toString(json['inviterName']),
+        role: _toString(json['role'], 'member'),
+        status: _toString(json['status'], 'pending'),
+        message: _toString(json['message']),
+        memberCount: _toInt(json['memberCount']),
       );
 }
 

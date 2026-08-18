@@ -78,6 +78,13 @@ const (
 	// The events calendar.
 	CodeEventTitleRequired = "errors.eventTitleRequired"
 	CodeInvalidEventDate   = "errors.invalidEventDate"
+	// Profiles, search, invitations and coach requests.
+	CodeInvalidBirthdate         = "errors.invalidBirthdate"
+	CodeInvalidProfileVisibility = "errors.invalidProfileVisibility"
+	CodeInvitationNotFound       = "errors.invitationNotFound"
+	CodeAlreadyInvited           = "errors.alreadyInvited"
+	CodeNoCoachRequest           = "errors.noCoachRequest"
+	CodeRejectMotiveRequired     = "errors.rejectMotiveRequired"
 	// The contact form's own failures, including the ones CWCloud's
 	// contact-request API reports back (see cwcloudContactErrors).
 	CodeContactFormNotConfigured = "errors.contactFormNotConfigured"
@@ -176,7 +183,8 @@ func meResponse(user models.User, activationMode string) models.UserMeResponse {
 		ID: user.ID, Email: user.Email, Name: user.Name, Surname: user.Surname,
 		Handle: user.Handle, Bio: user.Bio, Role: user.Role, Picture: user.Picture,
 		PictureX: user.PictureX, PictureY: user.PictureY, Locale: user.Locale,
-		PublicProfile: user.PublicProfile, Bodyweight: user.Bodyweight,
+		ProfileVisibility: user.ProfileVisibility, Birthdate: user.Birthdate,
+		CoachRequest: user.CoachRequest, Bodyweight: user.Bodyweight,
 		MFAEnabled: user.MFAEnabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
 		I18nCode: models.I18nCodeForRole(user.Role, activationMode),
 	}

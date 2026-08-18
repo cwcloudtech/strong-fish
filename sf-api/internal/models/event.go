@@ -9,9 +9,14 @@ const (
 	EventKindCompetition = "competition"
 	EventKindTraining    = "training"
 	EventKindOther       = "other"
+	// EventKindBirthday is never stored: it labels the entries derived from
+	// members' birthdates (see handlers.birthdayEvents), so a client can style
+	// them and a reader can tell them from a date somebody actually scheduled.
+	EventKindBirthday = "birthday"
 )
 
 // IsValidEventKind reports whether kind is one this app knows.
+// Birthdays are excluded: they are derived, so no payload may claim to be one.
 func IsValidEventKind(kind string) bool {
 	switch kind {
 	case EventKindCompetition, EventKindTraining, EventKindOther:

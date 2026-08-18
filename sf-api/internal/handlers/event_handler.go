@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -134,7 +135,20 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.decorate(r, events, userID))
+	events = h.decorate(r, events, userID)
+
+	// Birthdays are derived, not stored, so they're merged in here rather than
+	// coming out of the query - and they're never editable, which decorate
+	// would otherwise have to special-case.
+	birthdays, err := birthdayEvents(r.Context(), h.users, h.clubs, userID, from)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	events = append(events, birthdays...)
+	sort.SliceStable(events, func(i, j int) bool { return events[i].StartsAt.Before(events[j].StartsAt) })
+
+	writeJSON(w, http.StatusOK, events)
 }
 
 func (h *EventHandler) Get(w http.ResponseWriter, r *http.Request) {

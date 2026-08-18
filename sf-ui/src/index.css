@@ -627,6 +627,31 @@ button {
 .sf-sidebar.collapsed .sf-dropdown-toggle svg { font-size: 15px; }
 .sf-sidebar.collapsed .sf-dropdown-caret { display: none; }
 
+/* --- a radio group that reads as two cards ---
+   Used for "athlete or coach" at signup, where the choice carries a line of
+   explanation each and a bare radio button would bury it. */
+.sf-choice-row { display: flex; gap: var(--sf-spacing-xs); flex-wrap: wrap; }
+
+.sf-choice {
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: var(--sf-spacing-sm);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  background-color: var(--sf-surface);
+  cursor: pointer;
+  transition: border-color var(--sf-transition), background-color var(--sf-transition);
+}
+
+.sf-choice:hover { border-color: var(--sf-primary); }
+.sf-choice.selected { border-color: var(--sf-primary); background-color: var(--sf-primary-tint); }
+.sf-choice input { margin-top: 3px; }
+.sf-choice span { display: flex; flex-direction: column; gap: 2px; }
+.sf-choice .sf-muted { font-size: 0.8rem; }
+
 /* --- lists, tokens and plain icon buttons --- */
 
 .sf-list { list-style: none; margin: var(--sf-spacing) 0 0; padding: 0; }

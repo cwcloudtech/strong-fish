@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiPlus, FiTrash2, FiUpload } from "react-icons/fi";
+import { FiMail, FiPlus, FiTrash2, FiUpload } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
-import { auth, clubs as clubsApi, programs as programsApi } from "../../api/services";
+import { auth, clubs as clubsApi, invitations as invitationsApi, programs as programsApi } from "../../api/services";
 import { ClubFormModal } from "./Clubs";
 import ImportProgramModal from "../../components/programs/ImportProgramModal";
 import Avatar from "../../components/common/Avatar";
@@ -233,6 +233,10 @@ function MembersTab({ club, canManage, isOwner, onChanged }) {
   const { t } = useI18n();
   const [members, setMembers] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [inviting, setInviting] = useState(false);
+  // Bumped on every invitation change so the pending list reloads without
+  // MembersTab having to own its state.
+  const [invitationsKey, setInvitationsKey] = useState(0);
   const [confirming, setConfirming] = useState(null);
   const [error, setError] = useState(null);
 
@@ -279,12 +283,19 @@ function MembersTab({ club, canManage, isOwner, onChanged }) {
     <>
       <ErrorMessage error={error} />
       {canManage ? (
-        <div className="sf-row" style={{ marginBottom: "1rem" }}>
+        <div className="sf-row" style={{ marginBottom: "1rem", gap: "0.4rem" }}>
           <button className="sf-button" onClick={() => setAdding(true)}>
             {t("clubs.addMember")}
           </button>
+          {/* Adding puts somebody in the club; inviting asks them. The second
+              is what works for a person who has no account here yet. */}
+          <button className="sf-button sf-button-secondary" onClick={() => setInviting(true)}>
+            <FiMail /> {t("clubs.invite")}
+          </button>
         </div>
       ) : null}
+
+      {canManage ? <PendingInvitations club={club} refreshKey={invitationsKey} /> : null}
 
       <div className="sf-card">
         <div className="sf-table-wrapper">
@@ -344,6 +355,18 @@ function MembersTab({ club, canManage, isOwner, onChanged }) {
             toast.success(t("clubs.memberAdded"), toastOptions);
             load();
             onChanged();
+          }}
+        />
+      ) : null}
+
+      {inviting ? (
+        <InviteModal
+          club={club}
+          onClose={() => setInviting(false)}
+          onInvited={() => {
+            setInviting(false);
+            setInvitationsKey((key) => key + 1);
+            toast.success(t("clubs.invitationSent"), toastOptions);
           }}
         />
       ) : null}
@@ -561,6 +584,151 @@ function CreateProgramModal({ club, onClose, onCreated }) {
         />
       </div>
       <ErrorMessage error={error} />
+    </Modal>
+  );
+}
+
+/**
+ * Who has been invited and hasn't answered.
+ *
+ * It sits above the member list rather than in a tab of its own: an invitation
+ * is a member-in-waiting, and a coach wondering why somebody isn't in the club
+ * looks at the member list first.
+ */
+function PendingInvitations({ club, refreshKey }) {
+  const { t } = useI18n();
+  const [pending, setPending] = useState([]);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const all = await invitationsApi.forClub(club.id);
+      setPending(all.filter((invitation) => invitation.status === "pending"));
+    } catch (err) {
+      setError(err);
+    }
+  }, [club.id]);
+
+  useEffect(() => {
+    load();
+  }, [load, refreshKey]);
+
+  const withdraw = async (invitation) => {
+    try {
+      await invitationsApi.withdraw(club.id, invitation.id);
+      await load();
+    } catch (err) {
+      setError(err);
+    }
+  };
+
+  if (pending.length === 0) return <ErrorMessage error={error} />;
+
+  return (
+    <div className="sf-card">
+      <h3 style={{ marginTop: 0 }}>{t("clubs.pendingInvitations")}</h3>
+      <ErrorMessage error={error} />
+      <ul className="sf-list" style={{ marginTop: 0 }}>
+        {pending.map((invitation) => (
+          <li className="sf-list-item" key={invitation.id}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <strong>{invitation.email}</strong>
+              <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
+                {t(`invitations.asRole.${invitation.role}`)}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="sf-icon-button sf-icon-button-plain"
+              onClick={() => withdraw(invitation)}
+              aria-label={t("clubs.withdrawInvitation")}
+              title={t("clubs.withdrawInvitation")}
+            >
+              <FiTrash2 />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Invites one address to the club. */
+function InviteModal({ club, onClose, onInvited }) {
+  const { t } = useI18n();
+  const [form, setForm] = useState({ email: "", role: "member", message: "" });
+  const [busy, setBusy] = useState(false);
+
+  const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      await invitationsApi.invite(club.id, form);
+      onInvited();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t("errors.generic"), toastOptions);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={t("clubs.invite")}
+      onClose={onClose}
+      actions={
+        <>
+          <button type="button" className="sf-button sf-button-secondary" onClick={onClose} disabled={busy}>
+            {t("common.cancel")}
+          </button>
+          <button type="submit" form="sf-invite-form" className="sf-button" disabled={busy || !form.email}>
+            {busy ? t("common.loading") : t("clubs.sendInvitation")}
+          </button>
+        </>
+      }
+    >
+      <p className="sf-muted" style={{ marginTop: 0 }}>
+        {t("clubs.inviteHelp")}
+      </p>
+      <form id="sf-invite-form" onSubmit={submit}>
+        <div className="sf-field">
+          <label className="sf-label" htmlFor="inviteEmail">
+            {t("auth.email")}
+          </label>
+          <input
+            id="inviteEmail"
+            className="sf-input"
+            type="email"
+            value={form.email}
+            onChange={set("email")}
+            autoFocus
+            required
+          />
+        </div>
+        <div className="sf-field">
+          <label className="sf-label" htmlFor="inviteRole">
+            {t("clubs.role")}
+          </label>
+          <select id="inviteRole" className="sf-select" value={form.role} onChange={set("role")}>
+            <option value="member">{t("clubs.member")}</option>
+            <option value="admin">{t("clubs.admin")}</option>
+          </select>
+        </div>
+        <div className="sf-field">
+          <label className="sf-label" htmlFor="inviteMessage">
+            {t("clubs.inviteMessage")} <span className="sf-muted">({t("common.optional")})</span>
+          </label>
+          <textarea
+            id="inviteMessage"
+            className="sf-textarea"
+            rows={3}
+            value={form.message}
+            onChange={set("message")}
+          />
+        </div>
+      </form>
     </Modal>
   );
 }

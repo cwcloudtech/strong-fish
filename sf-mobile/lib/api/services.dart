@@ -22,18 +22,22 @@ class SfApi {
     return LoginResult.fromJson(_map(response.data));
   }
 
+  /// Opens an account. [coach] records a claim, not a grant: a superadmin
+  /// confirms it, and the account is an athlete until they do.
   Future<LoginResult> register({
     required String email,
     required String password,
     required String name,
     required String surname,
     required String locale,
+    bool coach = false,
   }) async {
     final response = await client.dio.post('/users', data: {
       'email': email,
       'password': password,
       'name': name,
       'surname': surname,
+      'coach': coach,
       'locale': locale,
     });
     return LoginResult.fromJson(_map(response.data));
@@ -200,6 +204,23 @@ class SfApi {
       'clubId': clubId,
     });
     return Post.fromJson(_map(response.data));
+  }
+
+  // --- invitations ---
+
+  Future<List<Invitation>> invitations() async {
+    final response = await client.dio.get('/users/me/invitations');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => Invitation.fromJson(_map(item))).toList();
+  }
+
+  Future<void> acceptInvitation(String id) async {
+    await client.dio.post('/users/me/invitations/$id/accept');
+  }
+
+  Future<void> declineInvitation(String id) async {
+    await client.dio.post('/users/me/invitations/$id/decline');
   }
 
   // --- the calendar ---

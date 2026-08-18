@@ -35,6 +35,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _error;
   String? _notice;
   bool _showServer = false;
+  // "I'm a coach" on the sign-up form. It queues a request for a superadmin to
+  // confirm; the account is an athlete in the meantime.
+  bool _coach = false;
 
   @override
   void initState() {
@@ -86,6 +89,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               password: _password.text,
               name: _name.text.trim(),
               surname: _surname.text.trim(),
+              coach: _coach,
               locale: ref.read(localeProvider),
             );
         // A new account starts disabled until it's activated - the very first
@@ -93,10 +97,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         if (result.token.isEmpty) {
           setState(() {
             _mode = _Mode.login;
-            _notice = t('auth.checkEmail');
+            _notice = _coach ? t('auth.coachRequestSent') : t('auth.checkEmail');
           });
           return;
         }
+        if (_coach) _notice = t('auth.coachRequestSent');
         try {
           await ref.read(sessionProvider.notifier).completeLogin(result.token);
         } on Object catch (error) {
@@ -231,6 +236,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         TextField(controller: _name, decoration: InputDecoration(labelText: t('auth.name'))),
         const SizedBox(height: 12),
         TextField(controller: _surname, decoration: InputDecoration(labelText: t('auth.surname'))),
+        const SizedBox(height: 12),
+        // Which of the two this account is. Picking "coach" grants nothing on
+        // its own - it queues a request.
+        SegmentedButton<bool>(
+          segments: [
+            ButtonSegment(value: false, label: Text(t('auth.imAnAthlete'))),
+            ButtonSegment(value: true, label: Text(t('auth.imACoach'))),
+          ],
+          selected: {_coach},
+          onSelectionChanged: (selection) => setState(() => _coach = selection.first),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _coach ? t('auth.imACoachHelp') : t('auth.imAnAthleteHelp'),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
         const SizedBox(height: 12),
       ],
       TextField(

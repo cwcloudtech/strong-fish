@@ -47,6 +47,7 @@ func main() {
 	webauthnStore := store.NewWebAuthnCredentialStore(pool)
 	apiKeyStore := store.NewApiKeyStore(pool)
 	eventStore := store.NewEventStore(pool)
+	invitationStore := store.NewInvitationStore(pool)
 
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
 	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
@@ -70,6 +71,8 @@ func main() {
 
 	providers := oidc.BuildProviders(cfg)
 
+	profileHandler := handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore)
+
 	programHandler := handlers.NewProgramHandler(programStore, clubStore, exerciseStore, oneRMStore,
 		userStore, mailer, cfg.MaxUploadSize, cfg.PlateIncrement, cfg.UIBaseURL)
 
@@ -84,8 +87,9 @@ func main() {
 		Program:  programHandler,
 		Training: handlers.NewTrainingHandler(programStore, clubStore, userStore, programHandler),
 		Social:   handlers.NewSocialHandler(socialStore, clubStore, userStore, oneRMStore, cfg.MaxImageSize),
-		Profile:  handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore),
-		Admin:    handlers.NewAdminHandler(userStore, webauthnStore, socialStore, cfg.ActivationMode),
+		Profile:  profileHandler,
+		Admin: handlers.NewAdminHandler(userStore, webauthnStore, socialStore, mailer,
+			cfg.ActivationMode, cfg.UIBaseURL),
 		Config: handlers.NewConfigHandler(oidc.Names(providers), cfg.ActivationMode,
 			cfg.PlateIncrement, cfg.MaxImageSize, cfg.Version, contactClient.Configured(),
 			cfg.APIBaseURL, cfg.UIBaseURL, cfg.MobileURLPattern),
@@ -94,6 +98,9 @@ func main() {
 		Media:    handlers.NewMediaHandler(userStore, cfg.MaxVideoSize),
 		Event:    handlers.NewEventHandler(eventStore, clubStore, userStore),
 		Calendar: handlers.NewCalendarHandler(userStore, eventStore, clubStore, cfg.APIBaseURL),
+		Search:   handlers.NewSearchHandler(userStore, clubStore, profileHandler),
+		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
+			mailer, cfg.UIBaseURL),
 	}, userStore, clubStore, router.Options{
 		JWTSecret:          cfg.JWTSecret,
 		ApiKeys:            apiKeyStore,

@@ -6,6 +6,7 @@ import '../widgets/logo.dart';
 import 'coach_screen.dart';
 import 'events_screen.dart';
 import 'feed_screen.dart';
+import 'invitations_screen.dart';
 import 'one_rms_screen.dart';
 import 'profile_screen.dart';
 import 'training_screen.dart';
@@ -35,6 +36,7 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
       if (isCoach)
         (label: t('programs.title'), icon: Icons.edit_note, screen: const CoachScreen()),
       (label: t('nav.events'), icon: Icons.event_outlined, screen: const EventsScreen()),
+      (label: t('nav.invitations'), icon: Icons.mail_outline, screen: const InvitationsScreen()),
       (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
       (label: t('nav.profile'), icon: Icons.person_outline, screen: const ProfileScreen()),
     ];

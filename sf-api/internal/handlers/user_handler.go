@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -50,6 +51,10 @@ type registerPayload struct {
 	Name     string `json:"name"`
 	Surname  string `json:"surname"`
 	Locale   string `json:"locale"`
+	// Coach is the "I'm a coach" box on the signup form. It records a claim,
+	// never a grant: coaching means writing other people's training, so the
+	// role waits on a superadmin (see models.CoachRequest).
+	Coach bool `json:"coach"`
 }
 
 // Register opens an account. Anyone can subscribe: the very first account ever
@@ -94,11 +99,42 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if p.Coach {
+		// The very first account is the superadmin and already outranks a
+		// coach, so it has nothing to apply for.
+		if user.Role != models.GlobalRoleSuperadmin {
+			if updated, err := h.users.RequestCoach(r.Context(), user.ID, time.Now().UTC()); err == nil {
+				user = updated
+				h.notifyCoachRequest(r, user)
+			} else {
+				// The account exists and works; it just isn't queued for
+				// review. Failing the registration over it would be worse.
+				slog.Error("failed to record coach request", "userId", user.ID, "error", err)
+			}
+		}
+	}
+
 	if user.Role == models.GlobalRoleDisabled && h.activationMode == models.ActivationModeEmail {
 		h.sendConfirmationEmail(r.Context(), user, localeOf(user, r))
 	}
 
 	h.respondSession(w, user, http.StatusCreated)
+}
+
+// notifyCoachRequest tells every superadmin somebody is waiting. Best-effort,
+// like every other outgoing mail here: the request is in the queue either way,
+// and the queue - not the email - is what they act on.
+func (h *UserHandler) notifyCoachRequest(r *http.Request, applicant models.User) {
+	emails, err := h.users.ListSuperadminEmails(r.Context())
+	if err != nil {
+		slog.Error("failed to list superadmins for a coach request", "error", err)
+		return
+	}
+	name := strings.TrimSpace(applicant.Name + " " + applicant.Surname)
+	for _, address := range emails {
+		h.mailer.SendCoachRequest(r.Context(), address, localeOf(applicant, r),
+			name, applicant.Email, h.uiBaseURL+"/dashboard/admin")
+	}
 }
 
 // sendConfirmationEmail mints a purpose-scoped confirmation token and emails the
@@ -190,15 +226,16 @@ func (h *UserHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateProfilePayload struct {
-	Name            string  `json:"name"`
-	Surname         string  `json:"surname"`
-	Handle          string  `json:"handle"`
-	Bio             string  `json:"bio"`
-	Locale          string  `json:"locale"`
-	PublicProfile   bool    `json:"publicProfile"`
-	Bodyweight      float64 `json:"bodyweight"`
-	Password        string  `json:"password"`
-	ConfirmPassword string  `json:"confirmPassword"`
+	Name              string  `json:"name"`
+	Surname           string  `json:"surname"`
+	Handle            string  `json:"handle"`
+	Bio               string  `json:"bio"`
+	Locale            string  `json:"locale"`
+	ProfileVisibility string  `json:"profileVisibility"`
+	Birthdate         string  `json:"birthdate"`
+	Bodyweight        float64 `json:"bodyweight"`
+	Password          string  `json:"password"`
+	ConfirmPassword   string  `json:"confirmPassword"`
 }
 
 // UpdateProfile lets the connected user edit their own profile and, optionally,
@@ -253,9 +290,20 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		passwordHash = &hashed
 	}
 
+	// A birthdate is optional and, once given, has to be a real date - it drives
+	// a calendar entry, and "1990-13-45" would render as one.
+	birthdate := strings.TrimSpace(p.Birthdate)
+	if utils.IsNotBlank(birthdate) {
+		if _, err := time.Parse("2006-01-02", birthdate); err != nil {
+			writeError(w, http.StatusBadRequest, "Please enter a valid birthdate", CodeInvalidBirthdate)
+			return
+		}
+	}
+
 	user, err := h.users.UpdateProfile(r.Context(), userID, store.ProfileFields{
 		Name: p.Name, Surname: p.Surname, Handle: handle, Bio: p.Bio, Locale: p.Locale,
-		PublicProfile: p.PublicProfile, Bodyweight: p.Bodyweight, PasswordHash: passwordHash,
+		ProfileVisibility: p.ProfileVisibility, Birthdate: birthdate,
+		Bodyweight: p.Bodyweight, PasswordHash: passwordHash,
 	})
 	if err != nil {
 		writeStoreError(w, err)

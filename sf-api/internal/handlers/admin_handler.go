@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	"strong-fish-api/internal/email"
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/store"
@@ -18,12 +20,17 @@ type AdminHandler struct {
 	users          *store.UserStore
 	webauthnCreds  *store.WebAuthnCredentialStore
 	social         *store.SocialStore
+	mailer         *email.Sender
 	activationMode string
+	uiBaseURL      string
 }
 
 func NewAdminHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCredentialStore,
-	social *store.SocialStore, activationMode string) *AdminHandler {
-	return &AdminHandler{users: users, webauthnCreds: webauthnCreds, social: social, activationMode: activationMode}
+	social *store.SocialStore, mailer *email.Sender, activationMode, uiBaseURL string) *AdminHandler {
+	return &AdminHandler{
+		users: users, webauthnCreds: webauthnCreds, social: social, mailer: mailer,
+		activationMode: activationMode, uiBaseURL: uiBaseURL,
+	}
 }
 
 // adminUser is one account as the management screen shows it, with the MFA flag
@@ -152,5 +159,86 @@ func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"users": users, "openReports": openReports})
+	coachRequests, err := h.users.CountCoachApplicants(r.Context())
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{
+		"users": users, "openReports": openReports, "coachRequests": coachRequests,
+	})
+}
+
+// --- coach confirmation ---
+
+// ListCoachRequests is the queue of accounts that said "I'm a coach" at signup
+// and are waiting to be believed.
+func (h *AdminHandler) ListCoachRequests(w http.ResponseWriter, r *http.Request) {
+	applicants, err := h.users.ListCoachApplicants(r.Context())
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	results := make([]models.CoachApplicant, len(applicants))
+	for i, user := range applicants {
+		results[i] = models.CoachApplicant{
+			UserSummary: summarize(user), Request: user.CoachRequest, CreatedAt: user.CreatedAt,
+		}
+	}
+	writeJSON(w, http.StatusOK, results)
+}
+
+type coachDecisionPayload struct {
+	Status string `json:"status"`
+	Motive string `json:"motive"`
+}
+
+// DecideCoachRequest confirms or turns down one claim.
+//
+// A rejection must carry a motive: it is emailed to the applicant, and "no"
+// with no reason tells them nothing about whether to ask again.
+func (h *AdminHandler) DecideCoachRequest(w http.ResponseWriter, r *http.Request) {
+	deciderID, _ := middleware.UserIDFromContext(r.Context())
+	userID := chi.URLParam(r, "userId")
+
+	var p coachDecisionPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	if !models.IsValidCoachRequestStatus(p.Status) {
+		writeError(w, http.StatusBadRequest, "Invalid decision", CodeInvalidStatus)
+		return
+	}
+	if p.Status == models.CoachRequestRejected && utils.IsBlank(p.Motive) {
+		writeError(w, http.StatusBadRequest, "Please say why this request is rejected", CodeRejectMotiveRequired)
+		return
+	}
+
+	applicant, err := h.users.FindByID(r.Context(), userID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if !applicant.CoachRequest.Pending() {
+		writeError(w, http.StatusBadRequest, "This account has no pending coach request", CodeNoCoachRequest)
+		return
+	}
+
+	user, err := h.users.DecideCoachRequest(r.Context(), userID, p.Status, p.Motive, deciderID, time.Now().UTC())
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	locale := localeOf(user, r)
+	if p.Status == models.CoachRequestApproved {
+		h.mailer.SendCoachApproved(r.Context(), user.Email, locale, h.uiBaseURL)
+	} else {
+		h.mailer.SendCoachRejected(r.Context(), user.Email, locale, p.Motive)
+	}
+
+	writeJSON(w, http.StatusOK, adminUser{
+		UserMeResponse: meResponse(user, h.activationMode), MFAEnabled: user.MFAEnabled,
+	})
 }
