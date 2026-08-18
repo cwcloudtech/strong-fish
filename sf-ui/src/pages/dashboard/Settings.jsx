@@ -14,6 +14,19 @@ import { readImageAsDataUrl } from "../../utils/image";
 import { createCredential, isWebAuthnSupported } from "../../utils/webauthn";
 
 /** The connected user's own settings: profile, avatar, and MFA enrollment. */
+/**
+ * The same normalization the API applies to a username, so the handle preview
+ * shows what will actually be saved rather than what was typed.
+ */
+function slugify(value) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export default function Settings() {
   const { t, locale, setLocale } = useI18n();
   const { user, setUser, config } = useAuth();
@@ -28,7 +41,8 @@ export default function Settings() {
     setForm({
       name: user.name || "",
       surname: user.surname || "",
-      handle: user.handle || "",
+      username: user.username || "",
+      anonymous: Boolean(user.anonymous),
       bio: user.bio || "",
       bodyweight: user.bodyweight || "",
       profileVisibility: user.profileVisibility || "private",
@@ -116,12 +130,34 @@ export default function Settings() {
         </div>
 
         <div className="sf-field">
-          <label className="sf-label">{t("profile.handle")}</label>
-          <input className="sf-input" value={form.handle} onChange={set("handle")} />
+          <label className="sf-label" htmlFor="username">
+            {t("profile.username")} <span className="sf-muted">({t("common.optional")})</span>
+          </label>
+          <input id="username" className="sf-input" value={form.username} onChange={set("username")} />
+          {/* The handle is not an editable field any more: it follows the
+              username, or the name when there is none. Showing what it will
+              become beats a second box that can disagree with this one. */}
           <p className="sf-muted" style={{ marginTop: "0.25rem" }}>
-            {t("profile.handleHelp", { handle: form.handle || "..." })}
+            {t("profile.handleHelp", {
+              handle: slugify(form.username) || slugify(`${form.name} ${form.surname}`) || "...",
+            })}
           </p>
         </div>
+
+        <label className="sf-checkbox" style={{ marginBottom: "1rem" }}>
+          <input
+            type="checkbox"
+            checked={form.anonymous}
+            onChange={set("anonymous")}
+            disabled={!form.username.trim()}
+          />
+          <span>
+            {t("profile.anonymous")}
+            <div className="sf-muted">
+              {form.username.trim() ? t("profile.anonymousHelp") : t("profile.anonymousNeedsUsername")}
+            </div>
+          </span>
+        </label>
 
         <div className="sf-field">
           <label className="sf-label">{t("profile.bio")}</label>

@@ -28,16 +28,20 @@ func NewUserStore(pool *pgxpool.Pool) *UserStore {
 
 // userData is the JSONB payload of the users table.
 type userData struct {
-	Password string   `json:"password"`
-	Name     string   `json:"name,omitempty"`
-	Surname  string   `json:"surname,omitempty"`
-	Role     string   `json:"role,omitempty"`
-	Handle   string   `json:"handle,omitempty"`
-	Bio      string   `json:"bio,omitempty"`
-	Picture  string   `json:"picture,omitempty"`
-	PictureX *float64 `json:"pictureX,omitempty"`
-	PictureY *float64 `json:"pictureY,omitempty"`
-	Locale   string   `json:"locale,omitempty"`
+	Password string `json:"password"`
+	Name     string `json:"name,omitempty"`
+	Surname  string `json:"surname,omitempty"`
+	Role     string `json:"role,omitempty"`
+	Handle   string `json:"handle,omitempty"`
+	// Username is the name the member picked; Anonymous makes it the only one
+	// anybody else sees (see display_name.go).
+	Username  string   `json:"username,omitempty"`
+	Anonymous bool     `json:"anonymous,omitempty"`
+	Bio       string   `json:"bio,omitempty"`
+	Picture   string   `json:"picture,omitempty"`
+	PictureX  *float64 `json:"pictureX,omitempty"`
+	PictureY  *float64 `json:"pictureY,omitempty"`
+	Locale    string   `json:"locale,omitempty"`
 	// PublicProfile is the boolean ProfileVisibility replaced. It is still read
 	// so an account the V5 migration hasn't touched still resolves to something
 	// sensible, and never written.
@@ -77,6 +81,8 @@ func scanUser(row pgx.Row) (models.User, error) {
 	u.Surname = d.Surname
 	u.Role = models.GlobalRole(d.Role)
 	u.Handle = d.Handle
+	u.Username = d.Username
+	u.Anonymous = d.Anonymous
 	u.Bio = d.Bio
 	u.Picture = d.Picture
 	u.PictureX = resolveImagePosition(d.PictureX)
@@ -241,17 +247,22 @@ func (s *UserStore) List(ctx context.Context) ([]models.User, error) {
 	return scanUsers(rows)
 }
 
-// SearchByEmail powers the autocomplete used when adding a member to a club: it
-// matches on the email, the handle and the name, so a coach can find someone
-// without knowing their exact address.
+// SearchByEmail powers the autocomplete used when adding a member to a club:
+// it matches the email, the handle and the shown name, so a coach can find
+// somebody without knowing their exact address.
+//
+// An anonymized account is findable by its username alone, for the same reason
+// as in SearchMembers: matching a real name or an address is how you learn who
+// a username belongs to. Such a member can still be invited, which is
+// addressed to the email directly rather than searched for.
 func (s *UserStore) SearchByEmail(ctx context.Context, query string, limit int) ([]models.User, error) {
 	pattern := "%" + strings.ToLower(strings.TrimSpace(query)) + "%"
 	rows, err := s.pool.Query(ctx, `
-		SELECT `+userColumns+` FROM users
-		WHERE lower(email) LIKE $1
-		   OR lower(coalesce(data->>'handle', '')) LIKE $1
-		   OR lower(coalesce(data->>'name', '') || ' ' || coalesce(data->>'surname', '')) LIKE $1
-		ORDER BY email
+		SELECT `+userColumns+` FROM users u
+		WHERE lower(coalesce(u.data->>'handle', '')) LIKE $1
+		   OR lower(`+displayFullName("u")+`) LIKE $1
+		   OR (coalesce(u.data->>'anonymous', 'false') <> 'true' AND lower(u.email) LIKE $1)
+		ORDER BY u.email
 		LIMIT $2
 	`, pattern, limit)
 	if err != nil {
@@ -314,21 +325,36 @@ func (s *UserStore) SearchMembers(ctx context.Context, m MemberSearch, callerID 
 		where = append(where, fmt.Sprintf("%s LIKE $%d", expression, len(args)))
 	}
 
-	const fullName = `lower(coalesce(data->>'name', '') || ' ' || coalesce(data->>'surname', ''))`
+	// Anonymity has to hold here too, and it takes more than hiding the name in
+	// the results: a search that *matches* on somebody's real name tells you
+	// who a username belongs to as surely as printing it would. So an
+	// anonymized account is findable only by the name it chose to show, and
+	// its email is off the table as well - an address identifies a person just
+	// as precisely.
+	//
+	// The consequence is deliberate: a coach cannot look an anonymized member
+	// up by email to add them to a club. Inviting them still works, because an
+	// invitation is addressed to the email without searching for it first.
+	const notAnonymous = `coalesce(data->>'anonymous', 'false') <> 'true'`
+	shown := `lower(` + displayFullName("users") + `)`
+
 	if utils.IsNotBlank(m.Terms) {
 		args = append(args, "%"+strings.ToLower(strings.TrimSpace(m.Terms))+"%")
 		where = append(where, fmt.Sprintf(
-			"(lower(email) LIKE $%d OR %s LIKE $%d OR lower(coalesce(data->>'handle', '')) LIKE $%d)",
-			len(args), fullName, len(args), len(args)))
+			"(%s LIKE $%d OR lower(coalesce(data->>'handle', '')) LIKE $%d OR (%s AND lower(email) LIKE $%d))",
+			shown, len(args), len(args), notAnonymous, len(args)))
 	}
 	if utils.IsNotBlank(m.Name) {
-		like(`lower(coalesce(data->>'name', ''))`, m.Name)
+		like(`lower(`+displayName("users")+`)`, m.Name)
 	}
 	if utils.IsNotBlank(m.Surname) {
-		like(`lower(coalesce(data->>'surname', ''))`, m.Surname)
+		// An anonymized member has no surname to match, so this criterion
+		// simply never selects one - which is the correct answer, not a gap.
+		like(`lower(`+displaySurname("users")+`)`, m.Surname)
 	}
 	if utils.IsNotBlank(m.Email) {
-		like(`lower(email)`, m.Email)
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(m.Email))+"%")
+		where = append(where, fmt.Sprintf("(%s AND lower(email) LIKE $%d)", notAnonymous, len(args)))
 	}
 
 	// The visibility rules, as SQL. "clubs" needs a shared club; "private"
@@ -370,7 +396,7 @@ func (s *UserStore) SearchMembers(ctx context.Context, m MemberSearch, callerID 
 	rows, err := s.pool.Query(ctx, `
 		SELECT `+userColumns+` FROM users
 		WHERE `+predicate+`
-		ORDER BY coalesce(data->>'name', ''), coalesce(data->>'surname', ''), email
+		ORDER BY `+displayName("users")+`, `+displaySurname("users")+`, email
 		LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		return nil, 0, err
@@ -414,9 +440,12 @@ func (s *UserStore) merge(ctx context.Context, id string, patch map[string]any) 
 // ProfileFields are the profile settings a user may change about themselves.
 // PasswordHash is a pointer so nil means "leave the current password alone".
 type ProfileFields struct {
-	Name              string
-	Surname           string
-	Handle            string
+	Name    string
+	Surname string
+	// Username is what the member is known by when set, and what the handle is
+	// derived from. Blank clears it, and the handle falls back to the name.
+	Username          string
+	Anonymous         bool
 	Bio               string
 	Locale            string
 	ProfileVisibility string
@@ -426,17 +455,27 @@ type ProfileFields struct {
 }
 
 // UpdateProfile sets the connected user's own profile fields.
+//
+// The handle is derived here rather than accepted from the caller: it is the
+// member's username when they picked one, and their name otherwise. That is
+// what makes "@..." follow the username - there is no second field to keep in
+// step with it, and no way for the two to disagree.
 func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileFields) (models.User, error) {
+	handle, err := s.deriveHandle(ctx, id, f)
+	if err != nil {
+		return models.User{}, err
+	}
+
 	patch := map[string]any{
 		"name":              f.Name,
 		"surname":           f.Surname,
+		"username":          strings.TrimSpace(f.Username),
+		"anonymous":         f.Anonymous,
+		"handle":            handle,
 		"bio":               f.Bio,
 		"profileVisibility": models.NormalizeProfileVisibility(f.ProfileVisibility),
 		"birthdate":         f.Birthdate,
 		"bodyweight":        f.Bodyweight,
-	}
-	if utils.IsNotBlank(f.Handle) {
-		patch["handle"] = f.Handle
 	}
 	if utils.IsNotBlank(f.Locale) {
 		patch["locale"] = f.Locale
@@ -445,6 +484,43 @@ func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileField
 		patch["password"] = *f.PasswordHash
 	}
 	return s.merge(ctx, id, patch)
+}
+
+// deriveHandle works out the handle a profile should have after this update:
+// the slugified username when one is set, the name and surname otherwise.
+//
+// The account's own current handle is never treated as taken - re-saving a
+// profile without changing anything must not walk the handle to "marie-2".
+func (s *UserStore) deriveHandle(ctx context.Context, id string, f ProfileFields) (string, error) {
+	seed := utils.Slugify(f.Username)
+	if utils.IsBlank(seed) {
+		seed = utils.Slugify(strings.TrimSpace(f.Name + " " + f.Surname))
+	}
+	if utils.IsBlank(seed) {
+		// Nothing usable in either: keep whatever the account already has
+		// rather than renaming it to a placeholder.
+		user, err := s.FindByID(ctx, id)
+		if err != nil {
+			return utils.EMPTY, err
+		}
+		return user.Handle, nil
+	}
+	return s.availableHandleFor(ctx, seed, id)
+}
+
+// UsernameTaken reports whether another account already uses this username.
+// Case-insensitive, matching the unique index: two names that read the same to
+// a person must not both exist.
+func (s *UserStore) UsernameTaken(ctx context.Context, username, exceptID string) (bool, error) {
+	if utils.IsBlank(username) {
+		return false, nil
+	}
+	var taken bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT exists(SELECT 1 FROM users
+		              WHERE lower(data->>'username') = lower($1) AND id <> $2::uuid)
+	`, strings.TrimSpace(username), exceptID).Scan(&taken)
+	return taken, err
 }
 
 // UpdatePassword sets a new password hash, leaving everything else alone.
@@ -559,15 +635,24 @@ func (s *UserStore) ClearMFA(ctx context.Context, id string) (models.User, error
 // handleSeed derives a starting profile handle from an email's local part,
 // falling back to the display name and finally to a generic one, so an address
 // made entirely of punctuation still yields something addressable.
+// handleSeed picks the starting handle for a new account.
+//
+// The name comes first, because that is the rule the handle follows for the
+// rest of the account's life: the username when one is set, the name
+// otherwise (see UpdateProfile). Seeding from the email instead would give a
+// new member a handle that changes the first time they save their profile.
+//
+// The email's local part is the fallback for a name with no usable letters.
 func handleSeed(email, name string) string {
+	if seed := utils.Slugify(name); utils.IsNotBlank(seed) {
+		return seed
+	}
+
 	local := email
 	if at := strings.IndexByte(email, '@'); at > 0 {
 		local = email[:at]
 	}
 	if seed := utils.Slugify(local); utils.IsNotBlank(seed) {
-		return seed
-	}
-	if seed := utils.Slugify(name); utils.IsNotBlank(seed) {
 		return seed
 	}
 	return "athlete"
@@ -577,6 +662,13 @@ func handleSeed(email, name string) string {
 // The unique index on the handle is still the authority - this only avoids
 // losing the race in the common case.
 func (s *UserStore) availableHandle(ctx context.Context, seed string) (string, error) {
+	return s.availableHandleFor(ctx, seed, utils.EMPTY)
+}
+
+// availableHandleFor is availableHandle for an account that already exists:
+// exceptID's own handle doesn't count as taken, so re-saving a profile leaves
+// the handle where it was instead of walking it to "marie-2".
+func (s *UserStore) availableHandleFor(ctx context.Context, seed, exceptID string) (string, error) {
 	var taken bool
 	for suffix := 0; suffix < 50; suffix++ {
 		candidate := seed
@@ -584,8 +676,9 @@ func (s *UserStore) availableHandle(ctx context.Context, seed string) (string, e
 			candidate = seed + "-" + strconv.Itoa(suffix+1)
 		}
 		err := s.pool.QueryRow(ctx, `
-			SELECT exists(SELECT 1 FROM users WHERE data->>'handle' = $1)
-		`, candidate).Scan(&taken)
+			SELECT exists(SELECT 1 FROM users
+			              WHERE data->>'handle' = $1 AND ($2 = '' OR id <> $2::uuid))
+		`, candidate, exceptID).Scan(&taken)
 		if err != nil {
 			return utils.EMPTY, err
 		}

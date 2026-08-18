@@ -6,6 +6,7 @@ import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/logo.dart';
+import 'admin_users_screen.dart';
 import 'coach_screen.dart';
 import 'events_screen.dart';
 import 'feed_screen.dart';
@@ -30,7 +31,10 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
-    final isCoach = ref.watch(sessionProvider).user?.isCoach ?? false;
+    final colors = AppColors.of(context);
+    final user = ref.watch(sessionProvider).user;
+    final isCoach = user?.isCoach ?? false;
+    final isSuperadmin = user?.role == 'superadmin';
 
     // The coaching tab is inserted rather than always present, so an athlete's
     // app doesn't carry a tab they can't use.
@@ -45,6 +49,10 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
       (label: t('nav.invitations'), icon: Icons.group_add_outlined, screen: const InvitationsScreen()),
       (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
       (label: t('nav.messages'), icon: Icons.chat_bubble_outline, screen: const MessagesScreen()),
+      // Only a superadmin has anything to manage, so the tab is inserted
+      // rather than always present - the same way the coaching tab is.
+      if (isSuperadmin)
+        (label: t('nav.admin'), icon: Icons.admin_panel_settings_outlined, screen: const AdminUsersScreen()),
       (label: t('nav.profile'), icon: Icons.person_outline, screen: const ProfileScreen()),
     ];
 
@@ -87,18 +95,39 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const _ConversationStrip(),
-          NavigationBar(
-            selectedIndex: index,
-            onDestinationSelected: (next) => setState(() => _index = next),
-            destinations: [
-              for (final tab in tabs)
-                NavigationDestination(
-                  icon: tab.screen is MessagesScreen
-                      ? _UnreadBadge(child: Icon(tab.icon))
-                      : Icon(tab.icon),
-                  label: tab.label,
+          // A horizontally scrollable bar rather than a NavigationBar: with the
+          // coaching and admin tabs there are up to nine destinations, far more
+          // than fit fixed - Material's own bar squeezes them until the labels
+          // are unreadable. This slides when they overflow and spreads out to
+          // fill the width when they don't, which is how ~/uprodit's mobile app
+          // solves the same problem.
+          Container(
+            decoration: BoxDecoration(
+              color: colors.surface,
+              border: Border(top: BorderSide(color: colors.border)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: MediaQuery.of(context).size.width),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      for (var i = 0; i < tabs.length; i++)
+                        _NavItem(
+                          label: tabs[i].label,
+                          icon: tabs[i].icon,
+                          active: i == index,
+                          badge: tabs[i].screen is MessagesScreen,
+                          onTap: () => setState(() => _index = i),
+                        ),
+                    ],
+                  ),
                 ),
-            ],
+              ),
+            ),
           ),
         ],
       ),
@@ -180,6 +209,62 @@ class _UnreadBadge extends ConsumerWidget {
       isLabelVisible: unread > 0,
       label: Text('$unread'),
       child: child,
+    );
+  }
+}
+
+/// One destination in the sliding bar.
+///
+/// A fixed width is what makes the row scroll rather than compress: give the
+/// items flexible widths and they shrink to fit instead of overflowing, which
+/// is exactly the squeezed, unreadable bar this replaces.
+class _NavItem extends ConsumerWidget {
+  final String label;
+  final IconData icon;
+  final bool active;
+  final bool badge;
+  final VoidCallback onTap;
+
+  const _NavItem({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.badge,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = AppColors.of(context);
+    final color = active ? colors.primary : colors.textMuted;
+
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        width: 74,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              badge
+                  ? _UnreadBadge(child: Icon(icon, color: color, size: 24))
+                  : Icon(icon, color: color, size: 24),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

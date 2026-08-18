@@ -293,3 +293,173 @@ func TestProfileVisibilitySQLMatchesTheModel(t *testing.T) {
 		}
 	}
 }
+
+// TestAnonymityHoldsAcrossQueries is the test the display_name.go rule exists
+// for. A member who anonymizes must be their username *everywhere* a name is
+// built - and those names are built in a dozen separate queries, any one of
+// which could be missed without anything failing to compile.
+func TestAnonymityHoldsAcrossQueries(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+
+	users := NewUserStore(pool)
+	messages := NewMessageStore(pool)
+
+	watcher := seedUser(t, pool, "watcher.anon@example.test")
+	subject := seedUser(t, pool, "subject.anon@example.test")
+
+	real := ProfileFields{
+		Name: "Marie", Surname: "Dubois",
+		ProfileVisibility: models.ProfileVisibilityPublic,
+	}
+	if _, err := users.UpdateProfile(ctx, subject, real); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+
+	// The handle follows the name while there is no username.
+	before, err := users.FindByID(ctx, subject)
+	if err != nil {
+		t.Fatalf("FindByID: %v", err)
+	}
+	if before.Handle != "marie-dubois" {
+		t.Errorf("handle = %q, want it derived from the name", before.Handle)
+	}
+
+	// Setting a username moves the handle to it.
+	anonymized := real
+	anonymized.Username = "ironfish"
+	anonymized.Anonymous = true
+	if _, err := users.UpdateProfile(ctx, subject, anonymized); err != nil {
+		t.Fatalf("UpdateProfile anonymized: %v", err)
+	}
+	after, err := users.FindByID(ctx, subject)
+	if err != nil {
+		t.Fatalf("FindByID: %v", err)
+	}
+	if after.Handle != "ironfish" {
+		t.Errorf("handle = %q, want the username", after.Handle)
+	}
+	// The real name is still stored - anonymity hides it, it does not destroy
+	// it, and turning the option off has to give it back.
+	if after.Name != "Marie" || after.Surname != "Dubois" {
+		t.Errorf("the real name was lost: %q %q", after.Name, after.Surname)
+	}
+
+	// Every query that names somebody now has to say "ironfish".
+	conversationID, err := messages.FindOrCreateConversation(ctx, watcher, subject)
+	if err != nil {
+		t.Fatalf("FindOrCreateConversation: %v", err)
+	}
+	if _, err := messages.Send(ctx, conversationID, subject, "hello"); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+
+	conversations, err := messages.ListConversations(ctx, watcher)
+	if err != nil {
+		t.Fatalf("ListConversations: %v", err)
+	}
+	if len(conversations) != 1 {
+		t.Fatalf("expected one conversation, got %d", len(conversations))
+	}
+	if got := conversations[0].Other; got.Name != "ironfish" || got.Surname != "" {
+		t.Errorf("conversation shows %q %q, want the username alone", got.Name, got.Surname)
+	}
+
+	sent, err := messages.ListMessages(ctx, conversationID, 0)
+	if err != nil {
+		t.Fatalf("ListMessages: %v", err)
+	}
+	if len(sent) != 1 || sent[0].Sender.Name != "ironfish" || sent[0].Sender.Surname != "" {
+		t.Errorf("message sender shows %+v, want the username alone", sent[0].Sender)
+	}
+
+	// Searching the real name must not find them: a search that matches on a
+	// hidden name reveals who the username belongs to just as surely as
+	// printing it would.
+	for _, criteria := range []MemberSearch{
+		{Terms: "Marie"},
+		{Terms: "Dubois"},
+		{Name: "Marie"},
+		{Surname: "Dubois"},
+		{Terms: "subject.anon@example.test"},
+		{Email: "subject.anon@example.test"},
+	} {
+		results, _, err := users.SearchMembers(ctx, criteria, watcher, false)
+		if err != nil {
+			t.Fatalf("SearchMembers %+v: %v", criteria, err)
+		}
+		for _, user := range results {
+			if user.ID == subject {
+				t.Errorf("SearchMembers %+v found an anonymized member by their real identity", criteria)
+			}
+		}
+	}
+
+	// ...but the username still finds them, or nobody could be reached at all.
+	found, _, err := users.SearchMembers(ctx, MemberSearch{Terms: "ironfish"}, watcher, false)
+	if err != nil {
+		t.Fatalf("SearchMembers by username: %v", err)
+	}
+	var seen bool
+	for _, user := range found {
+		if user.ID == subject {
+			seen = true
+			// The store returns the true record - hiding a name is the job of
+			// the projection, so that is what is asserted here.
+			if name, surname := user.DisplayName(); name != "ironfish" || surname != "" {
+				t.Errorf("DisplayName = %q %q, want the username alone", name, surname)
+			}
+		}
+	}
+	if !seen {
+		t.Error("an anonymized member cannot be found by their username")
+	}
+
+	// The club autocomplete follows the same rule.
+	byEmail, err := users.SearchByEmail(ctx, "subject.anon@example.test", 10)
+	if err != nil {
+		t.Fatalf("SearchByEmail: %v", err)
+	}
+	for _, user := range byEmail {
+		if user.ID == subject {
+			t.Error("SearchByEmail found an anonymized member by their address")
+		}
+	}
+}
+
+// TestUsernameIsUnique covers the constraint the handle now depends on.
+func TestUsernameIsUnique(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+
+	users := NewUserStore(pool)
+	first := seedUser(t, pool, "first.username@example.test")
+	second := seedUser(t, pool, "second.username@example.test")
+
+	fields := ProfileFields{Name: "A", Surname: "B", Username: "taken",
+		ProfileVisibility: models.ProfileVisibilityPublic}
+	if _, err := users.UpdateProfile(ctx, first, fields); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+
+	// Case-insensitively taken: two names that read the same to a person must
+	// not both exist.
+	for _, candidate := range []string{"taken", "TAKEN", "Taken"} {
+		taken, err := users.UsernameTaken(ctx, candidate, second)
+		if err != nil {
+			t.Fatalf("UsernameTaken(%q): %v", candidate, err)
+		}
+		if !taken {
+			t.Errorf("UsernameTaken(%q) = false, want true", candidate)
+		}
+	}
+
+	// Its own owner is not blocked by it, or nobody could ever re-save.
+	taken, err := users.UsernameTaken(ctx, "taken", first)
+	if err != nil {
+		t.Fatalf("UsernameTaken for the owner: %v", err)
+	}
+	if taken {
+		t.Error("an account is blocked by its own username")
+	}
+}

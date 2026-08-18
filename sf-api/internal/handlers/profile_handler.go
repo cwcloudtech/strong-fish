@@ -94,9 +94,13 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The profile is projected through DisplayName like every other surface:
+	// an anonymized member is their username here too.
+	name, surname := target.DisplayName()
 	writeJSON(w, http.StatusOK, models.PublicProfile{
-		ID: target.ID, Handle: target.Handle, Name: target.Name, Surname: target.Surname,
-		Role: target.Role, Bio: target.Bio, Picture: target.Picture,
+		ID: target.ID, Handle: target.Handle, Name: name, Surname: surname,
+		Anonymous: target.Anonymous,
+		Role:      target.Role, Bio: target.Bio, Picture: target.Picture,
 		PictureX: target.PictureX, PictureY: target.PictureY, Bodyweight: target.Bodyweight,
 		Birthdate: target.Birthdate,
 		Bests:     bests, Total: total, Followers: followers, Following: following,

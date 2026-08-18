@@ -32,6 +32,9 @@ const (
 	CodeDuplicateHandle      = "errors.duplicateHandle"
 	CodeInvalidEmail         = "errors.invalidEmail"
 	CodeInvalidHandle        = "errors.invalidHandle"
+	CodeInvalidUsername      = "errors.invalidUsername"
+	CodeDuplicateUsername    = "errors.duplicateUsername"
+	CodeUsernameRequired     = "errors.usernameRequired"
 	CodeUserNotFound         = "errors.userNotFound"
 	CodeNoUserWithEmail      = "errors.noUserWithEmail"
 	CodePasswordsMismatch    = "errors.passwordsMismatch"
@@ -177,10 +180,11 @@ func pagination(r *http.Request) (page, size int) {
 // summarize projects a user onto the shape embedded in posts, comments and
 // member lists.
 func summarize(user models.User) models.UserSummary {
+	name, surname := user.DisplayName()
 	return models.UserSummary{
-		ID: user.ID, Handle: user.Handle, Name: user.Name, Surname: user.Surname,
+		ID: user.ID, Handle: user.Handle, Name: name, Surname: surname,
 		Email: user.Email, Role: user.Role, Picture: user.Picture,
-		PictureX: user.PictureX, PictureY: user.PictureY,
+		PictureX: user.PictureX, PictureY: user.PictureY, Anonymous: user.Anonymous,
 	}
 }
 
@@ -190,6 +194,7 @@ func meResponse(user models.User, activationMode string) models.UserMeResponse {
 		ID: user.ID, Email: user.Email, Name: user.Name, Surname: user.Surname,
 		Handle: user.Handle, Bio: user.Bio, Role: user.Role, Picture: user.Picture,
 		PictureX: user.PictureX, PictureY: user.PictureY, Locale: user.Locale,
+		Username: user.Username, Anonymous: user.Anonymous,
 		ProfileVisibility: user.ProfileVisibility, Birthdate: user.Birthdate,
 		CoachRequest: user.CoachRequest, Bodyweight: user.Bodyweight,
 		MFAEnabled: user.MFAEnabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,

@@ -164,7 +164,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       await ref.read(apiProvider).updateProfile({
                         'name': user.name,
                         'surname': user.surname,
-                        'handle': user.handle,
+                        'username': user.username,
+                        'anonymous': user.anonymous,
                         'bio': user.bio,
                         'locale': value,
                         'profileVisibility': user.profileVisibility,
@@ -194,6 +195,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       value == null ? null : ref.read(themeModeProvider.notifier).set(value),
                 ),
               ),
+              // Anonymity is a switch here rather than a form: the username
+              // itself is edited on the web, where a text field belongs, and
+              // what an athlete wants on a phone is to turn it on or off.
+              ListTile(
+                leading: const Icon(Icons.masks_outlined),
+                title: Text(t('profile.anonymous')),
+                subtitle: Text(
+                  user.username.isEmpty
+                      ? t('profile.anonymousNeedsUsername')
+                      : t('profile.anonymousHelp'),
+                ),
+                trailing: Switch(
+                  value: user.anonymous,
+                  // Nothing to hide behind without a username, and the API
+                  // refuses it - so the switch is simply unavailable.
+                  onChanged: user.username.isEmpty
+                      ? null
+                      : (value) async {
+                          try {
+                            await ref.read(apiProvider).updateProfile({
+                              'name': user.name,
+                              'surname': user.surname,
+                              'username': user.username,
+                              'anonymous': value,
+                              'bio': user.bio,
+                              'locale': user.locale,
+                              'profileVisibility': user.profileVisibility,
+                              'birthdate': user.birthdate,
+                              'bodyweight': user.bodyweight,
+                            });
+                            await ref.read(sessionProvider.notifier).refresh();
+                          } catch (error) {
+                            _toast(ref.read(tErrorProvider)(error));
+                          }
+                        },
+                ),
+              ),
               // Three levels rather than a public/private switch: "my clubs"
               // is the one most athletes actually want, and a toggle cannot
               // express it.
@@ -215,7 +253,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       await ref.read(apiProvider).updateProfile({
                         'name': user.name,
                         'surname': user.surname,
-                        'handle': user.handle,
+                        'username': user.username,
+                        'anonymous': user.anonymous,
                         'bio': user.bio,
                         'locale': user.locale,
                         'profileVisibility': value,

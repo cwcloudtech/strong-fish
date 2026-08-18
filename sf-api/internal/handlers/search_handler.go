@@ -45,6 +45,8 @@ type searchResult struct {
 	// SharesClub tells the caller why this person is visible to them, which is
 	// what makes a result list of near-identical names usable.
 	SharesClub bool `json:"sharesClub"`
+	// Anonymous says the name above is a username rather than a person's name.
+	Anonymous bool `json:"anonymous,omitempty"`
 }
 
 func (h *SearchHandler) Members(w http.ResponseWriter, r *http.Request) {
@@ -86,10 +88,14 @@ func (h *SearchHandler) Members(w http.ResponseWriter, r *http.Request) {
 
 	results := make([]searchResult, len(users))
 	for i, user := range users {
+		// Projected through DisplayName, not read off the record: the store
+		// returns the true account, and it is every projection's job to honour
+		// the member's choice to be known by their username.
+		name, surname := user.DisplayName()
 		results[i] = searchResult{
-			ID: user.ID, Handle: user.Handle, Name: user.Name, Surname: user.Surname,
+			ID: user.ID, Handle: user.Handle, Name: name, Surname: surname,
 			Role: user.Role, Picture: user.Picture, PictureX: user.PictureX,
-			PictureY: user.PictureY, SharesClub: mates[user.ID],
+			PictureY: user.PictureY, SharesClub: mates[user.ID], Anonymous: user.Anonymous,
 		}
 	}
 	writeJSON(w, http.StatusOK, models.Page[searchResult]{Results: results, TotalResults: total})

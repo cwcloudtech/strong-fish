@@ -33,11 +33,11 @@ type clubData struct {
 // clubSelect carries the caller's own role and the member count alongside every
 // club, since the frontend needs both on every listing and neither is worth a
 // second round trip. $1 is the calling user's id.
-const clubSelect = `
+var clubSelect = `
 	SELECT c.id, c.owner_id, c.data, c.created_at, c.updated_at,
 	       coalesce(cm.role, ''),
 	       (SELECT count(*) FROM club_members WHERE club_id = c.id),
-	       coalesce(u.data->>'name', '') || ' ' || coalesce(u.data->>'surname', '')
+	       ` + displayFullName("u") + `
 	FROM clubs c
 	LEFT JOIN club_members cm ON cm.club_id = c.id AND cm.user_id = $1
 	JOIN users u ON u.id = c.owner_id`
@@ -201,10 +201,10 @@ func (s *ClubStore) Delete(ctx context.Context, id string) error {
 
 // --- members ---
 
-const memberSelect = `
+var memberSelect = `
 	SELECT cm.id, cm.club_id, cm.user_id, u.email,
-	       coalesce(u.data->>'handle', ''), coalesce(u.data->>'name', ''),
-	       coalesce(u.data->>'surname', ''), coalesce(u.data->>'picture', ''),
+	       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
+	       ` + displaySurname("u") + `, coalesce(u.data->>'picture', ''),
 	       coalesce((u.data->>'pictureX')::float, 50), coalesce((u.data->>'pictureY')::float, 50),
 	       cm.role, cm.created_at, cm.updated_at
 	FROM club_members cm

@@ -39,11 +39,11 @@ type commentData struct {
 // postSelect resolves everything a feed card needs in one row: the author, the
 // club a club-only post belongs to, the like and comment counts, and whether
 // the *caller* ($1) liked it.
-const postSelect = `
+var postSelect = `
 	SELECT p.id, p.author_id, coalesce(p.club_id::text, ''), coalesce(c.data->>'name', ''),
 	       p.data, p.created_at, p.updated_at,
-	       coalesce(u.data->>'handle', ''), coalesce(u.data->>'name', ''),
-	       coalesce(u.data->>'surname', ''), coalesce(u.data->>'role', ''),
+	       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
+	       ` + displaySurname("u") + `, coalesce(u.data->>'role', ''),
 	       coalesce(u.data->>'picture', ''),
 	       coalesce((u.data->>'pictureX')::float, 50), coalesce((u.data->>'pictureY')::float, 50),
 	       (SELECT count(*) FROM post_likes WHERE post_id = p.id),
@@ -332,10 +332,10 @@ func (s *SocialStore) Unlike(ctx context.Context, postID, userID string) error {
 
 // --- comments ---
 
-const commentSelect = `
+var commentSelect = `
 	SELECT c.id, c.post_id, c.author_id, c.data, c.created_at, c.updated_at,
-	       coalesce(u.data->>'handle', ''), coalesce(u.data->>'name', ''),
-	       coalesce(u.data->>'surname', ''), coalesce(u.data->>'role', ''),
+	       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
+	       ` + displaySurname("u") + `, coalesce(u.data->>'role', ''),
 	       coalesce(u.data->>'picture', ''),
 	       coalesce((u.data->>'pictureX')::float, 50), coalesce((u.data->>'pictureY')::float, 50)
 	FROM post_comments c
@@ -471,8 +471,8 @@ func (s *SocialStore) FollowCounts(ctx context.Context, userID, callerID string)
 // the accounts following them).
 func (s *SocialStore) ListFollows(ctx context.Context, userID string, followers bool) ([]models.UserSummary, error) {
 	query := `
-		SELECT u.id, coalesce(u.data->>'handle', ''), coalesce(u.data->>'name', ''),
-		       coalesce(u.data->>'surname', ''), coalesce(u.data->>'role', ''),
+		SELECT u.id, coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
+		       ` + displaySurname("u") + `, coalesce(u.data->>'role', ''),
 		       coalesce(u.data->>'picture', ''),
 		       coalesce((u.data->>'pictureX')::float, 50), coalesce((u.data->>'pictureY')::float, 50)
 		FROM follows f
@@ -481,8 +481,8 @@ func (s *SocialStore) ListFollows(ctx context.Context, userID string, followers 
 		ORDER BY f.created_at DESC`
 	if !followers {
 		query = `
-		SELECT u.id, coalesce(u.data->>'handle', ''), coalesce(u.data->>'name', ''),
-		       coalesce(u.data->>'surname', ''), coalesce(u.data->>'role', ''),
+		SELECT u.id, coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
+		       ` + displaySurname("u") + `, coalesce(u.data->>'role', ''),
 		       coalesce(u.data->>'picture', ''),
 		       coalesce((u.data->>'pictureX')::float, 50), coalesce((u.data->>'pictureY')::float, 50)
 		FROM follows f
@@ -520,10 +520,10 @@ type reportData struct {
 	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`
 }
 
-const reportSelect = `
+var reportSelect = `
 	SELECT r.id, r.reporter_id, r.target_type, r.target_id, r.data, r.created_at, r.updated_at,
-	       coalesce(u.data->>'handle', ''), coalesce(u.data->>'name', ''),
-	       coalesce(u.data->>'surname', ''), u.email, coalesce(u.data->>'role', '')
+	       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
+	       ` + displaySurname("u") + `, u.email, coalesce(u.data->>'role', '')
 	FROM content_reports r
 	JOIN users u ON u.id = r.reporter_id`
 

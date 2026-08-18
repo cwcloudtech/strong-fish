@@ -5,6 +5,7 @@ import { FiMessageSquare } from "react-icons/fi";
 import { profiles } from "../api/services";
 import Avatar from "../components/common/Avatar";
 import PostCard from "../components/feed/PostCard";
+import ShareButtons from "../components/common/ShareButtons";
 import { EmptyState, ErrorMessage, Spinner } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
@@ -98,6 +99,17 @@ export default function Profile() {
             </div>
 
             {profile.bio ? <p>{profile.bio}</p> : null}
+
+            {/* Only a profile somebody else can actually open is worth
+                sharing: a link to a members-only profile would land a
+                stranger on a 404. */}
+            {profile.handle ? (
+              <ShareButtons
+                url={`${window.location.origin}/profile/${profile.handle}`}
+                text={t("share.profileText", { name: `${profile.name} ${profile.surname}`.trim() })}
+                label={t("share.label")}
+              />
+            ) : null}
 
             <div className="sf-profile-stats">
               <div>
