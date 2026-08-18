@@ -169,11 +169,15 @@ export default function ProgramDetail() {
                   <FiCopy /> {t("programs.copyLink")}
                 </button>
               ) : null}
+              {/* The icon says which way the button moves you: a globe to open
+                  it up, a padlock to close it again - the same pair the state
+                  above is labelled with. */}
               <button
                 className="sf-button sf-button-secondary sf-button-sm"
                 onClick={() => setVisibility(program.visibility === "public" ? "club" : "public")}
                 disabled={publishing}
               >
+                {program.visibility === "public" ? <FiLock /> : <FiGlobe />}{" "}
                 {program.visibility === "public" ? t("programs.unpublish") : t("programs.publish")}
               </button>
             </div>

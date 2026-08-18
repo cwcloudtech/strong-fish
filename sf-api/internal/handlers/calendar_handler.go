@@ -162,10 +162,14 @@ func BuildICS(events []models.Event) string {
 			b.WriteString("RRULE:FREQ=YEARLY\r\n")
 		}
 
-		if event.AllDay {
+		if event.WholeDay() {
 			start := event.StartsAt.UTC()
 			end := event.End().UTC()
-			if !end.After(start) {
+			// A DATE-valued DTEND has to fall on a later *day*, not merely at a
+			// later instant: End() defaults to an hour after the start, and an
+			// hour later formats to the same date - which Outlook reads as an
+			// event occupying no days at all, and hides.
+			if !end.Truncate(24 * time.Hour).After(start.Truncate(24 * time.Hour)) {
 				end = start.AddDate(0, 0, 1)
 			}
 			fmt.Fprintf(&b, "DTSTART;VALUE=DATE:%s\r\n", start.Format("20060102"))

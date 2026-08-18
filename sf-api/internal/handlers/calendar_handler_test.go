@@ -44,19 +44,43 @@ func TestBuildICSStructure(t *testing.T) {
 	}
 }
 
-// TestBuildICSAllDayEndIsExclusive pins RFC 5545's rule that a DATE-valued
-// DTEND is the day *after* the last one. Outlook renders a same-day DTEND as
-// no day at all, so getting this wrong makes the event vanish.
-func TestBuildICSAllDayEndIsExclusive(t *testing.T) {
+// TestBuildICSBirthdayIsAWholeDay covers the one entry that occupies a day
+// rather than a time of day, and RFC 5545's rule that a DATE-valued DTEND is
+// the day *after* the last one. Outlook renders a same-day DTEND as no day at
+// all, so getting this wrong makes the entry vanish.
+//
+// Whole-day-ness is derived from the kind: events people author always happen
+// at a stated time, and a birthday is generated rather than written.
+func TestBuildICSBirthdayIsAWholeDay(t *testing.T) {
 	ics := BuildICS([]models.Event{{
-		ID: "ev-2", Title: "Camp", AllDay: true, StartsAt: at("2026-07-06T00:00:00Z"),
+		ID: "birthday-u1", Title: "Marie Dubois", Kind: models.EventKindBirthday,
+		StartsAt: at("2026-07-06T00:00:00Z"),
 	}})
 
 	if !strings.Contains(ics, "DTSTART;VALUE=DATE:20260706\r\n") {
-		t.Errorf("all-day DTSTART wrong:\n%s", ics)
+		t.Errorf("whole-day DTSTART wrong:\n%s", ics)
 	}
 	if !strings.Contains(ics, "DTEND;VALUE=DATE:20260707\r\n") {
-		t.Errorf("all-day DTEND must be the next day:\n%s", ics)
+		t.Errorf("whole-day DTEND must be the next day:\n%s", ics)
+	}
+}
+
+// TestBuildICSAuthoredEventsAreTimed is the other half: with the all-day option
+// gone, anything somebody created carries a real start and end time.
+func TestBuildICSAuthoredEventsAreTimed(t *testing.T) {
+	for _, kind := range []string{
+		models.EventKindCompetition, models.EventKindTraining, models.EventKindOther,
+	} {
+		ics := BuildICS([]models.Event{{
+			ID: "ev-" + kind, Title: kind, Kind: kind,
+			StartsAt: at("2026-07-06T09:00:00Z"),
+		}})
+		if strings.Contains(ics, "VALUE=DATE") {
+			t.Errorf("kind %q rendered as a whole day:\n%s", kind, ics)
+		}
+		if !strings.Contains(ics, "DTSTART:20260706T090000Z\r\n") {
+			t.Errorf("kind %q lost its start time:\n%s", kind, ics)
+		}
 	}
 }
 

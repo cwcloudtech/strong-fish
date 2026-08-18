@@ -56,7 +56,10 @@ S3 API.
    `https://drive.google.com/drive/folders/<this bit>`.
 4. In the app: **Settings → Video storage**, pick *Google Drive folder*.
 5. Upload the JSON key file and paste the folder id.
-6. Save.
+6. Optionally set a **subfolder** - `strong-fish/videos`, say. It is created
+   inside the shared folder if it does not exist yet, so you do not have to make
+   it by hand first. Leave it empty to write straight into the folder.
+7. Save.
 
 strong-fish grants each uploaded file anyone-with-the-link read access as it
 writes it, and posts the Drive preview player.

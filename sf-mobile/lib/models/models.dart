@@ -687,7 +687,6 @@ class Event {
   final String kind;
   final DateTime startsAt;
   final DateTime? endsAt;
-  final bool allDay;
   final String visibility;
   final bool editable;
   final bool deletable;
@@ -703,7 +702,6 @@ class Event {
     this.kind = 'other',
     required this.startsAt,
     this.endsAt,
-    this.allDay = false,
     this.visibility = 'public',
     this.editable = false,
     this.deletable = false,
@@ -723,7 +721,6 @@ class Event {
         // repeatedly.
         startsAt: _toDate(json['startsAt']).toLocal(),
         endsAt: _optionalDate(json['endsAt']),
-        allDay: json['allDay'] == true,
         visibility: _toString(json['visibility'], 'public'),
         editable: json['editable'] == true,
         deletable: json['deletable'] == true,

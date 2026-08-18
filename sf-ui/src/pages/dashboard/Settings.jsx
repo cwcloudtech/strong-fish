@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiTrash2 } from "react-icons/fi";
+import { FiSave, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { auth, media as mediaApi, mfa as mfaApi } from "../../api/services";
@@ -465,15 +465,18 @@ function StorageSettings() {
           {t("storage.path")} <span className="sf-muted">({t("common.optional")})</span>
         </label>
         <input id="path" className="sf-input" value={form.path} onChange={set("path")} />
+        <p className="sf-muted" style={{ fontSize: "0.82rem", margin: "0.3rem 0 0" }}>
+          {form.type === "google_drive" ? t("storage.pathHelpDrive") : t("storage.pathHelpS3")}
+        </p>
       </div>
 
       <div className="sf-row" style={{ gap: "0.4rem" }}>
         <button className="sf-button" type="submit" disabled={busy}>
-          {t("common.save")}
+          <FiSave /> {t("common.save")}
         </button>
         {state.configured ? (
           <button type="button" className="sf-button sf-button-secondary" onClick={clear} disabled={busy}>
-            {t("storage.clear")}
+            <FiTrash2 /> {t("storage.clear")}
           </button>
         ) : null}
       </div>

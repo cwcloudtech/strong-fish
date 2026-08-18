@@ -38,7 +38,6 @@ type eventPayload struct {
 	Kind        string `json:"kind"`
 	StartsAt    string `json:"startsAt"`
 	EndsAt      string `json:"endsAt"`
-	AllDay      bool   `json:"allDay"`
 	Visibility  string `json:"visibility"`
 }
 
@@ -70,7 +69,7 @@ func (h *EventHandler) fields(w http.ResponseWriter, p eventPayload) (store.Even
 	return store.EventFields{
 		ClubID: p.ClubID, Title: p.Title, Description: p.Description,
 		Location: p.Location, URL: p.URL, Kind: p.Kind,
-		StartsAt: startsAt, EndsAt: endsAt, AllDay: p.AllDay, Visibility: p.Visibility,
+		StartsAt: startsAt, EndsAt: endsAt, Visibility: p.Visibility,
 	}, true
 }
 

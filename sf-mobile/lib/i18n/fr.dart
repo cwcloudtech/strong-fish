@@ -563,7 +563,6 @@ const Map<String, dynamic> fr = {
     },
     'club': 'Club',
     'noClub': 'Calendrier ouvert (tout le monde)',
-    'allDay': 'Journée entière',
     'startsAt': 'Début',
     'endsAt': 'Fin',
     'location': 'Lieu',

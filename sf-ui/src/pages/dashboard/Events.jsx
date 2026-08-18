@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
-import { FiCalendar, FiEdit2, FiExternalLink, FiMapPin, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiCalendar, FiEdit2, FiExternalLink, FiGrid, FiList, FiMapPin, FiPlus, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import Modal, { ConfirmModal } from "../../components/common/Modal";
 import Tooltip from "../../components/common/Tooltip";
+import EventCalendar from "../../components/calendar/EventCalendar";
 import { calendarFeed, clubs as clubsApi, events as eventsApi } from "../../api/services";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 
 const KINDS = ["competition", "training", "other"];
+
+const LAYOUT_KEY = "sf.eventsLayout";
 
 /**
  * The calendar: meets, club sessions, camps.
@@ -29,11 +32,19 @@ export default function Events() {
   const [showPast, setShowPast] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
+  const [layout, setLayout] = useState(() => localStorage.getItem(LAYOUT_KEY) || "calendar");
+  const [view, setView] = useState("month");
+  const [anchor, setAnchor] = useState(() => new Date());
+  // The grid shows a month at a time, including the part of it already gone,
+  // so it always asks for the past - the list keeps its own toggle.
+  const [selected, setSelected] = useState(null);
 
   const load = useCallback(async () => {
     try {
+      // A grid always shows days that have already happened, so it asks for
+      // the whole calendar; the list is forward-looking unless asked.
       const [list, myClubs] = await Promise.all([
-        eventsApi.list(showPast ? { past: 1 } : undefined),
+        eventsApi.list(showPast || layout === "calendar" ? { past: 1 } : undefined),
         clubsApi.list().catch(() => []),
       ]);
       setEvents(list);
@@ -41,11 +52,16 @@ export default function Events() {
     } catch (err) {
       setError(err);
     }
-  }, [showPast]);
+  }, [showPast, layout]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const setLayoutAndRemember = (next) => {
+    setLayout(next);
+    localStorage.setItem(LAYOUT_KEY, next);
+  };
 
   // Only the clubs this member manages can receive an event; a superadmin can
   // also put one on the open calendar, which is what the blank option is.
@@ -85,13 +101,55 @@ export default function Events() {
 
       <ErrorMessage error={error} />
 
-      <label className="sf-row" style={{ gap: "0.4rem", alignItems: "center", margin: "0.6rem 0" }}>
-        <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
-        {t("events.showPast")}
-      </label>
+      <div className="sf-row-between" style={{ margin: "0.6rem 0", flexWrap: "wrap", gap: "0.5rem" }}>
+        <div className="sf-calendar-views">
+          <Tooltip label={t("events.calendarLayout")}>
+            <button
+              type="button"
+              className={`sf-calendar-view ${layout === "calendar" ? "active" : ""}`}
+              onClick={() => setLayoutAndRemember("calendar")}
+              aria-label={t("events.calendarLayout")}
+            >
+              <FiGrid style={{ verticalAlign: "-2px" }} />
+            </button>
+          </Tooltip>
+          <Tooltip label={t("events.listLayout")}>
+            <button
+              type="button"
+              className={`sf-calendar-view ${layout === "list" ? "active" : ""}`}
+              onClick={() => setLayoutAndRemember("list")}
+              aria-label={t("events.listLayout")}
+            >
+              <FiList style={{ verticalAlign: "-2px" }} />
+            </button>
+          </Tooltip>
+        </div>
+
+        {layout === "list" ? (
+          <label className="sf-row" style={{ gap: "0.4rem", alignItems: "center" }}>
+            <input type="checkbox" checked={showPast} onChange={(event) => setShowPast(event.target.checked)} />
+            {t("events.showPast")}
+          </label>
+        ) : null}
+      </div>
 
       {events === null ? (
         <Spinner />
+      ) : layout === "calendar" ? (
+        <div className="sf-calendar-scroll">
+          <EventCalendar
+            events={events}
+            anchor={anchor}
+            view={view}
+            onAnchorChange={setAnchor}
+            onViewChange={setView}
+            onSelect={setSelected}
+            // Starting an event from a day pre-fills that date, which is the
+            // whole reason to click a day rather than the "add" button.
+            onAddOn={(date) => setEditing({ startsOn: date })}
+            canCreate={canCreate}
+          />
+        </div>
       ) : events.length === 0 ? (
         <EmptyState title={t("events.emptyTitle")} message={t("events.emptyBody")} />
       ) : (
@@ -106,6 +164,23 @@ export default function Events() {
           />
         ))
       )}
+
+      {selected ? (
+        <EventDetailModal
+          event={selected}
+          locale={locale}
+          t={t}
+          onClose={() => setSelected(null)}
+          onEdit={() => {
+            setEditing(selected);
+            setSelected(null);
+          }}
+          onDelete={() => {
+            setDeleting(selected);
+            setSelected(null);
+          }}
+        />
+      ) : null}
 
       {editing ? (
         <EventFormModal
@@ -138,7 +213,11 @@ function EventCard({ event, locale, t, onEdit, onDelete }) {
   const start = new Date(event.startsAt);
   const end = event.endsAt ? new Date(event.endsAt) : null;
 
-  const dateLabel = event.allDay
+  // Birthdays are the one entry that occupies a day rather than a time of day,
+  // and they are generated rather than authored - everything somebody creates
+  // happens at a stated hour.
+  const wholeDay = event.kind === "birthday";
+  const dateLabel = wholeDay
     ? start.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "long", year: "numeric" })
     : start.toLocaleString(locale, {
         weekday: "short",
@@ -157,7 +236,7 @@ function EventCard({ event, locale, t, onEdit, onDelete }) {
           <h3 style={{ margin: "0.4rem 0 0.2rem" }}>{event.title}</h3>
           <p className="sf-muted" style={{ margin: 0 }}>
             <FiCalendar style={{ verticalAlign: "-2px" }} /> {dateLabel}
-            {end && !event.allDay ? ` – ${end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}` : ""}
+            {end && !wholeDay ? ` – ${end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}` : ""}
           </p>
           {event.location ? (
             <p className="sf-muted" style={{ margin: "0.2rem 0 0" }}>
@@ -199,6 +278,84 @@ function EventCard({ event, locale, t, onEdit, onDelete }) {
 }
 
 /**
+ * One event, opened from the grid.
+ *
+ * The grid's chips are small and say only the time and the title, so selecting
+ * one has to be able to show the rest - and it is where editing and deleting
+ * are reached from, since a chip has no room for its own buttons.
+ */
+function EventDetailModal({ event, locale, t, onClose, onEdit, onDelete }) {
+  const start = new Date(event.startsAt);
+  const end = event.endsAt ? new Date(event.endsAt) : null;
+  const wholeDay = event.kind === "birthday";
+
+  const when = wholeDay
+    ? start.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : start.toLocaleString(locale, {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+  return (
+    <Modal title={event.title} onClose={onClose}>
+      <span className={`sf-badge sf-badge-${event.kind}`}>{t(`events.kind.${event.kind}`)}</span>
+
+      <p className="sf-muted" style={{ margin: "0.6rem 0 0" }}>
+        <FiCalendar style={{ verticalAlign: "-2px" }} /> {when}
+        {end && !wholeDay
+          ? ` – ${end.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}`
+          : ""}
+      </p>
+
+      {event.location ? (
+        <p className="sf-muted" style={{ margin: "0.3rem 0 0" }}>
+          <FiMapPin style={{ verticalAlign: "-2px" }} /> {event.location}
+        </p>
+      ) : null}
+
+      {event.clubName ? (
+        <p className="sf-muted" style={{ margin: "0.3rem 0 0" }}>
+          {event.clubName}
+        </p>
+      ) : null}
+
+      {event.description ? (
+        <p style={{ whiteSpace: "pre-wrap", marginTop: "0.8rem" }}>{event.description}</p>
+      ) : null}
+
+      {event.url ? (
+        <a
+          href={event.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="sf-row"
+          style={{ gap: "0.3rem", marginTop: "0.6rem" }}
+        >
+          <FiExternalLink /> {t("events.moreInfo")}
+        </a>
+      ) : null}
+
+      {/* A birthday is generated from somebody's profile, so there is nothing
+          here to edit or delete - it goes when they clear the date. */}
+      {event.editable ? (
+        <div className="sf-row" style={{ gap: "0.5rem", marginTop: "1rem" }}>
+          <button className="sf-button sf-button-secondary sf-button-sm" onClick={onEdit}>
+            <FiEdit2 /> {t("common.edit")}
+          </button>
+          <button className="sf-button sf-button-danger sf-button-sm" onClick={onDelete}>
+            <FiTrash2 /> {t("common.delete")}
+          </button>
+        </div>
+      ) : null}
+    </Modal>
+  );
+}
+
+/**
  * Creates or edits one event.
  *
  * Dates are edited as the browser's own local date/time and converted to an
@@ -215,9 +372,11 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
     location: event.location || "",
     url: event.url || "",
     kind: event.kind || "competition",
-    allDay: Boolean(event.allDay),
-    startsAt: toInputValue(event.startsAt, event.allDay),
-    endsAt: toInputValue(event.endsAt, event.allDay),
+    // startsOn arrives when the form was opened by clicking a day in the grid:
+    // that day at 09:00, which is a working guess somebody adjusts rather than
+    // a blank field they have to fill from nothing.
+    startsAt: toInputValue(event.startsAt) || defaultStart(event.startsOn),
+    endsAt: toInputValue(event.endsAt),
     visibility: event.visibility || "public",
   }));
   const [busy, setBusy] = useState(false);
@@ -233,8 +392,8 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
     try {
       const payload = {
         ...form,
-        startsAt: toInstant(form.startsAt, form.allDay),
-        endsAt: form.endsAt ? toInstant(form.endsAt, form.allDay) : "",
+        startsAt: toInstant(form.startsAt),
+        endsAt: form.endsAt ? toInstant(form.endsAt) : "",
       };
       if (event.id) {
         await eventsApi.update(event.id, payload);
@@ -306,11 +465,6 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
           ) : null}
         </div>
 
-        <label className="sf-row" style={{ gap: "0.4rem", alignItems: "center", margin: "0.4rem 0" }}>
-          <input type="checkbox" checked={form.allDay} onChange={set("allDay")} />
-          {t("events.allDay")}
-        </label>
-
         <div className="sf-row" style={{ gap: "0.6rem" }}>
           <div className="sf-field" style={{ flex: 1, minWidth: 170 }}>
             <label className="sf-label" htmlFor="startsAt">
@@ -319,7 +473,7 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
             <input
               id="startsAt"
               className="sf-input"
-              type={form.allDay ? "date" : "datetime-local"}
+              type="datetime-local"
               value={form.startsAt}
               onChange={set("startsAt")}
               required
@@ -332,7 +486,7 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
             <input
               id="endsAt"
               className="sf-input"
-              type={form.allDay ? "date" : "datetime-local"}
+              type="datetime-local"
               value={form.endsAt}
               onChange={set("endsAt")}
             />
@@ -455,18 +609,30 @@ function CalendarSubscription() {
  * speak local wall-clock time with no zone, so the conversion has to go through
  * the browser's own offset rather than through toISOString.
  */
-function toInputValue(value, allDay) {
+function toInputValue(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   const pad = (n) => String(n).padStart(2, "0");
   const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-  return allDay ? day : `${day}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${day}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * The datetime-local value for a day picked in the grid: nine in the morning,
+ * which is when most sessions and every meet start.
+ */
+function defaultStart(day) {
+  if (!day) return "";
+  const at = new Date(day);
+  if (Number.isNaN(at.getTime())) return "";
+  at.setHours(9, 0, 0, 0);
+  return toInputValue(at.toISOString());
 }
 
 /** The inverse: a local input value back to an RFC 3339 instant. */
-function toInstant(value, allDay) {
+function toInstant(value) {
   if (!value) return "";
-  const date = new Date(allDay ? `${value}T00:00` : value);
+  const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
