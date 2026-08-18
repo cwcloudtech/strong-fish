@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import Logo from "../common/Logo";
 import LanguageDropdown from "../common/LanguageDropdown";
+import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 
 /**
@@ -16,6 +17,7 @@ import { useI18n } from "../../i18n/I18nContext";
  */
 export default function AuthLayout({ children }) {
   const { t } = useI18n();
+  const { config } = useAuth();
 
   return (
     <div className="sf-auth">
@@ -51,6 +53,9 @@ export default function AuthLayout({ children }) {
 
           <div className="sf-auth-footer">
             <Link to="/about">{t("nav.about")}</Link>
+            {/* Hidden when no CWCLOUD_CONTACT_FORM_ID is set: the page would
+                only be able to report that it isn't configured. */}
+            {config?.contactEnabled ? <Link to="/contact">{t("nav.contact")}</Link> : null}
             <LanguageDropdown variant="light" align="left" />
           </div>
         </div>

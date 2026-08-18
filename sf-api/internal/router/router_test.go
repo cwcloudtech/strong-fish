@@ -28,6 +28,7 @@ func newTestRouter() http.Handler {
 		Profile:  &handlers.ProfileHandler{},
 		Admin:    &handlers.AdminHandler{},
 		Config:   &handlers.ConfigHandler{},
+		Contact:  &handlers.ContactHandler{},
 	}, nil, nil, Options{JWTSecret: "test"})
 }
 
@@ -38,6 +39,7 @@ var routes = []struct{ method, path string }{
 	{"GET", "/v1/manifest"},
 	{"GET", "/v1/config"},
 	{"GET", "/v1/assets/logo.png"},
+	{"POST", "/v1/contact"},
 
 	{"GET", "/v1/oidc"},
 	{"GET", "/v1/oidc/callback"},

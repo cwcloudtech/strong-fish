@@ -12,6 +12,7 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import About from "./pages/About";
 import Admin from "./pages/dashboard/Admin";
 import ClubDetail from "./pages/dashboard/ClubDetail";
+import Contact from "./pages/Contact";
 import Clubs from "./pages/dashboard/Clubs";
 import Exercises from "./pages/dashboard/Exercises";
 import Feed from "./pages/dashboard/Feed";
@@ -59,6 +60,7 @@ function AppRoutes() {
                 makes a shared profile link work. */}
             <Route path="/profile/:handle" element={<Profile />} />
             <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
 
             <Route
               path="/dashboard"
