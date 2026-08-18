@@ -531,7 +531,7 @@ const Map<String, dynamic> en = {
   'about': {
     'title': 'About',
     'unavailable': 'This page has not been written yet.',
-    'openSource': 'strong-fish is an open-source product by CWCloud. Sources are available',
+    'openSource': 'StrongFish is an open-source product by CWCloud. Sources are available',
     'openSourceLink': 'here',
   },
   'apiKeys': {
@@ -640,6 +640,7 @@ const Map<String, dynamic> en = {
   'messages': {
     'title': 'Messages',
     'current': 'Conversations',
+    'findSomeone': 'Find someone',
     'subtitle': 'Private conversations with the members you can see.',
     'message': 'Message',
     'send': 'Send',

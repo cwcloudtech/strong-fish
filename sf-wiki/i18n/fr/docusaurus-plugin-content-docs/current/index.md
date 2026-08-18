@@ -26,4 +26,4 @@ faire une fonctionnalité à maintenir.
 | En train de publier une vidéo | [Publier une vidéo](./tutorials/video-upload.md) |
 
 L'application est sur [strong-fish.com](https://strong-fish.com), et les sources
-sont sur [GitLab](https://gitlab.cwcloud.tech/oss/strong-fish).
+sont sur [Github](https://github.com/cwcloudtech/strong-fish) ou sur le [Gitlab de CWCloud](https://gitlab.cwcloud.tech/oss/strong-fish) (c'est opensource, licence MIT).

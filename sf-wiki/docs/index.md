@@ -25,4 +25,4 @@ to be maintained.
 | Trying to post a video | [Posting a video](./tutorials/video-upload.md) |
 
 The app itself is at [strong-fish.com](https://strong-fish.com), and the sources
-are on [GitLab](https://gitlab.cwcloud.tech/oss/strong-fish).
+are on [Github] or the CWCloud's [GitLab](https://gitlab.cwcloud.tech/oss/strong-fish) (opensource, MIT licence).

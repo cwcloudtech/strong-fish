@@ -106,8 +106,8 @@ content.
 
 ## Legal notices
 
-_strong-fish_ is an open-source application (MIT licence) which anyone can
+_StrongFish_ is an open-source application (MIT licence) which anyone can
 self-host.
 
-The main instance at www.strong-fish.com is provided and hosted by
+The main instance at [strong-fish.com](https://www.strong-fish.com) is provided and hosted by
 [CWCloud](https://www.cwcloud.tech).

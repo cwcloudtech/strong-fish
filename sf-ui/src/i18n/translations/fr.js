@@ -658,6 +658,7 @@ const fr = {
   messages: {
     title: "Messages",
     current: "Conversations",
+    findSomeone: "Trouver quelqu'un",
     subtitle: "Conversations privées avec les membres que vous pouvez voir.",
     message: "Envoyer un message",
     send: "Envoyer",
