@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { FiEdit2, FiFlag, FiHeart, FiMessageSquare, FiTrash2 } from "react-icons/fi";
 
+import toastOptions from "../../utils/toastOptions";
 import { social } from "../../api/services";
 import Avatar from "../common/Avatar";
 import Modal, { ConfirmModal } from "../common/Modal";
@@ -59,7 +60,7 @@ export default function PostCard({ post, onChanged, onDeleted }) {
       await social.removeComment(post.id, comment.id);
       setComments((current) => current.filter((item) => item.id !== comment.id));
       onChanged({ ...post, comments: Math.max(0, post.comments - 1) });
-      toast.success(t("feed.commentDeleted"));
+      toast.success(t("feed.commentDeleted"), toastOptions);
     } catch (err) {
       setError(err);
     }
@@ -78,7 +79,7 @@ export default function PostCard({ post, onChanged, onDeleted }) {
     setConfirmDelete(false);
     try {
       await social.removePost(post.id);
-      toast.success(t("feed.postDeleted"));
+      toast.success(t("feed.postDeleted"), toastOptions);
       onDeleted(post.id);
     } catch (err) {
       setError(err);
@@ -225,7 +226,7 @@ function ReportModal({ post, onClose }) {
   const submit = async () => {
     try {
       await social.report({ targetType: "post", targetId: post.id, reason, comment });
-      toast.success(t("feed.reported"));
+      toast.success(t("feed.reported"), toastOptions);
       onClose();
     } catch (err) {
       setError(err);

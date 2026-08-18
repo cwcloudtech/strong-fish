@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
+import toastOptions from "../../utils/toastOptions";
 import { training } from "../../api/services";
 import { ErrorMessage, Spinner } from "../../components/common/Feedback";
 import SessionDay, { exerciseLabel } from "../../components/training/SessionDay";
@@ -29,7 +30,7 @@ export default function TrainingSession() {
 
   const logSet = async (set, payload) => {
     await training.logSet(assignmentId, set.id, payload);
-    toast.success(t("session.logged"));
+    toast.success(t("session.logged"), toastOptions);
     load();
   };
 

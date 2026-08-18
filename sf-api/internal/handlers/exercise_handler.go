@@ -43,6 +43,10 @@ type exercisePayload struct {
 	Category   string            `json:"category"`
 	OneRMRef   string            `json:"oneRmRef"`
 	Bodyweight bool              `json:"bodyweight"`
+	// Main flags the movement as a competition lift. Only a superadmin may set
+	// it, so it's read off the payload but ignored for anyone else (see
+	// ExerciseHandler.mainFlag).
+	Main bool `json:"main"`
 }
 
 // resolveLabels fills in the en/fr labels, defaulting either to the typed name
@@ -117,7 +121,8 @@ func (h *ExerciseHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	exercise, err := h.exercises.Create(r.Context(), store.ExerciseFields{
 		Slug: slug, Aliases: normalizeAliases(p.Aliases, slug), Labels: labels,
-		Category: p.Category, OneRMRef: p.OneRMRef, Bodyweight: p.Bodyweight, CreatedBy: userID,
+		Category: p.Category, OneRMRef: p.OneRMRef, Bodyweight: p.Bodyweight,
+		Main: h.mainFlag(r, p.Main, false), CreatedBy: userID,
 	})
 	if err != nil {
 		writeStoreError(w, err)
@@ -154,6 +159,7 @@ func (h *ExerciseHandler) Update(w http.ResponseWriter, r *http.Request) {
 	exercise, err := h.exercises.Update(r.Context(), id, store.ExerciseFields{
 		Aliases: normalizeAliases(p.Aliases, existing.Slug), Labels: p.resolveLabels(),
 		Category: p.Category, OneRMRef: p.OneRMRef, Bodyweight: p.Bodyweight,
+		Main: h.mainFlag(r, p.Main, existing.Main),
 	})
 	if err != nil {
 		writeStoreError(w, err)
@@ -162,7 +168,27 @@ func (h *ExerciseHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, exercise)
 }
 
-// Delete removes a catalog entry, refusing while a program still prescribes it.
+// Usage reports what deleting an exercise would take with it, so the superadmin
+// confirms an informed cascade rather than discovering it afterwards.
+func (h *ExerciseHandler) Usage(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "exerciseId")
+
+	if _, err := h.exercises.FindByID(r.Context(), id); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	usage, err := h.exercises.Usage(r.Context(), id)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, usage)
+}
+
+// Delete removes a catalog entry along with every set prescribing it and every
+// max recorded against it. The client is expected to have shown the caller
+// Usage first; this endpoint carries out the decision rather than second-
+// guessing it.
 func (h *ExerciseHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "exerciseId")
 	if err := h.exercises.Delete(r.Context(), id); err != nil {
@@ -170,6 +196,20 @@ func (h *ExerciseHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": id})
+}
+
+// mainFlag resolves the competition-movement flag: a superadmin sets it, and
+// anyone else leaves it at whatever it already was. Coaches can add movements
+// to the shared catalog, but which lifts count as competition movements is an
+// instance-wide decision - a member's 1RM prompts and every derived movement's
+// load resolve against them.
+func (h *ExerciseHandler) mainFlag(r *http.Request, requested, current bool) bool {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+	user, err := h.users.FindByID(r.Context(), userID)
+	if err != nil || user.Role != models.GlobalRoleSuperadmin {
+		return current
+	}
+	return requested
 }
 
 // --- one-rep maxes ---

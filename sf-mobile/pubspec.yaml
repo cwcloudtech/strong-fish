@@ -31,7 +31,9 @@ flutter:
 
   assets:
     - assets/images/logo.png
+    - assets/images/logo-dark.png
     - assets/images/icon.png
+    - assets/images/icon-dark.png
 
 # The launcher icon is generated from the same square crop of the logo the web
 # favicon uses (the wordmark is unreadable at icon sizes, so it's cropped out).

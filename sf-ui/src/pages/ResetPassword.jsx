@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
+import toastOptions from "../utils/toastOptions";
 import { auth } from "../api/services";
+import Logo from "../components/common/Logo";
 import { ErrorMessage } from "../components/common/Feedback";
 import { useI18n } from "../i18n/I18nContext";
 
@@ -27,7 +29,7 @@ export default function ResetPassword() {
     setError(null);
     try {
       await auth.resetPassword({ token, password, confirmPassword });
-      toast.success(t("auth.passwordUpdated"));
+      toast.success(t("auth.passwordUpdated"), toastOptions);
       navigate("/login");
     } catch (err) {
       setError(err);
@@ -39,7 +41,7 @@ export default function ResetPassword() {
   return (
     <div className="sf-auth">
       <div className="sf-auth-card">
-        <img className="sf-auth-logo" src="/logo512.png" alt={t("app.name")} />
+        <Logo className="sf-auth-logo" />
         <h1 style={{ textAlign: "center" }}>{t("auth.resetPassword")}</h1>
 
         {token ? (

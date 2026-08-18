@@ -88,7 +88,6 @@ func (h *ProgramHandler) Import(w http.ResponseWriter, r *http.Request) {
 	program, err := h.programs.Create(r.Context(), store.NewProgram{
 		ClubID: clubID, AuthorID: authorID, Name: name,
 		Description:    r.FormValue("description"),
-		Weeks:          parsed.Weeks,
 		SourceFileName: header.Filename,
 		Days:           buildDays(parsed, catalog),
 	})

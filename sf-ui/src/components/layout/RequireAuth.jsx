@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 
+import Logo from "../../components/common/Logo";
 import { Spinner } from "../common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
@@ -21,7 +22,7 @@ export default function RequireAuth({ children, superadmin = false }) {
     return (
       <div className="sf-auth">
         <div className="sf-auth-card">
-          <img className="sf-auth-logo" src="/logo512.png" alt={t("app.name")} />
+          <Logo className="sf-auth-logo" />
           <div className="sf-notice sf-notice-warning">
             {t(user.i18nCode || "errors.accountDisabledAdmin")}
           </div>

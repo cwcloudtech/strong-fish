@@ -258,12 +258,15 @@ class SetLog {
 /// recorded yet - the UI shows the spreadsheet's "?" for those.
 class ProgramSet {
   final String id;
+  final String exerciseId;
   final String exerciseSlug;
   final Map<String, String> exerciseLabels;
   final String exerciseOneRmRef;
   final bool bodyweight;
   final int reps;
   final double? rpe;
+  final double? percentage;
+  final double? absoluteLoad;
   final String loadMode;
   final double load;
   final double roundedLoad;
@@ -275,12 +278,15 @@ class ProgramSet {
 
   const ProgramSet({
     required this.id,
+    this.exerciseId = '',
     this.exerciseSlug = '',
     this.exerciseLabels = const {},
     this.exerciseOneRmRef = '',
     this.bodyweight = false,
     this.reps = 0,
     this.rpe,
+    this.percentage,
+    this.absoluteLoad,
     this.loadMode = '',
     this.load = 0,
     this.roundedLoad = 0,
@@ -293,12 +299,15 @@ class ProgramSet {
 
   factory ProgramSet.fromJson(Map<String, dynamic> json) => ProgramSet(
         id: _toString(json['id']),
+        exerciseId: _toString(json['exerciseId']),
         exerciseSlug: _toString(json['exerciseSlug']),
         exerciseLabels: _toLabels(json['exerciseLabels']),
         exerciseOneRmRef: _toString(json['exerciseOneRmRef']),
         bodyweight: json['bodyweight'] == true,
         reps: _toInt(json['reps']),
         rpe: _toDoubleOrNull(json['rpe']),
+        percentage: _toDoubleOrNull(json['percentage']),
+        absoluteLoad: _toDoubleOrNull(json['absoluteLoad']),
         loadMode: _toString(json['loadMode']),
         load: _toDouble(json['load']),
         roundedLoad: _toDouble(json['roundedLoad']),
@@ -314,6 +323,58 @@ class ProgramSet {
       : (exerciseLabels['en']?.isNotEmpty == true ? exerciseLabels['en']! : exerciseSlug);
 
   bool get isBodyweight => loadMode == 'bodyweight';
+}
+
+/// A program as its coach sees it in the club's list.
+class Program {
+  final String id;
+  final String clubId;
+  final String name;
+  final String description;
+  final String authorName;
+  final int weeks;
+  final int dayCount;
+  final int setCount;
+
+  const Program({
+    required this.id,
+    this.clubId = '',
+    this.name = '',
+    this.description = '',
+    this.authorName = '',
+    this.weeks = 0,
+    this.dayCount = 0,
+    this.setCount = 0,
+  });
+
+  factory Program.fromJson(Map<String, dynamic> json) => Program(
+        id: _toString(json['id']),
+        clubId: _toString(json['clubId']),
+        name: _toString(json['name']),
+        description: _toString(json['description']),
+        authorName: _toString(json['authorName']),
+        weeks: _toInt(json['weeks']),
+        dayCount: _toInt(json['dayCount']),
+        setCount: _toInt(json['setCount']),
+      );
+}
+
+/// A program with its sessions, as returned to a coach authoring it. The loads
+/// on each set are resolved against the *coach's* own maxes here, which is what
+/// makes the numbers concrete while writing.
+class ProgramDetail {
+  final Program program;
+  final List<ProgramDay> days;
+
+  const ProgramDetail({required this.program, this.days = const []});
+
+  factory ProgramDetail.fromJson(Map<String, dynamic> json) => ProgramDetail(
+        program: Program.fromJson(json),
+        days: (json['days'] as List? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(ProgramDay.fromJson)
+            .toList(),
+      );
 }
 
 class ProgramDay {

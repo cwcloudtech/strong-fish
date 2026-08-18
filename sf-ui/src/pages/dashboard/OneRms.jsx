@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { FiTrash2 } from "react-icons/fi";
 
+import toastOptions from "../../utils/toastOptions";
 import { exercises as exercisesApi, oneRms as oneRmsApi } from "../../api/services";
 import { ConfirmModal } from "../../components/common/Modal";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
@@ -72,7 +73,7 @@ export default function OneRms() {
     setError(null);
     try {
       await oneRmsApi.set(exercise.id, value);
-      toast.success(t("oneRms.saved"));
+      toast.success(t("oneRms.saved"), toastOptions);
       await load();
     } catch (err) {
       setError(err);
@@ -85,7 +86,7 @@ export default function OneRms() {
     setConfirming(null);
     try {
       await oneRmsApi.remove(exercise.id);
-      toast.success(t("oneRms.removed"));
+      toast.success(t("oneRms.removed"), toastOptions);
       await load();
     } catch (err) {
       setError(err);

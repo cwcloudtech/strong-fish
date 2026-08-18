@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { FiImage, FiLink, FiX } from "react-icons/fi";
 
+import toastOptions from "../../utils/toastOptions";
 import { social } from "../../api/services";
 import Avatar from "../common/Avatar";
 import { ErrorMessage } from "../common/Feedback";
@@ -64,7 +65,7 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
         visibility,
         clubId: visibility === "club" ? clubId : "",
       });
-      toast.success(t("feed.posted"));
+      toast.success(t("feed.posted"), toastOptions);
       setContent("");
       setPictures([]);
       setLinks([]);

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiTrash2 } from "react-icons/fi";
+import { FiEdit2, FiPlus, FiTrash2 } from "react-icons/fi";
 
+import toastOptions from "../../utils/toastOptions";
 import { clubs as clubsApi, programs as programsApi } from "../../api/services";
 import Modal, { ConfirmModal } from "../../components/common/Modal";
+import SessionEditor, { SessionFormModal } from "../../components/programs/SessionEditor";
 import SessionDay from "../../components/training/SessionDay";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useAuth } from "../../context/AuthContext";
@@ -31,6 +33,11 @@ export default function ProgramDetail() {
   const [assigning, setAssigning] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState(null);
+  // Authoring is a distinct mode: the same sessions render either as a coach's
+  // editable prescription or as the loads an athlete would lift, and showing
+  // both at once would put two sets of controls on every row.
+  const [building, setBuilding] = useState(false);
+  const [addingSession, setAddingSession] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -62,7 +69,7 @@ export default function ProgramDetail() {
     setConfirmDelete(false);
     try {
       await programsApi.remove(clubId, programId);
-      toast.success(t("programs.deleted"));
+      toast.success(t("programs.deleted"), toastOptions);
       navigate(`/dashboard/clubs/${clubId}`);
     } catch (err) {
       setError(err);
@@ -96,6 +103,12 @@ export default function ProgramDetail() {
         </div>
         {canManage ? (
           <div className="sf-row">
+            <button
+              className={`sf-button ${building ? "" : "sf-button-secondary"}`}
+              onClick={() => setBuilding((current) => !current)}
+            >
+              <FiEdit2 /> {building ? t("programs.done") : t("programs.buildMode")}
+            </button>
             <button className="sf-button" onClick={() => setAssigning(true)}>
               {t("programs.assign")}
             </button>
@@ -162,13 +175,48 @@ export default function ProgramDetail() {
         </div>
       ) : null}
 
-      {(program.days || []).length === 0 ? (
-        <EmptyState message={t("programs.empty")} />
+      {building ? (
+        <>
+          {(program.days || []).map((day) => (
+            <SessionEditor
+              key={day.id}
+              clubId={clubId}
+              programId={programId}
+              day={day}
+              locale={locale}
+              onChanged={load}
+            />
+          ))}
+          {(program.days || []).length === 0 ? <EmptyState message={t("programs.noSessions")} /> : null}
+          <button className="sf-button" onClick={() => setAddingSession(true)}>
+            <FiPlus /> {t("programs.addSession")}
+          </button>
+        </>
+      ) : (program.days || []).length === 0 ? (
+        <EmptyState message={t("programs.noSessions")}>
+          {canManage ? (
+            <button className="sf-button" onClick={() => setBuilding(true)}>
+              <FiPlus /> {t("programs.addSession")}
+            </button>
+          ) : null}
+        </EmptyState>
       ) : (
         (program.days || []).map((day, index) => (
           <SessionDay key={day.id} day={day} locale={locale} defaultOpen={index === 0} />
         ))
       )}
+
+      {addingSession ? (
+        <SessionFormModal
+          clubId={clubId}
+          programId={programId}
+          onClose={() => setAddingSession(false)}
+          onSaved={() => {
+            setAddingSession(false);
+            load();
+          }}
+        />
+      ) : null}
 
       {assigning ? (
         <AssignModal
@@ -179,7 +227,7 @@ export default function ProgramDetail() {
           onClose={() => setAssigning(false)}
           onAssigned={() => {
             setAssigning(false);
-            toast.success(t("programs.assigned"));
+            toast.success(t("programs.assigned"), toastOptions);
             load();
           }}
         />

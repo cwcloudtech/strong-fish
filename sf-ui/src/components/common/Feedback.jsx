@@ -1,3 +1,4 @@
+import Logo from "./Logo";
 import { useI18n } from "../../i18n/I18nContext";
 
 /** The loading indicator used while a screen's first fetch is in flight. */
@@ -5,10 +6,14 @@ export function Spinner() {
   return <div className="sf-spinner" aria-label="loading" />;
 }
 
-/** The "nothing here" state, with an optional call to action. */
+/**
+ * The "nothing here" state. Like cwclock's, it leads with the app's mark rather
+ * than a generic icon, so an empty screen still looks like part of the product.
+ */
 export function EmptyState({ title, message, children }) {
   return (
     <div className="sf-empty">
+      <Logo mark alt="" />
       {title ? <h3>{title}</h3> : null}
       {message ? <p>{message}</p> : null}
       {children}

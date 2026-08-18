@@ -48,7 +48,6 @@ const (
 	CodeAlreadyMember        = "errors.alreadyMember"
 	CodeNotAClubMember       = "errors.notAClubMember"
 	CodeDuplicateExercise    = "errors.duplicateExercise"
-	CodeExerciseInUse        = "errors.exerciseInUse"
 	CodeInvalidCategory      = "errors.invalidCategory"
 	CodeInvalidOneRM         = "errors.invalidOneRm"
 	CodeInvalidSet           = "errors.invalidSet"
@@ -107,7 +106,6 @@ var storeErrorMapping = []struct {
 	{store.ErrCannotRemoveOwner, http.StatusBadRequest, "The club owner cannot be removed or demoted", CodeCantRemoveOwner},
 	{store.ErrAlreadyMember, http.StatusBadRequest, "This user is already a member of the club", CodeAlreadyMember},
 	{store.ErrDuplicateExercise, http.StatusBadRequest, "An exercise with this name already exists", CodeDuplicateExercise},
-	{store.ErrExerciseInUse, http.StatusBadRequest, "This exercise is used by a program", CodeExerciseInUse},
 }
 
 // writeStoreError maps a store error to its HTTP status, falling back to a 500

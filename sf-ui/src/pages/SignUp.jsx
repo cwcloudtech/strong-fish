@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
+import toastOptions from "../utils/toastOptions";
 import { auth } from "../api/services";
 import OidcButtons from "../components/auth/OidcButtons";
+import Logo from "../components/common/Logo";
 import { ErrorMessage } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
@@ -40,7 +42,8 @@ export default function SignUp() {
       // becomes the superadmin and can go straight in.
       if (response.role === "disabled") {
         toast.info(
-          config?.activationMode === "email" ? t("auth.checkEmail") : t("errors.accountDisabledAdmin")
+          config?.activationMode === "email" ? t("auth.checkEmail") : t("errors.accountDisabledAdmin"),
+          toastOptions
         );
         navigate("/login");
         return;
@@ -57,7 +60,7 @@ export default function SignUp() {
   return (
     <div className="sf-auth">
       <div className="sf-auth-card">
-        <img className="sf-auth-logo" src="/logo512.png" alt={t("app.name")} />
+        <Logo className="sf-auth-logo" />
         <h1 style={{ textAlign: "center" }}>{t("auth.signup")}</h1>
 
         <form onSubmit={submit}>
