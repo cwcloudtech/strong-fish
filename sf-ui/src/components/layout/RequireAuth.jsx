@@ -1,6 +1,6 @@
 import { Navigate, useLocation } from "react-router-dom";
 
-import Logo from "../../components/common/Logo";
+import AuthLayout from "../auth/AuthLayout";
 import { Spinner } from "../common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
@@ -20,17 +20,14 @@ export default function RequireAuth({ children, superadmin = false }) {
 
   if (!isActive) {
     return (
-      <div className="sf-auth">
-        <div className="sf-auth-card">
-          <Logo className="sf-auth-logo" />
-          <div className="sf-notice sf-notice-warning">
-            {t(user.i18nCode || "errors.accountDisabledAdmin")}
-          </div>
-          <button className="sf-button" style={{ width: "100%" }} onClick={logout}>
-            {t("common.logout")}
-          </button>
+      <AuthLayout>
+        <div className="sf-notice sf-notice-warning">
+          {t(user.i18nCode || "errors.accountDisabledAdmin")}
         </div>
-      </div>
+        <button className="sf-button" style={{ width: "100%" }} onClick={logout}>
+          {t("common.logout")}
+        </button>
+      </AuthLayout>
     );
   }
 

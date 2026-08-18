@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import AuthLayout from "../components/auth/AuthLayout";
 import { auth } from "../api/services";
-import Logo from "../components/common/Logo";
 import { ErrorMessage } from "../components/common/Feedback";
 import { useI18n } from "../i18n/I18nContext";
 
@@ -28,9 +28,7 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="sf-auth">
-      <div className="sf-auth-card">
-        <Logo className="sf-auth-logo" />
+    <AuthLayout>
         <h1 style={{ textAlign: "center" }}>{t("auth.resetPassword")}</h1>
 
         {sent ? (
@@ -60,7 +58,6 @@ export default function ForgotPassword() {
         <div className="sf-auth-links">
           <Link to="/login">{t("auth.login")}</Link>
         </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

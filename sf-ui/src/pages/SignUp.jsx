@@ -2,10 +2,10 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
+import AuthLayout from "../components/auth/AuthLayout";
 import toastOptions from "../utils/toastOptions";
 import { auth } from "../api/services";
 import OidcButtons from "../components/auth/OidcButtons";
-import Logo from "../components/common/Logo";
 import { ErrorMessage } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
@@ -58,9 +58,7 @@ export default function SignUp() {
   };
 
   return (
-    <div className="sf-auth">
-      <div className="sf-auth-card">
-        <Logo className="sf-auth-logo" />
+    <AuthLayout>
         <h1 style={{ textAlign: "center" }}>{t("auth.signup")}</h1>
 
         <form onSubmit={submit}>
@@ -124,7 +122,6 @@ export default function SignUp() {
           <span />
           <Link to="/login">{t("auth.hasAccount")}</Link>
         </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }

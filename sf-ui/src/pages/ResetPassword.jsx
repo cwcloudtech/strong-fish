@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
+import AuthLayout from "../components/auth/AuthLayout";
 import toastOptions from "../utils/toastOptions";
 import { auth } from "../api/services";
-import Logo from "../components/common/Logo";
 import { ErrorMessage } from "../components/common/Feedback";
 import { useI18n } from "../i18n/I18nContext";
 
@@ -39,9 +39,7 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="sf-auth">
-      <div className="sf-auth-card">
-        <Logo className="sf-auth-logo" />
+    <AuthLayout>
         <h1 style={{ textAlign: "center" }}>{t("auth.resetPassword")}</h1>
 
         {token ? (
@@ -86,7 +84,6 @@ export default function ResetPassword() {
         <div className="sf-auth-links">
           <Link to="/login">{t("auth.login")}</Link>
         </div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 }
