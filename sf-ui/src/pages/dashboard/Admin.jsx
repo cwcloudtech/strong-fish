@@ -5,6 +5,7 @@ import { FiShield, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { admin as adminApi, clubs as clubsApi } from "../../api/services";
+import Avatar from "../../components/common/Avatar";
 import Modal, { ConfirmModal } from "../../components/common/Modal";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useAuth } from "../../context/AuthContext";
@@ -37,6 +38,10 @@ export default function Admin() {
               <span className="sf-stat-value">{stats.openReports}</span>
               <span className="sf-stat-label">{t("admin.openReports")}</span>
             </div>
+            <div>
+              <span className="sf-stat-value">{stats.coachRequests}</span>
+              <span className="sf-stat-label">{t("admin.coachRequests")}</span>
+            </div>
           </div>
         ) : null}
       </div>
@@ -46,6 +51,7 @@ export default function Admin() {
           { id: "users", label: t("admin.users") },
           { id: "clubs", label: t("admin.clubs") },
           { id: "reports", label: t("admin.reports") },
+          { id: "coaches", label: t("admin.coachRequests") },
         ].map((item) => (
           <button key={item.id} type="button" className={`sf-tab ${tab === item.id ? "active" : ""}`} onClick={() => setTab(item.id)}>
             {item.label}
@@ -56,6 +62,7 @@ export default function Admin() {
       {tab === "users" ? <UsersTab /> : null}
       {tab === "clubs" ? <ClubsTab /> : null}
       {tab === "reports" ? <ReportsTab /> : null}
+      {tab === "coaches" ? <CoachRequestsTab /> : null}
     </div>
   );
 }
@@ -253,6 +260,129 @@ function UserFormModal({ user, isSelf, onClose, onSaved }) {
       </div>
       <ErrorMessage error={error} />
     </Modal>
+  );
+}
+
+/**
+ * The queue of accounts that said "I'm a coach" at signup.
+ *
+ * Confirming is what actually grants the role - asking never did - and turning
+ * one down requires a motive, because the applicant is emailed it and "no" on
+ * its own tells them nothing about whether to try again.
+ */
+function CoachRequestsTab() {
+  const { t } = useI18n();
+  const [requests, setRequests] = useState(null);
+  const [error, setError] = useState(null);
+  const [rejecting, setRejecting] = useState(null);
+  const [motive, setMotive] = useState("");
+  const [busy, setBusy] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      setRequests(await adminApi.coachRequests());
+    } catch (err) {
+      setError(err);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const decide = async (applicant, status, why) => {
+    setBusy(applicant.id);
+    try {
+      await adminApi.decideCoachRequest(applicant.id, status, why || "");
+      toast.success(t(status === "approved" ? "admin.coachApproved" : "admin.coachRejected"), toastOptions);
+      setRejecting(null);
+      setMotive("");
+      await load();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (requests === null) return <Spinner />;
+
+  return (
+    <>
+      <ErrorMessage error={error} />
+
+      {requests.length === 0 ? (
+        <EmptyState title={t("admin.noCoachRequestsTitle")} message={t("admin.noCoachRequestsBody")} />
+      ) : (
+        <ul className="sf-list">
+          {requests.map((applicant) => (
+            <li className="sf-list-item" key={applicant.id}>
+              <Avatar user={applicant} size="sf-avatar-sm" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong>
+                  {applicant.name} {applicant.surname}
+                </strong>
+                <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
+                  {applicant.email}
+                  {applicant.request?.requestedAt
+                    ? ` · ${new Date(applicant.request.requestedAt).toLocaleDateString()}`
+                    : ""}
+                </div>
+              </div>
+              <div className="sf-row" style={{ gap: "0.35rem" }}>
+                <button
+                  className="sf-button sf-button-sm"
+                  onClick={() => decide(applicant, "approved")}
+                  disabled={busy === applicant.id}
+                >
+                  {t("admin.confirmCoach")}
+                </button>
+                <button
+                  className="sf-button sf-button-secondary sf-button-sm"
+                  onClick={() => setRejecting(applicant)}
+                  disabled={busy === applicant.id}
+                >
+                  {t("admin.rejectCoach")}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {rejecting ? (
+        <Modal
+          title={t("admin.rejectCoachTitle")}
+          onClose={() => setRejecting(null)}
+          actions={
+            <>
+              <button className="sf-button sf-button-secondary" onClick={() => setRejecting(null)}>
+                {t("common.cancel")}
+              </button>
+              <button
+                className="sf-button sf-button-danger"
+                onClick={() => decide(rejecting, "rejected", motive)}
+                disabled={!motive.trim() || busy === rejecting.id}
+              >
+                {t("admin.rejectCoach")}
+              </button>
+            </>
+          }
+        >
+          <p className="sf-muted" style={{ marginTop: 0 }}>
+            {t("admin.rejectCoachHelp", { name: `${rejecting.name} ${rejecting.surname}`.trim() })}
+          </p>
+          <textarea
+            className="sf-textarea"
+            rows={4}
+            autoFocus
+            value={motive}
+            onChange={(event) => setMotive(event.target.value)}
+            placeholder={t("admin.rejectCoachPlaceholder")}
+          />
+        </Modal>
+      ) : null}
+    </>
   );
 }
 

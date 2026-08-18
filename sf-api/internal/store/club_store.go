@@ -397,3 +397,56 @@ func (s *ClubStore) ListProfileClubs(ctx context.Context, userID string) ([]mode
 	}
 	return clubs, rows.Err()
 }
+
+// RelationTo resolves what callerID is to targetID, in the single query the
+// profile visibility rules need: do they share a club, and does the caller
+// manage one the target belongs to.
+//
+// It is one round trip rather than two club listings intersected in Go, because
+// this runs on every profile read and on every row of a search result.
+func (s *ClubStore) RelationTo(ctx context.Context, targetID, callerID string) (models.ViewerRelation, error) {
+	relation := models.ViewerRelation{Self: targetID == callerID}
+	if relation.Self || callerID == "" || targetID == "" {
+		return relation, nil
+	}
+
+	err := s.pool.QueryRow(ctx, `
+		SELECT
+			count(*) > 0,
+			count(*) FILTER (WHERE caller.role IN ('owner', 'admin')) > 0
+		FROM club_members target
+		JOIN club_members caller ON caller.club_id = target.club_id AND caller.user_id = $2
+		WHERE target.user_id = $1
+	`, targetID, callerID).Scan(&relation.SharesClub, &relation.ManagesClub)
+	if err != nil {
+		return models.ViewerRelation{}, err
+	}
+	return relation, nil
+}
+
+// ListClubMateIDs returns the ids of everybody sharing at least one club with
+// userID, themselves excluded. It is what scopes the birthday entries in the
+// calendar - a birthdate is personal, so it travels to the people its owner
+// actually trains with rather than to everybody who can load their profile.
+func (s *ClubStore) ListClubMateIDs(ctx context.Context, userID string) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT mate.user_id
+		FROM club_members mine
+		JOIN club_members mate ON mate.club_id = mine.club_id AND mate.user_id <> mine.user_id
+		WHERE mine.user_id = $1
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}

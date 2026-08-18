@@ -31,7 +31,8 @@ export default function Settings() {
       handle: user.handle || "",
       bio: user.bio || "",
       bodyweight: user.bodyweight || "",
-      publicProfile: Boolean(user.publicProfile),
+      profileVisibility: user.profileVisibility || "private",
+      birthdate: user.birthdate || "",
       password: "",
       confirmPassword: "",
     });
@@ -143,13 +144,42 @@ export default function Settings() {
           </div>
         </div>
 
-        <label className="sf-checkbox" style={{ marginBottom: "1rem" }}>
-          <input type="checkbox" checked={form.publicProfile} onChange={set("publicProfile")} />
-          <span>
-            {t("profile.public")}
-            <div className="sf-muted">{t("profile.publicHelp")}</div>
-          </span>
-        </label>
+        <div className="sf-row" style={{ gap: "0.6rem" }}>
+          <div className="sf-field" style={{ flex: 1, minWidth: 200 }}>
+            <label className="sf-label" htmlFor="profileVisibility">
+              {t("profile.visibility")}
+            </label>
+            <select
+              id="profileVisibility"
+              className="sf-select"
+              value={form.profileVisibility}
+              onChange={set("profileVisibility")}
+            >
+              <option value="public">{t("profile.visibilityPublic")}</option>
+              <option value="clubs">{t("profile.visibilityClubs")}</option>
+              <option value="private">{t("profile.visibilityPrivate")}</option>
+            </select>
+            <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+              {t(`profile.visibilityHelp.${form.profileVisibility}`)}
+            </p>
+          </div>
+
+          <div className="sf-field" style={{ flex: 1, minWidth: 160 }}>
+            <label className="sf-label" htmlFor="birthdate">
+              {t("profile.birthdate")} <span className="sf-muted">({t("common.optional")})</span>
+            </label>
+            <input
+              id="birthdate"
+              className="sf-input"
+              type="date"
+              value={form.birthdate}
+              onChange={set("birthdate")}
+            />
+            <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+              {t("profile.birthdateHelp")}
+            </p>
+          </div>
+        </div>
 
         <div className="sf-row" style={{ gap: "0.6rem" }}>
           <div className="sf-field" style={{ flex: 1, minWidth: 160 }}>

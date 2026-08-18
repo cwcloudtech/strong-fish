@@ -118,6 +118,13 @@ func (h *CalendarHandler) Feed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	birthdays, err := birthdayEvents(r.Context(), h.users, h.clubs, user.ID, time.Time{})
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	events = append(events, birthdays...)
+
 	w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 	w.Header().Set("Content-Disposition", `inline; filename="strong-fish.ics"`)
 	w.WriteHeader(http.StatusOK)
@@ -148,6 +155,12 @@ func BuildICS(events []models.Event) string {
 		b.WriteString("BEGIN:VEVENT\r\n")
 		fmt.Fprintf(&b, "UID:%s@strong-fish\r\n", event.ID)
 		fmt.Fprintf(&b, "DTSTAMP:%s\r\n", stamp)
+
+		// A birthday is the same date every year, so the client is given the
+		// rule instead of one entry per year.
+		if event.Kind == models.EventKindBirthday {
+			b.WriteString("RRULE:FREQ=YEARLY\r\n")
+		}
 
 		if event.AllDay {
 			start := event.StartsAt.UTC()

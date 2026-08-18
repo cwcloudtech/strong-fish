@@ -216,3 +216,78 @@ func (s *Sender) SendProgramAssigned(ctx context.Context, to, locale, programNam
 	))
 	s.deliver(ctx, to, subject, body, "program assignment")
 }
+
+// SendClubInvite asks somebody to join a club. Unlike SendClubInvitation -
+// which tells a member a coach already added them - this one is a request that
+// has to be accepted, and the link is where that happens.
+//
+// It deliberately works for an address with no account behind it: that is most
+// of the point of inviting people. The invitations page sends them through
+// signing up first and the invitation is still waiting when they arrive, since
+// it was addressed to the email rather than to a user.
+func (s *Sender) SendClubInvite(ctx context.Context, to, locale, clubName, coachName, message, invitationsURL string) {
+	subject := localized(locale,
+		fmt.Sprintf("%s invited you to join %s", coachName, clubName),
+		fmt.Sprintf("%s vous invite à rejoindre %s", coachName, clubName))
+
+	note := utils.EMPTY
+	if utils.IsNotBlank(message) {
+		note = fmt.Sprintf(`<p><em>%s</em></p>`, template.HTMLEscapeString(message))
+	}
+
+	body := template.HTML(localized(locale,
+		fmt.Sprintf(`<p><strong>%s</strong> invited you to join the club <strong>%s</strong> on strong-fish.</p>`,
+			template.HTMLEscapeString(coachName), template.HTMLEscapeString(clubName))+note+
+			cta(invitationsURL, "See the invitation")+
+			`<p>If you don't have an account yet, create one with this address and the invitation will be waiting.</p>`,
+		fmt.Sprintf(`<p><strong>%s</strong> vous invite à rejoindre le club <strong>%s</strong> sur strong-fish.</p>`,
+			template.HTMLEscapeString(coachName), template.HTMLEscapeString(clubName))+note+
+			cta(invitationsURL, "Voir l'invitation")+
+			`<p>Si vous n'avez pas encore de compte, créez-en un avec cette adresse : l'invitation vous y attendra.</p>`,
+	))
+	s.deliver(ctx, to, subject, body, "club invite")
+}
+
+// SendCoachRequest tells the superadmins somebody claims to be a coach.
+func (s *Sender) SendCoachRequest(ctx context.Context, to, locale, applicantName, applicantEmail, adminURL string) {
+	subject := localized(locale,
+		"A new coach is waiting for confirmation",
+		"Un nouveau coach attend une confirmation")
+	body := template.HTML(localized(locale,
+		fmt.Sprintf(`<p><strong>%s</strong> (%s) registered as a coach and is waiting for you to confirm it.</p>`,
+			template.HTMLEscapeString(applicantName), template.HTMLEscapeString(applicantEmail))+
+			cta(adminURL, "Review the request"),
+		fmt.Sprintf(`<p><strong>%s</strong> (%s) s'est inscrit en tant que coach et attend votre confirmation.</p>`,
+			template.HTMLEscapeString(applicantName), template.HTMLEscapeString(applicantEmail))+
+			cta(adminURL, "Examiner la demande"),
+	))
+	s.deliver(ctx, to, subject, body, "coach request")
+}
+
+// SendCoachApproved tells an applicant they are now a coach.
+func (s *Sender) SendCoachApproved(ctx context.Context, to, locale, appURL string) {
+	subject := localized(locale, "You are now a coach on strong-fish", "Vous êtes désormais coach sur strong-fish")
+	body := template.HTML(localized(locale,
+		`<p>Your coach account has been confirmed. You can now create clubs, write programs and extend the exercise catalog.</p>`+
+			cta(appURL, "Open strong-fish"),
+		`<p>Votre compte coach a été confirmé. Vous pouvez désormais créer des clubs, écrire des programmes et enrichir le catalogue d'exercices.</p>`+
+			cta(appURL, "Ouvrir strong-fish"),
+	))
+	s.deliver(ctx, to, subject, body, "coach approved")
+}
+
+// SendCoachRejected tells an applicant their claim was turned down, and why.
+// The motive is the applicant's, not an internal note - it is the only thing
+// that tells them whether to reapply.
+func (s *Sender) SendCoachRejected(ctx context.Context, to, locale, motive string) {
+	subject := localized(locale, "About your coach account", "À propos de votre compte coach")
+	body := template.HTML(localized(locale,
+		`<p>Your request for a coach account was not confirmed.</p>`+
+			fmt.Sprintf(`<p><em>%s</em></p>`, template.HTMLEscapeString(motive))+
+			`<p>You can keep using strong-fish as an athlete.</p>`,
+		`<p>Votre demande de compte coach n'a pas été confirmée.</p>`+
+			fmt.Sprintf(`<p><em>%s</em></p>`, template.HTMLEscapeString(motive))+
+			`<p>Vous pouvez continuer à utiliser strong-fish en tant qu'athlète.</p>`,
+	))
+	s.deliver(ctx, to, subject, body, "coach rejected")
+}

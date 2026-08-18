@@ -9,6 +9,8 @@ import {
   FiCalendar,
   FiInfo,
   FiKey,
+  FiMail as FiMailIcon,
+  FiSearch,
   FiLogOut,
   FiMail,
   FiMenu,
@@ -19,7 +21,7 @@ import {
   FiUsers,
 } from "react-icons/fi";
 
-import { admin } from "../../api/services";
+import { admin, invitations as invitationsApi } from "../../api/services";
 import Avatar from "../common/Avatar";
 import DownloadAppButton from "../common/DownloadApp";
 import Dropdown from "../common/Dropdown";
@@ -44,6 +46,7 @@ export default function DashboardLayout() {
   // who wants the room back wants it on every screen and every session.
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === "1");
   const [openReports, setOpenReports] = useState(0);
+  const [pendingInvitations, setPendingInvitations] = useState(0);
   const version = useAppVersion(config?.version);
 
   useEffect(() => localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0"), [collapsed]);
@@ -56,9 +59,18 @@ export default function DashboardLayout() {
     if (!isSuperadmin) return;
     admin
       .stats()
-      .then((stats) => setOpenReports(stats.openReports || 0))
+      // Reports and coach requests are both "somebody is waiting on you", so
+      // one badge counts them together rather than two competing for the eye.
+      .then((stats) => setOpenReports((stats.openReports || 0) + (stats.coachRequests || 0)))
       .catch(() => setOpenReports(0));
   }, [isSuperadmin, location.pathname]);
+
+  useEffect(() => {
+    invitationsApi
+      .mine()
+      .then((list) => setPendingInvitations(list.length))
+      .catch(() => setPendingInvitations(0));
+  }, [location.pathname]);
 
   const signOut = () => {
     logout();
@@ -71,6 +83,13 @@ export default function DashboardLayout() {
     { to: "/dashboard/one-rms", label: t("nav.oneRms"), icon: <FiAward /> },
     { to: "/dashboard/clubs", label: t("nav.clubs"), icon: <FiUsers /> },
     { to: "/dashboard/events", label: t("nav.events"), icon: <FiCalendar /> },
+    { to: "/dashboard/search", label: t("nav.search"), icon: <FiSearch /> },
+    {
+      to: "/dashboard/invitations",
+      label: t("nav.invitations"),
+      icon: <FiMailIcon />,
+      count: pendingInvitations,
+    },
   ];
   if (isCoach) links.push({ to: "/dashboard/exercises", label: t("nav.exercises"), icon: <FiActivity /> });
   links.push({ to: "/dashboard/settings", label: t("nav.settings"), icon: <FiUser /> });

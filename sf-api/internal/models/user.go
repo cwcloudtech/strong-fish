@@ -66,9 +66,13 @@ type User struct {
 	// Locale is the language the user picked, used to send transactional
 	// emails in the right one.
 	Locale string `json:"locale,omitempty"`
-	// PublicProfile gates whether the profile and its public posts are
-	// readable without logging in.
-	PublicProfile bool `json:"publicProfile"`
+	// ProfileVisibility gates who may read the profile and its posts: everybody,
+	// the members of the owner's clubs, or only their coaches (see
+	// CanSeeProfile).
+	ProfileVisibility string `json:"profileVisibility"`
+	// Birthdate is optional, stored as YYYY-MM-DD. When set it becomes a
+	// calendar entry for the people who may see the profile.
+	Birthdate string `json:"birthdate,omitempty"`
 	// Bodyweight, in kg, shown on the public profile next to the member's
 	// bests. Zero means "not stated".
 	Bodyweight float64 `json:"bodyweight,omitempty"`
@@ -80,6 +84,9 @@ type User struct {
 	// soon as enrollment starts but MFAEnabled stays false until the user
 	// confirms a code generated from it.
 	MFATOTPSecret string `json:"-"`
+	// CoachRequest is set when the account asked to be a coach at signup. The
+	// role is not granted by asking: it waits on a superadmin's decision.
+	CoachRequest CoachRequest `json:"-"`
 	// Storage is where this member's uploaded videos go. It holds live
 	// credentials, so it is never serialized with the user - the account
 	// screen reads it back through its own endpoint, redacted.
@@ -125,23 +132,27 @@ type MFAChallengeResponse struct {
 // UserMeResponse is the connected user's own account, including the settings
 // only they can see.
 type UserMeResponse struct {
-	ID            string     `json:"id"`
-	Email         string     `json:"email"`
-	Name          string     `json:"name"`
-	Surname       string     `json:"surname"`
-	Handle        string     `json:"handle,omitempty"`
-	Bio           string     `json:"bio,omitempty"`
-	Role          GlobalRole `json:"role"`
-	Picture       string     `json:"picture,omitempty"`
-	PictureX      float64    `json:"pictureX"`
-	PictureY      float64    `json:"pictureY"`
-	Locale        string     `json:"locale,omitempty"`
-	PublicProfile bool       `json:"publicProfile"`
-	Bodyweight    float64    `json:"bodyweight,omitempty"`
-	MFAEnabled    bool       `json:"mfaEnabled"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
-	I18nCode      string     `json:"i18nCode,omitempty"`
+	ID                string     `json:"id"`
+	Email             string     `json:"email"`
+	Name              string     `json:"name"`
+	Surname           string     `json:"surname"`
+	Handle            string     `json:"handle,omitempty"`
+	Bio               string     `json:"bio,omitempty"`
+	Role              GlobalRole `json:"role"`
+	Picture           string     `json:"picture,omitempty"`
+	PictureX          float64    `json:"pictureX"`
+	PictureY          float64    `json:"pictureY"`
+	Locale            string     `json:"locale,omitempty"`
+	ProfileVisibility string     `json:"profileVisibility"`
+	Birthdate         string     `json:"birthdate,omitempty"`
+	// CoachRequest is the account's own view of its coach application: whether
+	// it is still waiting, and - if it was turned down - why.
+	CoachRequest CoachRequest `json:"coachRequest,omitempty"`
+	Bodyweight   float64      `json:"bodyweight,omitempty"`
+	MFAEnabled   bool         `json:"mfaEnabled"`
+	CreatedAt    time.Time    `json:"createdAt"`
+	UpdatedAt    time.Time    `json:"updatedAt"`
+	I18nCode     string       `json:"i18nCode,omitempty"`
 }
 
 // PublicProfile is the outward-facing profile of a member or coach - never
@@ -158,6 +169,10 @@ type PublicProfile struct {
 	PictureX   float64    `json:"pictureX"`
 	PictureY   float64    `json:"pictureY"`
 	Bodyweight float64    `json:"bodyweight,omitempty"`
+	// Birthdate is only ever on a profile the caller was already allowed to
+	// read, which is the same gate that decides whether they see the birthday
+	// in their calendar.
+	Birthdate string `json:"birthdate,omitempty"`
 	// Bests are the member's current 1RMs on the three competition lifts, plus
 	// the total, shown as the headline of a powerlifting profile.
 	Bests     []ProfileBest `json:"bests"`

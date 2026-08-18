@@ -15,22 +15,24 @@ import (
 // Handlers bundles every handler the router wires up, so adding one doesn't mean
 // threading another positional argument through main.
 type Handlers struct {
-	User     *handlers.UserHandler
-	MFA      *handlers.MFAHandler
-	OIDC     *handlers.OIDCHandler
-	Club     *handlers.ClubHandler
-	Exercise *handlers.ExerciseHandler
-	Program  *handlers.ProgramHandler
-	Training *handlers.TrainingHandler
-	Social   *handlers.SocialHandler
-	Profile  *handlers.ProfileHandler
-	Admin    *handlers.AdminHandler
-	Config   *handlers.ConfigHandler
-	Contact  *handlers.ContactHandler
-	ApiKey   *handlers.ApiKeyHandler
-	Media    *handlers.MediaHandler
-	Event    *handlers.EventHandler
-	Calendar *handlers.CalendarHandler
+	User       *handlers.UserHandler
+	MFA        *handlers.MFAHandler
+	OIDC       *handlers.OIDCHandler
+	Club       *handlers.ClubHandler
+	Exercise   *handlers.ExerciseHandler
+	Program    *handlers.ProgramHandler
+	Training   *handlers.TrainingHandler
+	Social     *handlers.SocialHandler
+	Profile    *handlers.ProfileHandler
+	Admin      *handlers.AdminHandler
+	Config     *handlers.ConfigHandler
+	Contact    *handlers.ContactHandler
+	ApiKey     *handlers.ApiKeyHandler
+	Media      *handlers.MediaHandler
+	Event      *handlers.EventHandler
+	Calendar   *handlers.CalendarHandler
+	Search     *handlers.SearchHandler
+	Invitation *handlers.InvitationHandler
 }
 
 // Options carries the settings the middleware chain needs.
@@ -139,6 +141,15 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Delete("/{keyId}", h.ApiKey.Delete)
 				})
 
+				// The invitations waiting for this account's address. They are
+				// matched by email, not by user id, so one that arrived before
+				// the account existed is here too.
+				r.Route("/me/invitations", func(r chi.Router) {
+					r.Get("/", h.Invitation.Mine)
+					r.Post("/{invitationId}/accept", h.Invitation.Accept)
+					r.Post("/{invitationId}/decline", h.Invitation.Decline)
+				})
+
 				// The member's own object store for video uploads. It holds
 				// live credentials, so it has its own endpoint rather than
 				// riding along on the profile.
@@ -187,6 +198,11 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			// adds their clubs' own dates to the public ones.
 			r.Get("/events", h.Event.List)
 			r.Get("/events/{eventId}", h.Event.Get)
+
+			// Searching is readable logged out, but only ever returns public
+			// profiles then - the visibility predicate is the same one the
+			// profile endpoint applies, evaluated per row inside the query.
+			r.Get("/search/members", h.Search.Members)
 		})
 
 		// --- authenticated ---
@@ -244,6 +260,16 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					manager(r).Post("/transfer", h.Club.TransferOwnership)
 					manager(r).Get("/feedback", h.Program.ListFeedback)
 					r.Get("/feed", h.Social.ClubFeed)
+
+					// Inviting is not adding: a coach entering their own
+					// athletes adds them, and reaching out to somebody who
+					// has to agree - or who has no account yet - invites
+					// them.
+					r.Route("/invitations", func(r chi.Router) {
+						manager(r).Get("/", h.Invitation.ListForClub)
+						manager(r).Post("/", h.Invitation.Create)
+						manager(r).Delete("/{invitationId}", h.Invitation.Withdraw)
+					})
 
 					r.Route("/members", func(r chi.Router) {
 						r.Get("/", h.Club.ListMembers)
@@ -332,6 +358,8 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 				r.Get("/stats", h.Admin.Stats)
 				r.Get("/clubs", h.Club.ListAll)
 				r.Get("/reports", h.Social.ListReports)
+				r.Get("/coach-requests", h.Admin.ListCoachRequests)
+				r.Put("/coach-requests/{userId}", h.Admin.DecideCoachRequest)
 				r.Put("/reports/{reportId}", h.Social.ResolveReport)
 
 				r.Route("/users", func(r chi.Router) {

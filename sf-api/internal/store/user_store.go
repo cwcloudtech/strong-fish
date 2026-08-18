@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -25,20 +26,26 @@ func NewUserStore(pool *pgxpool.Pool) *UserStore {
 
 // userData is the JSONB payload of the users table.
 type userData struct {
-	Password      string   `json:"password"`
-	Name          string   `json:"name,omitempty"`
-	Surname       string   `json:"surname,omitempty"`
-	Role          string   `json:"role,omitempty"`
-	Handle        string   `json:"handle,omitempty"`
-	Bio           string   `json:"bio,omitempty"`
-	Picture       string   `json:"picture,omitempty"`
-	PictureX      *float64 `json:"pictureX,omitempty"`
-	PictureY      *float64 `json:"pictureY,omitempty"`
-	Locale        string   `json:"locale,omitempty"`
-	PublicProfile bool     `json:"publicProfile,omitempty"`
-	Bodyweight    float64  `json:"bodyweight,omitempty"`
-	MFAEnabled    bool     `json:"mfaEnabled,omitempty"`
-	MFATOTPSecret string   `json:"mfaTotpSecret,omitempty"`
+	Password string   `json:"password"`
+	Name     string   `json:"name,omitempty"`
+	Surname  string   `json:"surname,omitempty"`
+	Role     string   `json:"role,omitempty"`
+	Handle   string   `json:"handle,omitempty"`
+	Bio      string   `json:"bio,omitempty"`
+	Picture  string   `json:"picture,omitempty"`
+	PictureX *float64 `json:"pictureX,omitempty"`
+	PictureY *float64 `json:"pictureY,omitempty"`
+	Locale   string   `json:"locale,omitempty"`
+	// PublicProfile is the boolean ProfileVisibility replaced. It is still read
+	// so an account the V5 migration hasn't touched still resolves to something
+	// sensible, and never written.
+	PublicProfile     bool                 `json:"publicProfile,omitempty"`
+	ProfileVisibility string               `json:"profileVisibility,omitempty"`
+	Birthdate         string               `json:"birthdate,omitempty"`
+	CoachRequest      *models.CoachRequest `json:"coachRequest,omitempty"`
+	Bodyweight        float64              `json:"bodyweight,omitempty"`
+	MFAEnabled        bool                 `json:"mfaEnabled,omitempty"`
+	MFATOTPSecret     string               `json:"mfaTotpSecret,omitempty"`
 	// Storage is the member's own object store for video uploads, and
 	// CalendarFeed* back the ICS subscription. Both live in the payload like
 	// everything else here; neither is ever sent out with the user.
@@ -72,7 +79,21 @@ func scanUser(row pgx.Row) (models.User, error) {
 	u.PictureX = resolveImagePosition(d.PictureX)
 	u.PictureY = resolveImagePosition(d.PictureY)
 	u.Locale = d.Locale
-	u.PublicProfile = d.PublicProfile
+	u.ProfileVisibility = d.ProfileVisibility
+	if utils.IsBlank(u.ProfileVisibility) {
+		// Pre-V5 rows: the old boolean is the only statement of intent there
+		// is, and it maps exactly - true meant "anybody", false meant "only me
+		// and a superadmin".
+		u.ProfileVisibility = models.ProfileVisibilityPrivate
+		if d.PublicProfile {
+			u.ProfileVisibility = models.ProfileVisibilityPublic
+		}
+	}
+	u.ProfileVisibility = models.NormalizeProfileVisibility(u.ProfileVisibility)
+	u.Birthdate = d.Birthdate
+	if d.CoachRequest != nil {
+		u.CoachRequest = *d.CoachRequest
+	}
 	u.Bodyweight = d.Bodyweight
 	u.MFAEnabled = d.MFAEnabled
 	u.MFATOTPSecret = d.MFATOTPSecret
@@ -235,6 +256,138 @@ func (s *UserStore) SearchByEmail(ctx context.Context, query string, limit int) 
 	return scanUsers(rows)
 }
 
+// MemberSearch is what a caller is looking for. Every criterion is optional and
+// they are combined with AND, the way uprodit's own search composes its query
+// parameters - Terms is the free-text box that matches any of the three.
+type MemberSearch struct {
+	Terms   string
+	Name    string
+	Surname string
+	Email   string
+	Page    int
+	Size    int
+}
+
+// blank reports whether the search has nothing to go on. An empty search must
+// not enumerate the whole membership.
+func (m MemberSearch) blank() bool {
+	return utils.IsBlank(m.Terms) && utils.IsBlank(m.Name) &&
+		utils.IsBlank(m.Surname) && utils.IsBlank(m.Email)
+}
+
+// SearchMembers finds accounts by email, name or surname, returning only the
+// profiles callerID is allowed to see.
+//
+// The visibility predicate is in the query rather than applied to the results,
+// for two reasons: a caller-side filter would make the page counts wrong (a
+// page of 20 could come back with 3), and it would put the enforcement in
+// whichever handler remembered to do it rather than in the one place every
+// search goes through.
+//
+// An account that cannot sign in - disabled or banned - never appears: a
+// pending registration is not a member yet, and a banned one is not one any
+// more.
+func (s *UserStore) SearchMembers(ctx context.Context, m MemberSearch, callerID string, superadmin bool) ([]models.User, int, error) {
+	if m.blank() {
+		return []models.User{}, 0, nil
+	}
+
+	size := m.Size
+	if size <= 0 || size > 100 {
+		size = 20
+	}
+	page := m.Page
+	if page < 0 {
+		page = 0
+	}
+
+	// $1 caller, $2 superadmin, then one parameter per supplied criterion.
+	args := []any{callerID, superadmin}
+	where := []string{`data->>'role' NOT IN ('disabled', 'ban')`}
+
+	like := func(expression, value string) {
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(value))+"%")
+		where = append(where, fmt.Sprintf("%s LIKE $%d", expression, len(args)))
+	}
+
+	const fullName = `lower(coalesce(data->>'name', '') || ' ' || coalesce(data->>'surname', ''))`
+	if utils.IsNotBlank(m.Terms) {
+		args = append(args, "%"+strings.ToLower(strings.TrimSpace(m.Terms))+"%")
+		where = append(where, fmt.Sprintf(
+			"(lower(email) LIKE $%d OR %s LIKE $%d OR lower(coalesce(data->>'handle', '')) LIKE $%d)",
+			len(args), fullName, len(args), len(args)))
+	}
+	if utils.IsNotBlank(m.Name) {
+		like(`lower(coalesce(data->>'name', ''))`, m.Name)
+	}
+	if utils.IsNotBlank(m.Surname) {
+		like(`lower(coalesce(data->>'surname', ''))`, m.Surname)
+	}
+	if utils.IsNotBlank(m.Email) {
+		like(`lower(email)`, m.Email)
+	}
+
+	// The visibility rules, as SQL. "clubs" needs a shared club; "private"
+	// needs the caller to manage one. A row with no stored visibility is
+	// treated as private, matching NormalizeProfileVisibility.
+	where = append(where, `(
+		$2
+		OR users.id::text = $1
+		OR data->>'profileVisibility' = 'public'
+		OR (
+			data->>'profileVisibility' = 'clubs'
+			AND EXISTS (
+				SELECT 1 FROM club_members target
+				JOIN club_members caller ON caller.club_id = target.club_id AND caller.user_id::text = $1
+				WHERE target.user_id = users.id
+			)
+		)
+		OR (
+			coalesce(data->>'profileVisibility', 'private') NOT IN ('public', 'clubs')
+			AND EXISTS (
+				SELECT 1 FROM club_members target
+				JOIN club_members caller ON caller.club_id = target.club_id AND caller.user_id::text = $1
+				WHERE target.user_id = users.id AND caller.role IN ('owner', 'admin')
+			)
+		)
+	)`)
+
+	predicate := strings.Join(where, " AND ")
+
+	var total int
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE `+predicate, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return []models.User{}, 0, nil
+	}
+
+	args = append(args, size, page*size)
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+userColumns+` FROM users
+		WHERE `+predicate+`
+		ORDER BY coalesce(data->>'name', ''), coalesce(data->>'surname', ''), email
+		LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	users, err := scanUsers(rows)
+	return users, total, err
+}
+
+// ListByIDs loads several accounts at once, for the places that already know
+// which people they need - the calendar's birthday entries, for one.
+func (s *UserStore) ListByIDs(ctx context.Context, ids []string) ([]models.User, error) {
+	if len(ids) == 0 {
+		return []models.User{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT `+userColumns+` FROM users WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	return scanUsers(rows)
+}
+
 // merge applies a shallow JSONB patch to one account, so a write can never
 // clobber the fields it didn't mean to touch (the password hash lives in the
 // same column as the avatar).
@@ -257,24 +410,26 @@ func (s *UserStore) merge(ctx context.Context, id string, patch map[string]any) 
 // ProfileFields are the profile settings a user may change about themselves.
 // PasswordHash is a pointer so nil means "leave the current password alone".
 type ProfileFields struct {
-	Name          string
-	Surname       string
-	Handle        string
-	Bio           string
-	Locale        string
-	PublicProfile bool
-	Bodyweight    float64
-	PasswordHash  *string
+	Name              string
+	Surname           string
+	Handle            string
+	Bio               string
+	Locale            string
+	ProfileVisibility string
+	Birthdate         string
+	Bodyweight        float64
+	PasswordHash      *string
 }
 
 // UpdateProfile sets the connected user's own profile fields.
 func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileFields) (models.User, error) {
 	patch := map[string]any{
-		"name":          f.Name,
-		"surname":       f.Surname,
-		"bio":           f.Bio,
-		"publicProfile": f.PublicProfile,
-		"bodyweight":    f.Bodyweight,
+		"name":              f.Name,
+		"surname":           f.Surname,
+		"bio":               f.Bio,
+		"profileVisibility": models.NormalizeProfileVisibility(f.ProfileVisibility),
+		"birthdate":         f.Birthdate,
+		"bodyweight":        f.Bodyweight,
 	}
 	if utils.IsNotBlank(f.Handle) {
 		patch["handle"] = f.Handle

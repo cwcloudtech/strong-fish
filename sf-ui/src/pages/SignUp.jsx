@@ -14,7 +14,12 @@ export default function SignUp() {
   const { login, config } = useAuth();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({ name: "", surname: "", email: "", password: "", confirmPassword: "" });
+  const [form, setForm] = useState({
+    name: "", surname: "", email: "", password: "", confirmPassword: "",
+    // A claim, not a grant: choosing "coach" queues the account for a
+    // superadmin to confirm, and it stays an athlete until they do.
+    coach: false,
+  });
   const [busy, setBusy] = useState(false);
 
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -32,6 +37,7 @@ export default function SignUp() {
         password: form.password,
         name: form.name,
         surname: form.surname,
+        coach: form.coach,
         locale,
       });
       // A brand-new account is disabled until it's activated (by email link or
@@ -42,8 +48,12 @@ export default function SignUp() {
           config?.activationMode === "email" ? t("auth.checkEmail") : t("errors.accountDisabledAdmin"),
           toastOptions
         );
+        if (form.coach) toast.info(t("auth.coachRequestSent"), toastOptions);
         navigate("/login");
         return;
+      }
+      if (form.coach && response.coachRequest?.status === "pending") {
+        toast.info(t("auth.coachRequestSent"), toastOptions);
       }
       await login(response);
       toast.success(t("auth.accountCreated"), toastOptions);
@@ -79,6 +89,35 @@ export default function SignUp() {
               {t("auth.email")}
             </label>
             <input id="email" className="sf-input" type="email" value={form.email} onChange={set("email")} required />
+          </div>
+
+          {/* Which of the two this account is. Picking "coach" doesn't grant
+              anything - it queues a request, because a coach writes other
+              people's training. */}
+          <div className="sf-field">
+            <span className="sf-label">{t("auth.accountType")}</span>
+            <div className="sf-choice-row">
+              {[
+                { value: false, label: t("auth.imAnAthlete"), help: t("auth.imAnAthleteHelp") },
+                { value: true, label: t("auth.imACoach"), help: t("auth.imACoachHelp") },
+              ].map((option) => (
+                <label
+                  key={String(option.value)}
+                  className={`sf-choice ${form.coach === option.value ? "selected" : ""}`}
+                >
+                  <input
+                    type="radio"
+                    name="accountType"
+                    checked={form.coach === option.value}
+                    onChange={() => setForm((current) => ({ ...current, coach: option.value }))}
+                  />
+                  <span>
+                    <strong>{option.label}</strong>
+                    <span className="sf-muted">{option.help}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
           <div className="sf-field">
             <label className="sf-label" htmlFor="password">

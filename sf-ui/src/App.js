@@ -18,6 +18,7 @@ import Clubs from "./pages/dashboard/Clubs";
 import Events from "./pages/dashboard/Events";
 import Exercises from "./pages/dashboard/Exercises";
 import Feed from "./pages/dashboard/Feed";
+import Invitations from "./pages/dashboard/Invitations";
 import ForgotPassword from "./pages/ForgotPassword";
 import Login from "./pages/Login";
 import OidcCallback from "./pages/OidcCallback";
@@ -26,6 +27,7 @@ import ProgramDetail from "./pages/dashboard/ProgramDetail";
 import PublicProgram from "./pages/PublicProgram";
 import Profile from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword";
+import Search from "./pages/dashboard/Search";
 import Settings from "./pages/dashboard/Settings";
 import SignUp from "./pages/SignUp";
 import Training from "./pages/dashboard/Training";
@@ -85,6 +87,8 @@ function AppRoutes() {
               <Route path="clubs/:clubId" element={<ClubDetail />} />
               <Route path="clubs/:clubId/programs/:programId" element={<ProgramDetail />} />
               <Route path="events" element={<Events />} />
+              <Route path="invitations" element={<Invitations />} />
+              <Route path="search" element={<Search />} />
               <Route path="exercises" element={<Exercises />} />
               <Route path="settings" element={<Settings />} />
               <Route path="api-keys" element={<ApiKeys />} />

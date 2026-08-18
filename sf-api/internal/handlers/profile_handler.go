@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -26,9 +27,8 @@ func NewProfileHandler(users *store.UserStore, social *store.SocialStore, clubs 
 	return &ProfileHandler{users: users, social: social, clubs: clubs, oneRMs: oneRMs}
 }
 
-// resolveTarget loads the profile being addressed and decides whether the caller
-// may read it: a private profile is visible to its owner and to a superadmin,
-// and to nobody else.
+// resolveTarget loads the profile being addressed and decides whether the
+// caller may read it (see models.CanSeeProfile).
 func (h *ProfileHandler) resolveTarget(w http.ResponseWriter, r *http.Request) (models.User, string, bool) {
 	callerID, _ := middleware.UserIDFromContext(r.Context())
 
@@ -37,20 +37,38 @@ func (h *ProfileHandler) resolveTarget(w http.ResponseWriter, r *http.Request) (
 		writeStoreError(w, err)
 		return models.User{}, callerID, false
 	}
-	if target.PublicProfile || target.ID == callerID {
+
+	relation, err := h.RelationTo(r.Context(), target.ID, callerID)
+	if err != nil {
+		writeStoreError(w, err)
+		return models.User{}, callerID, false
+	}
+	if models.CanSeeProfile(target.ProfileVisibility, relation) {
 		return target, callerID, true
 	}
 
-	if utils.IsNotBlank(callerID) {
-		if caller, err := h.users.FindByID(r.Context(), callerID); err == nil && caller.Role == models.GlobalRoleSuperadmin {
-			return target, callerID, true
-		}
-	}
-
-	// A private profile reads as absent rather than forbidden, so its existence
-	// isn't disclosed.
+	// A profile the caller may not see reads as absent rather than forbidden,
+	// so its existence isn't disclosed to somebody guessing handles.
 	writeError(w, http.StatusNotFound, "Profile not found", CodeNotFound)
 	return models.User{}, callerID, false
+}
+
+// RelationTo resolves what a caller is to one profile's owner. It is exported
+// because the search returns many profiles at once and needs the same answer
+// per row, and because getting this rule right in two places is exactly how it
+// ends up wrong in one of them.
+func (h *ProfileHandler) RelationTo(ctx context.Context, targetID, callerID string) (models.ViewerRelation, error) {
+	if utils.IsBlank(callerID) {
+		return models.ViewerRelation{}, nil
+	}
+	relation, err := h.clubs.RelationTo(ctx, targetID, callerID)
+	if err != nil {
+		return models.ViewerRelation{}, err
+	}
+	if caller, err := h.users.FindByID(ctx, callerID); err == nil {
+		relation.Superadmin = caller.Role == models.GlobalRoleSuperadmin
+	}
+	return relation, nil
 }
 
 // Get returns one public profile.
@@ -80,7 +98,8 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 		ID: target.ID, Handle: target.Handle, Name: target.Name, Surname: target.Surname,
 		Role: target.Role, Bio: target.Bio, Picture: target.Picture,
 		PictureX: target.PictureX, PictureY: target.PictureY, Bodyweight: target.Bodyweight,
-		Bests: bests, Total: total, Followers: followers, Following: following,
+		Birthdate: target.Birthdate,
+		Bests:     bests, Total: total, Followers: followers, Following: following,
 		Followed: followed, Clubs: clubs, CreatedAt: target.CreatedAt,
 	})
 }
