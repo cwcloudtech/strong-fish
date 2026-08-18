@@ -587,6 +587,25 @@ button {
   font-size: 0.62rem;
 }
 
+/* The open conversations, listed under the Messages entry. */
+.sf-sidebar-conversations {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--sf-spacing-xs);
+  padding-top: var(--sf-spacing-xs);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.sf-sidebar-section {
+  padding: 0 11px 2px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8fa8c2;
+}
+
 /* --- collapsed rail ---
    Everything that reads as a row of "icon + words" becomes the icon alone,
    centred. The label is dropped from the flow rather than hidden with

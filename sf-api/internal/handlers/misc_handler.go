@@ -63,16 +63,18 @@ type ConfigHandler struct {
 	apiBaseURL     string
 	uiBaseURL      string
 	mobileURLPat   string
+	aboutURL       string
+	docURL         string
 }
 
 func NewConfigHandler(oidcProviders []string, activationMode string, plateIncrement float64,
 	maxImageSize int64, version string, contactEnabled bool,
-	apiBaseURL, uiBaseURL, mobileURLPattern string) *ConfigHandler {
+	apiBaseURL, uiBaseURL, mobileURLPattern, aboutURL, docURL string) *ConfigHandler {
 	return &ConfigHandler{
 		oidcProviders: oidcProviders, activationMode: activationMode,
 		plateIncrement: plateIncrement, maxImageSize: maxImageSize, version: version,
 		contactEnabled: contactEnabled, apiBaseURL: apiBaseURL, uiBaseURL: uiBaseURL,
-		mobileURLPat: mobileURLPattern,
+		mobileURLPat: mobileURLPattern, aboutURL: aboutURL, docURL: docURL,
 	}
 }
 
@@ -192,5 +194,10 @@ func (h *ConfigHandler) Get(w http.ResponseWriter, r *http.Request) {
 		// Lets the frontend hide the contact link entirely when no form id is
 		// configured, rather than offering a page that can only answer 405.
 		"contactEnabled": h.contactEnabled,
+		// Where the About link points. It is served rather than compiled in so
+		// a deployment can point at its own wiki without rebuilding the
+		// frontend.
+		"aboutUrl": h.aboutURL,
+		"docUrl":   h.docURL,
 	})
 }

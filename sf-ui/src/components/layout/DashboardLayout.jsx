@@ -7,11 +7,12 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiCalendar,
+  FiBookOpen,
   FiInfo,
   FiKey,
-  FiMail as FiMailIcon,
   FiMessageSquare,
   FiSearch,
+  FiUserPlus,
   FiLogOut,
   FiMail,
   FiMenu,
@@ -30,11 +31,16 @@ import LanguageDropdown from "../common/LanguageDropdown";
 import Logo from "../common/Logo";
 import Tooltip from "../common/Tooltip";
 import useAppVersion from "../../utils/useAppVersion";
+import { aboutUrl, docUrl } from "../../utils/aboutUrl";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import { useTheme } from "../../context/ThemeContext";
 
 const COLLAPSED_KEY = "sf.sidebarCollapsed";
+
+// How many open conversations the rail lists before it stops being a shortcut
+// and starts being a scrollbar.
+const MAX_SIDEBAR_CONVERSATIONS = 5;
 
 export default function DashboardLayout() {
   const { t } = useI18n();
@@ -49,6 +55,7 @@ export default function DashboardLayout() {
   const [openReports, setOpenReports] = useState(0);
   const [pendingInvitations, setPendingInvitations] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [conversations, setConversations] = useState([]);
   const version = useAppVersion(config?.version);
 
   useEffect(() => localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0"), [collapsed]);
@@ -76,6 +83,12 @@ export default function DashboardLayout() {
       .unread()
       .then(({ unread }) => setUnreadMessages(unread || 0))
       .catch(() => setUnreadMessages(0));
+    messagesApi
+      .conversations()
+      // Only the few most recent: the rail is a shortcut into a conversation,
+      // not a second copy of the messages page.
+      .then((list) => setConversations(list.slice(0, MAX_SIDEBAR_CONVERSATIONS)))
+      .catch(() => setConversations([]));
   }, [location.pathname]);
 
   const signOut = () => {
@@ -99,14 +112,17 @@ export default function DashboardLayout() {
     {
       to: "/dashboard/invitations",
       label: t("nav.invitations"),
-      icon: <FiMailIcon />,
+      icon: <FiUserPlus />,
       count: pendingInvitations,
     },
   ];
   if (isCoach) links.push({ to: "/dashboard/exercises", label: t("nav.exercises"), icon: <FiActivity /> });
   links.push({ to: "/dashboard/settings", label: t("nav.settings"), icon: <FiUser /> });
   links.push({ to: "/dashboard/api-keys", label: t("nav.apiKeys"), icon: <FiKey /> });
-  links.push({ to: "/about", label: t("nav.about"), icon: <FiInfo /> });
+  // The wiki, and the About page inside it. Both are external now: the prose
+  // lives with the documentation rather than in a second copy here.
+  links.push({ href: docUrl(config), label: t("nav.documentation"), icon: <FiBookOpen /> });
+  links.push({ href: aboutUrl(config), label: t("nav.about"), icon: <FiInfo /> });
   if (config?.contactEnabled) {
     links.push({ to: "/contact", label: t("nav.contact"), icon: <FiMail /> });
   }
@@ -154,16 +170,51 @@ export default function DashboardLayout() {
             /* Collapsed, the icon is all that's left of a link, so the label
                has to come back as a tooltip. Expanded, it's already on screen
                and a bubble repeating it would just be noise. */
-            <Tooltip key={link.to} label={collapsed ? link.label : null} position="right">
-              <NavLink to={link.to} className="sf-nav-link">
-                {link.icon}
-                <span className="sf-nav-label">{link.label}</span>
-                {link.count ? <span className="sf-nav-count">{link.count}</span> : null}
-              </NavLink>
+            <Tooltip key={link.to || link.href} label={collapsed ? link.label : null} position="right">
+              {link.href ? (
+                <a className="sf-nav-link" href={link.href} target="_blank" rel="noopener noreferrer">
+                  {link.icon}
+                  <span className="sf-nav-label">{link.label}</span>
+                </a>
+              ) : (
+                <NavLink to={link.to} className="sf-nav-link">
+                  {link.icon}
+                  <span className="sf-nav-label">{link.label}</span>
+                  {link.count ? <span className="sf-nav-count">{link.count}</span> : null}
+                </NavLink>
+              )}
             </Tooltip>
           ))}
           <DownloadAppButton collapsed={collapsed} />
         </nav>
+
+        {/* The conversations already open, under the entry that lists them all.
+            Collapsed there is no room for a name, so the rail falls back to the
+            avatar alone with the name as its tooltip. */}
+        {conversations.length > 0 ? (
+          <div className="sf-sidebar-conversations">
+            {collapsed ? null : (
+              <span className="sf-sidebar-section">{t("messages.current")}</span>
+            )}
+            {conversations.map((conversation) => (
+              <Tooltip
+                key={conversation.id}
+                label={collapsed ? `${conversation.other.name} ${conversation.other.surname}`.trim() : null}
+                position="right"
+              >
+                <Link className="sf-nav-link" to={`/dashboard/messages?with=${conversation.other.id}`}>
+                  <Avatar user={conversation.other} size="sf-avatar-sm" />
+                  <span className="sf-nav-label">
+                    {conversation.other.name} {conversation.other.surname}
+                  </span>
+                  {conversation.unread ? (
+                    <span className="sf-nav-count">{conversation.unread}</span>
+                  ) : null}
+                </Link>
+              </Tooltip>
+            ))}
+          </div>
+        ) : null}
 
         <div className="sf-sidebar-footer">
           {user?.handle ? (

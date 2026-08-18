@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 
-export APPS="ui api ui-and-mobile"
+export APPS="ui api ui-and-mobile wiki"
 export APP_PREFIX="sf"
 export VERSION="$(grep -oE "^[0-9\.]+$" VERSION)"
 export VERSION_SHA="${VERSION}-${CI_COMMIT_SHORT_SHA}"
 export SF_API_URL="https://api.strong-fish.com"
 export SF_UI_URL="https://www.strong-fish.com"
+export SF_DOC_URL="https://doc.strong-fish.com"
+export SF_ABOUT_URL="https://doc.strong-fish.com/docs/about"
 export SF_CORS_ENABLED="off"
 export SF_MAX_IMAGE_SIZE="2097152"
 export SF_ACTIVATION_MODE="email"

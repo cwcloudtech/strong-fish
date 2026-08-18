@@ -1,0 +1,14 @@
+{
+  "version.label": {
+    "message": "Next",
+    "description": "The label for version current"
+  },
+  "sidebar.docs.category.Tutorials": {
+    "message": "Tutoriels",
+    "description": "The label for category Tutorials in sidebar docs"
+  },
+  "sidebar.docs.category.Tutorials.link.generated-index.description": {
+    "message": "Pas à pas, de la création d'un compte à la publication de votre première vidéo.",
+    "description": "The generated-index page description for category Tutorials in sidebar docs"
+  }
+}

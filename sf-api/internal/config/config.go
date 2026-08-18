@@ -48,6 +48,12 @@ type Config struct {
 	// observable locally.
 	OTELEndpoint string
 	OTELProto    string
+	// AboutURL is where the About link points. The page itself lives in the
+	// wiki now, so the app links out rather than shipping a second copy of the
+	// text that would drift from it.
+	AboutURL string
+	// DocURL is the wiki's own root, linked from the sidebar.
+	DocURL string
 }
 
 const (
@@ -156,6 +162,8 @@ func Load() Config {
 		MaxVideoSize:             maxVideoSize,
 		OTELEndpoint:             os.Getenv("SF_OTEL_ENDPOINT"),
 		OTELProto:                utils.GetEnv("SF_OTEL_PROTO", "otlp/grpc"),
+		AboutURL:                 utils.GetEnv("SF_ABOUT_URL", "https://doc.strong-fish.com/docs/about"),
+		DocURL:                   utils.GetEnv("SF_DOC_URL", "https://doc.strong-fish.com"),
 	}
 }
 

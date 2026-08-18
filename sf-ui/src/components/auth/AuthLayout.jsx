@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import Logo from "../common/Logo";
 import LanguageDropdown from "../common/LanguageDropdown";
 import { DownloadAppIcon } from "../common/DownloadApp";
+import { aboutUrl } from "../../utils/aboutUrl";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -68,7 +69,9 @@ export default function AuthLayout({ children }) {
           {children}
 
           <div className="sf-auth-footer">
-            <Link to="/about">{t("nav.about")}</Link>
+            <a href={aboutUrl(config)} target="_blank" rel="noopener noreferrer">
+              {t("nav.about")}
+            </a>
             {/* Hidden when no CWCLOUD_CONTACT_FORM_ID is set: the page would
                 only be able to report that it isn't configured. */}
             {config?.contactEnabled ? <Link to="/contact">{t("nav.contact")}</Link> : null}

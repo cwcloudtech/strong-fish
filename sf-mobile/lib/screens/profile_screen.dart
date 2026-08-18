@@ -3,8 +3,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../models/models.dart';
+import '../providers/app_update_provider.dart';
 import '../providers/providers.dart';
 import '../widgets/common.dart';
 
@@ -19,6 +21,30 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _busy = false;
+  String _appVersion = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Both are best-effort and neither blocks the screen: the version is a
+    // label, and the update check is silent when it fails.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(appUpdateProvider.notifier).checkForUpdate();
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _appVersion = info.version);
+    });
+  }
+
+  Future<void> _install() async {
+    final t = ref.read(tProvider);
+    try {
+      await ref.read(appUpdateProvider.notifier).downloadAndInstall();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('update.failed'))));
+      }
+    }
+  }
 
   Future<void> _changeAvatar() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
@@ -211,6 +237,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 title: Text(t('mfa.title')),
                 subtitle: Text(user.mfaEnabled ? t('mfa.totpEnabled') : t('mfa.totpDisabled')),
               ),
+              // The upgrade entry only exists when there is something to
+              // upgrade to; the rest of the time this row is just the version.
+              _UpdateTile(
+                appVersion: _appVersion,
+                onInstall: _install,
+              ),
               ListTile(
                 leading: const Icon(Icons.logout),
                 title: Text(t('common.logout')),
@@ -220,6 +252,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The installed version, and the button that replaces it when a newer build
+/// is published.
+class _UpdateTile extends ConsumerWidget {
+  final String appVersion;
+  final Future<void> Function() onInstall;
+
+  const _UpdateTile({required this.appVersion, required this.onInstall});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(tProvider);
+    final update = ref.watch(appUpdateProvider);
+
+    if (update.downloading) {
+      return ListTile(
+        leading: const Icon(Icons.system_update),
+        title: Text(t('update.downloading')),
+        subtitle: LinearProgressIndicator(value: update.progress),
+      );
+    }
+
+    if (update.availableVersion == null) {
+      return ListTile(
+        leading: const Icon(Icons.info_outline),
+        title: Text(t('update.upToDate')),
+        subtitle: appVersion.isEmpty ? null : Text('v$appVersion'),
+      );
+    }
+
+    return ListTile(
+      leading: const Icon(Icons.system_update),
+      title: Text(t('update.available', {'version': update.availableVersion!})),
+      subtitle: Text(t('update.help')),
+      trailing: FilledButton(onPressed: onInstall, child: Text(t('update.install'))),
     );
   }
 }

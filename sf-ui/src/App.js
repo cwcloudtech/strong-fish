@@ -9,7 +9,6 @@ import { AuthProvider } from "./context/AuthContext";
 import { I18nProvider } from "./i18n/I18nContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
-import About from "./pages/About";
 import Admin from "./pages/dashboard/Admin";
 import Blocks from "./pages/dashboard/Blocks";
 import ApiKeys from "./pages/dashboard/ApiKeys";
@@ -66,7 +65,6 @@ function AppRoutes() {
             {/* Public profiles are readable without a session, which is what
                 makes a shared profile link work. */}
             <Route path="/profile/:handle" element={<Profile />} />
-            <Route path="/about" element={<About />} />
             {/* A program its coach shared: readable by anybody holding the
                 link, which is the whole point of publishing one. */}
             <Route path="/programs/:programId" element={<PublicProgram />} />

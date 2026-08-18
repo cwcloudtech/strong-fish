@@ -133,7 +133,7 @@ func main() {
 			cfg.ActivationMode, cfg.UIBaseURL),
 		Config: handlers.NewConfigHandler(oidc.Names(providers), cfg.ActivationMode,
 			cfg.PlateIncrement, cfg.MaxImageSize, cfg.Version, contactClient.Configured(),
-			cfg.APIBaseURL, cfg.UIBaseURL, cfg.MobileURLPattern),
+			cfg.APIBaseURL, cfg.UIBaseURL, cfg.MobileURLPattern, cfg.AboutURL, cfg.DocURL),
 		Contact:  handlers.NewContactHandler(contactClient),
 		ApiKey:   handlers.NewApiKeyHandler(apiKeyStore),
 		Media:    handlers.NewMediaHandler(userStore, cfg.MaxVideoSize),

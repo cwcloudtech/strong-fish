@@ -15,6 +15,16 @@ COPY sf-ui/ ./
 COPY manifest.json ./manifest.json
 RUN npm run build:docker
 
+# Stage wiki build: the Docusaurus documentation site (sf-wiki), served on its
+# own domain rather than from the app - it is public, static, and changes on a
+# different rhythm than the product.
+FROM node:${NODE_IMAGE_TAG} AS wiki-build
+WORKDIR /app
+COPY sf-wiki/package.json sf-wiki/package-lock.json ./
+RUN npm ci
+COPY sf-wiki/ ./
+RUN npm run build
+
 # Stage api build
 FROM golang:${GOLANG_IMAGE_TAG} AS api-build
 WORKDIR /app
@@ -60,6 +70,21 @@ COPY --from=ui-build /app/build /usr/share/nginx/html
 COPY --from=ui-build /app/manifest.json /usr/share/nginx/html/manifest-version.json
 COPY .docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY .docker/nginx/docker-entrypoint.sh /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]
+
+# Stage wiki run.
+# Stage wiki run. The same nginx config and entrypoint the app uses - the wiki
+# is a static site behind the same reverse proxy, and the entrypoint's env
+# substitution is what lets one image be pointed at any deployment.
+FROM nginx:${NGINX_IMAGE_TAG} AS wiki
+COPY .docker/nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY .docker/nginx/docker-entrypoint.sh /docker-entrypoint.sh
+COPY --from=wiki-build /app/build /usr/share/nginx/html
+COPY manifest.json /usr/share/nginx/html/manifest-version.json
+RUN chmod +x /docker-entrypoint.sh && \
+    chmod -R 755 /usr/share/nginx/html && \
+    chown -R nginx:nginx /usr/share/nginx/html
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
 

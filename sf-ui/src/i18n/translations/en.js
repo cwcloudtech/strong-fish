@@ -44,6 +44,7 @@ const en = {
     settings: "Settings",
     about: "About",
     events: "Calendar",
+    documentation: "Documentation",
     search: "Find people",
     messages: "Messages",
     invitations: "Invitations",
@@ -580,6 +581,14 @@ const en = {
     feedWarning:
       "Anybody holding this address can read your calendar - it is the only credential there is. Generate a new one if it gets out.",
   },
+  update: {
+    upToDate: "You are on the latest version",
+    available: "Version {{version}} is available",
+    help: "Downloads the new build and hands it to Android to install. You stay signed in.",
+    install: "Update",
+    downloading: "Downloading the update...",
+    failed: "The update could not be installed.",
+  },
   storage: {
     title: "Video storage",
     subtitle:
@@ -595,9 +604,11 @@ const en = {
     publicBaseUrl: "Public address",
     publicBaseUrlHelp: "Set this if the bucket is served through a CDN or a domain of your own.",
     folderId: "Folder id",
-    serviceAccount: "Service account key (base64)",
+    serviceAccount: "Service account key",
     serviceAccountHelp:
-      "The service account's JSON key, base64-encoded. Share the Drive folder with that account's address first, or it cannot write to it.",
+      "The JSON key file Google gives you. Share the Drive folder with that account's address first, or it cannot write to it.",
+    serviceAccountSet: "A key is already configured. Pick a file to replace it.",
+    serviceAccountReadError: "That file could not be read. Pick the JSON key Google gave you.",
     path: "Subfolder",
     clear: "Remove this configuration",
     saved: "Storage saved.",
@@ -605,6 +616,7 @@ const en = {
   },
   messages: {
     title: "Messages",
+    current: "Conversations",
     subtitle: "Private conversations with the members you can see.",
     message: "Message",
     send: "Send",

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/models.dart';
 import '../providers/providers.dart';
+import '../theme.dart';
+import '../widgets/common.dart';
 import '../widgets/logo.dart';
 import 'coach_screen.dart';
 import 'events_screen.dart';
@@ -37,7 +40,9 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
       if (isCoach)
         (label: t('programs.title'), icon: Icons.edit_note, screen: const CoachScreen()),
       (label: t('nav.events'), icon: Icons.event_outlined, screen: const EventsScreen()),
-      (label: t('nav.invitations'), icon: Icons.mail_outline, screen: const InvitationsScreen()),
+      // Its own icon, not the envelope: an invitation is somebody asking you
+      // to join them, and it should not read as another inbox.
+      (label: t('nav.invitations'), icon: Icons.group_add_outlined, screen: const InvitationsScreen()),
       (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
       (label: t('nav.messages'), icon: Icons.chat_bubble_outline, screen: const MessagesScreen()),
       (label: t('nav.profile'), icon: Icons.person_outline, screen: const ProfileScreen()),
@@ -74,13 +79,107 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
               child: const Icon(Icons.edit),
             )
           : null,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: index,
-        onDestinationSelected: (next) => setState(() => _index = next),
-        destinations: [
-          for (final tab in tabs) NavigationDestination(icon: Icon(tab.icon), label: tab.label),
+      // The open conversations sit directly above the bar, as a row of faces -
+      // the phone's answer to the web sidebar's conversation list. A bottom bar
+      // cannot list them as destinations, but a tap-to-open strip above it is
+      // the same one-tap shortcut.
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _ConversationStrip(),
+          NavigationBar(
+            selectedIndex: index,
+            onDestinationSelected: (next) => setState(() => _index = next),
+            destinations: [
+              for (final tab in tabs)
+                NavigationDestination(
+                  icon: tab.screen is MessagesScreen
+                      ? _UnreadBadge(child: Icon(tab.icon))
+                      : Icon(tab.icon),
+                  label: tab.label,
+                ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// The conversations already open, as a scrollable row of avatars pinned above
+/// the navigation bar.
+///
+/// It renders nothing at all when there are none: an empty strip would be a
+/// permanent band of dead space at the bottom of every screen.
+class _ConversationStrip extends ConsumerWidget {
+  const _ConversationStrip();
+
+  /// Enough to be a shortcut, few enough that it does not become a second
+  /// messages screen glued to the bottom of the app.
+  static const _max = 8;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final conversations = ref.watch(conversationsProvider).valueOrNull ?? const <Conversation>[];
+    if (conversations.isEmpty) return const SizedBox.shrink();
+
+    final shown = conversations.take(_max).toList();
+    final colors = AppColors.of(context);
+
+    return Container(
+      height: 62,
+      decoration: BoxDecoration(
+        color: colors.surface,
+        border: Border(top: BorderSide(color: colors.border)),
+      ),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        itemCount: shown.length,
+        itemBuilder: (context, index) {
+          final conversation = shown[index];
+          final name = '${conversation.other.name} ${conversation.other.surname}'.trim();
+
+          return Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Tooltip(
+              message: name,
+              child: InkWell(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ThreadScreen(userId: conversation.other.id, title: name),
+                )),
+                child: Badge(
+                  isLabelVisible: conversation.unread > 0,
+                  label: Text('${conversation.unread}'),
+                  child: SfAvatar.of(conversation.other, radius: 20),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// The unread count, on the messages destination.
+class _UnreadBadge extends ConsumerWidget {
+  final Widget child;
+
+  const _UnreadBadge({required this.child});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(conversationsProvider).valueOrNull?.fold<int>(
+          0,
+          (total, conversation) => total + conversation.unread,
+        ) ??
+        0;
+
+    return Badge(
+      isLabelVisible: unread > 0,
+      label: Text('$unread'),
+      child: child,
     );
   }
 }
