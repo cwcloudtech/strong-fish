@@ -5,7 +5,7 @@ sidebar_position: 1
 slug: /
 ---
 
-# strong-fish
+# StrongFish
 
 Une application de powerlifting : **des programmes à la RPE dont les charges
 sont calculées à partir du 1RM actuel de chaque athlète**, des clubs pour les

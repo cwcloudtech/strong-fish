@@ -5,7 +5,7 @@ sidebar_position: 1
 slug: /
 ---
 
-# strong-fish
+# StrongFish
 
 A powerlifting app: **RPE-based programs whose loads are computed from each
 athlete's own current 1RM**, clubs to coach them in, and a training feed.
