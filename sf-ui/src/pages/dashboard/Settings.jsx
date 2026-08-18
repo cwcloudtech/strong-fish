@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { FiTrash2 } from "react-icons/fi";
 
+import toastOptions from "../../utils/toastOptions";
 import { auth, mfa as mfaApi } from "../../api/services";
 import Avatar from "../../components/common/Avatar";
 import Modal from "../../components/common/Modal";
@@ -58,7 +59,7 @@ export default function Settings() {
       });
       setUser(updated);
       setForm((current) => ({ ...current, password: "", confirmPassword: "" }));
-      toast.success(t("profile.saved"));
+      toast.success(t("profile.saved"), toastOptions);
     } catch (err) {
       setError(err);
     } finally {
@@ -73,7 +74,7 @@ export default function Settings() {
     try {
       const dataUrl = await readImageAsDataUrl(file, config?.maxImageSize);
       setUser(await auth.updatePicture(dataUrl, 50, 50));
-      toast.success(t("profile.saved"));
+      toast.success(t("profile.saved"), toastOptions);
     } catch (err) {
       setError(err.message === "too-large" ? t("errors.imageTooLarge") : err);
     }
@@ -212,7 +213,7 @@ function MfaSettings() {
       await mfaApi.totpConfirm(code);
       setSetup(null);
       setCode("");
-      toast.success(t("mfa.totpConfirmed"));
+      toast.success(t("mfa.totpConfirmed"), toastOptions);
       await load();
       await refresh();
     } catch (err) {
@@ -225,7 +226,7 @@ function MfaSettings() {
   const disableTotp = async () => {
     try {
       await mfaApi.totpDisable();
-      toast.success(t("mfa.totpRemoved"));
+      toast.success(t("mfa.totpRemoved"), toastOptions);
       await load();
       await refresh();
     } catch (err) {
@@ -247,7 +248,7 @@ function MfaSettings() {
         credential,
         name: credential.transports?.includes("internal") ? "Platform authenticator" : "Security key",
       });
-      toast.success(t("mfa.keyAdded"));
+      toast.success(t("mfa.keyAdded"), toastOptions);
       await load();
       await refresh();
     } catch (err) {
@@ -258,7 +259,7 @@ function MfaSettings() {
   const removeKey = async (credential) => {
     try {
       await mfaApi.webauthnDelete(credential.id);
-      toast.success(t("mfa.keyRemoved"));
+      toast.success(t("mfa.keyRemoved"), toastOptions);
       await load();
       await refresh();
     } catch (err) {

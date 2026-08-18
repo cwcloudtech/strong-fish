@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -266,6 +267,33 @@ type programMetaPayload struct {
 	Description string `json:"description"`
 }
 
+// Create opens an empty program for a coach to build session by session, which
+// is the alternative to importing a spreadsheet. It starts with no sessions: a
+// program's shape comes from the sessions added to it, not from a week count
+// declared up front.
+func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
+	authorID, _ := middleware.UserIDFromContext(r.Context())
+
+	var p programMetaPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	if utils.IsBlank(p.Name) {
+		writeError(w, http.StatusBadRequest, "Please add a name", CodeNameRequired)
+		return
+	}
+
+	program, err := h.programs.Create(r.Context(), store.NewProgram{
+		ClubID: chi.URLParam(r, "clubId"), AuthorID: authorID,
+		Name: p.Name, Description: p.Description,
+	})
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, program)
+}
+
 func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var p programMetaPayload
 	if !decodeJSON(w, r, &p) {
@@ -291,6 +319,135 @@ func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": id})
+}
+
+// --- sessions ---
+
+type dayPayload struct {
+	Week  int    `json:"week"`
+	Day   int    `json:"day"`
+	Title string `json:"title"`
+}
+
+// AddDay appends a session to a program. Week and day are optional: left out,
+// they continue the program's existing numbering, which is what a coach adding
+// sessions one after another wants.
+func (h *ProgramHandler) AddDay(w http.ResponseWriter, r *http.Request) {
+	programID := chi.URLParam(r, "programId")
+
+	program, ok := h.programOfClub(w, r)
+	if !ok {
+		return
+	}
+
+	var p dayPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+
+	week, day, position, err := h.programs.NextDayNumber(r.Context(), program.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if p.Week > 0 {
+		week = p.Week
+	}
+	if p.Day > 0 {
+		day = p.Day
+	}
+
+	created, err := h.programs.AddDay(r.Context(), programID, store.NewDay{
+		Week: week, Day: day, Title: dayTitle(p.Title, week, day), Position: position,
+	})
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+// UpdateDay renumbers or renames a session.
+func (h *ProgramHandler) UpdateDay(w http.ResponseWriter, r *http.Request) {
+	day, ok := h.dayOfProgram(w, r)
+	if !ok {
+		return
+	}
+
+	var p dayPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	if p.Week <= 0 || p.Day <= 0 {
+		writeError(w, http.StatusBadRequest, "A session needs a week and a day number", CodeInvalidSet)
+		return
+	}
+
+	updated, err := h.programs.UpdateDay(r.Context(), day.ID, store.NewDay{
+		Week: p.Week, Day: p.Day, Title: dayTitle(p.Title, p.Week, p.Day), Position: day.Position,
+	})
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// DeleteDay removes a session and the sets in it.
+func (h *ProgramHandler) DeleteDay(w http.ResponseWriter, r *http.Request) {
+	day, ok := h.dayOfProgram(w, r)
+	if !ok {
+		return
+	}
+	if err := h.programs.DeleteDay(r.Context(), day.ID); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"id": day.ID})
+}
+
+// dayTitle falls back to the same "Week n Day m" shape the importer generates,
+// so a hand-built session reads like an imported one.
+func dayTitle(title string, week, day int) string {
+	if utils.IsNotBlank(title) {
+		return title
+	}
+	return fmt.Sprintf("Week %d Day %d", week, day)
+}
+
+// programOfClub loads the addressed program, refusing one that belongs to a
+// different club than the URL says - the club is what the membership middleware
+// authorized, so a mismatched program id must not be reachable through it.
+func (h *ProgramHandler) programOfClub(w http.ResponseWriter, r *http.Request) (models.Program, bool) {
+	program, err := h.programs.FindByID(r.Context(), chi.URLParam(r, "programId"))
+	if err != nil {
+		writeStoreError(w, err)
+		return models.Program{}, false
+	}
+	if program.ClubID != chi.URLParam(r, "clubId") {
+		writeError(w, http.StatusNotFound, "Program not found", CodeNotFound)
+		return models.Program{}, false
+	}
+	return program, true
+}
+
+// dayOfProgram loads the addressed session, checking the same way.
+func (h *ProgramHandler) dayOfProgram(w http.ResponseWriter, r *http.Request) (models.ProgramDay, bool) {
+	program, ok := h.programOfClub(w, r)
+	if !ok {
+		return models.ProgramDay{}, false
+	}
+
+	day, err := h.programs.FindDay(r.Context(), chi.URLParam(r, "dayId"))
+	if err != nil {
+		writeStoreError(w, err)
+		return models.ProgramDay{}, false
+	}
+	if day.ProgramID != program.ID {
+		writeError(w, http.StatusNotFound, "Session not found", CodeNotFound)
+		return models.ProgramDay{}, false
+	}
+	return day, true
 }
 
 // --- sets ---
@@ -364,18 +521,13 @@ func (h *ProgramHandler) AddSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	day, err := h.programs.FindDay(r.Context(), dayID)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	if day.ProgramID != programID {
-		writeError(w, http.StatusNotFound, "Session not found", CodeNotFound)
+	if _, ok := h.dayOfProgram(w, r); !ok {
 		return
 	}
 
 	fields := p.fields()
 	if fields.Position <= 0 {
+		var err error
 		if fields.Position, err = h.programs.NextSetPosition(r.Context(), dayID); err != nil {
 			writeStoreError(w, err)
 			return

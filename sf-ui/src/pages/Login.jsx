@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 
+import toastOptions from "../utils/toastOptions";
 import { auth, mfa } from "../api/services";
 import MfaChallenge from "../components/auth/MfaChallenge";
 import OidcButtons from "../components/auth/OidcButtons";
+import Logo from "../components/common/Logo";
 import { ErrorMessage } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
@@ -25,9 +27,9 @@ export default function Login() {
   const [challenge, setChallenge] = useState(null);
 
   useEffect(() => {
-    if (params.get("confirmed") === "1") toast.success(t("auth.confirmed"));
+    if (params.get("confirmed") === "1") toast.success(t("auth.confirmed"), toastOptions);
     if (params.get("confirmed") === "0") {
-      toast.error(params.get("reason") === "banned" ? t("auth.confirmBanned") : t("auth.confirmFailed"));
+      toast.error(params.get("reason") === "banned" ? t("auth.confirmBanned") : t("auth.confirmFailed"), toastOptions);
     }
     // Only on the first render: re-running would re-toast on every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -60,7 +62,7 @@ export default function Login() {
   return (
     <div className="sf-auth">
       <div className="sf-auth-card">
-        <img className="sf-auth-logo" src="/logo512.png" alt={t("app.name")} />
+        <Logo className="sf-auth-logo" />
 
         {challenge ? (
           <MfaChallenge

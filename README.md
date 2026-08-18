@@ -7,9 +7,9 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
 
 ## Features
 
-* **Programs from a spreadsheet.** A coach uploads the `.xlsx` they already
-  write their blocks in and it becomes a real program - weeks, sessions and
-  every prescribed set (see [Importing a program](#importing-a-program)).
+* **Programs, written or imported.** A coach builds a block session by session
+  in the web or mobile app, or uploads the `.xlsx` they already write it in and
+  gets the same thing (see [Importing a program](#importing-a-program)).
 * **Loads that follow the athlete.** Nothing derived is ever stored: every set's
   weight is computed from the member's own current max at read time, so updating
   one 1RM recalculates the whole program (see [Load calculation](#load-calculation)).
@@ -19,7 +19,9 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
 * **Clubs.** A coach owns the clubs they create, promotes members to admin, and
   assigns programs. Coaches read their club's feedback in one inbox.
 * **A shared exercise catalog.** A coach adds "larsen press" once and every other
-  coach gets it in their autocomplete, with English and French labels.
+  coach gets it in their autocomplete, with English and French labels. A
+  superadmin curates it: editing and deleting entries, and flagging which ones
+  are competition movements (see [Exercise administration](#exercise-administration)).
 * **Public profiles and a feed.** Follow, post, like, comment and report;
   posts are public or club-only, carry inline pictures, and embed a detected
   video link with a player.
@@ -28,7 +30,8 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   GitHub and Keycloak.
 * **I18N** in English and French, across the API's error codes, the web app and
   the mobile app.
-* Light/dark mode.
+* **Light/dark mode**, following the OS by default and switchable from the
+  sidebar. The logo ships in two inks so the wordmark stays legible either way.
 
 ## Technologies
 
@@ -106,6 +109,40 @@ for accessories, and **bodyweight** movements like pull-ups and dips.
 Loads are also reported snapped to a loadable increment (`SF_PLATE_INCREMENT`,
 2.5kg by default - one small plate per side).
 
+## Building a program
+
+A program is a set of sessions, each a list of prescribed sets. It's created
+either way round:
+
+* **From the app.** Create an empty program, add sessions, and add sets to them.
+  A session added without week/day numbers continues the program's own numbering,
+  so filling a block is a matter of pressing "add session" repeatedly. Each set
+  states how it's loaded - reps at an RPE, a percentage of the 1RM, a fixed
+  weight, or bodyweight - and only the field that mode uses is asked for.
+* **From a spreadsheet.** See below.
+
+The week count is never stored: it's derived from the sessions, so a program
+built one session at a time can't drift out of step with a declared total.
+
+## Exercise administration
+
+The catalog is shared by every club, which is what makes a movement nameable
+once. That sharing is also why it's curated:
+
+* **Any coach can add** a movement - a program can't be written without naming
+  what it prescribes, and the importer adds whatever a spreadsheet mentions.
+* **Only a superadmin can edit or delete** one: a rename ripples through
+  everyone's programs, and a delete cascades into their sets.
+* **Only a superadmin can flag a competition movement.** That flag decides which
+  1RMs every member is prompted to record, and which max a derived movement's
+  percentage or RPE prescription resolves against - an instance-wide decision,
+  not a per-coach one.
+
+Deleting is a real cascade, so the app asks the API what it would take with it
+(`GET /v1/exercises/{id}/usage` - prescribed sets, the programs they're in, and
+recorded 1RMs) and shows those numbers in the confirmation before carrying it
+out.
+
 ## Importing a program
 
 `POST /v1/clubs/{clubId}/programs/import` takes the coach's `.xlsx`. The expected
@@ -124,8 +161,13 @@ It also recovers what the file never states outright: which competition lift eac
 movement is programmed off. A Larsen press row just computes "82% of `refs!B4`",
 so the reference lift is inferred from the arithmetic - the row's cached load and
 percentage imply the max the author used, and that lands on one of the reference
-1RMs. Movements the catalog doesn't know yet are added to it, so they're
-available to every other coach from then on.
+1RMs.
+
+Every movement is matched against the catalog by its normalized name or one of
+its aliases, so a spreadsheet spelling one differently (or with the reference
+file's "Dumbbel" typo) lands on the existing entry. Anything genuinely new is
+added to the catalog, and reported back in the response so the coach can see what
+was created.
 
 ## Repository layout
 
@@ -152,6 +194,21 @@ The API's tests cover the load calculation against the reference spreadsheet's
 own numbers, the spreadsheet importer against the real file, and the router (a
 subrouter silently shadowing a route is not a startup error in chi, so every
 endpoint is asserted to resolve).
+
+## Design
+
+The look is ported from [cwclock](https://gitlab.cwcloud.tech/oss/cwclock): the
+same token structure (`sf-ui/src/index.css` mirrors its `--cw-*` scales), the
+same three-way theming - the OS preference by default, an explicit `[data-theme]`
+choice winning in either direction - the same modal/card/button shapes, the same
+`react-toastify` behaviour, and `react-icons` throughout. `sf-mobile/lib/theme.dart`
+carries the same tokens as a Flutter `ThemeExtension`, so the two clients read as
+one product.
+
+The brand hues come from the logo: a deep navy for chrome and a steel blue for
+action. The logo itself ships in two inks - the stock navy one would all but
+disappear on a dark background, so dark mode gets a light-inked variant, and the
+favicon follows `prefers-color-scheme` the same way.
 
 ## The i18n dictionaries
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "react-toastify";
 
+import toastOptions from "../../utils/toastOptions";
 import { oneRms as oneRmsApi, programs as programsApi } from "../../api/services";
 import Modal from "../common/Modal";
 import { ErrorMessage } from "../common/Feedback";
@@ -42,7 +43,7 @@ export default function ImportProgramModal({ club, onClose, onImported }) {
   const applyReferenceOneRms = async () => {
     const entries = Object.entries(result.referenceOneRms || {});
     await Promise.all(entries.map(([exerciseId, value]) => oneRmsApi.set(exerciseId, value)));
-    toast.success(t("oneRms.saved"));
+    toast.success(t("oneRms.saved"), toastOptions);
   };
 
   if (result) {

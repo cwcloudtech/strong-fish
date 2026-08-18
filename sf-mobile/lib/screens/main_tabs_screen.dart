@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../widgets/logo.dart';
+import 'coach_screen.dart';
 import 'feed_screen.dart';
 import 'one_rms_screen.dart';
 import 'profile_screen.dart';
 import 'training_screen.dart';
 
-/// The app shell: training, maxes, feed, profile.
+/// The app shell: training, maxes, feed, profile - plus a coaching tab for the
+/// accounts that can author programs.
 class MainTabsScreen extends ConsumerStatefulWidget {
   const MainTabsScreen({super.key});
 
@@ -21,24 +24,38 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
+    final isCoach = ref.watch(sessionProvider).user?.isCoach ?? false;
 
-    final titles = [t('nav.training'), t('nav.oneRms'), t('nav.feed'), t('nav.profile')];
-    const screens = [TrainingScreen(), OneRmsScreen(), FeedScreen(), ProfileScreen()];
+    // The coaching tab is inserted rather than always present, so an athlete's
+    // app doesn't carry a tab they can't use.
+    final tabs = <({String label, IconData icon, Widget screen})>[
+      (label: t('nav.training'), icon: Icons.fitness_center, screen: const TrainingScreen()),
+      (label: t('nav.oneRms'), icon: Icons.emoji_events_outlined, screen: const OneRmsScreen()),
+      if (isCoach)
+        (label: t('programs.title'), icon: Icons.edit_note, screen: const CoachScreen()),
+      (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
+      (label: t('nav.profile'), icon: Icons.person_outline, screen: const ProfileScreen()),
+    ];
+
+    // Losing coach rights while a later tab is selected would leave the index
+    // past the end of the list.
+    final index = _index.clamp(0, tabs.length - 1);
+    final feedIndex = tabs.indexWhere((tab) => tab.screen is FeedScreen);
 
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
-            Image.asset('assets/images/icon.png', height: 28),
+            const SfLogo(mark: true, height: 28, on: Brightness.dark),
             const SizedBox(width: 8),
-            Text(titles[_index]),
+            Text(tabs[index].label),
           ],
         ),
       ),
-      body: IndexedStack(index: _index, children: screens),
+      body: IndexedStack(index: index, children: [for (final tab in tabs) tab.screen]),
       // The composer is only offered on the feed tab, where it's the obvious
       // action; elsewhere it would just be a floating button with no context.
-      floatingActionButton: _index == 2
+      floatingActionButton: index == feedIndex
           ? FloatingActionButton(
               onPressed: () async {
                 final posted = await Navigator.of(context).push<bool>(
@@ -52,13 +69,10 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
             )
           : null,
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (index) => setState(() => _index = index),
+        selectedIndex: index,
+        onDestinationSelected: (next) => setState(() => _index = next),
         destinations: [
-          NavigationDestination(icon: const Icon(Icons.fitness_center), label: t('nav.training')),
-          NavigationDestination(icon: const Icon(Icons.emoji_events_outlined), label: t('nav.oneRms')),
-          NavigationDestination(icon: const Icon(Icons.forum_outlined), label: t('nav.feed')),
-          NavigationDestination(icon: const Icon(Icons.person_outline), label: t('nav.profile')),
+          for (final tab in tabs) NavigationDestination(icon: Icon(tab.icon), label: tab.label),
         ],
       ),
     );

@@ -6,7 +6,7 @@ import DashboardLayout from "./components/layout/DashboardLayout";
 import RequireAuth from "./components/layout/RequireAuth";
 import { AuthProvider } from "./context/AuthContext";
 import { I18nProvider } from "./i18n/I18nContext";
-import { ThemeProvider } from "./context/ThemeContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
 import Admin from "./pages/dashboard/Admin";
 import ClubDetail from "./pages/dashboard/ClubDetail";
@@ -29,7 +29,22 @@ export default function App() {
   return (
     <I18nProvider>
       <ThemeProvider>
-        <AuthProvider>
+        <AppRoutes />
+      </ThemeProvider>
+    </I18nProvider>
+  );
+}
+
+/**
+ * Split out of App so it sits inside ThemeProvider and can read the resolved
+ * theme - react-toastify needs it told explicitly, it can't inherit CSS
+ * variables for its own backdrop.
+ */
+function AppRoutes() {
+  const { theme } = useTheme();
+
+  return (
+    <AuthProvider>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard/feed" replace />} />
             <Route path="/login" element={<Login />} />
@@ -73,9 +88,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/dashboard/feed" replace />} />
           </Routes>
 
-          <ToastContainer position="top-right" autoClose={4000} />
-        </AuthProvider>
-      </ThemeProvider>
-    </I18nProvider>
+      <ToastContainer position="top-right" theme={theme} />
+    </AuthProvider>
   );
 }

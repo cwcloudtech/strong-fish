@@ -79,6 +79,68 @@ class SfApi {
   Future<List<Club>> clubs() async =>
       _list((await client.dio.get('/clubs')).data).map(Club.fromJson).toList();
 
+  // --- program authoring (coaches) ---
+
+  Future<List<Program>> programs(String clubId) async =>
+      _list((await client.dio.get('/clubs/$clubId/programs')).data).map(Program.fromJson).toList();
+
+  Future<Program> createProgram(String clubId, String name, String description) async {
+    final response = await client.dio
+        .post('/clubs/$clubId/programs', data: {'name': name, 'description': description});
+    return Program.fromJson(_map(response.data));
+  }
+
+  Future<ProgramDetail> program(String clubId, String programId) async =>
+      ProgramDetail.fromJson(_map((await client.dio.get('/clubs/$clubId/programs/$programId')).data));
+
+  Future<void> deleteProgram(String clubId, String programId) =>
+      client.dio.delete('/clubs/$clubId/programs/$programId');
+
+  /// Leaving week/day at 0 continues the program's own numbering server-side,
+  /// which is what adding sessions one after another wants.
+  Future<ProgramDay> addDay(String clubId, String programId,
+      {int week = 0, int day = 0, String title = ''}) async {
+    final response = await client.dio.post('/clubs/$clubId/programs/$programId/days',
+        data: {'week': week, 'day': day, 'title': title});
+    return ProgramDay.fromJson(_map(response.data));
+  }
+
+  Future<void> deleteDay(String clubId, String programId, String dayId) =>
+      client.dio.delete('/clubs/$clubId/programs/$programId/days/$dayId');
+
+  Future<ProgramSet> saveSet(
+    String clubId,
+    String programId, {
+    String? setId,
+    String? dayId,
+    required String exerciseId,
+    required int reps,
+    required String loadMode,
+    double? rpe,
+    double? percentage,
+    double? absoluteLoad,
+    String notes = '',
+  }) async {
+    // Only the field the mode uses is sent, so a set never carries a stale
+    // number from a mode it isn't in.
+    final data = {
+      'exerciseId': exerciseId,
+      'reps': reps,
+      'loadMode': loadMode,
+      'notes': notes,
+      'rpe': loadMode == 'rpe' ? rpe : null,
+      'percentage': loadMode == 'percentage' ? percentage : null,
+      'absoluteLoad': loadMode == 'absolute' ? absoluteLoad : null,
+    };
+    final response = setId != null
+        ? await client.dio.put('/clubs/$clubId/programs/$programId/sets/$setId', data: data)
+        : await client.dio.post('/clubs/$clubId/programs/$programId/days/$dayId/sets', data: data);
+    return ProgramSet.fromJson(_map(response.data));
+  }
+
+  Future<void> deleteSet(String clubId, String programId, String setId) =>
+      client.dio.delete('/clubs/$clubId/programs/$programId/sets/$setId');
+
   // --- training ---
 
   Future<List<Assignment>> assignments() async =>

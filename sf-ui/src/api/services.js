@@ -60,6 +60,9 @@ export const exercises = {
   list: (q) => body(client.get("/exercises", { params: q ? { q } : {} })),
   create: (payload) => body(client.post("/exercises", payload)),
   update: (exerciseId, payload) => body(client.put(`/exercises/${exerciseId}`, payload)),
+  // What a delete would take with it, so the superadmin confirms an informed
+  // cascade rather than discovering it afterwards.
+  usage: (exerciseId) => body(client.get(`/exercises/${exerciseId}/usage`)),
   remove: (exerciseId) => body(client.delete(`/exercises/${exerciseId}`)),
 };
 
@@ -73,6 +76,7 @@ export const oneRms = {
 
 export const programs = {
   list: (clubId) => body(client.get(`/clubs/${clubId}/programs`)),
+  create: (clubId, payload) => body(client.post(`/clubs/${clubId}/programs`, payload)),
   get: (clubId, programId, memberId) =>
     body(client.get(`/clubs/${clubId}/programs/${programId}`, { params: memberId ? { memberId } : {} })),
   update: (clubId, programId, payload) => body(client.put(`/clubs/${clubId}/programs/${programId}`, payload)),
@@ -84,6 +88,12 @@ export const programs = {
     if (description) form.append("description", description);
     return body(client.post(`/clubs/${clubId}/programs/import`, form));
   },
+  addDay: (clubId, programId, payload) =>
+    body(client.post(`/clubs/${clubId}/programs/${programId}/days`, payload)),
+  updateDay: (clubId, programId, dayId, payload) =>
+    body(client.put(`/clubs/${clubId}/programs/${programId}/days/${dayId}`, payload)),
+  removeDay: (clubId, programId, dayId) =>
+    body(client.delete(`/clubs/${clubId}/programs/${programId}/days/${dayId}`)),
   addSet: (clubId, programId, dayId, payload) =>
     body(client.post(`/clubs/${clubId}/programs/${programId}/days/${dayId}/sets`, payload)),
   updateSet: (clubId, programId, setId, payload) =>

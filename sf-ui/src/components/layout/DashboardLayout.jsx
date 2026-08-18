@@ -4,22 +4,26 @@ import {
   FiActivity,
   FiAward,
   FiBarChart2,
+  FiGlobe,
   FiLogOut,
   FiMenu,
+  FiMoon,
   FiShield,
+  FiSun,
   FiUser,
   FiUsers,
 } from "react-icons/fi";
 
 import { admin } from "../../api/services";
 import Avatar from "../common/Avatar";
+import Logo from "../common/Logo";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import { useTheme } from "../../context/ThemeContext";
 
 export default function DashboardLayout() {
   const { t, locale, setLocale, locales } = useI18n();
-  const { theme, setTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
   const { user, logout, isCoach, isSuperadmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -58,8 +62,10 @@ export default function DashboardLayout() {
   return (
     <div className="sf-shell">
       <aside className={`sf-sidebar ${menuOpen ? "open" : ""}`}>
+        {/* The sidebar is navy in both themes, so its mark is pinned to the
+            light-inked variant rather than following the app's theme. */}
         <Link className="sf-sidebar-brand" to="/dashboard/feed">
-          <img src="/logo192.png" alt="" />
+          <Logo mark on="dark" alt="" />
           {t("app.name")}
         </Link>
 
@@ -81,46 +87,62 @@ export default function DashboardLayout() {
             </Link>
           ) : null}
 
-          <select
-            className="sf-sidebar-select"
-            value={locale}
-            onChange={(event) => setLocale(event.target.value)}
-            aria-label={t("common.language")}
-          >
-            {locales.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="sf-sidebar-actions">
+            <button
+              type="button"
+              className="sf-icon-button"
+              onClick={toggleTheme}
+              title={t("common.theme")}
+              aria-label={t("common.theme")}
+            >
+              {theme === "dark" ? <FiSun /> : <FiMoon />}
+              {theme === "dark" ? t("common.light") : t("common.dark")}
+            </button>
 
-          <select
-            className="sf-sidebar-select"
-            value={theme}
-            onChange={(event) => setTheme(event.target.value)}
-            aria-label={t("common.theme")}
-          >
-            <option value="light">{t("common.light")}</option>
-            <option value="dark">{t("common.dark")}</option>
-          </select>
+            <label className="sf-icon-button" style={{ position: "relative", cursor: "pointer" }}>
+              <FiGlobe />
+              {locale.toUpperCase()}
+              <select
+                value={locale}
+                onChange={(event) => setLocale(event.target.value)}
+                aria-label={t("common.language")}
+                style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
+              >
+                {locales.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-          <button type="button" className="sf-nav-link" onClick={signOut} style={{ background: "none", border: 0, cursor: "pointer" }}>
+          <button
+            type="button"
+            className="sf-nav-link"
+            onClick={signOut}
+            style={{ background: "none", border: 0, cursor: "pointer", width: "100%" }}
+          >
             <FiLogOut />
             {t("common.logout")}
           </button>
         </div>
       </aside>
 
+      {/* Tapping outside the drawer closes it, which is what a drawer is
+          expected to do on a phone. */}
+      <div className={`sf-scrim ${menuOpen ? "open" : ""}`} onClick={() => setMenuOpen(false)} />
+
       <div className="sf-content">
         <div className="sf-topbar">
           <button
             type="button"
-            className="sf-button-ghost"
-            style={{ color: "#fff" }}
+            className="sf-icon-button"
+            style={{ flex: "0 0 auto" }}
             onClick={() => setMenuOpen((open) => !open)}
             aria-label="menu"
           >
-            <FiMenu size={20} />
+            <FiMenu size={18} />
           </button>
           <strong>{t("app.name")}</strong>
         </div>

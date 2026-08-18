@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { FiShield, FiTrash2 } from "react-icons/fi";
 
+import toastOptions from "../../utils/toastOptions";
 import { admin as adminApi, clubs as clubsApi } from "../../api/services";
 import Modal, { ConfirmModal } from "../../components/common/Modal";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
@@ -77,7 +78,7 @@ function UsersTab() {
     setConfirming(null);
     try {
       await adminApi.removeUser(user.id);
-      toast.success(t("admin.userDeleted"));
+      toast.success(t("admin.userDeleted"), toastOptions);
       load();
     } catch (err) {
       setError(err);
@@ -87,7 +88,7 @@ function UsersTab() {
   const clearMfa = async (user) => {
     try {
       await adminApi.clearMfa(user.id);
-      toast.success(t("admin.mfaCleared"));
+      toast.success(t("admin.mfaCleared"), toastOptions);
       load();
     } catch (err) {
       setError(err);
@@ -162,7 +163,7 @@ function UsersTab() {
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            toast.success(t("admin.userSaved"));
+            toast.success(t("admin.userSaved"), toastOptions);
             load();
           }}
         />
@@ -299,7 +300,7 @@ function ReportsTab() {
   const resolve = async (report, newStatus, deleteTarget) => {
     try {
       await adminApi.resolveReport(report.id, newStatus, deleteTarget);
-      toast.success(t("admin.resolved"));
+      toast.success(t("admin.resolved"), toastOptions);
       load();
     } catch (err) {
       setError(err);

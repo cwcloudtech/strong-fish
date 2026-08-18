@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 
+import toastOptions from "../../utils/toastOptions";
 import { clubs as clubsApi } from "../../api/services";
 import Modal from "../../components/common/Modal";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
@@ -59,7 +60,7 @@ export default function Clubs() {
           onSaved={(club) => {
             setClubs((current) => [club, ...current]);
             setCreating(false);
-            toast.success(t("clubs.created"));
+            toast.success(t("clubs.created"), toastOptions);
           }}
         />
       ) : null}

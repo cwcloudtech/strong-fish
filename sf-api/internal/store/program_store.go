@@ -20,11 +20,13 @@ func NewProgramStore(pool *pgxpool.Pool) *ProgramStore {
 	return &ProgramStore{pool: pool}
 }
 
-// programData is the JSONB payload of the programs table.
+// programData is the JSONB payload of the programs table. The week count is
+// deliberately absent: it's derived from the sessions (see programSelect), so a
+// program built one session at a time can't drift out of step with a stored
+// count.
 type programData struct {
 	Name           string `json:"name"`
 	Description    string `json:"description,omitempty"`
-	Weeks          int    `json:"weeks"`
 	SourceFileName string `json:"sourceFileName,omitempty"`
 }
 
@@ -53,7 +55,8 @@ const programSelect = `
 	SELECT p.id, p.club_id, p.author_id, p.data, p.created_at, p.updated_at,
 	       coalesce(u.data->>'name', '') || ' ' || coalesce(u.data->>'surname', ''),
 	       (SELECT count(*) FROM program_days WHERE program_id = p.id),
-	       (SELECT count(*) FROM program_sets WHERE program_id = p.id)
+	       (SELECT count(*) FROM program_sets WHERE program_id = p.id),
+	       (SELECT coalesce(max((data->>'week')::int), 0) FROM program_days WHERE program_id = p.id)
 	FROM programs p
 	JOIN users u ON u.id = p.author_id`
 
@@ -61,7 +64,7 @@ func scanProgram(row pgx.Row) (models.Program, error) {
 	var p models.Program
 	var raw []byte
 	if err := row.Scan(&p.ID, &p.ClubID, &p.AuthorID, &raw, &p.CreatedAt, &p.UpdatedAt,
-		&p.AuthorName, &p.DayCount, &p.SetCount); err != nil {
+		&p.AuthorName, &p.DayCount, &p.SetCount, &p.Weeks); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Program{}, ErrNotFound
 		}
@@ -73,7 +76,6 @@ func scanProgram(row pgx.Row) (models.Program, error) {
 	}
 	p.Name = d.Name
 	p.Description = d.Description
-	p.Weeks = d.Weeks
 	p.SourceFileName = d.SourceFileName
 	return p, nil
 }
@@ -98,7 +100,6 @@ type NewProgram struct {
 	AuthorID       string
 	Name           string
 	Description    string
-	Weeks          int
 	SourceFileName string
 	Days           []NewDay
 }
@@ -126,7 +127,7 @@ type NewSet struct {
 // Create writes a program with all its days and sets.
 func (s *ProgramStore) Create(ctx context.Context, p NewProgram) (models.Program, error) {
 	data, err := json.Marshal(programData{
-		Name: p.Name, Description: p.Description, Weeks: p.Weeks, SourceFileName: p.SourceFileName,
+		Name: p.Name, Description: p.Description, SourceFileName: p.SourceFileName,
 	})
 	if err != nil {
 		return models.Program{}, err
@@ -271,6 +272,75 @@ func (s *ProgramStore) ListDays(ctx context.Context, programID string) ([]models
 
 func (s *ProgramStore) FindDay(ctx context.Context, dayID string) (models.ProgramDay, error) {
 	return scanDay(s.pool.QueryRow(ctx, daySelect+` WHERE id = $1`, dayID))
+}
+
+// AddDay appends a session to a program, for a coach building one by hand
+// rather than importing it.
+func (s *ProgramStore) AddDay(ctx context.Context, programID string, f NewDay) (models.ProgramDay, error) {
+	data, err := json.Marshal(dayData{Week: f.Week, Day: f.Day, Title: f.Title, Position: f.Position})
+	if err != nil {
+		return models.ProgramDay{}, err
+	}
+	var dayID string
+	if err := s.pool.QueryRow(ctx, `
+		INSERT INTO program_days (program_id, data) VALUES ($1, $2) RETURNING id
+	`, programID, data).Scan(&dayID); err != nil {
+		return models.ProgramDay{}, err
+	}
+	return s.FindDay(ctx, dayID)
+}
+
+// UpdateDay renumbers or renames a session.
+func (s *ProgramStore) UpdateDay(ctx context.Context, dayID string, f NewDay) (models.ProgramDay, error) {
+	patch, err := json.Marshal(dayData{Week: f.Week, Day: f.Day, Title: f.Title, Position: f.Position})
+	if err != nil {
+		return models.ProgramDay{}, err
+	}
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE program_days SET data = data || $2::jsonb, updated_at = now() WHERE id = $1
+	`, dayID, patch)
+	if err != nil {
+		return models.ProgramDay{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		return models.ProgramDay{}, ErrNotFound
+	}
+	return s.FindDay(ctx, dayID)
+}
+
+// DeleteDay removes a session; its sets go with it by cascade.
+func (s *ProgramStore) DeleteDay(ctx context.Context, dayID string) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM program_days WHERE id = $1`, dayID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// NextDayNumber suggests where a new session goes: the next day of the last
+// week, so repeatedly adding sessions fills a week before starting the next.
+// Returns (1, 1) for an empty program.
+func (s *ProgramStore) NextDayNumber(ctx context.Context, programID string) (week, day, position int, err error) {
+	err = s.pool.QueryRow(ctx, `
+		SELECT coalesce(max((data->>'week')::int), 1),
+		       coalesce(max((data->>'position')::int) + 1, 0)
+		FROM program_days WHERE program_id = $1
+	`, programID).Scan(&week, &position)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	err = s.pool.QueryRow(ctx, `
+		SELECT coalesce(max((data->>'day')::int) + 1, 1)
+		FROM program_days WHERE program_id = $1 AND (data->>'week')::int = $2
+	`, programID, week).Scan(&day)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return week, day, position, nil
 }
 
 // setSelect joins the exercise so a session renders without a lookup per row.

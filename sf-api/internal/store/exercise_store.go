@@ -71,8 +71,8 @@ func scanExercises(rows pgx.Rows) ([]models.Exercise, error) {
 	return exercises, rows.Err()
 }
 
-// ExerciseFields are the properties a coach sets when adding a movement to the
-// shared catalog.
+// ExerciseFields are the properties set when adding a movement to the shared
+// catalog or editing one.
 type ExerciseFields struct {
 	Slug       string
 	Aliases    []string
@@ -80,7 +80,22 @@ type ExerciseFields struct {
 	Category   string
 	OneRMRef   string
 	Bodyweight bool
-	CreatedBy  string
+	// Main flags a competition movement ("mouvement de compétition"): the lifts
+	// every member is prompted to record a 1RM for, and that a derived movement's
+	// percentage/RPE prescription resolves against. Only a superadmin sets it.
+	Main      bool
+	CreatedBy string
+}
+
+// ExerciseUsage counts what deleting an exercise would take with it. The
+// foreign key from program_sets cascades, so removing a movement silently drops
+// every set prescribing it - a superadmin is shown these numbers first.
+type ExerciseUsage struct {
+	Programs int `json:"programs"`
+	Sets     int `json:"sets"`
+	// OneRMs is how many members have recorded a max for this movement; those
+	// rows cascade too.
+	OneRMs int `json:"oneRms"`
 }
 
 // Create adds a movement to the catalog, visible to every coach's autocomplete
@@ -88,7 +103,7 @@ type ExerciseFields struct {
 func (s *ExerciseStore) Create(ctx context.Context, f ExerciseFields) (models.Exercise, error) {
 	data, err := json.Marshal(exerciseData{
 		Slug: f.Slug, Aliases: f.Aliases, Labels: f.Labels, Category: f.Category,
-		OneRMRef: f.OneRMRef, Bodyweight: f.Bodyweight, CreatedBy: f.CreatedBy,
+		OneRMRef: f.OneRMRef, Bodyweight: f.Bodyweight, Main: f.Main, CreatedBy: f.CreatedBy,
 	})
 	if err != nil {
 		return models.Exercise{}, err
@@ -115,6 +130,7 @@ func (s *ExerciseStore) Update(ctx context.Context, id string, f ExerciseFields)
 		"category":   f.Category,
 		"oneRmRef":   f.OneRMRef,
 		"bodyweight": f.Bodyweight,
+		"main":       f.Main,
 	})
 	if err != nil {
 		return models.Exercise{}, err
@@ -126,28 +142,53 @@ func (s *ExerciseStore) Update(ctx context.Context, id string, f ExerciseFields)
 	`, id, patch))
 }
 
-// Delete removes a catalog entry, refusing while a program still prescribes it
-// (the foreign key is RESTRICT, so this reports the reason rather than letting
-// a raw constraint error surface).
+// Usage counts what deleting an exercise would take with it, so the superadmin
+// is warned before the cascade rather than after.
+func (s *ExerciseStore) Usage(ctx context.Context, id string) (ExerciseUsage, error) {
+	var usage ExerciseUsage
+	err := s.pool.QueryRow(ctx, `
+		SELECT (SELECT count(DISTINCT program_id) FROM program_sets WHERE exercise_id = $1),
+		       (SELECT count(*) FROM program_sets WHERE exercise_id = $1),
+		       (SELECT count(*) FROM one_rms WHERE exercise_id = $1)
+	`, id).Scan(&usage.Programs, &usage.Sets, &usage.OneRMs)
+	return usage, err
+}
+
+// Delete removes a catalog entry along with every set prescribing it and every
+// max recorded against it.
+//
+// The schema's foreign key from program_sets is RESTRICT, which would refuse
+// this outright, so the sets are removed explicitly in the same transaction -
+// the cascade is deliberate (a superadmin who confirmed the impact reported by
+// Usage) rather than something a stray delete could trigger.
 func (s *ExerciseStore) Delete(ctx context.Context, id string) error {
-	var used bool
-	if err := s.pool.QueryRow(ctx, `
-		SELECT exists(SELECT 1 FROM program_sets WHERE exercise_id = $1)
-	`, id).Scan(&used); err != nil {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
 		return err
 	}
-	if used {
-		return ErrExerciseInUse
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `DELETE FROM program_sets WHERE exercise_id = $1`, id); err != nil {
+		return err
 	}
 
-	tag, err := s.pool.Exec(ctx, `DELETE FROM exercises WHERE id = $1`, id)
+	// Sessions left with no sets at all are dropped too: an empty session is
+	// noise in a program rather than a meaningful rest day.
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM program_days pd
+		WHERE NOT EXISTS (SELECT 1 FROM program_sets WHERE day_id = pd.id)
+	`); err != nil {
+		return err
+	}
+
+	tag, err := tx.Exec(ctx, `DELETE FROM exercises WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 func (s *ExerciseStore) FindByID(ctx context.Context, id string) (models.Exercise, error) {

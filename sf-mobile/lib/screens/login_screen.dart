@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../api/api_exception.dart';
 import '../providers/providers.dart';
-import '../theme.dart';
+import '../widgets/logo.dart';
 
 /// Login, sign-up, and the second-factor step, in one screen.
 ///
@@ -128,11 +128,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       body: Container(
+        // The navy chrome, in both themes - the same gradient sf-ui's .sf-auth
+        // uses. Spelled out rather than read from AppColors because a const
+        // BoxDecoration can't access a field.
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [sfNavy, Color(0xFF0B3A63)],
+            colors: [Color(0xFF062A4E), Color(0xFF0B3A63)],
           ),
         ),
         child: SafeArea(
@@ -162,7 +165,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   List<Widget> _body(String Function(String, [Map<String, String>?]) t) {
     return [
-      Image.asset('assets/images/logo.png', height: 90),
+      const SfLogo(height: 90),
       const SizedBox(height: 16),
       Text(
         switch (_mode) {

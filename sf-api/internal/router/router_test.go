@@ -73,6 +73,7 @@ var routes = []struct{ method, path string }{
 	{"GET", "/v1/exercises"},
 	{"POST", "/v1/exercises"},
 	{"PUT", "/v1/exercises/ex-1"},
+	{"GET", "/v1/exercises/ex-1/usage"},
 	{"DELETE", "/v1/exercises/ex-1"},
 
 	{"GET", "/v1/one-rms"},
@@ -95,10 +96,14 @@ var routes = []struct{ method, path string }{
 
 	// The pair that regressed: a leaf handler and a subrouter on the same path.
 	{"GET", "/v1/clubs/club-1/programs"},
+	{"POST", "/v1/clubs/club-1/programs"},
 	{"POST", "/v1/clubs/club-1/programs/import"},
 	{"GET", "/v1/clubs/club-1/programs/prog-1"},
 	{"PUT", "/v1/clubs/club-1/programs/prog-1"},
 	{"DELETE", "/v1/clubs/club-1/programs/prog-1"},
+	{"POST", "/v1/clubs/club-1/programs/prog-1/days"},
+	{"PUT", "/v1/clubs/club-1/programs/prog-1/days/day-1"},
+	{"DELETE", "/v1/clubs/club-1/programs/prog-1/days/day-1"},
 	{"POST", "/v1/clubs/club-1/programs/prog-1/days/day-1/sets"},
 	{"PUT", "/v1/clubs/club-1/programs/prog-1/sets/set-1"},
 	{"DELETE", "/v1/clubs/club-1/programs/prog-1/sets/set-1"},

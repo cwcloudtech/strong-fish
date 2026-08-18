@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiTrash2, FiUpload } from "react-icons/fi";
+import { FiPlus, FiTrash2, FiUpload } from "react-icons/fi";
 
+import toastOptions from "../../utils/toastOptions";
 import { auth, clubs as clubsApi, programs as programsApi } from "../../api/services";
 import { ClubFormModal } from "./Clubs";
 import ImportProgramModal from "../../components/programs/ImportProgramModal";
@@ -44,7 +45,7 @@ export default function ClubDetail() {
     setConfirmDelete(false);
     try {
       await clubsApi.remove(clubId);
-      toast.success(t("clubs.deleted"));
+      toast.success(t("clubs.deleted"), toastOptions);
       navigate("/dashboard/clubs");
     } catch (err) {
       setError(err);
@@ -116,7 +117,7 @@ export default function ClubDetail() {
           onSaved={(updated) => {
             setClub(updated);
             setEditing(false);
-            toast.success(t("clubs.saved"));
+            toast.success(t("clubs.saved"), toastOptions);
           }}
         />
       ) : null}
@@ -146,7 +147,9 @@ function ProgramsTab({ club, canManage }) {
   const { t } = useI18n();
   const [programs, setPrograms] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   const load = useCallback(() => {
     programsApi.list(club.id).then(setPrograms).catch(setError);
@@ -160,11 +163,19 @@ function ProgramsTab({ club, canManage }) {
     <>
       <ErrorMessage error={error} />
       {canManage ? (
-        <div className="sf-row" style={{ marginBottom: "1rem" }}>
-          <button className="sf-button" onClick={() => setImporting(true)}>
-            <FiUpload /> {t("programs.import")}
-          </button>
-        </div>
+        <>
+          <div className="sf-row" style={{ marginBottom: "0.4rem" }}>
+            <button className="sf-button" onClick={() => setCreating(true)}>
+              <FiPlus /> {t("programs.create")}
+            </button>
+            <button className="sf-button sf-button-secondary" onClick={() => setImporting(true)}>
+              <FiUpload /> {t("programs.import")}
+            </button>
+          </div>
+          <p className="sf-muted" style={{ marginBottom: "1rem" }}>
+            {t("programs.createHelp")}
+          </p>
+        </>
       ) : null}
 
       {programs.length === 0 ? (
@@ -200,6 +211,20 @@ function ProgramsTab({ club, canManage }) {
           }}
         />
       ) : null}
+
+      {creating ? (
+        <CreateProgramModal
+          club={club}
+          onClose={() => setCreating(false)}
+          onCreated={(program) => {
+            setCreating(false);
+            toast.success(t("programs.created"), toastOptions);
+            // An empty program is only useful once it has sessions, so the
+            // coach lands straight on it rather than back in the list.
+            navigate(`/dashboard/clubs/${club.id}/programs/${program.id}`);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -232,7 +257,7 @@ function MembersTab({ club, canManage, isOwner, onChanged }) {
     setConfirming(null);
     try {
       await clubsApi.removeMember(club.id, member.userId);
-      toast.success(t("clubs.memberRemoved"));
+      toast.success(t("clubs.memberRemoved"), toastOptions);
       load();
       onChanged();
     } catch (err) {
@@ -316,7 +341,7 @@ function MembersTab({ club, canManage, isOwner, onChanged }) {
           onClose={() => setAdding(false)}
           onAdded={() => {
             setAdding(false);
-            toast.success(t("clubs.memberAdded"));
+            toast.success(t("clubs.memberAdded"), toastOptions);
             load();
             onChanged();
           }}
@@ -484,5 +509,58 @@ function FeedbackTab({ club, locale }) {
         </table>
       </div>
     </div>
+  );
+}
+
+/** Opens an empty program, to be filled session by session. */
+function CreateProgramModal({ club, onClose, onCreated }) {
+  const { t } = useI18n();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      onCreated(await programsApi.create(club.id, { name, description }));
+    } catch (err) {
+      setError(err);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={t("programs.create")}
+      onClose={onClose}
+      actions={
+        <>
+          <button className="sf-button sf-button-secondary" onClick={onClose} disabled={busy}>
+            {t("common.cancel")}
+          </button>
+          <button className="sf-button" onClick={submit} disabled={busy || !name.trim()}>
+            {t("common.save")}
+          </button>
+        </>
+      }
+    >
+      <div className="sf-field">
+        <label className="sf-label">{t("programs.programName")}</label>
+        <input className="sf-input" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+      </div>
+      <div className="sf-field">
+        <label className="sf-label">
+          {t("clubs.description")} <span className="sf-muted">({t("common.optional")})</span>
+        </label>
+        <textarea
+          className="sf-textarea"
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </div>
+      <ErrorMessage error={error} />
+    </Modal>
   );
 }

@@ -128,14 +128,20 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 
 			// The exercise catalog is shared across every club: any member can
 			// read it (it names the movements in their program), and any coach
-			// can extend it.
+			// can extend it - a program can't be written without naming the
+			// movements it prescribes.
+			//
+			// Editing and deleting are the superadmin's, though: an entry is
+			// shared by every club, so a rename ripples through everyone's
+			// programs and a delete cascades into their sets.
 			r.Route("/exercises", func(r chi.Router) {
 				r.Get("/", h.Exercise.List)
+				r.With(middleware.RequireCoach(users)).Post("/", h.Exercise.Create)
 
 				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireCoach(users))
-					r.Post("/", h.Exercise.Create)
+					r.Use(middleware.RequireSuperadmin(users))
 					r.Put("/{exerciseId}", h.Exercise.Update)
+					r.Get("/{exerciseId}/usage", h.Exercise.Usage)
 					r.Delete("/{exerciseId}", h.Exercise.Delete)
 				})
 			})
@@ -181,12 +187,19 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 
 					r.Route("/programs", func(r chi.Router) {
 						r.Get("/", h.Program.List)
+						// A program is either imported from a spreadsheet or
+						// built session by session; both end up in the same
+						// shape.
+						manager(r).Post("/", h.Program.Create)
 						manager(r).Post("/import", h.Program.Import)
 
 						r.Route("/{programId}", func(r chi.Router) {
 							r.Get("/", h.Program.Get)
 							manager(r).Put("/", h.Program.Update)
 							manager(r).Delete("/", h.Program.Delete)
+							manager(r).Post("/days", h.Program.AddDay)
+							manager(r).Put("/days/{dayId}", h.Program.UpdateDay)
+							manager(r).Delete("/days/{dayId}", h.Program.DeleteDay)
 							manager(r).Post("/days/{dayId}/sets", h.Program.AddSet)
 							manager(r).Put("/sets/{setId}", h.Program.UpdateSet)
 							manager(r).Delete("/sets/{setId}", h.Program.DeleteSet)

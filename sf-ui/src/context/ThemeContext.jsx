@@ -1,26 +1,50 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+const STORAGE_KEY = "sf.theme";
 const ThemeContext = createContext(null);
 
-const THEME_KEY = "sf.theme";
+const getSystemTheme = () =>
+  window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
-/** Light/dark mode, persisted and defaulting to the OS preference. */
+/**
+ * Applies the OS colour scheme by default; once the user toggles the switch,
+ * that explicit choice is persisted and wins over the OS setting in both
+ * directions (light OS + dark choice, or the reverse) via the [data-theme]
+ * attribute on <html> - see index.css. Ported from cwclock's ThemeContext, so
+ * both apps behave identically.
+ */
 export function ThemeProvider({ children }) {
-  const [theme, setTheme] = useState(() => {
-    const stored = localStorage.getItem(THEME_KEY);
-    if (stored === "light" || stored === "dark") return stored;
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  });
+  const [explicitTheme, setExplicitTheme] = useState(() => localStorage.getItem(STORAGE_KEY));
+  const [systemTheme, setSystemTheme] = useState(getSystemTheme);
 
   useEffect(() => {
-    localStorage.setItem(THEME_KEY, theme);
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (event) => setSystemTheme(event.matches ? "dark" : "light");
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
 
-  const value = useMemo(
-    () => ({ theme, setTheme, toggleTheme: () => setTheme((current) => (current === "dark" ? "light" : "dark")) }),
-    [theme]
-  );
+  useEffect(() => {
+    // No attribute while the user hasn't chosen: the media query in index.css
+    // is then what decides, so the app follows the OS live.
+    if (explicitTheme) {
+      document.documentElement.setAttribute("data-theme", explicitTheme);
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }, [explicitTheme]);
+
+  const theme = explicitTheme || systemTheme;
+
+  const toggleTheme = useCallback(() => {
+    setExplicitTheme((current) => {
+      const next = (current || getSystemTheme()) === "dark" ? "light" : "dark";
+      localStorage.setItem(STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const value = useMemo(() => ({ theme, toggleTheme }), [theme, toggleTheme]);
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

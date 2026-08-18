@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <!-- The mark is inked navy, which disappears against a dark tab strip, so
+         browsers that support it get the light-on-dark variant instead. -->
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" media="(prefers-color-scheme: light)" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon-dark.ico" media="(prefers-color-scheme: dark)" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#062a4e" />
     <meta name="description" content="%REACT_APP_SEO_DESCRIPTION%" />

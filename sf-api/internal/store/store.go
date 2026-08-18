@@ -32,9 +32,6 @@ var (
 	// ErrDuplicateExercise is returned when a new exercise's name normalizes
 	// onto an existing one.
 	ErrDuplicateExercise = errors.New("an exercise with this name already exists")
-	// ErrExerciseInUse is returned when deleting an exercise a program still
-	// prescribes.
-	ErrExerciseInUse = errors.New("this exercise is used by a program")
 )
 
 // defaultImagePosition centers a picture when no position was ever stored for
