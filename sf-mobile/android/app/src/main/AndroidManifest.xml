@@ -6,6 +6,10 @@
          hardware: a device without one can still sign in with a password. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- Handing the downloaded APK to Android's package installer, which is
+         what makes the in-app upgrade an update rather than a re-install. The
+         user still confirms it in the system dialog. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
     <application
         android:label="strong-fish"

@@ -58,6 +58,10 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   of your feed and your inbox (see [Messages and blocks](#messages-and-blocks)).
 * **Observability.** Structured logs, traces and metrics through one OTLP
   collector, and a Prometheus endpoint (see [Observability](#observability)).
+* **Documentation** as its own site: [`sf-wiki`](./sf-wiki), in English and
+  French, light and dark (see [The wiki](#the-wiki)).
+* **In-app upgrades on Android.** The app checks for a newer build and installs
+  it in place, so nobody has to sign in again.
 * **A self-describing API.** The API's root serves a Swagger UI over an OpenAPI
   document generated from the live router, so it cannot drift out of step with
   the routes it documents.
@@ -99,6 +103,7 @@ failing a registration. Two more knobs are worth knowing:
 | `SF_MOBILE_URL_PATTERN` | Where the Android build is published; `{version}` is substituted, and a path is resolved against `SF_UI_URL`. Blank hides the download entry rather than offering a dead link. |
 | `SF_GIT_REPO_URL` | The sources link shown on the signed-out screens. |
 | `SF_OTEL_ENDPOINT` | The collector traces, logs and metrics are pushed to. Blank disables export; logs and `/v1/metrics` are unaffected. |
+| `SF_DOC_URL` / `SF_ABOUT_URL` | The wiki's root, and the About page inside it. Both are linked from the app rather than rendered by it. |
 
 ### Running the pieces separately
 
@@ -242,6 +247,7 @@ was created.
 | [`sf-api`](./sf-api) | The Go API |
 | [`sf-ui`](./sf-ui) | The React web app |
 | [`sf-mobile`](./sf-mobile) | The Flutter mobile app |
+| [`sf-wiki`](./sf-wiki) | The documentation site (Docusaurus, English and French) |
 | [`ai-gen`](./ai-gen) | The instructions and assets this was built from |
 
 Every table is a thin set of indexed, foreign-keyed columns plus a single `data`
@@ -253,6 +259,7 @@ JSONB payload, so the schema stays stable while the domain grows.
 cd sf-api && go test ./...
 cd sf-ui && CI=true npm run build
 cd sf-mobile && flutter analyze
+cd sf-wiki && npm run build
 ```
 
 The API's tests cover the load calculation against the reference spreadsheet's
@@ -305,14 +312,28 @@ and to adaptations of it, **not** to the software that displays it - the project
 own code stays MIT. See [`sf-ui/public/CREDITS.md`](./sf-ui/public/CREDITS.md)
 for the full provenance and what swapping the file would change.
 
-## The About page
+## The wiki
 
-[`sf-ui/public/about.md`](./sf-ui/public/about.md) is rendered as the `/about`
-route. It's fetched at runtime rather than compiled in, so the text can be
-rewritten by dropping a new file next to the built assets - no rebuild, no
-redeploy of the frontend. A French translation goes in `about.fr.md`; the page
-loads `about.<locale>.md` first and falls back to `about.md`, so translating is
-optional.
+The documentation lives in [`sf-wiki`](./sf-wiki) as a Docusaurus site and is
+published at `doc.strong-fish.com`. English and French are both full
+translations - a page missing from `i18n/fr/` renders in English rather than
+404ing - and it follows the reader's own light/dark preference.
+
+The **About page moved there**. It was `sf-ui/public/about.md`, rendered at
+runtime by the app; it is now `sf-wiki/docs/about.md`, and the app links out.
+Long-form prose that changes on its own schedule does not want a second copy in
+the frontend, and `SF_ABOUT_URL` (with `SF_DOC_URL` for the wiki's root) is what
+lets a deployment point at its own.
+
+Both URLs are reported by `GET /v1/config` rather than compiled into the
+frontend, so a deployment can repoint them without rebuilding.
+
+The tutorial **screenshots are of the real app**, captured against a mock API
+serving fake data - the screens are genuine, the accounts in them are not.
+
+It builds and deploys from the same pipeline as everything else: a `wiki` stage
+in the root `Dockerfile`, a `wiki` service in `docker-compose-build.yml`, and
+`sf-wiki/**/*` in the pipeline's change rules.
 
 ## Contact form
 
@@ -571,6 +592,11 @@ with a service-account JWT. Each is responsible for making its object readable
 as it writes it - `x-amz-acl: public-read` on S3, an anyone-with-the-link
 reader permission on Drive - because the URL has to work for a browser with no
 credentials.
+
+The Drive key is **uploaded as the JSON file Google hands out**, not pasted as
+base64: the encoding is a storage detail, and making somebody run `base64` in a
+terminal first is a step that exists only because of it. The stored value is
+base64 either way.
 
 Credentials are write-only. `GET /v1/users/me/storage` returns the connection
 with the secret replaced by a marker; echoing that marker back on save keeps

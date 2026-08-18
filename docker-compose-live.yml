@@ -36,3 +36,13 @@ services:
       - api
     ports:
       - "13001:80"
+
+  # The documentation site, on its own domain (doc.strong-fish.com). It has no
+  # env file and no dependencies: it is static HTML, and it stays up when the
+  # API does not - which is when somebody is most likely to be reading it.
+  wiki:
+    image: ${CI_REGISTRY}/sf-wiki:${VERSION}
+    container_name: sf-wiki
+    restart: always
+    ports:
+      - "13002:80"

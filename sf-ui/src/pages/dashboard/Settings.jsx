@@ -224,6 +224,9 @@ function StorageSettings() {
   const [state, setState] = useState(null);
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
+  // The name of the key file that was picked, purely so the field can say
+  // which one is loaded - the key itself is write-only and never comes back.
+  const [serviceAccountFile, setServiceAccountFile] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -253,6 +256,35 @@ function StorageSettings() {
   if (!state || !form) return null;
 
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  /**
+   * Reads a Google service-account key as a file rather than asking for base64.
+   *
+   * Google hands out a JSON file; making somebody base64 it by hand first is a
+   * step that exists only because of how the value happens to be stored. The
+   * data model is unchanged - the API still receives and stores base64 - the
+   * encoding just happens here instead of in a terminal.
+   */
+  const readServiceAccount = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      // FileReader gives a data: URL; the payload is everything after the
+      // comma, which is exactly the base64 the API wants.
+      const base64 = String(reader.result || "").split(",")[1] || "";
+      if (!base64) {
+        toast.error(t("storage.serviceAccountReadError"), toastOptions);
+        return;
+      }
+      setForm((current) => ({ ...current, serviceAccountBase64: base64 }));
+      setServiceAccountFile(file.name);
+    };
+    reader.onerror = () => toast.error(t("storage.serviceAccountReadError"), toastOptions);
+    reader.readAsDataURL(file);
+  };
 
   const save = async (event) => {
     event.preventDefault();
@@ -369,14 +401,22 @@ function StorageSettings() {
             <label className="sf-label" htmlFor="serviceAccountBase64">
               {t("storage.serviceAccount")}
             </label>
-            <textarea
+            <input
               id="serviceAccountBase64"
-              className="sf-textarea"
-              rows={3}
-              autoComplete="off"
-              value={form.serviceAccountBase64}
-              onChange={set("serviceAccountBase64")}
+              className="sf-input"
+              type="file"
+              accept="application/json,.json"
+              onChange={readServiceAccount}
             />
+            {serviceAccountFile ? (
+              <p className="sf-muted" style={{ fontSize: "0.82rem", margin: "0.3rem 0 0" }}>
+                {serviceAccountFile}
+              </p>
+            ) : form.serviceAccountBase64 ? (
+              <p className="sf-muted" style={{ fontSize: "0.82rem", margin: "0.3rem 0 0" }}>
+                {t("storage.serviceAccountSet")}
+              </p>
+            ) : null}
             <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
               {t("storage.serviceAccountHelp")}
             </p>

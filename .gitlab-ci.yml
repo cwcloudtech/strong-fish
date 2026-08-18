@@ -27,6 +27,7 @@ build:
         - sf-api/**/*
         - sf-ui/**/*
         - sf-mobile/**/*
+        - sf-wiki/**/*
         - helm/migrations/**/*
         - .docker/**/*
         - Dockerfile
@@ -57,6 +58,7 @@ deploy:
     - setsid ./ci/common/notif.sh "api"
     - setsid ./ci/common/notif.sh "ui"
     - setsid ./ci/common/notif.sh "mobile"
+    - setsid ./ci/common/notif.sh "wiki"
   rules: *app_deploy_rules
   tags:
     - sf

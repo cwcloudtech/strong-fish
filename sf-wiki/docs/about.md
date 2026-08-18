@@ -1,4 +1,8 @@
-# About us
+---
+id: about
+title: About
+sidebar_position: 2
+---
 
 We are a team of French powerlifters and engineers who volunteer their time to
 develop a powerlifting app and social network.

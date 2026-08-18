@@ -23,6 +23,13 @@ services:
       dockerfile: Dockerfile
       target: api
 
+  wiki:
+    image: ${CI_REGISTRY}/sf-wiki:${VERSION}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: wiki
+
   ui:
     image: ${CI_REGISTRY}/sf-ui:${VERSION}
     build:

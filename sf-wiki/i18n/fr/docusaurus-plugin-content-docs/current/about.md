@@ -1,4 +1,8 @@
-# À propos
+---
+id: about
+title: À propos
+sidebar_position: 2
+---
 
 Nous sommes une équipe de powerlifters et d'ingénieurs français qui consacrent
 bénévolement leur temps au développement d'une application et d'un réseau social

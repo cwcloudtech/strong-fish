@@ -1,0 +1,22 @@
+{
+  "title": {
+    "message": "strong-fish",
+    "description": "The title in the navbar"
+  },
+  "logo.alt": {
+    "message": "strong-fish",
+    "description": "The alt text of navbar logo"
+  },
+  "item.label.Documentation": {
+    "message": "Documentation",
+    "description": "Navbar item with label Documentation"
+  },
+  "item.label.Tutorials": {
+    "message": "Tutoriels",
+    "description": "Navbar item with label Tutorials"
+  },
+  "item.label.App": {
+    "message": "L'application",
+    "description": "Navbar item with label App"
+  }
+}

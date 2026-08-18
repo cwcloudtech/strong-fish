@@ -44,6 +44,7 @@ const fr = {
     settings: "Paramètres",
     about: "À propos",
     events: "Calendrier",
+    documentation: "Documentation",
     search: "Trouver des personnes",
     messages: "Messages",
     invitations: "Invitations",
@@ -595,6 +596,14 @@ const fr = {
     feedWarning:
       "Toute personne disposant de cette adresse peut lire votre calendrier : c'est le seul justificatif qui existe. Générez-en une nouvelle si elle a fuité.",
   },
+  update: {
+    upToDate: "Vous êtes à jour",
+    available: "La version {{version}} est disponible",
+    help: "Télécharge la nouvelle version et la confie à Android pour l'installer. Vous restez connecté.",
+    install: "Mettre à jour",
+    downloading: "Téléchargement de la mise à jour...",
+    failed: "La mise à jour n'a pas pu être installée.",
+  },
   storage: {
     title: "Stockage des vidéos",
     subtitle:
@@ -610,9 +619,11 @@ const fr = {
     publicBaseUrl: "Adresse publique",
     publicBaseUrlHelp: "À renseigner si le bucket est servi par un CDN ou par un domaine à vous.",
     folderId: "Identifiant du dossier",
-    serviceAccount: "Clé du compte de service (base64)",
+    serviceAccount: "Clé du compte de service",
     serviceAccountHelp:
-      "La clé JSON du compte de service, encodée en base64. Partagez d'abord le dossier Drive avec l'adresse de ce compte, sans quoi il ne pourra rien y écrire.",
+      "Le fichier JSON fourni par Google. Partagez d'abord le dossier Drive avec l'adresse de ce compte, sans quoi il ne pourra rien y écrire.",
+    serviceAccountSet: "Une clé est déjà configurée. Choisissez un fichier pour la remplacer.",
+    serviceAccountReadError: "Ce fichier n'a pas pu être lu. Choisissez la clé JSON fournie par Google.",
     path: "Sous-dossier",
     clear: "Supprimer cette configuration",
     saved: "Stockage enregistré.",
@@ -620,6 +631,7 @@ const fr = {
   },
   messages: {
     title: "Messages",
+    current: "Conversations",
     subtitle: "Conversations privées avec les membres que vous pouvez voir.",
     message: "Envoyer un message",
     send: "Envoyer",

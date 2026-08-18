@@ -1,0 +1,8 @@
+{
+  "label": "Tutoriels",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Pas à pas, de la création d'un compte à la publication de votre première vidéo."
+  }
+}

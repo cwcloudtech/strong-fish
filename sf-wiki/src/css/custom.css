@@ -1,0 +1,41 @@
+/**
+ * The wiki's palette, taken from the app's own tokens (sf-ui/src/index.css) so
+ * the documentation reads as part of the product rather than as a separate
+ * site that happens to be about it.
+ */
+
+:root {
+  --ifm-color-primary: #0e5e9b;
+  --ifm-color-primary-dark: #0a4a7d;
+  --ifm-color-primary-darker: #083f6b;
+  --ifm-color-primary-darkest: #062a4e;
+  --ifm-color-primary-light: #1a76bb;
+  --ifm-color-primary-lighter: #2b8fd4;
+  --ifm-color-primary-lightest: #aacfec;
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto,
+    Helvetica, Arial, sans-serif;
+  --docusaurus-highlighted-code-line-bg: rgba(14, 94, 155, 0.1);
+}
+
+/* Dark mode lightens the brand blue: the light theme's navy-leaning tone does
+   not carry enough contrast against a near-black background. */
+[data-theme="dark"] {
+  --ifm-color-primary: #2b8fd4;
+  --ifm-color-primary-dark: #1a76bb;
+  --ifm-color-primary-darker: #0e5e9b;
+  --ifm-color-primary-darkest: #0a4a7d;
+  --ifm-color-primary-light: #4aa6e4;
+  --ifm-color-primary-lighter: #6fbaeb;
+  --ifm-color-primary-lightest: #aacfec;
+  --ifm-background-color: #0b1220;
+  --ifm-background-surface-color: #141d2e;
+  --docusaurus-highlighted-code-line-bg: rgba(43, 143, 212, 0.2);
+}
+
+/* The RPE chart is wide and read across, so it scrolls inside itself rather
+   than making the whole page scroll sideways on a phone. */
+.markdown table {
+  display: block;
+  overflow-x: auto;
+}
