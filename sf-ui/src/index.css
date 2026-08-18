@@ -648,6 +648,40 @@ button {
 .sf-sidebar.collapsed .sf-dropdown-toggle svg { font-size: 15px; }
 .sf-sidebar.collapsed .sf-dropdown-caret { display: none; }
 
+/* --- share buttons --- */
+.sf-share {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-wrap: wrap;
+}
+
+.sf-share-label {
+  margin-right: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--sf-text-muted);
+}
+
+.sf-share-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--sf-text-muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background-color var(--sf-transition), color var(--sf-transition);
+}
+
+.sf-share-button:hover {
+  background-color: var(--sf-bg-alt);
+  color: var(--sf-primary);
+}
+
 /* --- private messages ---
    Conversations on the left, the open thread on the right. Below the
    breakpoint the two stack: a 260px list beside a thread leaves neither

@@ -29,10 +29,10 @@ type invitationData struct {
 	Message string `json:"message,omitempty"`
 }
 
-const invitationSelect = `
+var invitationSelect = `
 	SELECT i.id, i.club_id, i.inviter_id, i.email, i.data, i.created_at, i.updated_at,
 	       coalesce(c.data->>'name', ''),
-	       trim(coalesce(u.data->>'name', '') || ' ' || coalesce(u.data->>'surname', '')),
+	       trim(` + displayFullName("u") + `),
 	       (SELECT count(*) FROM club_members WHERE club_id = i.club_id)
 	FROM club_invitations i
 	JOIN clubs c ON c.id = i.club_id

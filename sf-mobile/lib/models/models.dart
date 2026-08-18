@@ -62,6 +62,10 @@ class User {
   final String name;
   final String surname;
   final String handle;
+  /// The name the member picked. When [anonymous] is set it is the only name
+  /// anybody else sees, and the handle is derived from it.
+  final String username;
+  final bool anonymous;
   final String bio;
   final String role;
   final String picture;
@@ -80,6 +84,8 @@ class User {
     this.name = '',
     this.surname = '',
     this.handle = '',
+    this.username = '',
+    this.anonymous = false,
     this.bio = '',
     this.role = '',
     this.picture = '',
@@ -97,6 +103,8 @@ class User {
         name: _toString(json['name']),
         surname: _toString(json['surname']),
         handle: _toString(json['handle']),
+        username: _toString(json['username']),
+        anonymous: json['anonymous'] == true,
         bio: _toString(json['bio']),
         role: _toString(json['role']),
         picture: _toString(json['picture']),
@@ -478,6 +486,63 @@ class AssignmentDetail {
             .map(Exercise.fromJson)
             .toList(),
       );
+}
+
+/// One address an account has connected from, with how often.
+class ConnectionIp {
+  final String ip;
+  final int count;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+
+  const ConnectionIp({
+    this.ip = '',
+    this.count = 0,
+    required this.firstSeen,
+    required this.lastSeen,
+  });
+
+  factory ConnectionIp.fromJson(Map<String, dynamic> json) => ConnectionIp(
+        ip: _toString(json['ip']),
+        count: _toInt(json['count']),
+        firstSeen: _toDate(json['firstSeen']).toLocal(),
+        lastSeen: _toDate(json['lastSeen']).toLocal(),
+      );
+}
+
+/// An account that asked to be a coach at signup, waiting on a decision.
+class CoachApplicant {
+  final String id;
+  final String email;
+  final String name;
+  final String surname;
+  final String picture;
+  final DateTime? requestedAt;
+
+  const CoachApplicant({
+    required this.id,
+    this.email = '',
+    this.name = '',
+    this.surname = '',
+    this.picture = '',
+    this.requestedAt,
+  });
+
+  factory CoachApplicant.fromJson(Map<String, dynamic> json) {
+    final request = json['request'] is Map<String, dynamic>
+        ? json['request'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    return CoachApplicant(
+      id: _toString(json['id']),
+      email: _toString(json['email']),
+      name: _toString(json['name']),
+      surname: _toString(json['surname']),
+      picture: _toString(json['picture']),
+      requestedAt: _optionalDate(request['requestedAt']),
+    );
+  }
+
+  String get fullName => '$name $surname'.trim();
 }
 
 /// A private thread with one other member.

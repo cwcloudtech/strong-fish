@@ -206,6 +206,48 @@ class SfApi {
     return Post.fromJson(_map(response.data));
   }
 
+  // --- administration (superadmin only) ---
+
+  Future<Map<String, dynamic>> adminStats() async =>
+      _map((await client.dio.get('/admin/stats')).data);
+
+  Future<List<User>> adminUsers() async {
+    final response = await client.dio.get('/admin/users');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => User.fromJson(_map(item))).toList();
+  }
+
+  /// Changes one account's global role. This is the whole of what the phone
+  /// offers: activating somebody, promoting a coach, banning an abuser - the
+  /// three things worth being able to do away from a desk.
+  Future<User> adminSetRole(String userId, String role) async {
+    final response = await client.dio.put('/admin/users/$userId', data: {'role': role});
+    return User.fromJson(_map(response.data));
+  }
+
+  Future<void> adminDeleteUser(String userId) async {
+    await client.dio.delete('/admin/users/$userId');
+  }
+
+  Future<List<ConnectionIp>> adminUserIps(String userId) async {
+    final response = await client.dio.get('/admin/users/$userId/ips');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => ConnectionIp.fromJson(_map(item))).toList();
+  }
+
+  Future<List<CoachApplicant>> adminCoachRequests() async {
+    final response = await client.dio.get('/admin/coach-requests');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => CoachApplicant.fromJson(_map(item))).toList();
+  }
+
+  Future<void> adminDecideCoachRequest(String userId, String status, String motive) async {
+    await client.dio.put('/admin/coach-requests/$userId', data: {'status': status, 'motive': motive});
+  }
+
   // --- private messages ---
 
   Future<List<Conversation>> conversations() async {

@@ -227,9 +227,14 @@ func (h *UserHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateProfilePayload struct {
-	Name              string  `json:"name"`
-	Surname           string  `json:"surname"`
-	Handle            string  `json:"handle"`
+	Name    string `json:"name"`
+	Surname string `json:"surname"`
+	// Username is what the member is known by, and what their handle derives
+	// from. There is no handle field: it is computed (see
+	// UserStore.UpdateProfile), so accepting one would create a second source
+	// of truth for the same string.
+	Username          string  `json:"username"`
+	Anonymous         bool    `json:"anonymous"`
 	Bio               string  `json:"bio"`
 	Locale            string  `json:"locale"`
 	ProfileVisibility string  `json:"profileVisibility"`
@@ -253,23 +258,32 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The handle is normalized rather than validated character by character, so
-	// a user typing "Jean Dupont" gets "jean-dupont" instead of an error.
-	handle := utils.Slugify(p.Handle)
-	if utils.IsNotBlank(p.Handle) && utils.IsBlank(handle) {
-		writeError(w, http.StatusBadRequest, "This profile name cannot be used", CodeInvalidHandle)
+	// The username is normalized rather than validated character by character,
+	// so somebody typing "Marie Dubois" gets "marie-dubois" instead of an
+	// error - but a name of nothing but punctuation has no slug at all, and
+	// silently clearing it would be worse than saying so.
+	username := utils.Slugify(p.Username)
+	if utils.IsNotBlank(p.Username) && utils.IsBlank(username) {
+		writeError(w, http.StatusBadRequest, "This username cannot be used", CodeInvalidUsername)
 		return
 	}
-	if utils.IsNotBlank(handle) {
-		taken, err := h.users.IsHandleTaken(r.Context(), handle, userID)
+	if utils.IsNotBlank(username) {
+		taken, err := h.users.UsernameTaken(r.Context(), username, userID)
 		if err != nil {
 			writeStoreError(w, err)
 			return
 		}
 		if taken {
-			writeError(w, http.StatusBadRequest, "This profile name is already taken", CodeDuplicateHandle)
+			writeError(w, http.StatusBadRequest, "This username is already taken", CodeDuplicateUsername)
 			return
 		}
+	}
+
+	// Anonymity without a username has nothing to show: the profile would fall
+	// back to a handle derived from the very name it is meant to hide.
+	if p.Anonymous && utils.IsBlank(username) {
+		writeError(w, http.StatusBadRequest, "Pick a username to browse anonymously", CodeUsernameRequired)
+		return
 	}
 
 	var passwordHash *string
@@ -302,7 +316,8 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.users.UpdateProfile(r.Context(), userID, store.ProfileFields{
-		Name: p.Name, Surname: p.Surname, Handle: handle, Bio: p.Bio, Locale: p.Locale,
+		Name: p.Name, Surname: p.Surname, Username: username, Anonymous: p.Anonymous,
+		Bio: p.Bio, Locale: p.Locale,
 		ProfileVisibility: p.ProfileVisibility, Birthdate: birthdate,
 		Bodyweight: p.Bodyweight, PasswordHash: passwordHash,
 	})

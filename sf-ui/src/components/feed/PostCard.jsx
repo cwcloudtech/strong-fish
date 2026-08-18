@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiEdit2, FiFlag, FiHeart, FiMessageSquare, FiTrash2 } from "react-icons/fi";
+import { FiEdit2, FiFlag, FiHeart, FiMessageSquare, FiShare2, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { social } from "../../api/services";
 import Avatar from "../common/Avatar";
 import Modal, { ConfirmModal } from "../common/Modal";
+import ShareButtons from "../common/ShareButtons";
 import { ErrorMessage } from "../common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -19,6 +20,7 @@ export default function PostCard({ post, onChanged, onDeleted }) {
   const { t, locale } = useI18n();
   const [comments, setComments] = useState(null);
   const [showComments, setShowComments] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
@@ -152,6 +154,15 @@ export default function PostCard({ post, onChanged, onDeleted }) {
         <button type="button" className="sf-button-ghost" onClick={() => setShowComments((open) => !open)}>
           <FiMessageSquare /> {post.comments || 0}
         </button>
+        <button
+          type="button"
+          className="sf-button-ghost"
+          onClick={() => setSharing((open) => !open)}
+          aria-label={t("share.label")}
+          aria-expanded={sharing}
+        >
+          <FiShare2 />
+        </button>
         <span className="sf-spacer" />
         {post.editable ? (
           <button type="button" className="sf-button-ghost" onClick={() => setEditing(true)} aria-label={t("common.edit")}>
@@ -169,6 +180,15 @@ export default function PostCard({ post, onChanged, onDeleted }) {
           </button>
         ) : null}
       </div>
+
+      {/* Folded away until asked for: six icons under every post in the feed
+          would outweigh the post. */}
+      {sharing ? (
+        <ShareButtons
+          url={`${window.location.origin}/profile/${post.author.handle || ""}`}
+          text={post.content ? post.content.slice(0, 180) : t("share.postText")}
+        />
+      ) : null}
 
       {showComments ? (
         <div>

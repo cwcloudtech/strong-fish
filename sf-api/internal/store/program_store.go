@@ -55,9 +55,9 @@ type setData struct {
 	Notes        string   `json:"notes,omitempty"`
 }
 
-const programSelect = `
+var programSelect = `
 	SELECT p.id, p.club_id, p.author_id, p.data, p.created_at, p.updated_at,
-	       coalesce(u.data->>'name', '') || ' ' || coalesce(u.data->>'surname', ''),
+	       ` + displayFullName("u") + `,
 	       (SELECT count(*) FROM program_days WHERE program_id = p.id),
 	       (SELECT count(*) FROM program_sets WHERE program_id = p.id),
 	       (SELECT coalesce(max((data->>'week')::int), 0) FROM program_days WHERE program_id = p.id),
@@ -522,10 +522,10 @@ type assignmentData struct {
 	Note      string `json:"note,omitempty"`
 }
 
-const assignmentSelect = `
+var assignmentSelect = `
 	SELECT a.id, a.program_id, a.user_id, a.data, a.created_at, a.updated_at,
 	       coalesce(p.data->>'name', ''), p.club_id, coalesce(c.data->>'name', ''),
-	       coalesce(u.data->>'name', '') || ' ' || coalesce(u.data->>'surname', ''), u.email,
+	       ` + displayFullName("u") + `, u.email,
 	       (SELECT count(*) FROM program_sets WHERE program_id = a.program_id),
 	       (SELECT count(*) FROM set_logs WHERE assignment_id = a.id AND (data->>'done')::boolean IS TRUE)
 	FROM program_assignments a
@@ -767,7 +767,7 @@ func (s *ProgramStore) ListFeedbackForClub(ctx context.Context, clubID string, p
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT sl.id, sl.assignment_id, sl.set_id, sl.user_id, sl.data, sl.created_at, sl.updated_at,
-		       coalesce(u.data->>'name', '') || ' ' || coalesce(u.data->>'surname', ''),
+		       ` + displayFullName("u") + `,
 		       coalesce(u.data->>'handle', ''), coalesce(u.data->>'picture', ''),
 		       p.id, coalesce(p.data->>'name', ''),
 		       coalesce((pd.data->>'week')::int, 0), coalesce((pd.data->>'day')::int, 0),

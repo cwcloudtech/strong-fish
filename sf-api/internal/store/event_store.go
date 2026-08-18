@@ -39,11 +39,11 @@ type eventData struct {
 	Visibility  string `json:"visibility"`
 }
 
-const eventSelect = `
+var eventSelect = `
 	SELECT e.id, e.club_id, e.author_id, e.data, e.created_at, e.updated_at,
 	       coalesce(c.data->>'name', ''),
 	       coalesce(u.data->>'handle', ''),
-	       coalesce(u.data->>'name', ''), coalesce(u.data->>'surname', ''),
+	       ` + displayName("u") + `, ` + displaySurname("u") + `,
 	       coalesce(u.data->>'picture', '')
 	FROM events e
 	JOIN users u ON u.id = e.author_id

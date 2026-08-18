@@ -70,7 +70,7 @@ func (s *MessageStore) ListConversations(ctx context.Context, callerID string) (
 		SELECT c.id, c.created_at, c.updated_at,
 		       coalesce(c.data->>'lastMessage', ''), coalesce(c.data->>'lastSenderId', ''),
 		       other.id, coalesce(other.data->>'handle', ''),
-		       coalesce(other.data->>'name', ''), coalesce(other.data->>'surname', ''),
+		       ` + displayName("other") + `, ` + displaySurname("other") + `,
 		       coalesce(other.data->>'picture', ''),
 		       (SELECT count(*) FROM messages m
 		        WHERE m.conversation_id = c.id AND m.sender_id <> $1::uuid AND m.data->>'readAt' IS NULL)
@@ -141,8 +141,8 @@ func (s *MessageStore) ListMessages(ctx context.Context, conversationID string, 
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT m.id, m.conversation_id, m.sender_id, m.data, m.created_at,
-		       coalesce(u.data->>'handle', ''), coalesce(u.data->>'name', ''),
-		       coalesce(u.data->>'surname', ''), coalesce(u.data->>'picture', '')
+		       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
+		       ` + displaySurname("u") + `, coalesce(u.data->>'picture', '')
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
 		WHERE m.conversation_id = $1
@@ -233,8 +233,8 @@ func (s *MessageStore) FindMessage(ctx context.Context, id string) (models.Messa
 	var raw []byte
 	err := s.pool.QueryRow(ctx, `
 		SELECT m.id, m.conversation_id, m.sender_id, m.data, m.created_at,
-		       coalesce(u.data->>'handle', ''), coalesce(u.data->>'name', ''),
-		       coalesce(u.data->>'surname', ''), coalesce(u.data->>'picture', '')
+		       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
+		       ` + displaySurname("u") + `, coalesce(u.data->>'picture', '')
 		FROM messages m JOIN users u ON u.id = m.sender_id
 		WHERE m.id = $1
 	`, id).Scan(&m.ID, &m.ConversationID, &m.SenderID, &raw, &m.CreatedAt,
@@ -312,8 +312,8 @@ func (s *MessageStore) Unblock(ctx context.Context, blockerID, blockedID string)
 func (s *MessageStore) ListBlocks(ctx context.Context, blockerID string) ([]models.Block, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT b.id, b.blocked_id, b.created_at,
-		       coalesce(u.data->>'handle', ''), coalesce(u.data->>'name', ''),
-		       coalesce(u.data->>'surname', ''), coalesce(u.data->>'picture', '')
+		       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
+		       ` + displaySurname("u") + `, coalesce(u.data->>'picture', '')
 		FROM blocks b JOIN users u ON u.id = b.blocked_id
 		WHERE b.blocker_id = $1
 		ORDER BY b.created_at DESC
