@@ -50,6 +50,14 @@ func (s *MessageStore) FindOrCreateConversation(ctx context.Context, callerID, o
 	return id, err
 }
 
+// Every reference to the caller is written $1::uuid rather than left to
+// inference. pgx sends a Go string as untyped text, and Postgres picks one type
+// for a parameter across the whole statement: mixing `member_a = $1` with
+// `member_a::text = $1` made it choose text, and the uuid comparison then failed
+// outright with "operator does not exist: uuid = text". Casting the parameter
+// instead of the columns also keeps idx_conversations_pair and idx_blocks_pair
+// usable - a cast on the column side is what stops an index being used.
+//
 // ListConversations returns one member's threads, most recently active first,
 // each projected for them: "the other person" is whichever of the pair is not
 // the caller, and the unread count is messages the caller did not send and has
@@ -65,14 +73,14 @@ func (s *MessageStore) ListConversations(ctx context.Context, callerID string) (
 		       coalesce(other.data->>'name', ''), coalesce(other.data->>'surname', ''),
 		       coalesce(other.data->>'picture', ''),
 		       (SELECT count(*) FROM messages m
-		        WHERE m.conversation_id = c.id AND m.sender_id <> $1 AND m.data->>'readAt' IS NULL)
+		        WHERE m.conversation_id = c.id AND m.sender_id <> $1::uuid AND m.data->>'readAt' IS NULL)
 		FROM conversations c
-		JOIN users other ON other.id = CASE WHEN c.member_a = $1 THEN c.member_b ELSE c.member_a END
-		WHERE ($1 IN (c.member_a::text, c.member_b::text))
+		JOIN users other ON other.id = CASE WHEN c.member_a = $1::uuid THEN c.member_b ELSE c.member_a END
+		WHERE $1::uuid IN (c.member_a, c.member_b)
 		  AND NOT EXISTS (
 		      SELECT 1 FROM blocks b
-		      WHERE (b.blocker_id::text = $1 AND b.blocked_id = other.id)
-		         OR (b.blocked_id::text = $1 AND b.blocker_id = other.id)
+		      WHERE (b.blocker_id = $1::uuid AND b.blocked_id = other.id)
+		         OR (b.blocked_id = $1::uuid AND b.blocker_id = other.id)
 		  )
 		  AND EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id)
 		ORDER BY c.updated_at DESC
@@ -101,13 +109,13 @@ func (s *MessageStore) CountUnread(ctx context.Context, callerID string) (int, e
 	err := s.pool.QueryRow(ctx, `
 		SELECT count(*) FROM messages m
 		JOIN conversations c ON c.id = m.conversation_id
-		WHERE $1 IN (c.member_a::text, c.member_b::text)
-		  AND m.sender_id <> $1
+		WHERE $1::uuid IN (c.member_a, c.member_b)
+		  AND m.sender_id <> $1::uuid
 		  AND m.data->>'readAt' IS NULL
 		  AND NOT EXISTS (
 		      SELECT 1 FROM blocks b
-		      WHERE (b.blocker_id::text = $1 AND b.blocked_id = m.sender_id)
-		         OR (b.blocked_id::text = $1 AND b.blocker_id = m.sender_id)
+		      WHERE (b.blocker_id = $1::uuid AND b.blocked_id = m.sender_id)
+		         OR (b.blocked_id = $1::uuid AND b.blocker_id = m.sender_id)
 		  )
 	`, callerID).Scan(&count)
 	return count, err

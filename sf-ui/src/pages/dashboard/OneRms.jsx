@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
-import { FiTrash2 } from "react-icons/fi";
+import { FiSave, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { exercises as exercisesApi, oneRms as oneRmsApi } from "../../api/services";
 import { ConfirmModal } from "../../components/common/Modal";
+import Tooltip from "../../components/common/Tooltip";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -124,24 +125,33 @@ export default function OneRms() {
           {current?.history?.length ? current.history.slice(-4).map((entry) => entry.value).join(" → ") + " → " + current.value : "—"}
         </td>
         <td className="sf-table-num">
+          {/* Icon actions, like every other row in the app: a table of maxes
+              is scanned down the left, and a column of repeated "Save" words
+              is noise where an icon is a target. Enter in the field saves too,
+              which is what most people will actually use. */}
           <div className="sf-row" style={{ justifyContent: "flex-end", gap: "0.3rem", flexWrap: "nowrap" }}>
-            <button
-              type="button"
-              className="sf-button sf-button-sm"
-              onClick={() => save(exercise)}
-              disabled={saving === exercise.id || !drafts[exercise.id]}
-            >
-              {t("common.save")}
-            </button>
-            {current ? (
+            <Tooltip label={t("common.save")}>
               <button
                 type="button"
-                className="sf-button sf-button-ghost sf-button-sm"
-                onClick={() => setConfirming(exercise)}
-                aria-label={t("common.delete")}
+                className="sf-icon-button sf-icon-button-plain"
+                onClick={() => save(exercise)}
+                disabled={saving === exercise.id || !drafts[exercise.id]}
+                aria-label={t("common.save")}
               >
-                <FiTrash2 />
+                <FiSave />
               </button>
+            </Tooltip>
+            {current ? (
+              <Tooltip label={t("common.delete")}>
+                <button
+                  type="button"
+                  className="sf-icon-button sf-icon-button-plain"
+                  onClick={() => setConfirming(exercise)}
+                  aria-label={t("common.delete")}
+                >
+                  <FiTrash2 />
+                </button>
+              </Tooltip>
             ) : null}
           </div>
         </td>
