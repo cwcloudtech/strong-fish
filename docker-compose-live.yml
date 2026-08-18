@@ -1,0 +1,38 @@
+services:
+  flyway:
+    image: flyway/flyway:10-alpine
+    container_name: SF-db-migrate
+    env_file:
+      - .env.sf.db
+    command: >
+      -url=jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+      -user=${POSTGRES_USER}
+      -password=${POSTGRES_PASSWORD}
+      -connectRetries=10
+      migrate
+    volumes:
+      - ./helm/migrations:/flyway/sql
+
+  api:
+    image: ${CI_REGISTRY}/sf-api:${VERSION}
+    container_name: sf-api
+    restart: always
+    depends_on:
+      flyway:
+        condition: service_completed_successfully
+    env_file:
+      - .env.sf.db
+      - .env.sf.api
+    ports:
+      - "18081:8080"
+
+  ui:
+    image: ${CI_REGISTRY}/sf-ui:${VERSION}-mobile
+    container_name: sf-ui
+    restart: always
+    env_file:
+      -  .env.sf.ui
+    depends_on:
+      - api
+    ports:
+      - "13001:80"
