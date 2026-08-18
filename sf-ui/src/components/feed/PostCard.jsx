@@ -33,7 +33,7 @@ export default function PostCard({ post, onChanged, onDeleted }) {
     if (!showComments || comments) return;
     social
       .comments(post.id)
-      .then((page) => setComments(page.results))
+      .then((page) => setComments(page?.results || []))
       .catch(setError);
   }, [showComments, comments, post.id]);
 

@@ -4,6 +4,7 @@ const en = {
     tagline: "Powerlifting app",
   },
   common: {
+    retry: "Reload",
     create: "Create",
     copy: "Copy",
     copied: "Copied to the clipboard.",
@@ -466,6 +467,9 @@ const en = {
     cannotBlockSelf: "You cannot block yourself.",
     emptyMessage: "A message needs some text.",
     internal: "Something went wrong. Please try again.",
+    screenTitle: "This screen ran into a problem",
+    screenBody:
+      "Something on this page failed to display. The rest of the app still works - pick another screen from the menu, or reload to try this one again.",
     notFound: "Not found.",
     invalidRequestBody: "Invalid request.",
     allFieldsRequired: "Please fill in every field.",

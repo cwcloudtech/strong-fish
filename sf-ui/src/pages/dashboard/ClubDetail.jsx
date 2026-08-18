@@ -455,7 +455,7 @@ function ClubFeedTab({ club }) {
   useEffect(() => {
     clubsApi
       .feed(club.id)
-      .then((page) => setPosts(page.results))
+      .then((page) => setPosts(page?.results || []))
       .catch(setError);
   }, [club.id]);
 
@@ -490,7 +490,7 @@ function FeedbackTab({ club, locale }) {
   useEffect(() => {
     clubsApi
       .feedback(club.id)
-      .then((page) => setFeedback(page.results))
+      .then((page) => setFeedback(page?.results || []))
       .catch(setError);
   }, [club.id]);
 

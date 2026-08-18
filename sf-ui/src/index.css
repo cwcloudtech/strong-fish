@@ -886,11 +886,10 @@ button {
 .sf-auth-footer-icon:hover { color: var(--sf-primary); }
 
 /* --- tooltip ---
-   A port of cwclock's Tooltip: shown on hover, and on keyboard focus via
-   :has(:focus-visible) rather than :focus-within, which would also match the
-   focus a mouse click leaves behind and pin the bubble open after the pointer
-   has gone. It replaces bare `title` attributes, whose native tooltip is slow
-   to appear and can't be styled - most noticeable on an icon-only rail. */
+   The bubble is portaled to <body> and positioned from JS (see
+   components/common/Tooltip.jsx), so it is fixed rather than anchored to its
+   trigger: the sidebar scrolls, and a scroll container clips its overflow in
+   both axes, which used to swallow the collapsed rail's tooltips entirely. */
 .sf-tooltip {
   position: relative;
   display: flex;
@@ -898,7 +897,7 @@ button {
 }
 
 .sf-tooltip-bubble {
-  position: absolute;
+  position: fixed;
   z-index: 3000;
   padding: 5px 9px;
   border-radius: var(--sf-radius-sm);
@@ -909,52 +908,9 @@ button {
   white-space: nowrap;
   line-height: 1.2;
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 120ms ease, transform 120ms ease;
-  transition-delay: 0s;
+  box-shadow: var(--sf-shadow);
 }
 
-/* Direct-child combinator only: tooltips nest (an icon tooltip inside a
-   dropdown whose trigger has one of its own), and a bubble is always its own
-   wrapper's direct child. */
-.sf-tooltip:hover > .sf-tooltip-bubble,
-.sf-tooltip:has(:focus-visible) > .sf-tooltip-bubble {
-  opacity: 1;
-  transition-delay: 300ms;
-}
-
-.sf-tooltip-bubble[data-position="right"] {
-  left: calc(100% + 10px);
-  top: 50%;
-  transform: translate(-2px, -50%);
-}
-
-.sf-tooltip:hover > .sf-tooltip-bubble[data-position="right"],
-.sf-tooltip:has(:focus-visible) > .sf-tooltip-bubble[data-position="right"] {
-  transform: translate(0, -50%);
-}
-
-.sf-tooltip-bubble[data-position="top"] {
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translate(-50%, 2px);
-}
-
-.sf-tooltip:hover > .sf-tooltip-bubble[data-position="top"],
-.sf-tooltip:has(:focus-visible) > .sf-tooltip-bubble[data-position="top"] {
-  transform: translate(-50%, 0);
-}
-
-.sf-tooltip-bubble[data-position="bottom"] {
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translate(-50%, -2px);
-}
-
-.sf-tooltip:hover > .sf-tooltip-bubble[data-position="bottom"],
-.sf-tooltip:has(:focus-visible) > .sf-tooltip-bubble[data-position="bottom"] {
-  transform: translate(-50%, 0);
-}
 
 .sf-icon-button {
   flex: 1;
@@ -1763,3 +1719,71 @@ button {
   .sf-calendar-weekdays { min-width: 560px; }
   .sf-calendar-scroll { overflow-x: auto; }
 }
+
+/* --- switch ---
+   A toggle-styled checkbox (see components/common/Switch.jsx), ported from
+   ~/cwclock. The real input sits transparent on top of the track, so focus and
+   keyboard operation are the browser's rather than something reimplemented. */
+
+.sf-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.sf-switch-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.sf-switch-thumb {
+  position: absolute;
+  inset: 0;
+  background-color: var(--sf-border);
+  border-radius: 999px;
+  transition: background-color var(--sf-transition);
+}
+
+.sf-switch-thumb::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background-color: var(--sf-surface);
+  border-radius: 50%;
+  transition: transform var(--sf-transition);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.sf-switch-input:checked + .sf-switch-thumb { background-color: var(--sf-primary); }
+.sf-switch-input:checked + .sf-switch-thumb::before { transform: translateX(18px); }
+
+.sf-switch-input:disabled { cursor: not-allowed; }
+.sf-switch-input:disabled + .sf-switch-thumb { opacity: 0.6; }
+
+.sf-switch-input:focus-visible + .sf-switch-thumb {
+  outline: 2px solid var(--sf-primary);
+  outline-offset: 2px;
+}
+
+/* The row a switch sits in: label and help on the left, the switch on the
+   right, the way a settings list reads. */
+.sf-switch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sf-spacing);
+  margin-bottom: var(--sf-spacing);
+  cursor: pointer;
+}
+
+.sf-switch-row.disabled { cursor: not-allowed; }
+.sf-switch-row > span:first-child { min-width: 0; }
