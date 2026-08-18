@@ -15,6 +15,7 @@ done
 echo "SF_API_URL=${SF_API_URL}" > .env.sf.ui
 echo "SF_UI_URL=${SF_UI_URL}" >> .env.sf.ui
 echo "SF_MAX_IMAGE_SIZE=${SF_MAX_IMAGE_SIZE}" >> .env.sf.ui
+echo "SF_GIT_REPO_URL=${SF_GIT_REPO_URL}" >> .env.sf.ui
 
 docker ps -a | grep -i sf | awk '{system ("docker rm -f "$1)}' || :
 docker compose -f docker-compose-live.yml up -d --force-recreate
