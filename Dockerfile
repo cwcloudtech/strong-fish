@@ -81,7 +81,7 @@ FROM nginx:${NGINX_IMAGE_TAG} AS wiki
 COPY .docker/nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY .docker/nginx/docker-entrypoint.sh /docker-entrypoint.sh
 COPY --from=wiki-build /app/build /usr/share/nginx/html
-COPY manifest.json /usr/share/nginx/html/manifest-version.json
+COPY manifest.json /usr/share/nginx/html/manifest.json
 RUN chmod +x /docker-entrypoint.sh && \
     chmod -R 755 /usr/share/nginx/html && \
     chown -R nginx:nginx /usr/share/nginx/html
