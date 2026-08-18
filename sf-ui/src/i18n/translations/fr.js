@@ -40,6 +40,7 @@ const fr = {
     admin: "Administration",
     settings: "Paramètres",
     about: "À propos",
+    contact: "Contact",
   },
   auth: {
     login: "Se connecter",
@@ -423,6 +424,11 @@ const fr = {
     accountDisabledEmail: "Veuillez confirmer votre compte avec le lien reçu par email.",
     accountBanned: "Votre compte a été banni par un administrateur.",
     network: "Le serveur est injoignable. Veuillez réessayer.",
+    contactFormNotConfigured: "Le formulaire de contact n'est pas disponible sur cette instance.",
+    contactFormFailed: "Votre message n'a pas pu être envoyé. Veuillez réessayer plus tard.",
+    contactRateLimited: "Vous avez envoyé trop de messages. Veuillez réessayer plus tard.",
+    contactMessageTooShort: "Votre message est trop court : donnez-nous un peu plus de détails.",
+    contactGibberish: "Votre message a été signalé comme indésirable. Veuillez le reformuler.",
   },
   about: {
     title: "À propos",
@@ -432,6 +438,14 @@ const fr = {
     title: "Avis relatif aux cookies",
     message: "strong-fish est un produit open-source. Les cookies et le stockage local qu'il utilise sont nécessaires uniquement au fonctionnement de l'application (connexion, thème et langue) - jamais pour le suivi ou l'analyse.",
     understand: "J'ai compris",
+  },
+  contact: {
+    title: "Nous contacter",
+    body: "Une question, un bug ou un retour sur l'application ? Envoyez-nous un message.",
+    subject: "Sujet",
+    message: "Message",
+    send: "Envoyer le message",
+    sent: "Votre message a bien été envoyé. Merci !",
   },
 };
 

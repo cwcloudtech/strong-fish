@@ -53,12 +53,15 @@ type ConfigHandler struct {
 	plateIncrement float64
 	maxImageSize   int64
 	version        string
+	contactEnabled bool
 }
 
-func NewConfigHandler(oidcProviders []string, activationMode string, plateIncrement float64, maxImageSize int64, version string) *ConfigHandler {
+func NewConfigHandler(oidcProviders []string, activationMode string, plateIncrement float64,
+	maxImageSize int64, version string, contactEnabled bool) *ConfigHandler {
 	return &ConfigHandler{
 		oidcProviders: oidcProviders, activationMode: activationMode,
 		plateIncrement: plateIncrement, maxImageSize: maxImageSize, version: version,
+		contactEnabled: contactEnabled,
 	}
 }
 
@@ -74,5 +77,8 @@ func (h *ConfigHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"maxImageSize":   h.maxImageSize,
 		"version":        h.version,
 		"locales":        []string{"en", "fr"},
+		// Lets the frontend hide the contact link entirely when no form id is
+		// configured, rather than offering a page that can only answer 405.
+		"contactEnabled": h.contactEnabled,
 	})
 }

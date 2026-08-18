@@ -143,6 +143,14 @@ export const profiles = {
   unfollow: (handle) => body(client.delete(`/profiles/${handle}/follow`)),
 };
 
+// --- contact ---
+
+export const contact = {
+  // Forwarded by the API to CWCloud's contact-request endpoint; name and
+  // firstname are optional.
+  send: (payload) => body(client.post("/contact", payload)),
+};
+
 // --- administration ---
 
 export const admin = {

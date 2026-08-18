@@ -34,6 +34,8 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   sidebar. The logo ships in two inks so the wordmark stays legible either way.
 * **An About page** you can write without touching the build - it renders
   `public/about.md` (and `about.fr.md`) at runtime.
+* **A contact form**, forwarded to CWCloud's contact-request API (see
+  [Contact form](#contact-form)).
 
 ## Technologies
 
@@ -240,6 +242,28 @@ rewritten by dropping a new file next to the built assets - no rebuild, no
 redeploy of the frontend. A French translation goes in `about.fr.md`; the page
 loads `about.<locale>.md` first and falls back to `about.md`, so translating is
 optional.
+
+## Contact form
+
+`POST /v1/contact` forwards a submission to CWCloud's contact-request API
+(`POST {CWCLOUD_API_URL}/v1/contactreq`) - the same integration cwclock uses.
+Unlike the email API it needs no key: `CWCLOUD_CONTACT_FORM_ID` is the form's
+uuid, and that is what scopes the submission on CWCloud's side.
+
+The page is public, because someone who cannot sign in is exactly who most
+needs to reach you. The browser never talks to CWCloud directly: the API holds
+the form id, and it fills in the submitter's IP from the request's own
+`X-Real-IP`/`X-Forwarded-By` headers (set by the reverse proxy) rather than
+from the payload - that IP is what CWCloud rate-limits on, so accepting one
+from the submitter would hand them the means to sidestep the limit.
+
+CWCloud's own rejections (`cf_rate_limiting`, `message_too_short`,
+`gibberish`) are mapped onto translated messages, so a submitter is told what
+to change instead of just "something went wrong".
+
+With `CWCLOUD_CONTACT_FORM_ID` unset the endpoint answers **405** and
+`GET /v1/config` reports `contactEnabled: false`, which is what makes the
+frontend hide the link entirely rather than offer a page that cannot work.
 
 ## Cookies
 

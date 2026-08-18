@@ -1,0 +1,149 @@
+// Package contact forwards strong-fish's contact form submissions to CWCloud's
+// contact-request API (POST {apiURL}/v1/contactreq) - the same integration
+// cwclock uses, driven by CWCLOUD_API_URL and CWCLOUD_CONTACT_FORM_ID.
+package contact
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"strong-fish-api/internal/utils"
+)
+
+// request is the JSON body CWCloud's /v1/contactreq expects. Unlike every other
+// CWCloud call this app makes, it carries no X-Api-Key/X-Auth-Token header at
+// all - the form's uuid (see Client.formID) is what scopes the submission on
+// CWCloud's side instead.
+type request struct {
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Subject   string `json:"subject"`
+	Message   string `json:"message"`
+	Name      string `json:"name,omitempty"`
+	Firstname string `json:"firstname,omitempty"`
+}
+
+// Submission is one contact form submission to send.
+type Submission struct {
+	Email     string
+	Subject   string
+	Message   string
+	Name      string
+	Firstname string
+	// ClientIP is the caller's IP address, forwarded to CWCloud via the
+	// X-Client-IP header rather than the JSON body - see ResolveClientIP, which
+	// callers should use to fill it in. It's how CWCloud rate-limits the form,
+	// so it must come from the request rather than from anything the submitter
+	// can type.
+	ClientIP string
+}
+
+// The headers ResolveClientIP reads the caller's IP from - already set by the
+// reverse proxy, so the form itself never has to supply one - and the header it
+// forwards to CWCloud.
+const (
+	headerXRealIP      = "X-Real-IP"
+	headerXForwardedBy = "X-Forwarded-By"
+	headerXClientIP    = "X-Client-IP"
+)
+
+// ResolveClientIP determines the X-Client-IP value to forward to CWCloud, from
+// the incoming request's X-Real-IP header, falling back to X-Forwarded-By.
+func ResolveClientIP(r *http.Request) string {
+	if r == nil {
+		return utils.EMPTY
+	}
+	if realIP := r.Header.Get(headerXRealIP); utils.IsNotBlank(realIP) {
+		return realIP
+	}
+	return r.Header.Get(headerXForwardedBy)
+}
+
+// APIError is returned by Send when CWCloud's contact-request API responds with
+// a non-2xx status. Code is CWCloud's own i18n_code from the response body
+// ("cf_rate_limiting", "message_too_short", "gibberish", ...). It's optional, so
+// a well-formed error response may still leave Code blank - callers must handle
+// that rather than assuming it's set.
+type APIError struct {
+	StatusCode int
+	Code       string
+}
+
+func (e *APIError) Error() string {
+	if utils.IsNotBlank(e.Code) {
+		return fmt.Sprintf("cwcloud contact api returned status %d (code %q)", e.StatusCode, e.Code)
+	}
+	return fmt.Sprintf("cwcloud contact api returned status %d", e.StatusCode)
+}
+
+// Client posts contact form submissions to CWCloud's contact-request API.
+type Client struct {
+	apiURL string
+	formID string
+	client *http.Client
+}
+
+// New builds a Client for the given CWCloud API base URL and contact form id
+// (CWCLOUD_CONTACT_FORM_ID). formID may be blank - see Configured.
+func New(apiURL, formID string) *Client {
+	return &Client{apiURL: apiURL, formID: formID, client: &http.Client{Timeout: 15 * time.Second}}
+}
+
+// Configured reports whether the form can be submitted at all. Callers should
+// check this and reject the request themselves rather than relying on Send to
+// fail: an unset form id is a deployment choice (the operator didn't want a
+// contact form), not a request-time error.
+func (c *Client) Configured() bool {
+	return utils.IsNotBlank(c.formID) && utils.IsNotBlank(c.apiURL)
+}
+
+// Send posts one submission. Unlike internal/email, failures are returned
+// rather than swallowed: this is a live form with someone waiting on it, so the
+// caller needs to be able to tell them it didn't go through.
+func (c *Client) Send(ctx context.Context, s Submission) error {
+	body, err := json.Marshal(request{
+		ID: c.formID, Email: s.Email, Subject: s.Subject, Message: s.Message,
+		Name: s.Name, Firstname: s.Firstname,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal contact request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiURL+"/v1/contactreq", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("failed to build contact request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	if utils.IsNotBlank(s.ClientIP) {
+		req.Header.Set(headerXClientIP, s.ClientIP)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("cwcloud contact api is not available: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		// Best-effort: CWCloud's i18n_code is optional and the body isn't
+		// guaranteed to be JSON at all, so a decode failure just leaves Code
+		// blank rather than masking the status-based error.
+		var errBody struct {
+			I18nCode string `json:"i18n_code"`
+		}
+		if raw, readErr := io.ReadAll(resp.Body); readErr == nil {
+			_ = json.Unmarshal(raw, &errBody)
+		} else {
+			slog.Warn("could not read cwcloud contact error body", "error", readErr)
+		}
+		return &APIError{StatusCode: resp.StatusCode, Code: errBody.I18nCode}
+	}
+	return nil
+}

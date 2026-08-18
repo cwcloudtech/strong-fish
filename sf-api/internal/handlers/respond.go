@@ -64,6 +64,13 @@ const (
 	CodeInvalidReportTarget  = "errors.invalidReportTarget"
 	CodeReportReasonRequired = "errors.reportReasonRequired"
 	CodeForbidden            = "errors.forbidden"
+	// The contact form's own failures, including the ones CWCloud's
+	// contact-request API reports back (see cwcloudContactErrors).
+	CodeContactFormNotConfigured = "errors.contactFormNotConfigured"
+	CodeContactFormFailed        = "errors.contactFormFailed"
+	CodeContactRateLimited       = "errors.contactRateLimited"
+	CodeContactMessageTooShort   = "errors.contactMessageTooShort"
+	CodeContactGibberish         = "errors.contactGibberish"
 )
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

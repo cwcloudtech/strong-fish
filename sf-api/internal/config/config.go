@@ -36,6 +36,7 @@ type Config struct {
 	OIDCKeycloakGroups       []string
 	CWCloudAPIURL            string
 	CWCloudAPIKey            string
+	CWCloudContactFormID     string
 	EmailFrom                string
 	ConfirmationEmailTTL     time.Duration
 	ActivationMode           string
@@ -129,6 +130,7 @@ func Load() Config {
 		OIDCKeycloakGroups:       utils.SplitList(os.Getenv("SF_OIDC_KEYCLOAK_GROUPS")),
 		CWCloudAPIURL:            utils.GetBaseUrlFromEnvWithFallback("CWCLOUD_API_URL", "https://api.cwcloud.tech"),
 		CWCloudAPIKey:            os.Getenv("CWCLOUD_API_KEY"),
+		CWCloudContactFormID:     os.Getenv("CWCLOUD_CONTACT_FORM_ID"),
 		EmailFrom:                utils.GetEnv("SF_MAIL_FROM", "noreply@cwcloud.tech"),
 		ConfirmationEmailTTL:     time.Duration(confirmationHours) * time.Hour,
 		ActivationMode:           activationMode,

@@ -25,6 +25,7 @@ type Handlers struct {
 	Profile  *handlers.ProfileHandler
 	Admin    *handlers.AdminHandler
 	Config   *handlers.ConfigHandler
+	Contact  *handlers.ContactHandler
 }
 
 // Options carries the settings the middleware chain needs.
@@ -62,6 +63,10 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		r.Get("/manifest", handlers.NewManifestHandler(o.ManifestPath))
 		r.Get("/config", h.Config.Get)
 		r.Get("/assets/logo.png", handlers.AssetsLogo)
+
+		// The contact form is deliberately public: someone who can't sign in is
+		// exactly who most needs to reach us.
+		r.Post("/contact", h.Contact.Create)
 
 		r.Route("/oidc", func(r chi.Router) {
 			r.Get("/", h.OIDC.ListProviders)

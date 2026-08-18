@@ -6,6 +6,7 @@ import {
   FiBarChart2,
   FiInfo,
   FiLogOut,
+  FiMail,
   FiMenu,
   FiMoon,
   FiShield,
@@ -26,7 +27,7 @@ import { useTheme } from "../../context/ThemeContext";
 export default function DashboardLayout() {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
-  const { user, logout, isCoach, isSuperadmin } = useAuth();
+  const { user, config, logout, isCoach, isSuperadmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -58,6 +59,9 @@ export default function DashboardLayout() {
   if (isCoach) links.push({ to: "/dashboard/exercises", label: t("nav.exercises"), icon: <FiActivity /> });
   links.push({ to: "/dashboard/settings", label: t("nav.settings"), icon: <FiUser /> });
   links.push({ to: "/about", label: t("nav.about"), icon: <FiInfo /> });
+  if (config?.contactEnabled) {
+    links.push({ to: "/contact", label: t("nav.contact"), icon: <FiMail /> });
+  }
   if (isSuperadmin) {
     links.push({ to: "/dashboard/admin", label: t("nav.admin"), icon: <FiShield />, count: openReports });
   }

@@ -11,6 +11,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 
 	"strong-fish-api/internal/config"
+	"strong-fish-api/internal/contact"
 	"strong-fish-api/internal/db"
 	"strong-fish-api/internal/email"
 	"strong-fish-api/internal/handlers"
@@ -46,6 +47,7 @@ func main() {
 	webauthnStore := store.NewWebAuthnCredentialStore(pool)
 
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
+	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
 
 	// WebAuthn binds credentials to a relying-party id, which must be the
 	// frontend's bare hostname - a security key registered against one origin
@@ -83,7 +85,8 @@ func main() {
 		Profile:  handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore),
 		Admin:    handlers.NewAdminHandler(userStore, webauthnStore, socialStore, cfg.ActivationMode),
 		Config: handlers.NewConfigHandler(oidc.Names(providers), cfg.ActivationMode,
-			cfg.PlateIncrement, cfg.MaxImageSize, cfg.Version),
+			cfg.PlateIncrement, cfg.MaxImageSize, cfg.Version, contactClient.Configured()),
+		Contact: handlers.NewContactHandler(contactClient),
 	}, userStore, clubStore, router.Options{
 		JWTSecret:          cfg.JWTSecret,
 		ActivationMode:     cfg.ActivationMode,
@@ -93,7 +96,8 @@ func main() {
 	})
 
 	slog.Info("strong-fish api listening", "port", cfg.Port, "version", cfg.Version,
-		"activationMode", cfg.ActivationMode, "oidcProviders", oidc.Names(providers))
+		"activationMode", cfg.ActivationMode, "oidcProviders", oidc.Names(providers),
+		"contactForm", contactClient.Configured())
 
 	if err := http.ListenAndServe(":"+cfg.Port, api); err != nil {
 		slog.Error("server stopped", "error", err)
