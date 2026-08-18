@@ -1,6 +1,7 @@
 .DS_Store
 .env
 *.log
+mobile.keystore
 
 # sf-api
 sf-api/sf-api
