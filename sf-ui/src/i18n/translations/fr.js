@@ -4,6 +4,7 @@ const fr = {
     tagline: "Application de powerlifting",
   },
   common: {
+    retry: "Recharger",
     create: "Créer",
     copy: "Copier",
     copied: "Copié dans le presse-papiers.",
@@ -479,6 +480,9 @@ const fr = {
     cannotBlockSelf: "Vous ne pouvez pas vous bloquer vous-même.",
     emptyMessage: "Un message ne peut pas être vide.",
     internal: "Une erreur est survenue. Veuillez réessayer.",
+    screenTitle: "Cet écran a rencontré un problème",
+    screenBody:
+      "Un élément de cette page n'a pas pu s'afficher. Le reste de l'application fonctionne toujours : choisissez un autre écran dans le menu, ou rechargez pour réessayer celui-ci.",
     notFound: "Introuvable.",
     invalidRequestBody: "Requête invalide.",
     allFieldsRequired: "Veuillez remplir tous les champs.",

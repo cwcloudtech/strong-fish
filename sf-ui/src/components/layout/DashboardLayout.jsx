@@ -25,6 +25,7 @@ import {
 
 import { admin, invitations as invitationsApi, messages as messagesApi } from "../../api/services";
 import Avatar from "../common/Avatar";
+import ErrorBoundary from "../common/ErrorBoundary";
 import DownloadAppButton from "../common/DownloadApp";
 import Dropdown from "../common/Dropdown";
 import LanguageDropdown from "../common/LanguageDropdown";
@@ -42,7 +43,7 @@ const COLLAPSED_KEY = "sf.sidebarCollapsed";
 // and starts being a scrollbar.
 const MAX_SIDEBAR_CONVERSATIONS = 5;
 
-export default function DashboardLayout() {
+export default function DashboardLayout({ children }) {
   const { t } = useI18n();
   const { theme, setTheme } = useTheme();
   const { user, config, logout, isCoach, isSuperadmin } = useAuth();
@@ -273,7 +274,18 @@ export default function DashboardLayout() {
           </button>
           <strong>{t("app.name")}</strong>
         </div>
-        <Outlet />
+        {/* Nested dashboard routes render through the outlet; a public page
+            wrapped by SignedInShell passes itself as children instead.
+
+            The boundary is inside the shell on purpose: a screen that throws
+            leaves the rail standing, so there is somewhere to click next. */}
+        <ErrorBoundary
+          title={t("errors.screenTitle")}
+          message={t("errors.screenBody")}
+          retryLabel={t("common.retry")}
+        >
+          {children ?? <Outlet />}
+        </ErrorBoundary>
       </div>
     </div>
   );

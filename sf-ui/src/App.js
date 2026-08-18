@@ -3,10 +3,12 @@ import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 import DashboardLayout from "./components/layout/DashboardLayout";
+import SignedInShell from "./components/layout/SignedInShell";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 import CookieBanner from "./components/common/CookieBanner";
 import RequireAuth from "./components/layout/RequireAuth";
 import { AuthProvider } from "./context/AuthContext";
-import { I18nProvider } from "./i18n/I18nContext";
+import { I18nProvider, useI18n } from "./i18n/I18nContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
 import Admin from "./pages/dashboard/Admin";
@@ -52,9 +54,21 @@ export default function App() {
  */
 function AppRoutes() {
   const { theme } = useTheme();
+  const { t } = useI18n();
 
   return (
     <AuthProvider>
+          {/* The outermost boundary. The one inside DashboardLayout keeps the
+              sidebar standing when a signed-in screen throws; this one is what
+              catches everything else - a logged-out visitor on a shared link,
+              and the window before the session has resolved, neither of which
+              has a shell around them yet. Without it those crash to a white
+              page with nothing to click. */}
+          <ErrorBoundary
+            title={t("errors.screenTitle")}
+            message={t("errors.screenBody")}
+            retryLabel={t("common.retry")}
+          >
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard/feed" replace />} />
             <Route path="/login" element={<Login />} />
@@ -63,14 +77,42 @@ function AppRoutes() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/oidc/callback" element={<OidcCallback />} />
 
-            {/* Public profiles are readable without a session, which is what
-                makes a shared profile link work. */}
-            <Route path="/profile/:handle" element={<Profile />} />
-            {/* A program its coach shared: readable by anybody holding the
-                link, which is the whole point of publishing one. */}
-            <Route path="/programs/:programId" element={<PublicProgram />} />
-            <Route path="/posts/:postId" element={<PublicPost />} />
-            <Route path="/contact" element={<Contact />} />
+            {/* Readable with or without a session - a shared link has to work
+                for somebody with no account. SignedInShell keeps the sidebar
+                around them for a member, who did not ask to leave the app just
+                by opening a profile from their own feed. */}
+            <Route
+              path="/profile/:handle"
+              element={
+                <SignedInShell>
+                  <Profile />
+                </SignedInShell>
+              }
+            />
+            <Route
+              path="/programs/:programId"
+              element={
+                <SignedInShell>
+                  <PublicProgram />
+                </SignedInShell>
+              }
+            />
+            <Route
+              path="/posts/:postId"
+              element={
+                <SignedInShell>
+                  <PublicPost />
+                </SignedInShell>
+              }
+            />
+            <Route
+              path="/contact"
+              element={
+                <SignedInShell>
+                  <Contact />
+                </SignedInShell>
+              }
+            />
 
             <Route
               path="/dashboard"
@@ -108,6 +150,7 @@ function AppRoutes() {
 
             <Route path="*" element={<Navigate to="/dashboard/feed" replace />} />
           </Routes>
+          </ErrorBoundary>
 
           <ToastContainer position="top-right" theme={theme} />
           <CookieBanner />

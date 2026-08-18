@@ -30,7 +30,7 @@ export default function Profile() {
     profiles.get(handle).then(setProfile).catch(setError);
     profiles
       .posts(handle)
-      .then((page) => setPosts(page.results))
+      .then((page) => setPosts(page?.results || []))
       .catch(() => setPosts([]));
   }, [handle]);
 

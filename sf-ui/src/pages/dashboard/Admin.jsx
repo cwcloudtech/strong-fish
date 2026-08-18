@@ -492,7 +492,7 @@ function ReportsTab() {
   const load = useCallback(() => {
     adminApi
       .reports(status)
-      .then((page) => setReports(page.results))
+      .then((page) => setReports(page?.results || []))
       .catch(setError);
   }, [status]);
 

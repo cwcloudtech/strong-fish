@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { FiSave, FiTrash2 } from "react-icons/fi";
 
+import Switch from "../../components/common/Switch";
+
 import toastOptions from "../../utils/toastOptions";
 import { auth, media as mediaApi, mfa as mfaApi } from "../../api/services";
 import Avatar from "../../components/common/Avatar";
@@ -144,19 +146,23 @@ export default function Settings() {
           </p>
         </div>
 
-        <label className="sf-checkbox" style={{ marginBottom: "1rem" }}>
-          <input
-            type="checkbox"
-            checked={form.anonymous}
-            onChange={set("anonymous")}
-            disabled={!form.username.trim()}
-          />
+        {/* A switch rather than a checkbox: this turns a mode on, it is not
+            one of a set of things being ticked. */}
+        <label className={`sf-switch-row ${form.username.trim() ? "" : "disabled"}`}>
           <span>
             {t("profile.anonymous")}
             <div className="sf-muted">
               {form.username.trim() ? t("profile.anonymousHelp") : t("profile.anonymousNeedsUsername")}
             </div>
           </span>
+          <Switch
+            checked={form.anonymous}
+            onChange={set("anonymous")}
+            // Nothing to be known by without a username, and the API refuses
+            // it - so the switch is unavailable rather than silently failing.
+            disabled={!form.username.trim()}
+            aria-label={t("profile.anonymous")}
+          />
         </label>
 
         <div className="sf-field">
