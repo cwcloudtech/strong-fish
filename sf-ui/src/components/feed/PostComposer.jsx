@@ -1,37 +1,49 @@
 import { useRef, useState } from "react";
 import { toast } from "react-toastify";
-import { FiImage, FiLink, FiX } from "react-icons/fi";
+import { FiImage, FiVideo, FiX } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
-import { social } from "../../api/services";
+import { media, social } from "../../api/services";
 import Avatar from "../common/Avatar";
 import { ErrorMessage } from "../common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import { readImageAsDataUrl } from "../../utils/image";
+import { firstUrl } from "../../utils/links";
 
 const MAX_PICTURES = 4;
-const MAX_LINKS = 4;
 
 /**
- * Composes a post. Pictures are read into base64 data URIs and carried inline in
- * the post payload (the API stores them in the JSONB column), so there's no
- * separate upload step or object store to run.
+ * Composes a post.
+ *
+ * Pictures are read into base64 data URIs and carried inline in the payload
+ * (the API stores them in the JSONB column), so there is no upload step for
+ * them. Videos are the opposite: too big for a row, so they go to the member's
+ * own bucket and what lands in the post is the URL - typed into the text like
+ * any other link.
+ *
+ * There is no separate link field. Whatever URL is in the text is the post's
+ * link, which is why the preview below reacts to the textarea rather than to a
+ * control of its own.
  */
 export default function PostComposer({ clubs, defaultClubId, onPosted }) {
-  const { t } = useI18n();
+  const { t, tError } = useI18n();
   const { user, config } = useAuth();
   const fileInput = useRef(null);
 
+  const videoInput = useRef(null);
+
   const [content, setContent] = useState("");
   const [pictures, setPictures] = useState([]);
-  const [links, setLinks] = useState([]);
-  const [linkDraft, setLinkDraft] = useState("");
-  const [showLink, setShowLink] = useState(false);
   const [visibility, setVisibility] = useState(defaultClubId ? "club" : "public");
   const [clubId, setClubId] = useState(defaultClubId || "");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(null);
+
+  // What the post will actually embed, detected the same way the API detects
+  // it - so the preview and the stored post cannot disagree.
+  const link = firstUrl(content);
 
   const addPicture = async (event) => {
     const file = event.target.files?.[0];
@@ -45,12 +57,27 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
     }
   };
 
-  const addLink = () => {
-    const url = linkDraft.trim();
-    if (!url) return;
-    setLinks((current) => [...current, url].slice(0, MAX_LINKS));
-    setLinkDraft("");
-    setShowLink(false);
+  // Uploading a video appends its URL to the text rather than storing it
+  // beside the post: from there it is an ordinary link, and the same detection
+  // that handles a pasted YouTube URL renders it.
+  const addVideo = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setUploading(0);
+    setError(null);
+    try {
+      const { url } = await media.uploadVideo(file, setUploading);
+      setContent((current) => (current.trim() ? `${current.trim()}\n${url}` : url));
+    } catch (err) {
+      // The API's 405 for "no bucket configured" carries its own i18n code, so
+      // it translates into "set up your storage first" through the same path
+      // as every other failure - no status check needed here.
+      toast.error(tError(err), toastOptions);
+    } finally {
+      setUploading(null);
+    }
   };
 
   const submit = async (event) => {
@@ -61,14 +88,12 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
       const post = await social.createPost({
         content,
         pictures,
-        links,
         visibility,
         clubId: visibility === "club" ? clubId : "",
       });
       toast.success(t("feed.posted"), toastOptions);
       setContent("");
       setPictures([]);
-      setLinks([]);
       onPosted(post);
     } catch (err) {
       setError(err);
@@ -77,7 +102,7 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
     }
   };
 
-  const canPost = Boolean(content.trim() || pictures.length || links.length) && (visibility !== "club" || clubId);
+  const canPost = Boolean(content.trim() || pictures.length) && (visibility !== "club" || clubId) && !uploading;
 
   return (
     <form className="sf-card" onSubmit={submit}>
@@ -110,39 +135,16 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
         </div>
       ) : null}
 
-      {links.map((link) => (
-        <div key={link} className="sf-row" style={{ marginTop: "0.4rem" }}>
+      {link ? (
+        <div style={{ marginTop: "0.5rem" }}>
           <media-player url={link} />
-          <button
-            type="button"
-            className="sf-button-ghost sf-button-sm"
-            onClick={() => setLinks((current) => current.filter((item) => item !== link))}
-            aria-label={t("common.delete")}
-          >
-            <FiX />
-          </button>
         </div>
-      ))}
+      ) : null}
 
-      {showLink ? (
-        <div className="sf-row" style={{ marginTop: "0.5rem", flexWrap: "nowrap" }}>
-          <input
-            className="sf-input sf-input-sm"
-            placeholder={t("feed.linkPlaceholder")}
-            value={linkDraft}
-            autoFocus
-            onChange={(event) => setLinkDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addLink();
-              }
-            }}
-          />
-          <button type="button" className="sf-button sf-button-sm" onClick={addLink}>
-            {t("common.add")}
-          </button>
-        </div>
+      {uploading !== null ? (
+        <p className="sf-muted" style={{ marginTop: "0.5rem" }}>
+          {t("feed.uploadingVideo", { percent: uploading })}
+        </p>
       ) : null}
 
       <ErrorMessage error={error} />
@@ -161,11 +163,12 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
           <button
             type="button"
             className="sf-button-ghost sf-button-sm"
-            onClick={() => setShowLink((open) => !open)}
-            disabled={links.length >= MAX_LINKS}
+            onClick={() => videoInput.current?.click()}
+            disabled={uploading !== null}
           >
-            <FiLink /> {t("feed.addLink")}
+            <FiVideo /> {t("feed.addVideo")}
           </button>
+          <input ref={videoInput} type="file" accept="video/*" hidden onChange={addVideo} />
         </div>
 
         <div className="sf-row" style={{ gap: "0.35rem" }}>

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -81,6 +82,17 @@ func GetBaseUrlFromEnv(envKey string) string {
 
 // HashToken returns the sha256 hex digest of a plaintext token; only the
 // digest is ever stored.
+// RandomHex returns n cryptographically random bytes, hex-encoded (so 2n
+// characters). Used where a name has to be unguessable but carries no meaning
+// of its own - an uploaded object's key, for instance.
+func RandomHex(n int) (string, error) {
+	buf := make([]byte, n)
+	if _, err := rand.Read(buf); err != nil {
+		return EMPTY, err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

@@ -39,6 +39,12 @@ type userData struct {
 	Bodyweight    float64  `json:"bodyweight,omitempty"`
 	MFAEnabled    bool     `json:"mfaEnabled,omitempty"`
 	MFATOTPSecret string   `json:"mfaTotpSecret,omitempty"`
+	// Storage is the member's own object store for video uploads, and
+	// CalendarFeed* back the ICS subscription. Both live in the payload like
+	// everything else here; neither is ever sent out with the user.
+	Storage             *models.StorageConnection `json:"storage,omitempty"`
+	CalendarFeedEnabled bool                      `json:"calendarFeedEnabled,omitempty"`
+	CalendarFeedToken   string                    `json:"calendarFeedToken,omitempty"`
 }
 
 const userColumns = `id, email, data, created_at, updated_at`
@@ -70,6 +76,11 @@ func scanUser(row pgx.Row) (models.User, error) {
 	u.Bodyweight = d.Bodyweight
 	u.MFAEnabled = d.MFAEnabled
 	u.MFATOTPSecret = d.MFATOTPSecret
+	if d.Storage != nil {
+		u.Storage = *d.Storage
+	}
+	u.CalendarFeedEnabled = d.CalendarFeedEnabled
+	u.CalendarFeedToken = d.CalendarFeedToken
 	return u, nil
 }
 
@@ -468,4 +479,65 @@ func isUUID(s string) bool {
 		}
 	}
 	return true
+}
+
+// --- storage connection and calendar feed ---
+
+// SetStorage replaces the member's own object-store configuration.
+func (s *UserStore) SetStorage(ctx context.Context, id string, conn models.StorageConnection) (models.User, error) {
+	return s.merge(ctx, id, map[string]any{"storage": conn})
+}
+
+// ClearStorage removes it. The key is set to JSON null rather than deleted,
+// because the shallow `data || patch` merge every other write here uses can
+// only add or replace - and a null unmarshals back to the zero connection,
+// which reads as "not configured".
+func (s *UserStore) ClearStorage(ctx context.Context, id string) (models.User, error) {
+	return s.merge(ctx, id, map[string]any{"storage": nil})
+}
+
+// SetCalendarFeedEnabled turns the ICS subscription on or off, minting a token
+// the first time it's enabled. Disabling deliberately keeps the token, so
+// somebody who turns the feed back on doesn't have to re-subscribe in Outlook;
+// RegenerateCalendarFeedToken is how a leaked URL is actually revoked.
+func (s *UserStore) SetCalendarFeedEnabled(ctx context.Context, id string, enabled bool) (models.User, error) {
+	patch := map[string]any{"calendarFeedEnabled": enabled}
+	if enabled {
+		user, err := s.FindByID(ctx, id)
+		if err != nil {
+			return models.User{}, err
+		}
+		if utils.IsBlank(user.CalendarFeedToken) {
+			token, err := generateToken()
+			if err != nil {
+				return models.User{}, err
+			}
+			patch["calendarFeedToken"] = token
+		}
+	}
+	return s.merge(ctx, id, patch)
+}
+
+// RegenerateCalendarFeedToken mints a new token, which breaks every calendar
+// already subscribed to the old URL. That is the point: it is the only way to
+// take back a feed URL that got out.
+func (s *UserStore) RegenerateCalendarFeedToken(ctx context.Context, id string) (models.User, error) {
+	token, err := generateToken()
+	if err != nil {
+		return models.User{}, err
+	}
+	return s.merge(ctx, id, map[string]any{"calendarFeedToken": token, "calendarFeedEnabled": true})
+}
+
+// FindByCalendarFeedToken resolves the owner of a feed URL. A blank token is
+// rejected outright rather than matching every account that never enabled the
+// feed.
+func (s *UserStore) FindByCalendarFeedToken(ctx context.Context, token string) (models.User, error) {
+	if utils.IsBlank(token) {
+		return models.User{}, ErrNotFound
+	}
+	return scanUser(s.pool.QueryRow(ctx, `
+		SELECT `+userColumns+` FROM users
+		WHERE data->>'calendarFeedToken' = $1 AND data->>'calendarFeedEnabled' = 'true'
+	`, token))
 }

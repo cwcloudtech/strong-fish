@@ -28,6 +28,9 @@ type Handlers struct {
 	Config   *handlers.ConfigHandler
 	Contact  *handlers.ContactHandler
 	ApiKey   *handlers.ApiKeyHandler
+	Media    *handlers.MediaHandler
+	Event    *handlers.EventHandler
+	Calendar *handlers.CalendarHandler
 }
 
 // Options carries the settings the middleware chain needs.
@@ -85,6 +88,11 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		// visibility predicate, not this route, that decides what may be read.
 		r.Get("/public/programs/{programId}", h.Program.GetPublic)
 
+		// The ICS feed Outlook and Google Calendar poll. Unauthenticated by
+		// necessity - neither can send an Authorization header - so the token
+		// in the path is the whole credential.
+		r.Get("/calendar/{token}", h.Calendar.Feed)
+
 		r.Route("/oidc", func(r chi.Router) {
 			r.Get("/", h.OIDC.ListProviders)
 			r.Get("/callback", h.OIDC.FrontendCallback)
@@ -131,6 +139,22 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Delete("/{keyId}", h.ApiKey.Delete)
 				})
 
+				// The member's own object store for video uploads. It holds
+				// live credentials, so it has its own endpoint rather than
+				// riding along on the profile.
+				r.Route("/me/storage", func(r chi.Router) {
+					r.Get("/", h.Media.StorageGet)
+					r.Put("/", h.Media.StorageSet)
+					r.Delete("/", h.Media.StorageDelete)
+				})
+
+				r.Route("/me/calendar-feed", func(r chi.Router) {
+					r.Get("/", h.Calendar.Status)
+					r.Post("/enable", h.Calendar.Enable)
+					r.Post("/disable", h.Calendar.Disable)
+					r.Post("/regenerate", h.Calendar.Regenerate)
+				})
+
 				r.Route("/me/config", func(r chi.Router) {
 					r.Post("/file", h.Config.ClientConfigFile)
 					r.Post("/qr", h.Config.ClientConfigQR)
@@ -156,6 +180,13 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			r.Get("/profiles/{handle}", h.Profile.Get)
 			r.Get("/profiles/{handle}/posts", h.Profile.Posts)
 			r.Get("/profiles/{handle}/follows", h.Social.ListFollows)
+
+			// The calendar is readable logged out: a meet anybody can enter is
+			// exactly what is worth finding before you have an account. What
+			// comes back still depends on the caller - OptionalAuth is what
+			// adds their clubs' own dates to the public ones.
+			r.Get("/events", h.Event.List)
+			r.Get("/events/{eventId}", h.Event.Get)
 		})
 
 		// --- authenticated ---
@@ -280,6 +311,16 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 						r.Delete("/{commentId}", h.Social.DeleteComment)
 					})
 				})
+			})
+
+			// Uploading a video is a write, so it needs a session even though
+			// reading the calendar doesn't.
+			r.Post("/media/videos", h.Media.UploadVideo)
+
+			r.Route("/events", func(r chi.Router) {
+				r.Post("/", h.Event.Create)
+				r.Put("/{eventId}", h.Event.Update)
+				r.Delete("/{eventId}", h.Event.Delete)
 			})
 
 			r.Post("/reports", h.Social.Report)

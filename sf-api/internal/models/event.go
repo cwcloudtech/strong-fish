@@ -1,0 +1,77 @@
+package models
+
+import "time"
+
+// Event kinds. The kind is a label, not a behaviour - a competition and a
+// training camp are stored and served identically - but it's what lets the
+// calendar colour-code and filter.
+const (
+	EventKindCompetition = "competition"
+	EventKindTraining    = "training"
+	EventKindOther       = "other"
+)
+
+// IsValidEventKind reports whether kind is one this app knows.
+func IsValidEventKind(kind string) bool {
+	switch kind {
+	case EventKindCompetition, EventKindTraining, EventKindOther:
+		return true
+	}
+	return false
+}
+
+// NormalizeEventKind maps anything unrecognized - including the empty string -
+// onto "other", so an unknown label can never make an event disappear from a
+// filtered view.
+func NormalizeEventKind(kind string) string {
+	if IsValidEventKind(kind) {
+		return kind
+	}
+	return EventKindOther
+}
+
+// Event is a date in the calendar: a meet, a club session, a camp.
+//
+// Times are absolute instants rather than the app's usual day + time-of-day,
+// because an event has a real one - a meet starts at a stated hour in a stated
+// place, and somebody subscribing from another timezone still needs to be
+// there then. An all-day event is the exception and is emitted as a plain date
+// in the ICS feed.
+type Event struct {
+	ID string `json:"id"`
+	// ClubID is empty for an event that belongs to no club - a federation meet
+	// anybody can see rather than one club's own date.
+	ClubID      string      `json:"clubId,omitempty"`
+	ClubName    string      `json:"clubName,omitempty"`
+	AuthorID    string      `json:"authorId"`
+	Author      UserSummary `json:"author"`
+	Title       string      `json:"title"`
+	Description string      `json:"description,omitempty"`
+	Location    string      `json:"location,omitempty"`
+	// URL is the meet's own page - the entry form, the federation listing.
+	URL      string    `json:"url,omitempty"`
+	Kind     string    `json:"kind"`
+	StartsAt time.Time `json:"startsAt"`
+	EndsAt   time.Time `json:"endsAt,omitempty"`
+	AllDay   bool      `json:"allDay"`
+	// Visibility reuses the post visibilities: club-only, or public (which is
+	// what puts a meet in front of somebody who isn't a member yet).
+	Visibility string    `json:"visibility"`
+	Editable   bool      `json:"editable"`
+	Deletable  bool      `json:"deletable"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+// End returns the instant the event finishes, defaulting to an hour after it
+// starts (a day, for an all-day event) when the author gave no end - a
+// calendar entry with no duration renders as a zero-length blip in Outlook.
+func (e Event) End() time.Time {
+	if !e.EndsAt.IsZero() && e.EndsAt.After(e.StartsAt) {
+		return e.EndsAt
+	}
+	if e.AllDay {
+		return e.StartsAt.AddDate(0, 0, 1)
+	}
+	return e.StartsAt.Add(time.Hour)
+}

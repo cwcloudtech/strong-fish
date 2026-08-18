@@ -477,7 +477,6 @@ class ComposePostScreen extends ConsumerStatefulWidget {
 
 class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
   final _content = TextEditingController();
-  final _link = TextEditingController();
   final List<String> _pictures = [];
 
   String _visibility = 'public';
@@ -488,7 +487,6 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
   @override
   void dispose() {
     _content.dispose();
-    _link.dispose();
     super.dispose();
   }
 
@@ -509,7 +507,6 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
       await ref.read(apiProvider).createPost(
             content: _content.text.trim(),
             pictures: _pictures,
-            links: _link.text.trim().isEmpty ? const [] : [_link.text.trim()],
             visibility: _visibility,
             clubId: _visibility == 'club' ? _clubId : '',
           );
@@ -548,12 +545,8 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
             autofocus: true,
             decoration: InputDecoration(hintText: t('feed.compose')),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _link,
-            keyboardType: TextInputType.url,
-            decoration: InputDecoration(labelText: t('feed.addLink'), hintText: t('feed.linkPlaceholder')),
-          ),
+          // No link field: paste the URL into the text above and the API
+          // picks it up, the same way it does on the web.
           const SizedBox(height: 12),
           for (final picture in _pictures) ...[
             _Base64Image(data: picture),

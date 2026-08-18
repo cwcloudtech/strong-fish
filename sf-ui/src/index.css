@@ -398,6 +398,12 @@ button {
 .sf-badge-warning { background-color: var(--sf-warning-tint); color: var(--sf-warning); }
 .sf-badge-danger { background-color: var(--sf-danger-light); color: var(--sf-danger); }
 
+/* Event kinds. A meet is the one worth spotting at a glance in a list that
+   also holds ordinary club sessions, so it takes the brand colour. */
+.sf-badge-competition { background-color: var(--sf-primary-tint); color: var(--sf-primary-dark); }
+.sf-badge-training { background-color: var(--sf-success-tint); color: var(--sf-success); }
+.sf-badge-other { background-color: var(--sf-bg-alt); color: var(--sf-text-muted); }
+
 /* --- table --- */
 
 .sf-table-wrapper { overflow-x: auto; }
@@ -556,6 +562,28 @@ button {
 }
 
 .sf-sidebar-actions { display: flex; gap: var(--sf-spacing-xs); }
+
+/* The running version, badged the way cwclock's sidebar does it. */
+.sf-version-wrap { text-align: center; margin-top: 2px; }
+
+.sf-version-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  background-color: var(--sf-primary);
+}
+
+/* Collapsed there is no room for "v1.0.0" as a pill, so it becomes plain
+   small text rather than a badge overflowing the rail. */
+.sf-sidebar.collapsed .sf-version-badge {
+  padding: 0;
+  background: none;
+  color: #8fa8c2;
+  font-size: 0.62rem;
+}
 
 /* --- collapsed rail ---
    Everything that reads as a row of "icon + words" becomes the icon alone,

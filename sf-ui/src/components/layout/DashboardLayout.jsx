@@ -6,6 +6,7 @@ import {
   FiBarChart2,
   FiChevronLeft,
   FiChevronRight,
+  FiCalendar,
   FiInfo,
   FiKey,
   FiLogOut,
@@ -25,6 +26,7 @@ import Dropdown from "../common/Dropdown";
 import LanguageDropdown from "../common/LanguageDropdown";
 import Logo from "../common/Logo";
 import Tooltip from "../common/Tooltip";
+import useAppVersion from "../../utils/useAppVersion";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import { useTheme } from "../../context/ThemeContext";
@@ -42,6 +44,7 @@ export default function DashboardLayout() {
   // who wants the room back wants it on every screen and every session.
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === "1");
   const [openReports, setOpenReports] = useState(0);
+  const version = useAppVersion(config?.version);
 
   useEffect(() => localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0"), [collapsed]);
 
@@ -67,6 +70,7 @@ export default function DashboardLayout() {
     { to: "/dashboard/training", label: t("nav.training"), icon: <FiBarChart2 /> },
     { to: "/dashboard/one-rms", label: t("nav.oneRms"), icon: <FiAward /> },
     { to: "/dashboard/clubs", label: t("nav.clubs"), icon: <FiUsers /> },
+    { to: "/dashboard/events", label: t("nav.events"), icon: <FiCalendar /> },
   ];
   if (isCoach) links.push({ to: "/dashboard/exercises", label: t("nav.exercises"), icon: <FiActivity /> });
   links.push({ to: "/dashboard/settings", label: t("nav.settings"), icon: <FiUser /> });
@@ -144,6 +148,12 @@ export default function DashboardLayout() {
             />
             <LanguageDropdown variant="dark" />
           </div>
+
+          {version ? (
+            <div className="sf-version-wrap">
+              <span className="sf-version-badge">v{version}</span>
+            </div>
+          ) : null}
 
           <Tooltip label={collapsed ? t("common.logout") : null} position="right">
             <button

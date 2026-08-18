@@ -68,7 +68,9 @@ export default function PostCard({ post, onChanged, onDeleted }) {
 
   const saveEdit = async () => {
     try {
-      onChanged(await social.updatePost(post.id, { content: editContent, pictures: post.pictures, links: post.links }));
+      // No links are sent: the API re-derives them from the edited text, so
+      // fixing a typo'd URL fixes the embed instead of leaving a stale one.
+      onChanged(await social.updatePost(post.id, { content: editContent, pictures: post.pictures }));
       setEditing(false);
     } catch (err) {
       setError(err);

@@ -20,7 +20,6 @@ const (
 	maxPostLength    = 5000
 	maxCommentLength = 2000
 	maxPostPictures  = 4
-	maxPostLinks     = 4
 )
 
 type SocialHandler struct {
@@ -70,26 +69,41 @@ func (h *SocialHandler) caller(r *http.Request) (id string, superadmin bool, clu
 }
 
 type postPayload struct {
-	Content    string   `json:"content"`
-	Pictures   []string `json:"pictures"`
+	Content  string   `json:"content"`
+	Pictures []string `json:"pictures"`
+	// Links is derived, never submitted: see validate. The field stays on the
+	// payload so a client that still sends one gets it ignored rather than
+	// rejected.
 	Links      []string `json:"links"`
 	Visibility string   `json:"visibility"`
 	ClubID     string   `json:"clubId"`
 }
 
-// validate checks a composed post. A post needs something in it - text, a
-// picture or a link - and a club-visibility post needs the club it belongs to.
+// validate checks a composed post. A post needs something in it - text or a
+// picture - and a club-visibility post needs the club it belongs to.
+//
+// It is also where a post's link comes from. There is no "add a link" field
+// any more: whatever URL the author pasted into the text is the post's link,
+// so the two can't disagree and an edit can't leave a stale embed behind. Only
+// the first is taken - a post gets one embed, not a wall of them - and the URL
+// stays in the text where it was typed, the way every other feed does it.
 func (h *SocialHandler) validate(w http.ResponseWriter, p *postPayload) bool {
 	p.Content = strings.TrimSpace(p.Content)
 	if len(p.Content) > maxPostLength {
 		writeError(w, http.StatusBadRequest, "This post is too long", CodeEmptyPost)
 		return false
 	}
-	if utils.IsBlank(p.Content) && len(p.Pictures) == 0 && len(p.Links) == 0 {
+
+	p.Links = nil
+	if link := utils.FirstURL(p.Content); utils.IsNotBlank(link) {
+		p.Links = []string{link}
+	}
+
+	if utils.IsBlank(p.Content) && len(p.Pictures) == 0 {
 		writeError(w, http.StatusBadRequest, "A post needs some text, a picture or a link", CodeEmptyPost)
 		return false
 	}
-	if len(p.Pictures) > maxPostPictures || len(p.Links) > maxPostLinks {
+	if len(p.Pictures) > maxPostPictures {
 		writeError(w, http.StatusBadRequest, "Too many attachments on this post", CodeEmptyPost)
 		return false
 	}

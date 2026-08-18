@@ -184,21 +184,34 @@ class SfApi {
     return Page.fromJson(_map(response.data), Post.fromJson);
   }
 
+  /// Publishes a post. No links are sent: the API detects the first URL in
+  /// the content and stores that, so there is one place a post's embed can
+  /// come from and nothing for the two clients to disagree about.
   Future<Post> createPost({
     required String content,
     List<String> pictures = const [],
-    List<String> links = const [],
     String visibility = 'public',
     String clubId = '',
   }) async {
     final response = await client.dio.post('/posts', data: {
       'content': content,
       'pictures': pictures,
-      'links': links,
       'visibility': visibility,
       'clubId': clubId,
     });
     return Post.fromJson(_map(response.data));
+  }
+
+  // --- the calendar ---
+
+  /// The events this member may see: the open calendar plus their own clubs'
+  /// dates. Readable logged out, though the app always has a session by the
+  /// time it asks.
+  Future<List<Event>> events({bool past = false}) async {
+    final response = await client.dio.get('/events', queryParameters: past ? {'past': 1} : null);
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => Event.fromJson(_map(item))).toList();
   }
 
   Future<Post> like(String postId, bool liked) async {

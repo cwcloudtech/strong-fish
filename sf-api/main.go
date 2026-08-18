@@ -46,6 +46,7 @@ func main() {
 	socialStore := store.NewSocialStore(pool)
 	webauthnStore := store.NewWebAuthnCredentialStore(pool)
 	apiKeyStore := store.NewApiKeyStore(pool)
+	eventStore := store.NewEventStore(pool)
 
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
 	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
@@ -88,8 +89,11 @@ func main() {
 		Config: handlers.NewConfigHandler(oidc.Names(providers), cfg.ActivationMode,
 			cfg.PlateIncrement, cfg.MaxImageSize, cfg.Version, contactClient.Configured(),
 			cfg.APIBaseURL, cfg.UIBaseURL, cfg.MobileURLPattern),
-		Contact: handlers.NewContactHandler(contactClient),
-		ApiKey:  handlers.NewApiKeyHandler(apiKeyStore),
+		Contact:  handlers.NewContactHandler(contactClient),
+		ApiKey:   handlers.NewApiKeyHandler(apiKeyStore),
+		Media:    handlers.NewMediaHandler(userStore, cfg.MaxVideoSize),
+		Event:    handlers.NewEventHandler(eventStore, clubStore, userStore),
+		Calendar: handlers.NewCalendarHandler(userStore, eventStore, clubStore, cfg.APIBaseURL),
 	}, userStore, clubStore, router.Options{
 		JWTSecret:          cfg.JWTSecret,
 		ApiKeys:            apiKeyStore,

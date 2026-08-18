@@ -30,6 +30,9 @@ func newTestRouter() http.Handler {
 		Config:   &handlers.ConfigHandler{},
 		Contact:  &handlers.ContactHandler{},
 		ApiKey:   &handlers.ApiKeyHandler{},
+		Media:    &handlers.MediaHandler{},
+		Event:    &handlers.EventHandler{},
+		Calendar: &handlers.CalendarHandler{},
 	}, nil, nil, Options{JWTSecret: "test"})
 }
 
@@ -47,6 +50,7 @@ var routes = []struct{ method, path string }{
 	{"POST", "/v1/contact"},
 	{"GET", "/v1/mobile-app"},
 	{"GET", "/v1/public/programs/prog-1"},
+	{"GET", "/v1/calendar/tok-1.ics"},
 
 	{"GET", "/v1/oidc"},
 	{"GET", "/v1/oidc/callback"},
@@ -77,6 +81,13 @@ var routes = []struct{ method, path string }{
 	{"DELETE", "/v1/users/me/api-keys/key-1"},
 	{"POST", "/v1/users/me/config/file"},
 	{"POST", "/v1/users/me/config/qr"},
+	{"GET", "/v1/users/me/storage"},
+	{"PUT", "/v1/users/me/storage"},
+	{"DELETE", "/v1/users/me/storage"},
+	{"GET", "/v1/users/me/calendar-feed"},
+	{"POST", "/v1/users/me/calendar-feed/enable"},
+	{"POST", "/v1/users/me/calendar-feed/disable"},
+	{"POST", "/v1/users/me/calendar-feed/regenerate"},
 
 	{"GET", "/v1/profiles/ada"},
 	{"GET", "/v1/profiles/ada/posts"},
@@ -143,6 +154,14 @@ var routes = []struct{ method, path string }{
 	{"POST", "/v1/posts/post-1/comments"},
 	{"PUT", "/v1/posts/post-1/comments/c-1"},
 	{"DELETE", "/v1/posts/post-1/comments/c-1"},
+
+	{"POST", "/v1/media/videos"},
+
+	{"GET", "/v1/events"},
+	{"POST", "/v1/events"},
+	{"GET", "/v1/events/ev-1"},
+	{"PUT", "/v1/events/ev-1"},
+	{"DELETE", "/v1/events/ev-1"},
 
 	{"POST", "/v1/reports"},
 

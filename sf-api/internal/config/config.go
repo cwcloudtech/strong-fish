@@ -41,6 +41,7 @@ type Config struct {
 	ConfirmationEmailTTL     time.Duration
 	ActivationMode           string
 	MobileURLPattern         string
+	MaxVideoSize             int64
 }
 
 const (
@@ -53,6 +54,11 @@ const (
 	// defaultConfirmationEmailExpirationHours bounds how long an
 	// account-confirmation or password-reset link stays usable.
 	defaultConfirmationEmailExpirationHours = 24
+	// defaultMaxVideoSize caps one uploaded video. Unlike images, videos never
+	// touch this app's own storage - they go to the member's own bucket - so
+	// this is about what is reasonable to push through the API, not about what
+	// a row can hold.
+	defaultMaxVideoSize int64 = 20 * 1024 * 1024
 	// defaultPlateIncrement is the weight step computed loads are rounded to
 	// for the "on the bar" column: 2.5kg is one small plate per side.
 	defaultPlateIncrement = 2.5
@@ -91,6 +97,11 @@ func Load() Config {
 	plateIncrement, err := strconv.ParseFloat(os.Getenv("SF_PLATE_INCREMENT"), 64)
 	if err != nil || plateIncrement < 0 {
 		plateIncrement = defaultPlateIncrement
+	}
+
+	maxVideoSize, err := strconv.ParseInt(os.Getenv("SF_MAX_VIDEO_SIZE"), 10, 64)
+	if err != nil || maxVideoSize <= 0 {
+		maxVideoSize = defaultMaxVideoSize
 	}
 
 	confirmationHours, err := strconv.Atoi(os.Getenv("SF_CONFIRMATION_EMAIL_EXPIRATION"))
@@ -136,6 +147,7 @@ func Load() Config {
 		ConfirmationEmailTTL:     time.Duration(confirmationHours) * time.Hour,
 		ActivationMode:           activationMode,
 		MobileURLPattern:         utils.GetEnv("SF_MOBILE_URL_PATTERN", "/strong-fish-v{version}.apk"),
+		MaxVideoSize:             maxVideoSize,
 	}
 }
 

@@ -143,6 +143,43 @@ export const profiles = {
   unfollow: (handle) => body(client.delete(`/profiles/${handle}/follow`)),
 };
 
+// --- media, events and the calendar feed ---
+
+export const media = {
+  // Uploads to the member's *own* bucket and returns its public URL. 405 means
+  // they haven't configured one, which is what the composer toasts.
+  uploadVideo: (file, onProgress) => {
+    const form = new FormData();
+    form.append("file", file);
+    return body(
+      client.post("/media/videos", form, {
+        onUploadProgress: (event) =>
+          onProgress?.(event.total ? Math.round((event.loaded * 100) / event.total) : 0),
+      })
+    );
+  },
+  storage: () => body(client.get("/users/me/storage")),
+  setStorage: (payload) => body(client.put("/users/me/storage", payload)),
+  clearStorage: () => body(client.delete("/users/me/storage")),
+};
+
+export const events = {
+  // Readable logged out; what comes back still widens for a member, whose own
+  // clubs' dates join the public ones.
+  list: (params) => body(client.get("/events", { params })),
+  get: (eventId) => body(client.get(`/events/${eventId}`)),
+  create: (payload) => body(client.post("/events", payload)),
+  update: (eventId, payload) => body(client.put(`/events/${eventId}`, payload)),
+  remove: (eventId) => body(client.delete(`/events/${eventId}`)),
+};
+
+export const calendarFeed = {
+  status: () => body(client.get("/users/me/calendar-feed")),
+  enable: () => body(client.post("/users/me/calendar-feed/enable")),
+  disable: () => body(client.post("/users/me/calendar-feed/disable")),
+  regenerate: () => body(client.post("/users/me/calendar-feed/regenerate")),
+};
+
 // --- API keys ---
 
 export const apiKeys = {
