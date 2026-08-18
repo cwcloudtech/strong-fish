@@ -515,7 +515,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--sf-spacing-xs) 0 var(--sf-spacing);
+  padding: var(--sf-spacing-xs) 0 var(--sf-spacing-xs);
 }
 
 .sf-sidebar-brand img {
@@ -563,8 +563,10 @@ button {
 
 .sf-sidebar-actions { display: flex; gap: var(--sf-spacing-xs); }
 
-/* The running version, badged the way cwclock's sidebar does it. */
-.sf-version-wrap { text-align: center; margin-top: 2px; }
+/* The running version, badged the way cwclock's sidebar does it. It sits under
+   the mark, so the spacing below it is what separates the branding from the
+   nav. */
+.sf-version-wrap { text-align: center; margin-bottom: var(--sf-spacing-sm); }
 
 .sf-version-badge {
   display: inline-block;
@@ -626,6 +628,119 @@ button {
 .sf-sidebar.collapsed .sf-dropdown-toggle { padding: 0.4rem; gap: 0; font-size: 0; }
 .sf-sidebar.collapsed .sf-dropdown-toggle svg { font-size: 15px; }
 .sf-sidebar.collapsed .sf-dropdown-caret { display: none; }
+
+/* --- private messages ---
+   Conversations on the left, the open thread on the right. Below the
+   breakpoint the two stack: a 260px list beside a thread leaves neither
+   enough room on a phone. */
+.sf-messages {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: var(--sf-spacing);
+  align-items: start;
+}
+
+.sf-messages-list {
+  background-color: var(--sf-surface);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  overflow: hidden;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.sf-conversation {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-spacing-sm);
+  width: 100%;
+  padding: var(--sf-spacing-sm);
+  border: 0;
+  border-bottom: 1px solid var(--sf-border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sf-conversation:hover { background-color: var(--sf-bg-alt); }
+.sf-conversation.active { background-color: var(--sf-primary-tint); }
+
+.sf-conversation-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+/* The preview is one line whatever the message was: a wrapped preview would
+   make every row a different height. */
+.sf-conversation-body .sf-muted {
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-messages-thread {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--sf-surface);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  min-height: 420px;
+  max-height: 70vh;
+}
+
+.sf-thread-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-spacing-sm);
+  padding: var(--sf-spacing-sm) var(--sf-spacing);
+  border-bottom: 1px solid var(--sf-border);
+}
+
+.sf-thread-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sf-spacing);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sf-spacing-xs);
+}
+
+.sf-bubble-row { display: flex; align-items: center; gap: 4px; }
+/* Own messages sit on the right, the way every messenger has trained people
+   to read a thread. */
+.sf-bubble-row.mine { flex-direction: row-reverse; }
+
+.sf-bubble {
+  max-width: 78%;
+  padding: 8px 12px;
+  border-radius: var(--sf-radius);
+  background-color: var(--sf-bg-alt);
+  font-size: 0.9rem;
+}
+
+.sf-bubble-row.mine .sf-bubble { background-color: var(--sf-primary-tint); }
+
+.sf-bubble-time {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.7rem;
+  color: var(--sf-text-muted);
+}
+
+.sf-thread-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sf-spacing-xs);
+  padding: var(--sf-spacing-sm);
+  border-top: 1px solid var(--sf-border);
+}
+
+.sf-thread-composer .sf-textarea { margin: 0; }
 
 /* --- a radio group that reads as two cards ---
    Used for "athlete or coach" at signup, where the choice carries a line of
@@ -1414,6 +1529,11 @@ button {
   }
   .sf-auth-footer { color: rgba(255, 255, 255, 0.75); }
   .sf-auth-footer a { color: #fff; }
+}
+
+@media (max-width: 860px) {
+  .sf-messages { grid-template-columns: 1fr; }
+  .sf-messages-list { max-height: 240px; }
 }
 
 @media (max-width: 600px) {

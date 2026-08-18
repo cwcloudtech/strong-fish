@@ -62,12 +62,16 @@ const (
 	ReportTargetPost    = "post"
 	ReportTargetComment = "comment"
 	ReportTargetUser    = "user"
+	// ReportTargetMessage is a private message. Unlike the others, a
+	// moderator cannot go and look at it in context - the thread is private -
+	// so the report has to carry the message's text as its snapshot.
+	ReportTargetMessage = "message"
 )
 
 // IsValidReportTarget reports whether targetType is a known report target.
 func IsValidReportTarget(targetType string) bool {
 	switch targetType {
-	case ReportTargetPost, ReportTargetComment, ReportTargetUser:
+	case ReportTargetPost, ReportTargetComment, ReportTargetUser, ReportTargetMessage:
 		return true
 	}
 	return false

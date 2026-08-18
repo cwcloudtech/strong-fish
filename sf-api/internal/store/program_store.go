@@ -822,3 +822,10 @@ func (s *ProgramStore) ListFeedbackForClub(ctx context.Context, clubID string, p
 	}
 	return feedback, total, rows.Err()
 }
+
+// Count is the programs gauge.
+func (s *ProgramStore) Count(ctx context.Context) (int64, error) {
+	var count int64
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM programs`).Scan(&count)
+	return count, err
+}

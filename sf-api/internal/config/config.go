@@ -42,6 +42,12 @@ type Config struct {
 	ActivationMode           string
 	MobileURLPattern         string
 	MaxVideoSize             int64
+	// OTELEndpoint is the single collector traces, logs and metrics are all
+	// pushed to. Blank disables export - logs still go to stdout/stderr, and
+	// /v1/metrics still serves, so a deployment with no collector is fully
+	// observable locally.
+	OTELEndpoint string
+	OTELProto    string
 }
 
 const (
@@ -148,6 +154,8 @@ func Load() Config {
 		ActivationMode:           activationMode,
 		MobileURLPattern:         utils.GetEnv("SF_MOBILE_URL_PATTERN", "/strong-fish-v{version}.apk"),
 		MaxVideoSize:             maxVideoSize,
+		OTELEndpoint:             os.Getenv("SF_OTEL_ENDPOINT"),
+		OTELProto:                utils.GetEnv("SF_OTEL_PROTO", "otlp/grpc"),
 	}
 }
 

@@ -450,3 +450,10 @@ func (s *ClubStore) ListClubMateIDs(ctx context.Context, userID string) ([]strin
 	}
 	return ids, rows.Err()
 }
+
+// Count is the clubs gauge.
+func (s *ClubStore) Count(ctx context.Context) (int64, error) {
+	var count int64
+	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM clubs`).Scan(&count)
+	return count, err
+}

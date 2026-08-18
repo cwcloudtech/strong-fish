@@ -206,6 +206,36 @@ class SfApi {
     return Post.fromJson(_map(response.data));
   }
 
+  // --- private messages ---
+
+  Future<List<Conversation>> conversations() async {
+    final response = await client.dio.get('/messages');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => Conversation.fromJson(_map(item))).toList();
+  }
+
+  Future<int> unreadMessages() async {
+    final response = await client.dio.get('/messages/unread');
+    final value = _map(response.data)['unread'];
+    return value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+  }
+
+  /// Opens the thread with one member, which also marks it read.
+  Future<Thread> thread(String userId) async {
+    final response = await client.dio.get('/messages/with/$userId');
+    return Thread.fromJson(_map(response.data));
+  }
+
+  Future<PrivateMessage> sendMessage(String userId, String content) async {
+    final response = await client.dio.post('/messages/with/$userId', data: {'content': content});
+    return PrivateMessage.fromJson(_map(response.data));
+  }
+
+  Future<void> blockMember(String userId) async {
+    await client.dio.post('/blocks/$userId');
+  }
+
   // --- invitations ---
 
   Future<List<Invitation>> invitations() async {
