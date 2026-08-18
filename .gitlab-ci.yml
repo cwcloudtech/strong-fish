@@ -1,0 +1,62 @@
+stages:
+  - validate
+  - pre-release
+  - publish
+  - build
+  - deploy
+  - post
+
+mirror:
+  stage: publish
+  script:
+    - setsid ./ci/common/mirror.sh
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^main$/ && $CI_COMMIT_MESSAGE !~ /Brew formula update/i
+  tags:
+    - mirror
+
+build:
+  stage: build
+  tags:
+    - imagesbuilder
+  rules: &app_deploy_rules
+    - if: $CI_COMMIT_BRANCH =~ /^main$/ && $CI_COMMIT_MESSAGE !~ /Brew formula update/i
+      changes:
+        - ci/common/**/*
+        - ci/app/**/*
+        - sf-api/**/*
+        - sf-ui/**/*
+        - sf-mobile/**/*
+        - helm/migrations/**/*
+        - .docker/**/*
+        - Dockerfile
+        - docker-compose*.yml
+        - VERSION
+  script:
+    - setsid ./ci/app/prune.sh
+    - setsid ./ci/app/deliver.sh
+
+scan:
+  stage: deploy
+  needs:
+    - build
+  tags:
+    - imagesbuilder
+  rules: *app_deploy_rules
+  script:
+    - setsid ./ci/app/prune.sh
+    - setsid ./ci/app/scan.sh
+
+deploy:
+  stage: deploy
+  needs:
+    - build
+    - scan
+  script:
+    - setsid ./ci/app/deploy.sh
+    - setsid ./ci/common/notif.sh "api"
+    - setsid ./ci/common/notif.sh "ui"
+    - setsid ./ci/common/notif.sh "mobile"
+  rules: *app_deploy_rules
+  tags:
+    - sf
