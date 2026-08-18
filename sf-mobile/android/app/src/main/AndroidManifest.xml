@@ -2,6 +2,10 @@
     <!-- The app talks to the strong-fish API over the network; release builds
          don't inherit the permission the debug manifest adds. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Reading the sign-in QR code the web app shows. The camera is optional
+         hardware: a device without one can still sign in with a password. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
 
     <application
         android:label="strong-fish"

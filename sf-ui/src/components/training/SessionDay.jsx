@@ -2,6 +2,7 @@ import { Fragment, useState } from "react";
 import { FiChevronDown, FiChevronRight } from "react-icons/fi";
 
 import SetLogForm from "./SetLogForm";
+import { formatReps } from "../../utils/setFormat";
 import { useI18n } from "../../i18n/I18nContext";
 
 /** The exercise's name in the reader's language, falling back to English. */
@@ -71,7 +72,7 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
                         ) : null}
                         {set.notes ? <div className="sf-muted">{set.notes}</div> : null}
                       </td>
-                      <td className="sf-table-num">{set.reps}</td>
+                      <td className="sf-table-num">{formatReps(set)}</td>
                       <td className="sf-table-num">{set.rpe ?? t("common.unknown")}</td>
                       <td className="sf-table-num">
                         {set.loadKnown && set.computedPercentage ? `${set.computedPercentage}%` : "—"}

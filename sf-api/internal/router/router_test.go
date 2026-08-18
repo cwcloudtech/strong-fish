@@ -29,17 +29,24 @@ func newTestRouter() http.Handler {
 		Admin:    &handlers.AdminHandler{},
 		Config:   &handlers.ConfigHandler{},
 		Contact:  &handlers.ContactHandler{},
+		ApiKey:   &handlers.ApiKeyHandler{},
 	}, nil, nil, Options{JWTSecret: "test"})
 }
 
 // routes lists every endpoint the API is meant to expose. A missing entry here
 // is a route nobody is checking; an entry that doesn't resolve is a routing bug.
 var routes = []struct{ method, path string }{
+	// The API's own documentation, served at the root.
+	{"GET", "/"},
+	{"GET", "/openapi.json"},
+
 	{"GET", "/v1/health"},
 	{"GET", "/v1/manifest"},
 	{"GET", "/v1/config"},
 	{"GET", "/v1/assets/logo.png"},
 	{"POST", "/v1/contact"},
+	{"GET", "/v1/mobile-app"},
+	{"GET", "/v1/public/programs/prog-1"},
 
 	{"GET", "/v1/oidc"},
 	{"GET", "/v1/oidc/callback"},
@@ -65,6 +72,11 @@ var routes = []struct{ method, path string }{
 	{"POST", "/v1/users/me/mfa/webauthn/begin"},
 	{"POST", "/v1/users/me/mfa/webauthn/finish"},
 	{"DELETE", "/v1/users/me/mfa/webauthn/cred-1"},
+	{"GET", "/v1/users/me/api-keys"},
+	{"POST", "/v1/users/me/api-keys"},
+	{"DELETE", "/v1/users/me/api-keys/key-1"},
+	{"POST", "/v1/users/me/config/file"},
+	{"POST", "/v1/users/me/config/qr"},
 
 	{"GET", "/v1/profiles/ada"},
 	{"GET", "/v1/profiles/ada/posts"},

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { toast } from "react-toastify";
 
 import AuthLayout from "../components/auth/AuthLayout";
+import toastOptions from "../utils/toastOptions";
 import { mfa } from "../api/services";
 import MfaChallenge from "../components/auth/MfaChallenge";
-import { ErrorMessage, Spinner } from "../components/common/Feedback";
+import { Spinner } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
 
@@ -18,7 +20,7 @@ export default function OidcCallback() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const [error, setError] = useState(null);
+  const [failed, setFailed] = useState(false);
   const [challenge, setChallenge] = useState(null);
   // React 18's StrictMode mounts effects twice in development; the token is
   // single-use on the server side, so guard against consuming it twice.
@@ -28,9 +30,13 @@ export default function OidcCallback() {
     if (handled.current) return;
     handled.current = true;
 
-    const errorCode = params.get("error");
-    if (errorCode) {
-      setError(t("errors.invalidCredentials"));
+    const fail = (message) => {
+      toast.error(message, toastOptions);
+      setFailed(true);
+    };
+
+    if (params.get("error")) {
+      fail(t("errors.invalidCredentials"));
       return;
     }
 
@@ -46,13 +52,13 @@ export default function OidcCallback() {
 
     const token = params.get("token");
     if (!token) {
-      setError(t("errors.invalidToken"));
+      fail(t("errors.invalidToken"));
       return;
     }
 
     login({ token })
       .then(() => navigate("/dashboard/feed"))
-      .catch(() => setError(t("errors.internal")));
+      .catch(() => fail(t("errors.internal")));
   }, [params, login, navigate, t]);
 
   return (
@@ -70,13 +76,10 @@ export default function OidcCallback() {
             beginWebauthn={() => mfa.loginWebauthnBegin(challenge.challengeToken)}
             finishWebauthn={(payload) => mfa.loginWebauthnFinish(payload)}
           />
-        ) : error ? (
-          <>
-            <ErrorMessage error={error} />
-            <button className="sf-button" style={{ width: "100%" }} onClick={() => navigate("/login")}>
-              {t("auth.login")}
-            </button>
-          </>
+        ) : failed ? (
+          <button className="sf-button" style={{ width: "100%" }} onClick={() => navigate("/login")}>
+            {t("auth.login")}
+          </button>
         ) : (
           <Spinner />
         )}

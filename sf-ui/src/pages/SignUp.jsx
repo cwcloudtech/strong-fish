@@ -6,17 +6,15 @@ import AuthLayout from "../components/auth/AuthLayout";
 import toastOptions from "../utils/toastOptions";
 import { auth } from "../api/services";
 import OidcButtons from "../components/auth/OidcButtons";
-import { ErrorMessage } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
 
 export default function SignUp() {
-  const { t, locale } = useI18n();
+  const { t, tError, locale } = useI18n();
   const { login, config } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({ name: "", surname: "", email: "", password: "", confirmPassword: "" });
-  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -24,11 +22,10 @@ export default function SignUp() {
   const submit = async (event) => {
     event.preventDefault();
     if (form.password !== form.confirmPassword) {
-      setError(t("errors.passwordsMismatch"));
+      toast.error(t("errors.passwordsMismatch"), toastOptions);
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       const response = await auth.register({
         email: form.email,
@@ -49,9 +46,10 @@ export default function SignUp() {
         return;
       }
       await login(response);
+      toast.success(t("auth.accountCreated"), toastOptions);
       navigate("/dashboard/feed");
     } catch (err) {
-      setError(err);
+      toast.error(tError(err), toastOptions);
     } finally {
       setBusy(false);
     }
@@ -110,7 +108,6 @@ export default function SignUp() {
               required
             />
           </div>
-          <ErrorMessage error={error} />
           <button className="sf-button" type="submit" style={{ width: "100%" }} disabled={busy}>
             {busy ? t("common.loading") : t("auth.signup")}
           </button>

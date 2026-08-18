@@ -11,6 +11,7 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
 import About from "./pages/About";
 import Admin from "./pages/dashboard/Admin";
+import ApiKeys from "./pages/dashboard/ApiKeys";
 import ClubDetail from "./pages/dashboard/ClubDetail";
 import Contact from "./pages/Contact";
 import Clubs from "./pages/dashboard/Clubs";
@@ -21,6 +22,7 @@ import Login from "./pages/Login";
 import OidcCallback from "./pages/OidcCallback";
 import OneRms from "./pages/dashboard/OneRms";
 import ProgramDetail from "./pages/dashboard/ProgramDetail";
+import PublicProgram from "./pages/PublicProgram";
 import Profile from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword";
 import Settings from "./pages/dashboard/Settings";
@@ -60,6 +62,9 @@ function AppRoutes() {
                 makes a shared profile link work. */}
             <Route path="/profile/:handle" element={<Profile />} />
             <Route path="/about" element={<About />} />
+            {/* A program its coach shared: readable by anybody holding the
+                link, which is the whole point of publishing one. */}
+            <Route path="/programs/:programId" element={<PublicProgram />} />
             <Route path="/contact" element={<Contact />} />
 
             <Route
@@ -80,6 +85,7 @@ function AppRoutes() {
               <Route path="clubs/:clubId/programs/:programId" element={<ProgramDetail />} />
               <Route path="exercises" element={<Exercises />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="api-keys" element={<ApiKeys />} />
               <Route
                 path="admin"
                 element={

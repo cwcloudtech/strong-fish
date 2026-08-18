@@ -5,34 +5,31 @@ import { toast } from "react-toastify";
 import AuthLayout from "../components/auth/AuthLayout";
 import toastOptions from "../utils/toastOptions";
 import { auth } from "../api/services";
-import { ErrorMessage } from "../components/common/Feedback";
 import { useI18n } from "../i18n/I18nContext";
 
 export default function ResetPassword() {
-  const { t } = useI18n();
+  const { t, tError } = useI18n();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const token = params.get("token") || "";
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
     if (password !== confirmPassword) {
-      setError(t("errors.passwordsMismatch"));
+      toast.error(t("errors.passwordsMismatch"), toastOptions);
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       await auth.resetPassword({ token, password, confirmPassword });
       toast.success(t("auth.passwordUpdated"), toastOptions);
       navigate("/login");
     } catch (err) {
-      setError(err);
+      toast.error(tError(err), toastOptions);
     } finally {
       setBusy(false);
     }
@@ -72,7 +69,6 @@ export default function ResetPassword() {
                 required
               />
             </div>
-            <ErrorMessage error={error} />
             <button className="sf-button" type="submit" style={{ width: "100%" }} disabled={busy}>
               {busy ? t("common.loading") : t("common.save")}
             </button>

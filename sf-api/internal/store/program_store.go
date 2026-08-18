@@ -28,6 +28,10 @@ type programData struct {
 	Name           string `json:"name"`
 	Description    string `json:"description,omitempty"`
 	SourceFileName string `json:"sourceFileName,omitempty"`
+	// Visibility is absent on every program written before sharing existed,
+	// which is exactly why the zero value has to mean "club only" - see
+	// models.NormalizeProgramVisibility.
+	Visibility string `json:"visibility,omitempty"`
 }
 
 // dayData is the JSONB payload of the program_days table.
@@ -56,15 +60,17 @@ const programSelect = `
 	       coalesce(u.data->>'name', '') || ' ' || coalesce(u.data->>'surname', ''),
 	       (SELECT count(*) FROM program_days WHERE program_id = p.id),
 	       (SELECT count(*) FROM program_sets WHERE program_id = p.id),
-	       (SELECT coalesce(max((data->>'week')::int), 0) FROM program_days WHERE program_id = p.id)
+	       (SELECT coalesce(max((data->>'week')::int), 0) FROM program_days WHERE program_id = p.id),
+	       coalesce(c.data->>'name', '')
 	FROM programs p
-	JOIN users u ON u.id = p.author_id`
+	JOIN users u ON u.id = p.author_id
+	JOIN clubs c ON c.id = p.club_id`
 
 func scanProgram(row pgx.Row) (models.Program, error) {
 	var p models.Program
 	var raw []byte
 	if err := row.Scan(&p.ID, &p.ClubID, &p.AuthorID, &raw, &p.CreatedAt, &p.UpdatedAt,
-		&p.AuthorName, &p.DayCount, &p.SetCount, &p.Weeks); err != nil {
+		&p.AuthorName, &p.DayCount, &p.SetCount, &p.Weeks, &p.ClubName); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Program{}, ErrNotFound
 		}
@@ -77,6 +83,7 @@ func scanProgram(row pgx.Row) (models.Program, error) {
 	p.Name = d.Name
 	p.Description = d.Description
 	p.SourceFileName = d.SourceFileName
+	p.Visibility = models.NormalizeProgramVisibility(d.Visibility)
 	return p, nil
 }
 
@@ -101,6 +108,7 @@ type NewProgram struct {
 	Name           string
 	Description    string
 	SourceFileName string
+	Visibility     string
 	Days           []NewDay
 }
 
@@ -128,6 +136,7 @@ type NewSet struct {
 func (s *ProgramStore) Create(ctx context.Context, p NewProgram) (models.Program, error) {
 	data, err := json.Marshal(programData{
 		Name: p.Name, Description: p.Description, SourceFileName: p.SourceFileName,
+		Visibility: models.NormalizeProgramVisibility(p.Visibility),
 	})
 	if err != nil {
 		return models.Program{}, err
@@ -186,6 +195,15 @@ func (s *ProgramStore) FindByID(ctx context.Context, id string) (models.Program,
 }
 
 // ListForClub returns a club's programs, newest first.
+// FindPublicByID returns a program only when it has been shared publicly.
+// The predicate lives in the query rather than in a caller-side check, so the
+// unauthenticated path cannot read a private program even if it forgets to
+// look at Visibility.
+func (s *ProgramStore) FindPublicByID(ctx context.Context, id string) (models.Program, error) {
+	return scanProgram(s.pool.QueryRow(ctx,
+		programSelect+` WHERE p.id = $1 AND p.data->>'visibility' = $2`, id, models.ProgramVisibilityPublic))
+}
+
 func (s *ProgramStore) ListForClub(ctx context.Context, clubID string) ([]models.Program, error) {
 	rows, err := s.pool.Query(ctx, programSelect+` WHERE p.club_id = $1 ORDER BY p.created_at DESC`, clubID)
 	if err != nil {
@@ -196,8 +214,11 @@ func (s *ProgramStore) ListForClub(ctx context.Context, clubID string) ([]models
 
 // UpdateMeta renames a program or changes its description; the sessions
 // themselves are edited set by set.
-func (s *ProgramStore) UpdateMeta(ctx context.Context, id, name, description string) (models.Program, error) {
-	patch, err := json.Marshal(map[string]any{"name": name, "description": description})
+func (s *ProgramStore) UpdateMeta(ctx context.Context, id, name, description, visibility string) (models.Program, error) {
+	patch, err := json.Marshal(map[string]any{
+		"name": name, "description": description,
+		"visibility": models.NormalizeProgramVisibility(visibility),
+	})
 	if err != nil {
 		return models.Program{}, err
 	}

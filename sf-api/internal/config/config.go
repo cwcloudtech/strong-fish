@@ -40,6 +40,7 @@ type Config struct {
 	EmailFrom                string
 	ConfirmationEmailTTL     time.Duration
 	ActivationMode           string
+	MobileURLPattern         string
 }
 
 const (
@@ -134,6 +135,7 @@ func Load() Config {
 		EmailFrom:                utils.GetEnv("SF_MAIL_FROM", "noreply@cwcloud.tech"),
 		ConfirmationEmailTTL:     time.Duration(confirmationHours) * time.Hour,
 		ActivationMode:           activationMode,
+		MobileURLPattern:         utils.GetEnv("SF_MOBILE_URL_PATTERN", "/strong-fish-v{version}.apk"),
 	}
 }
 

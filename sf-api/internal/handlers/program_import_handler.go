@@ -169,6 +169,7 @@ func buildDays(parsed *xlsximport.ParsedProgram, catalog map[string]models.Exerc
 				ExerciseID: exercise.ID, Position: parsedSet.Position, Reps: parsedSet.Reps,
 				RPE: parsedSet.RPE, Percentage: parsedSet.Percentage,
 				AbsoluteLoad: parsedSet.AbsoluteLoad, LoadMode: parsedSet.LoadMode, Part: parsedSet.Part,
+				Notes: parsedSet.Notes,
 			})
 		}
 		if len(sets) == 0 {

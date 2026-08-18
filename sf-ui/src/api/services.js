@@ -143,6 +143,35 @@ export const profiles = {
   unfollow: (handle) => body(client.delete(`/profiles/${handle}/follow`)),
 };
 
+// --- API keys ---
+
+export const apiKeys = {
+  list: () => body(client.get("/users/me/api-keys")),
+  // The response to this call is the only place the plaintext token ever
+  // exists - the API stores its hash and nothing else - so whatever the caller
+  // means to do with it, it has to do now.
+  create: (payload) => body(client.post("/users/me/api-keys", payload)),
+  remove: (keyId) => body(client.delete(`/users/me/api-keys/${keyId}`)),
+  // The token goes back to the API to be formatted, because the API is what
+  // knows its own public URL. It is POSTed rather than sent as a header so no
+  // reverse proxy in front of this needs a CORS exception for it.
+  configQr: (key) => body(client.post("/users/me/config/qr", { key })),
+  configFile: (key) => client.post("/users/me/config/file", { key }, { responseType: "blob" }).then((r) => r.data),
+};
+
+// --- the mobile build ---
+
+export const mobileApp = {
+  // Public: you need the app before you have an account.
+  get: () => body(client.get("/mobile-app")),
+};
+
+// --- programs shared publicly ---
+
+export const publicPrograms = {
+  get: (programId) => body(client.get(`/public/programs/${programId}`)),
+};
+
 // --- contact ---
 
 export const contact = {

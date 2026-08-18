@@ -45,6 +45,7 @@ func main() {
 	programStore := store.NewProgramStore(pool)
 	socialStore := store.NewSocialStore(pool)
 	webauthnStore := store.NewWebAuthnCredentialStore(pool)
+	apiKeyStore := store.NewApiKeyStore(pool)
 
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
 	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
@@ -85,14 +86,18 @@ func main() {
 		Profile:  handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore),
 		Admin:    handlers.NewAdminHandler(userStore, webauthnStore, socialStore, cfg.ActivationMode),
 		Config: handlers.NewConfigHandler(oidc.Names(providers), cfg.ActivationMode,
-			cfg.PlateIncrement, cfg.MaxImageSize, cfg.Version, contactClient.Configured()),
+			cfg.PlateIncrement, cfg.MaxImageSize, cfg.Version, contactClient.Configured(),
+			cfg.APIBaseURL, cfg.UIBaseURL, cfg.MobileURLPattern),
 		Contact: handlers.NewContactHandler(contactClient),
+		ApiKey:  handlers.NewApiKeyHandler(apiKeyStore),
 	}, userStore, clubStore, router.Options{
 		JWTSecret:          cfg.JWTSecret,
+		ApiKeys:            apiKeyStore,
 		ActivationMode:     cfg.ActivationMode,
 		CorsEnabled:        cfg.CorsEnabled,
 		CorsAllowedOrigins: cfg.CorsAllowedOrigins,
 		ManifestPath:       cfg.ManifestPath,
+		Version:            cfg.Version,
 	})
 
 	slog.Info("strong-fish api listening", "port", cfg.Port, "version", cfg.Version,

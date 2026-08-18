@@ -19,6 +19,11 @@
   --sf-primary-700: #073a63;
   /* The logo's darkest ink, used for the chrome (sidebar, app bar). */
   --sf-navy: #062a4e;
+  /* The chrome's own ground. In light mode it's the brand navy; in dark
+     mode it collapses onto the page background so the logo isn't sitting
+     on a plate of its own colour, and a border draws the rail instead. */
+  --sf-chrome: var(--sf-navy);
+  --sf-chrome-border: transparent;
 
   /* Neutrals */
   --sf-gray-0: #ffffff;
@@ -71,6 +76,7 @@
   --sf-transition: 150ms ease;
 
   --sf-sidebar-width: 240px;
+  --sf-sidebar-collapsed-width: 68px;
 }
 
 /* Dark theme: applied automatically when the OS is set to dark and the user
@@ -89,6 +95,8 @@
     --sf-text: #f1f5f9;
     --sf-text-muted: #94a3b8;
     --sf-navy: #0d1a2c;
+    --sf-chrome: #0b1220;
+    --sf-chrome-border: #2a3750;
     --sf-danger-light: rgba(220, 38, 38, 0.18);
     --sf-success-tint: rgba(22, 163, 74, 0.16);
     --sf-warning-tint: rgba(217, 119, 6, 0.18);
@@ -111,6 +119,8 @@
   --sf-text: var(--sf-gray-900);
   --sf-text-muted: var(--sf-gray-500);
   --sf-navy: #062a4e;
+  --sf-chrome: var(--sf-navy);
+  --sf-chrome-border: transparent;
   --sf-danger-light: #fee2e2;
   --sf-success-tint: #dcfce7;
   --sf-warning-tint: #fef3c7;
@@ -132,6 +142,8 @@
   --sf-text: #f1f5f9;
   --sf-text-muted: #94a3b8;
   --sf-navy: #0d1a2c;
+  --sf-chrome: #0b1220;
+  --sf-chrome-border: #2a3750;
   --sf-danger-light: rgba(220, 38, 38, 0.18);
   --sf-success-tint: rgba(22, 163, 74, 0.16);
   --sf-warning-tint: rgba(217, 119, 6, 0.18);
@@ -450,7 +462,8 @@ button {
 .sf-sidebar {
   width: var(--sf-sidebar-width);
   flex-shrink: 0;
-  background-color: var(--sf-navy);
+  background-color: var(--sf-chrome);
+  border-right: 1px solid var(--sf-chrome-border);
   color: #dbe7f3;
   padding: var(--sf-spacing) var(--sf-spacing-sm);
   display: flex;
@@ -460,7 +473,35 @@ button {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
+  transition: width var(--sf-transition);
 }
+
+/* Collapsed, the rail keeps every destination but drops to icons only, each
+   one naming itself through a tooltip on hover or keyboard focus - the same
+   trade cwclock's sidebar makes. */
+.sf-sidebar.collapsed {
+  width: var(--sf-sidebar-collapsed-width);
+  padding-left: var(--sf-spacing-xs);
+  padding-right: var(--sf-spacing-xs);
+}
+
+.sf-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  width: 100%;
+  margin-bottom: var(--sf-spacing-xs);
+  background-color: rgba(255, 255, 255, 0.07);
+  color: #b9cee3;
+  border: 0;
+  border-radius: var(--sf-radius-sm);
+  cursor: pointer;
+  transition: background-color var(--sf-transition), color var(--sf-transition);
+}
+
+.sf-sidebar-toggle:hover { background-color: rgba(255, 255, 255, 0.14); color: #fff; }
 
 /* The brand is the mark alone - no wordmark text beside it. The logo carries
    the name already, so repeating it just crowds the rail. */
@@ -474,8 +515,10 @@ button {
 .sf-sidebar-brand img {
   width: 96px;
   height: 96px;
-  transition: transform var(--sf-transition);
+  transition: transform var(--sf-transition), width var(--sf-transition), height var(--sf-transition);
 }
+
+.sf-sidebar.collapsed .sf-sidebar-brand img { width: 44px; height: 44px; }
 
 .sf-sidebar-brand:hover { text-decoration: none; }
 .sf-sidebar-brand:hover img { transform: scale(1.04); }
@@ -513,6 +556,184 @@ button {
 }
 
 .sf-sidebar-actions { display: flex; gap: var(--sf-spacing-xs); }
+
+/* --- collapsed rail ---
+   Everything that reads as a row of "icon + words" becomes the icon alone,
+   centred. The label is dropped from the flow rather than hidden with
+   visibility, so it can't keep reserving width the rail no longer has. */
+.sf-sidebar.collapsed .sf-nav-link {
+  justify-content: center;
+  gap: 0;
+  padding: 10px 0;
+  position: relative;
+}
+
+.sf-sidebar.collapsed .sf-nav-label { display: none; }
+
+/* Unread reports still need to show through: with no room for a number beside
+   the icon, the count rides the icon's top-right corner instead. */
+.sf-sidebar.collapsed .sf-nav-count {
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  margin-left: 0;
+  min-width: 16px;
+  text-align: center;
+  line-height: 16px;
+  padding: 0 4px;
+  font-size: 0.65rem;
+}
+
+.sf-sidebar.collapsed .sf-sidebar-actions { flex-direction: column; }
+.sf-sidebar.collapsed .sf-avatar-sm { width: 24px; height: 24px; }
+
+/* A tooltip wraps its child in a span, which would otherwise shrink a nav
+   link to its text and lose the full-width hover band. */
+.sf-sidebar .sf-tooltip { width: 100%; }
+.sf-sidebar .sf-tooltip > .sf-nav-link,
+.sf-sidebar .sf-tooltip > .sf-sidebar-toggle { flex: 1; min-width: 0; }
+
+/* Collapsed, the theme and language pills have no room for their labels
+   either, so they shrink to the icon that opens them. */
+.sf-sidebar.collapsed .sf-dropdown-toggle { padding: 0.4rem; gap: 0; font-size: 0; }
+.sf-sidebar.collapsed .sf-dropdown-toggle svg { font-size: 15px; }
+.sf-sidebar.collapsed .sf-dropdown-caret { display: none; }
+
+/* --- lists, tokens and plain icon buttons --- */
+
+.sf-list { list-style: none; margin: var(--sf-spacing) 0 0; padding: 0; }
+
+.sf-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-spacing-sm);
+  padding: var(--sf-spacing-sm) var(--sf-spacing);
+  background-color: var(--sf-surface);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  margin-bottom: var(--sf-spacing-xs);
+}
+
+/* An icon button that isn't part of the navy chrome: it sits on a card, so it
+   takes the page's own colours rather than the sidebar's translucent white. */
+.sf-icon-button-plain {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  color: var(--sf-text-muted);
+  padding: 6px;
+  cursor: pointer;
+}
+
+.sf-icon-button-plain:hover { color: var(--sf-primary); background: none; }
+.sf-icon-button-plain:disabled { opacity: 0.5; cursor: default; }
+
+/* The one and only showing of a freshly minted API key. */
+.sf-token-box {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-spacing-xs);
+  padding: var(--sf-spacing-sm);
+  background-color: var(--sf-bg-alt);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+}
+
+.sf-token {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  word-break: break-all;
+  color: var(--sf-text);
+}
+
+/* The "get the app" control on the signed-out screens, sized to sit inline
+   with the footer's links rather than as a full-width row. */
+.sf-auth-footer-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: var(--sf-text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.sf-auth-footer-icon:hover { color: var(--sf-primary); }
+
+/* --- tooltip ---
+   A port of cwclock's Tooltip: shown on hover, and on keyboard focus via
+   :has(:focus-visible) rather than :focus-within, which would also match the
+   focus a mouse click leaves behind and pin the bubble open after the pointer
+   has gone. It replaces bare `title` attributes, whose native tooltip is slow
+   to appear and can't be styled - most noticeable on an icon-only rail. */
+.sf-tooltip {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sf-tooltip-bubble {
+  position: absolute;
+  z-index: 3000;
+  padding: 5px 9px;
+  border-radius: var(--sf-radius-sm);
+  background-color: var(--sf-gray-900);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  line-height: 1.2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 120ms ease, transform 120ms ease;
+  transition-delay: 0s;
+}
+
+/* Direct-child combinator only: tooltips nest (an icon tooltip inside a
+   dropdown whose trigger has one of its own), and a bubble is always its own
+   wrapper's direct child. */
+.sf-tooltip:hover > .sf-tooltip-bubble,
+.sf-tooltip:has(:focus-visible) > .sf-tooltip-bubble {
+  opacity: 1;
+  transition-delay: 300ms;
+}
+
+.sf-tooltip-bubble[data-position="right"] {
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translate(-2px, -50%);
+}
+
+.sf-tooltip:hover > .sf-tooltip-bubble[data-position="right"],
+.sf-tooltip:has(:focus-visible) > .sf-tooltip-bubble[data-position="right"] {
+  transform: translate(0, -50%);
+}
+
+.sf-tooltip-bubble[data-position="top"] {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, 2px);
+}
+
+.sf-tooltip:hover > .sf-tooltip-bubble[data-position="top"],
+.sf-tooltip:has(:focus-visible) > .sf-tooltip-bubble[data-position="top"] {
+  transform: translate(-50%, 0);
+}
+
+.sf-tooltip-bubble[data-position="bottom"] {
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, -2px);
+}
+
+.sf-tooltip:hover > .sf-tooltip-bubble[data-position="bottom"],
+.sf-tooltip:has(:focus-visible) > .sf-tooltip-bubble[data-position="bottom"] {
+  transform: translate(-50%, 0);
+}
 
 .sf-icon-button {
   flex: 1;
@@ -553,7 +774,8 @@ button {
   align-items: center;
   gap: var(--sf-spacing-sm);
   padding: var(--sf-spacing-sm) var(--sf-spacing);
-  background-color: var(--sf-navy);
+  background-color: var(--sf-chrome);
+  border-bottom: 1px solid var(--sf-chrome-border);
   color: #fff;
   position: sticky;
   top: 0;
@@ -629,17 +851,25 @@ button {
   font-size: 0.95rem;
 }
 
-.sf-auth-art-credit {
+/* The photo credit and the open-source mention stack in one corner: two
+   absolutely positioned paragraphs would sit on top of each other. */
+.sf-auth-art-footer {
   position: absolute;
   right: var(--sf-spacing);
   bottom: var(--sf-spacing-xs);
   left: var(--sf-spacing);
   z-index: 1;
+}
+
+.sf-auth-art-credit {
+  margin: 0;
   font-size: 0.68rem;
   line-height: 1.5;
   text-align: right;
   color: rgba(255, 255, 255, 0.55);
 }
+
+.sf-auth-art-oss { margin-top: 2px; }
 
 .sf-auth-art-credit a {
   color: rgba(255, 255, 255, 0.75);
@@ -1099,6 +1329,19 @@ button {
     transition: transform 200ms ease;
   }
   .sf-sidebar.open { transform: translateX(0); }
+  /* As a drawer the rail is either open or off-screen, so the desktop collapse
+     preference must not narrow it - a 68px drawer would clip its own labels. */
+  .sf-sidebar.collapsed {
+    width: var(--sf-sidebar-width);
+    padding-left: var(--sf-spacing-sm);
+    padding-right: var(--sf-spacing-sm);
+  }
+  .sf-sidebar.collapsed .sf-nav-link { justify-content: flex-start; gap: 10px; padding: 9px 11px; }
+  .sf-sidebar.collapsed .sf-nav-label { display: inline; }
+  .sf-sidebar.collapsed .sf-nav-count { position: static; margin-left: auto; font-size: 0.72rem; padding: 0 6px; }
+  .sf-sidebar.collapsed .sf-sidebar-brand img { width: 96px; height: 96px; }
+  .sf-sidebar.collapsed .sf-sidebar-actions { flex-direction: row; }
+  .sf-sidebar-toggle { display: none; }
   .sf-scrim.open { display: block; }
   .sf-topbar { display: flex; }
   .sf-page { padding: var(--sf-spacing); }

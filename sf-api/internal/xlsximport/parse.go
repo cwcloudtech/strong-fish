@@ -1,7 +1,19 @@
 // Package xlsximport turns a coach's program spreadsheet into the data model.
 //
-// The reference file (ai-gen/assets/program.xlsx) is laid out as one sheet per
-// week plus a "refs" sheet, and each week sheet holds several day blocks:
+// Two layouts are supported, told apart by their header rows so that either
+// can be dropped on the same upload button:
+//
+//   - week per sheet (ai-gen/assets/program_1.xlsx), described below;
+//   - block per sheet (ai-gen/assets/program_2.xlsx), where one sheet holds
+//     several weeks at once - see parse_block.go.
+//
+// Neither reads the workbook's own computed weights. Every load in this app is
+// derived from the member reading it (see package loadcalc), so a spreadsheet
+// whose formulas are stale, or wrong, or written against somebody else's maxes
+// imports exactly as well as a correct one.
+//
+// The week-per-sheet file is laid out as one sheet per week plus a "refs"
+// sheet, and each week sheet holds several day blocks:
 //
 //	WEEK 1 DAY 2                                       <- title row
 //	Exercice | Reps | RPE | Percentage | Load | e1RM | Part   <- header row
@@ -88,6 +100,9 @@ type ParsedSet struct {
 	AbsoluteLoad *float64
 	LoadMode     string
 	Part         int
+	// Notes is whatever the coach wrote alongside the prescription: a cue, a
+	// weekly progression instruction, or a rep target that wasn't a number.
+	Notes string
 	// sourceLoad is the weight the spreadsheet had cached for this row. It is
 	// never persisted - loads are derived per member from now on - but it's
 	// what identifies which lift a percentage was authored against (see
@@ -144,6 +159,10 @@ func Parse(data []byte) (*ParsedProgram, error) {
 		}
 	}
 
+	// Weeks accumulate across block sheets: two four-week blocks make an
+	// eight-week program, so the second block's "W1" is program week 5. A
+	// week-per-sheet workbook numbers its own weeks and leaves this at zero.
+	weekOffset := 0
 	weeks := 0
 	for _, sheet := range file.GetSheetList() {
 		if refsSheetNames[strings.ToLower(strings.TrimSpace(sheet))] {
@@ -153,7 +172,19 @@ func Parse(data []byte) (*ParsedProgram, error) {
 		if err != nil {
 			return nil, err
 		}
-		days := parseSheet(sheet, rows, len(program.Days), program)
+
+		// The two layouts are told apart by their header row, not by the sheet
+		// name or the file name - a coach renames sheets, and both formats are
+		// uploaded through the same button.
+		var days []ParsedDay
+		if isBlockSheet(rows) {
+			var added int
+			days, added = parseBlockSheet(sheet, rows, weekOffset, len(program.Days), program)
+			weekOffset += added
+		} else {
+			days = parseSheet(sheet, rows, len(program.Days), program)
+		}
+
 		for _, day := range days {
 			if day.Week > weeks {
 				weeks = day.Week

@@ -265,6 +265,12 @@ func (h *ProgramHandler) loadMissing(ctx context.Context, ids map[string]bool) (
 type programMetaPayload struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	// Visibility is optional on create (a new program is club-only) and
+	// authoritative on update, which is how a coach publishes or unpublishes
+	// one. Anything unrecognized normalizes to club-only rather than being
+	// rejected, so a client that doesn't know about sharing can keep sending
+	// the payload it always sent without silently making a block public.
+	Visibility string `json:"visibility"`
 }
 
 // Create opens an empty program for a coach to build session by session, which
@@ -285,7 +291,7 @@ func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	program, err := h.programs.Create(r.Context(), store.NewProgram{
 		ClubID: chi.URLParam(r, "clubId"), AuthorID: authorID,
-		Name: p.Name, Description: p.Description,
+		Name: p.Name, Description: p.Description, Visibility: p.Visibility,
 	})
 	if err != nil {
 		writeStoreError(w, err)
@@ -304,12 +310,59 @@ func (h *ProgramHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	program, err := h.programs.UpdateMeta(r.Context(), chi.URLParam(r, "programId"), p.Name, p.Description)
+	program, err := h.programs.UpdateMeta(r.Context(), chi.URLParam(r, "programId"),
+		p.Name, p.Description, p.Visibility)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, program)
+}
+
+// GetPublic serves a program that has been shared publicly, to a caller who
+// may well be anonymous.
+//
+// It is deliberately not Get with the membership check skipped: there is no
+// member to resolve loads against, so every set comes back as the coach
+// authored it - reps, RPE and percentage - with no weights, no 1RM and no
+// logs. A visitor sees the prescription; what anybody actually lifted stays
+// inside the club.
+func (h *ProgramHandler) GetPublic(w http.ResponseWriter, r *http.Request) {
+	programID := chi.URLParam(r, "programId")
+
+	program, err := h.programs.FindPublicByID(r.Context(), programID)
+	if err != nil {
+		// A private program is reported as missing rather than forbidden: the
+		// difference would confirm the id exists to somebody guessing.
+		writeError(w, http.StatusNotFound, "Program not found", CodeNotFound)
+		return
+	}
+
+	days, err := h.programs.ListDays(r.Context(), programID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	sets, err := h.programs.ListSetsForProgram(r.Context(), programID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	byDay := map[string][]models.ProgramSet{}
+	for _, set := range sets {
+		byDay[set.DayID] = append(byDay[set.DayID], set)
+	}
+	for i := range days {
+		days[i].Sets = byDay[days[i].ID]
+	}
+
+	// program carries its club's name already (see programSelect), which is the
+	// provenance a reader outside the club wants without implying membership.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"program": program,
+		"days":    days,
+	})
 }
 
 func (h *ProgramHandler) Delete(w http.ResponseWriter, r *http.Request) {

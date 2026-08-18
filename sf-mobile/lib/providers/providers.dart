@@ -8,6 +8,7 @@ import '../api/api_exception.dart';
 import '../api/services.dart';
 import '../i18n/app_localizations.dart';
 import '../models/models.dart';
+import '../models/session_config.dart';
 
 /// The default API URL. It's overridable at runtime (see [SessionNotifier.setApiUrl])
 /// because a club typically runs its own server, so a single build has to be
@@ -15,6 +16,7 @@ import '../models/models.dart';
 const String defaultApiUrl = String.fromEnvironment('SF_API_URL', defaultValue: 'https://api.strong-fish.app');
 
 const _tokenKey = 'sf.token';
+const _apiKeyKey = 'sf.apiKey';
 const _apiUrlKey = 'sf.apiUrl';
 const _localeKey = 'sf.locale';
 const _themeKey = 'sf.theme';
@@ -65,12 +67,17 @@ class SessionNotifier extends Notifier<SessionState> {
     final apiUrl = prefs.getString(_apiUrlKey) ?? defaultApiUrl;
     _client.setApiUrl(apiUrl);
 
-    final token = await _readToken();
-    if (token == null || token.isEmpty) {
+    // A device enrolled by QR code holds a key, not a session token, and its
+    // key does not expire on its own - so it is checked first and restored the
+    // same way.
+    final apiKey = await _read(_apiKeyKey);
+    final token = apiKey != null && apiKey.isNotEmpty ? null : await _readToken();
+    if ((apiKey == null || apiKey.isEmpty) && (token == null || token.isEmpty)) {
       state = state.copyWith(status: SessionStatus.missing, apiUrl: apiUrl);
       return;
     }
 
+    _client.setApiKey(apiKey);
     _client.setToken(token);
     try {
       final user = await _api.me();
@@ -83,11 +90,13 @@ class SessionNotifier extends Notifier<SessionState> {
     }
   }
 
-  /// Reads the token, tolerating a secure-storage backend that isn't available
-  /// (a device without a keystore) rather than crashing the launch.
-  Future<String?> _readToken() async {
+  Future<String?> _readToken() => _read(_tokenKey);
+
+  /// Reads a stored credential, tolerating a secure-storage backend that isn't
+  /// available (a device without a keystore) rather than crashing the launch.
+  Future<String?> _read(String key) async {
     try {
-      return await _storage.read(key: _tokenKey);
+      return await _storage.read(key: key);
     } catch (_) {
       return null;
     }
@@ -103,10 +112,15 @@ class SessionNotifier extends Notifier<SessionState> {
   Future<User> completeLogin(String token) async {
     try {
       await _storage.write(key: _tokenKey, value: token);
+      // Signing in with a password replaces any key this device was enrolled
+      // with; leaving it behind would keep authenticating as whoever the key
+      // belonged to.
+      await _storage.delete(key: _apiKeyKey);
     } catch (_) {
       // A device without secure storage still gets a working session for this
       // run; it just won't survive a restart.
     }
+    _client.setApiKey(null);
     _client.setToken(token);
     final user = await _api.me();
     state = state.copyWith(status: SessionStatus.connected, user: user);
@@ -122,9 +136,47 @@ class SessionNotifier extends Notifier<SessionState> {
     }
   }
 
+  /// Signs this device in with a scanned config: the API URL and the API key
+  /// it carries, in that order - the key is meaningless against a different
+  /// server.
+  ///
+  /// The key is only kept once the API has accepted it. A QR code that scans
+  /// cleanly but names a server that rejects it should leave the device
+  /// exactly as it was, not half-enrolled.
+  Future<User> connectWithConfig(SessionConfig config) async {
+    final previousUrl = state.apiUrl;
+    _client.setApiUrl(config.apiUrl);
+    _client.setToken(null);
+    _client.setApiKey(config.apiKey);
+
+    try {
+      final user = await _api.me();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_apiUrlKey, config.apiUrl);
+      try {
+        await _storage.delete(key: _tokenKey);
+        await _storage.write(key: _apiKeyKey, value: config.apiKey);
+      } catch (_) {
+        // No keystore: the session works for this run but won't survive a
+        // restart, which is the same trade a password login makes.
+      }
+      state = SessionState(
+        status: SessionStatus.connected,
+        user: user,
+        apiUrl: config.apiUrl,
+      );
+      return user;
+    } catch (error) {
+      _client.setApiKey(null);
+      _client.setApiUrl(previousUrl);
+      rethrow;
+    }
+  }
+
   Future<void> logout() async {
     try {
       await _storage.delete(key: _tokenKey);
+      await _storage.delete(key: _apiKeyKey);
     } catch (_) {
       // Nothing to clean up if secure storage was never available.
     }
