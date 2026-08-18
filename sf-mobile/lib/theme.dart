@@ -17,6 +17,13 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color primaryDark;
   final Color primaryTint;
   final Color navy;
+
+  /// The chrome's own ground - the app bar, where the logo mark sits. In light
+  /// mode it is the brand navy; in dark mode it collapses onto the page
+  /// background so the mark isn't sitting on a plate of its own colour, and
+  /// [chromeBorder] draws the edge instead. Mirrors sf-ui's --sf-chrome.
+  final Color chrome;
+  final Color chromeBorder;
   final Color danger;
   final Color success;
   final Color warning;
@@ -32,6 +39,8 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.primaryDark,
     required this.primaryTint,
     required this.navy,
+    required this.chrome,
+    required this.chromeBorder,
     required this.danger,
     required this.success,
     required this.warning,
@@ -49,6 +58,8 @@ class AppColors extends ThemeExtension<AppColors> {
     primaryDark: Color(0xFF0A4A7D),
     primaryTint: Color(0xFFEEF6FC),
     navy: Color(0xFF062A4E),
+    chrome: Color(0xFF062A4E),
+    chromeBorder: Color(0x00000000),
     danger: Color(0xFFDC2626),
     success: Color(0xFF16A34A),
     warning: Color(0xFFD97706),
@@ -68,6 +79,8 @@ class AppColors extends ThemeExtension<AppColors> {
     primaryDark: Color(0xFF4AA6E4),
     primaryTint: Color(0x292B8FD4),
     navy: Color(0xFF0D1A2C),
+    chrome: Color(0xFF0B1220),
+    chromeBorder: Color(0xFF2A3750),
     danger: Color(0xFFF87171),
     success: Color(0xFF4ADE80),
     warning: Color(0xFFFBBF24),
@@ -87,6 +100,8 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? primaryDark,
     Color? primaryTint,
     Color? navy,
+    Color? chrome,
+    Color? chromeBorder,
     Color? danger,
     Color? success,
     Color? warning,
@@ -102,6 +117,8 @@ class AppColors extends ThemeExtension<AppColors> {
       primaryDark: primaryDark ?? this.primaryDark,
       primaryTint: primaryTint ?? this.primaryTint,
       navy: navy ?? this.navy,
+      chrome: chrome ?? this.chrome,
+      chromeBorder: chromeBorder ?? this.chromeBorder,
       danger: danger ?? this.danger,
       success: success ?? this.success,
       warning: warning ?? this.warning,
@@ -150,13 +167,16 @@ ThemeData buildAppTheme(Brightness brightness) {
       surface: colors.surface,
     ),
     appBarTheme: AppBarTheme(
-      // The app bar is the navy chrome the sidebar is on the web, in both
-      // themes - so its foreground is pinned white rather than following the
-      // text token.
-      backgroundColor: colors.navy,
+      // The app bar is what the sidebar is on the web: brand navy in light
+      // mode, the page's own ground in dark so the logo carries no backdrop of
+      // its own. Its foreground stays white either way - both grounds are
+      // dark - and in dark mode a hairline, not a block of colour, separates
+      // it from the content below.
+      backgroundColor: colors.chrome,
       foregroundColor: kWhite,
       elevation: 0,
       centerTitle: false,
+      shape: Border(bottom: BorderSide(color: colors.chromeBorder)),
     ),
     cardTheme: CardThemeData(
       elevation: 0,

@@ -18,11 +18,33 @@ const (
 	clubRoleKey contextKey = "clubRole"
 )
 
-// Auth authenticates a request from its JWT Bearer token and puts the user id
-// in the request context.
-func Auth(secret string) func(http.Handler) http.Handler {
+// ApiKeyVerifier resolves the user a key token's hash belongs to. It's a
+// narrow interface rather than *store.ApiKeyStore so this package keeps not
+// depending on store.
+type ApiKeyVerifier interface {
+	VerifyHash(ctx context.Context, hash string) (userID string, err error)
+}
+
+// Auth authenticates a request and puts the user id in the request context,
+// accepting either an X-Api-Key header or a JWT Bearer token.
+//
+// X-Api-Key wins when both are present, and a bad key is rejected outright
+// rather than falling back to the JWT - a client that sent a key meant to use
+// it, and silently authenticating as somebody else's session would be worse
+// than a 401. Both paths set the same context value, so nothing downstream
+// (RequireActiveUser, ClubMembership, ...) can tell them apart.
+func Auth(secret string, apiKeys ApiKeyVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if userID, present, ok := apiKeyUserID(apiKeys, r); present {
+				if !ok {
+					jsonError(w, http.StatusUnauthorized, "Not authorised")
+					return
+				}
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userIDKey, userID)))
+				return
+			}
+
 			userID, ok := userIDFromRequest(secret, r)
 			if !ok {
 				jsonError(w, http.StatusUnauthorized, "Not authorised")
@@ -33,13 +55,33 @@ func Auth(secret string) func(http.Handler) http.Handler {
 	}
 }
 
+// apiKeyUserID resolves an X-Api-Key header. present reports whether the
+// header was sent at all, so the caller can tell "no key" (fall through to the
+// JWT) from "a key that doesn't verify" (reject).
+func apiKeyUserID(apiKeys ApiKeyVerifier, r *http.Request) (userID string, present, ok bool) {
+	token := r.Header.Get("X-Api-Key")
+	if apiKeys == nil || utils.IsBlank(token) {
+		return utils.EMPTY, false, false
+	}
+	userID, err := apiKeys.VerifyHash(r.Context(), utils.HashToken(token))
+	if err != nil || utils.IsBlank(userID) {
+		return utils.EMPTY, true, false
+	}
+	return userID, true, true
+}
+
 // OptionalAuth is Auth for endpoints that serve logged-out visitors too (a
-// shared public profile, the public feed): a valid token identifies the caller,
-// and a missing or bad one simply leaves them anonymous rather than rejecting
-// the request.
-func OptionalAuth(secret string) func(http.Handler) http.Handler {
+// shared public profile, the public feed): valid credentials identify the
+// caller, and missing or bad ones simply leave them anonymous rather than
+// rejecting the request. Unlike Auth, a bad API key here is not fatal - the
+// endpoint has an anonymous answer to give.
+func OptionalAuth(secret string, apiKeys ApiKeyVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if userID, _, ok := apiKeyUserID(apiKeys, r); ok {
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userIDKey, userID)))
+				return
+			}
 			if userID, ok := userIDFromRequest(secret, r); ok {
 				r = r.WithContext(context.WithValue(r.Context(), userIDKey, userID))
 			}

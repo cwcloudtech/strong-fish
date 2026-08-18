@@ -8,6 +8,7 @@ import (
 
 	"strong-fish-api/internal/handlers"
 	"strong-fish-api/internal/middleware"
+	"strong-fish-api/internal/openapi"
 	"strong-fish-api/internal/store"
 )
 
@@ -26,15 +27,21 @@ type Handlers struct {
 	Admin    *handlers.AdminHandler
 	Config   *handlers.ConfigHandler
 	Contact  *handlers.ContactHandler
+	ApiKey   *handlers.ApiKeyHandler
 }
 
 // Options carries the settings the middleware chain needs.
 type Options struct {
-	JWTSecret          string
+	JWTSecret string
+	// ApiKeys lets the auth middleware accept an X-Api-Key header as well as a
+	// bearer token. Nil simply means no key can authenticate.
+	ApiKeys            middleware.ApiKeyVerifier
 	ActivationMode     string
 	CorsEnabled        bool
 	CorsAllowedOrigins []string
 	ManifestPath       string
+	// Version labels the generated OpenAPI document.
+	Version string
 }
 
 func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) http.Handler {
@@ -51,7 +58,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 	// authenticated wraps a route group in "logged in and not disabled/banned".
 	authenticated := func(fn func(chi.Router)) func(chi.Router) {
 		return func(r chi.Router) {
-			r.Use(middleware.Auth(o.JWTSecret))
+			r.Use(middleware.Auth(o.JWTSecret, o.ApiKeys))
 			r.Use(middleware.RequireActiveUser(users, o.ActivationMode))
 			fn(r)
 		}
@@ -67,6 +74,16 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		// The contact form is deliberately public: someone who can't sign in is
 		// exactly who most needs to reach us.
 		r.Post("/contact", h.Contact.Create)
+
+		// Where to get the Android build, and a QR code of that link for
+		// someone reading this on a desktop. Public for the same reason the
+		// contact form is: you need the app before you have an account.
+		r.Get("/mobile-app", h.Config.MobileApp)
+
+		// A program its coach chose to share. Unauthenticated by design - the
+		// point is a link that works for anybody - and it is the store's
+		// visibility predicate, not this route, that decides what may be read.
+		r.Get("/public/programs/{programId}", h.Program.GetPublic)
 
 		r.Route("/oidc", func(r chi.Router) {
 			r.Get("/", h.OIDC.ListProviders)
@@ -95,7 +112,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			// /me needs a session but must stay reachable by a disabled account,
 			// so it can be told why it's blocked.
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.Auth(o.JWTSecret))
+				r.Use(middleware.Auth(o.JWTSecret, o.ApiKeys))
 				r.Get("/me", h.User.Me)
 			})
 
@@ -103,6 +120,21 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 				r.Put("/me", h.User.UpdateProfile)
 				r.Put("/me/picture", h.User.UpdatePicture)
 				r.Get("/search", h.User.Search)
+
+				// A member's own keys, and the CLI/mobile config built from
+				// one. The config endpoints POST the token they format
+				// because a custom request header would need a CORS
+				// exception on reverse proxies that a JSON body doesn't.
+				r.Route("/me/api-keys", func(r chi.Router) {
+					r.Get("/", h.ApiKey.List)
+					r.Post("/", h.ApiKey.Create)
+					r.Delete("/{keyId}", h.ApiKey.Delete)
+				})
+
+				r.Route("/me/config", func(r chi.Router) {
+					r.Post("/file", h.Config.ClientConfigFile)
+					r.Post("/qr", h.Config.ClientConfigQR)
+				})
 
 				r.Route("/me/mfa", func(r chi.Router) {
 					r.Get("/", h.MFA.Status)
@@ -120,7 +152,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		// a shared link works; OptionalAuth still identifies a logged-in caller
 		// so their own follow state and club-only posts come through.
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.OptionalAuth(o.JWTSecret))
+			r.Use(middleware.OptionalAuth(o.JWTSecret, o.ApiKeys))
 			r.Get("/profiles/{handle}", h.Profile.Get)
 			r.Get("/profiles/{handle}/posts", h.Profile.Posts)
 			r.Get("/profiles/{handle}/follows", h.Social.ListFollows)
@@ -270,6 +302,11 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			})
 		}))
 	})
+
+	// Generated once every /v1 route above is registered, so the document can
+	// never describe a router that isn't the one running.
+	r.Get("/openapi.json", handlers.NewOpenAPIHandler(openapi.Generate(r, "strong-fish API", o.Version)))
+	r.Get("/", handlers.ServeSwaggerUI)
 
 	return r
 }

@@ -5,7 +5,6 @@ import { toast } from "react-toastify";
 import toastOptions from "../utils/toastOptions";
 import { contact } from "../api/services";
 import AuthLayout from "../components/auth/AuthLayout";
-import { ErrorMessage } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
 
@@ -21,29 +20,25 @@ const EMPTY = { firstname: "", name: "", email: "", subject: "", message: "" };
  * browser never talks to CWCloud directly.
  */
 export default function Contact() {
-  const { t } = useI18n();
+  const { t, tError } = useI18n();
   const { user } = useAuth();
 
   // Prefill the address for a signed-in user rather than making them retype one
   // the app already knows.
   const [form, setForm] = useState(() => ({ ...EMPTY, email: user?.email || "" }));
-  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
 
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
 
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
-    setError(null);
     try {
       await contact.send(form);
       toast.success(t("contact.sent"), toastOptions);
       setForm({ ...EMPTY, email: user?.email || "" });
-      setSent(true);
     } catch (err) {
-      setError(err);
+      toast.error(tError(err), toastOptions);
     } finally {
       setBusy(false);
     }
@@ -55,8 +50,6 @@ export default function Contact() {
       <p className="sf-muted" style={{ textAlign: "center" }}>
         {t("contact.body")}
       </p>
-
-      {sent ? <div className="sf-notice">{t("contact.sent")}</div> : null}
 
       <form onSubmit={submit}>
         <div className="sf-row" style={{ gap: "0.6rem", alignItems: "flex-start" }}>
@@ -110,8 +103,6 @@ export default function Contact() {
             required
           />
         </div>
-
-        <ErrorMessage error={error} />
 
         <button className="sf-button" type="submit" style={{ width: "100%" }} disabled={busy}>
           {busy ? t("common.loading") : t("contact.send")}

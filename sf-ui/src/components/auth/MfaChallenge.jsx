@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { toast } from "react-toastify";
 
-import { ErrorMessage } from "../common/Feedback";
+import toastOptions from "../../utils/toastOptions";
 import { useI18n } from "../../i18n/I18nContext";
 import { getAssertion, isWebAuthnSupported } from "../../utils/webauthn";
 
@@ -9,19 +10,17 @@ import { getAssertion, isWebAuthnSupported } from "../../utils/webauthn";
  * OIDC one, which both end up with the same short-lived challenge token.
  */
 export default function MfaChallenge({ challenge, onVerified, onCancel, verifyTotp, beginWebauthn, finishWebauthn }) {
-  const { t } = useI18n();
+  const { t, tError } = useI18n();
   const [code, setCode] = useState("");
-  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const submitTotp = async (event) => {
     event.preventDefault();
     setBusy(true);
-    setError(null);
     try {
       await onVerified(await verifyTotp(code));
     } catch (err) {
-      setError(err);
+      toast.error(tError(err), toastOptions);
     } finally {
       setBusy(false);
     }
@@ -29,17 +28,16 @@ export default function MfaChallenge({ challenge, onVerified, onCancel, verifyTo
 
   const submitWebauthn = async () => {
     if (!isWebAuthnSupported()) {
-      setError(t("mfa.unsupported"));
+      toast.error(t("mfa.unsupported"), toastOptions);
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       const { ceremonyToken, options } = await beginWebauthn();
       const credential = await getAssertion(options);
       await onVerified(await finishWebauthn({ ceremonyToken, credential }));
     } catch (err) {
-      setError(err);
+      toast.error(tError(err), toastOptions);
     } finally {
       setBusy(false);
     }
@@ -70,14 +68,11 @@ export default function MfaChallenge({ challenge, onVerified, onCancel, verifyTo
               {t("auth.mfaCodeHelp")}
             </p>
           </div>
-          <ErrorMessage error={error} />
           <button className="sf-button" type="submit" style={{ width: "100%" }} disabled={busy || code.length < 6}>
             {busy ? t("common.loading") : t("auth.mfaVerify")}
           </button>
         </form>
-      ) : (
-        <ErrorMessage error={error} />
-      )}
+      ) : null}
 
       {challenge.hasWebAuthn ? (
         <>

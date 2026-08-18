@@ -19,6 +19,9 @@ dependencies:
   image_picker: ^1.1.2
   url_launcher: ^6.3.1
   package_info_plus: ^10.2.1
+  # Reads the QR code the web app's API-keys screen shows, which is what
+  # enrols this device without typing a password.
+  mobile_scanner: ^7.4.0
 
 dev_dependencies:
   flutter_test:

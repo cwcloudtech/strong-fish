@@ -7,19 +7,17 @@ import toastOptions from "../utils/toastOptions";
 import { auth, mfa } from "../api/services";
 import MfaChallenge from "../components/auth/MfaChallenge";
 import OidcButtons from "../components/auth/OidcButtons";
-import { ErrorMessage } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
 
 export default function Login() {
-  const { t } = useI18n();
+  const { t, tError } = useI18n();
   const { login } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   // Set when the password was right but the account has a second factor: the
   // form is replaced by the challenge rather than navigating, so a failed code
@@ -38,7 +36,6 @@ export default function Login() {
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
-    setError(null);
     try {
       const response = await auth.login(email, password);
       if (response.mfaRequired) {
@@ -46,9 +43,10 @@ export default function Login() {
         return;
       }
       await login(response);
+      toast.success(t("auth.welcomeBack"), toastOptions);
       navigate("/dashboard/feed");
     } catch (err) {
-      setError(err);
+      toast.error(tError(err), toastOptions);
     } finally {
       setBusy(false);
     }
@@ -103,7 +101,6 @@ export default function Login() {
                   required
                 />
               </div>
-              <ErrorMessage error={error} />
               <button className="sf-button" type="submit" style={{ width: "100%" }} disabled={busy}>
                 {busy ? t("common.loading") : t("auth.login")}
               </button>

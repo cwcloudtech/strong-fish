@@ -64,6 +64,10 @@ const (
 	CodeInvalidReportTarget  = "errors.invalidReportTarget"
 	CodeReportReasonRequired = "errors.reportReasonRequired"
 	CodeForbidden            = "errors.forbidden"
+	// API keys, and the CLI/mobile config built from one.
+	CodeApiKeyDescription   = "errors.apiKeyDescription"
+	CodeInvalidExpiration   = "errors.invalidExpiration"
+	CodeConfigTokenRequired = "errors.configTokenRequired"
 	// The contact form's own failures, including the ones CWCloud's
 	// contact-request API reports back (see cwcloudContactErrors).
 	CodeContactFormNotConfigured = "errors.contactFormNotConfigured"

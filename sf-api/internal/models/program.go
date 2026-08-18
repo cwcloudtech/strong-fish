@@ -7,6 +7,7 @@ import "time"
 type Program struct {
 	ID          string `json:"id"`
 	ClubID      string `json:"clubId"`
+	ClubName    string `json:"clubName,omitempty"`
 	AuthorID    string `json:"authorId"`
 	AuthorName  string `json:"authorName,omitempty"`
 	Name        string `json:"name"`
@@ -14,11 +15,41 @@ type Program struct {
 	Weeks       int    `json:"weeks"`
 	// SourceFileName is the uploaded spreadsheet's name, kept so a coach can
 	// tell two imports of the same block apart.
-	SourceFileName string    `json:"sourceFileName,omitempty"`
-	DayCount       int       `json:"dayCount"`
-	SetCount       int       `json:"setCount"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	SourceFileName string `json:"sourceFileName,omitempty"`
+	// Visibility is who may read the program: its club's members
+	// (ProgramVisibilityClub, the default) or anybody holding the link
+	// (ProgramVisibilityPublic). Sharing is always opted into - a program with
+	// no stored visibility reads as club-only.
+	Visibility string    `json:"visibility"`
+	DayCount   int       `json:"dayCount"`
+	SetCount   int       `json:"setCount"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+// Program visibilities.
+const (
+	ProgramVisibilityClub   = "club"
+	ProgramVisibilityPublic = "public"
+)
+
+// IsValidProgramVisibility reports whether visibility is one this app knows.
+func IsValidProgramVisibility(visibility string) bool {
+	switch visibility {
+	case ProgramVisibilityClub, ProgramVisibilityPublic:
+		return true
+	}
+	return false
+}
+
+// NormalizeProgramVisibility maps anything unrecognized - including the empty
+// string a program written before sharing existed carries - onto club-only, so
+// an unknown value can never widen an audience.
+func NormalizeProgramVisibility(visibility string) string {
+	if visibility == ProgramVisibilityPublic {
+		return ProgramVisibilityPublic
+	}
+	return ProgramVisibilityClub
 }
 
 // ProgramDay is one training session - "WEEK 2 DAY 3" in the source

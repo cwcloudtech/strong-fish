@@ -5,6 +5,7 @@ import Modal, { ConfirmModal } from "../common/Modal";
 import SetFormModal from "./SetFormModal";
 import { ErrorMessage } from "../common/Feedback";
 import { programs as programsApi } from "../../api/services";
+import { describeLoad, formatReps } from "../../utils/setFormat";
 import { useI18n } from "../../i18n/I18nContext";
 
 const exerciseLabel = (set, locale) =>
@@ -87,7 +88,7 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
                   {exerciseLabel(set, locale)}
                   {set.notes ? <div className="sf-muted">{set.notes}</div> : null}
                 </td>
-                <td className="sf-table-num">{set.reps}</td>
+                <td className="sf-table-num">{formatReps(set)}</td>
                 <td className="sf-muted">{describeLoad(t, set)}</td>
                 <td className="sf-table-num">
                   <div className="sf-row" style={{ justifyContent: "flex-end", gap: "0.25rem" }}>
@@ -167,20 +168,6 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
       ) : null}
     </div>
   );
-}
-
-/** A one-line summary of how a set is loaded, for the authoring table. */
-function describeLoad(t, set) {
-  switch (set.loadMode) {
-    case "rpe":
-      return `${t("session.rpe")} ${set.rpe ?? "—"}`;
-    case "percentage":
-      return `${set.percentage ?? "—"}%`;
-    case "absolute":
-      return `${set.absoluteLoad ?? "—"} ${t("common.kg")}`;
-    default:
-      return t("session.bodyweight");
-  }
 }
 
 /** Creates or renumbers a session. */

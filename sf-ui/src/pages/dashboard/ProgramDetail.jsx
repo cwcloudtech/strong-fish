@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiEdit2, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiCopy, FiEdit2, FiGlobe, FiLock, FiPlus, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { clubs as clubsApi, programs as programsApi } from "../../api/services";
@@ -38,6 +38,7 @@ export default function ProgramDetail() {
   // both at once would put two sets of controls on every row.
   const [building, setBuilding] = useState(false);
   const [addingSession, setAddingSession] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -74,6 +75,37 @@ export default function ProgramDetail() {
     } catch (err) {
       setError(err);
     }
+  };
+
+  // Publishing is a two-state switch, not a form: a program is either scoped
+  // to the club's members or readable by anybody holding its link. The link
+  // itself is just the program's id - unguessable, but the visibility flag is
+  // what actually authorises the read (see the API's FindPublicByID), so an
+  // old link stops working the moment this is turned off.
+  const setVisibility = async (visibility) => {
+    setPublishing(true);
+    try {
+      await programsApi.update(clubId, programId, {
+        name: program.name,
+        description: program.description || "",
+        visibility,
+      });
+      toast.success(visibility === "public" ? t("programs.published") : t("programs.unpublished"), toastOptions);
+      await load();
+    } catch (err) {
+      toast.error(t("errors.generic"), toastOptions);
+      setError(err);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const copyShareLink = () => {
+    const link = `${window.location.origin}/programs/${programId}`;
+    navigator.clipboard
+      ?.writeText(link)
+      .then(() => toast.success(t("common.copied"), toastOptions))
+      .catch(() => toast.error(t("errors.copyFailed"), toastOptions));
   };
 
   const unassign = async (assignment) => {
@@ -121,6 +153,32 @@ export default function ProgramDetail() {
 
       {canManage ? (
         <div className="sf-card">
+          <div className="sf-row-between" style={{ alignItems: "center", marginBottom: "0.8rem" }}>
+            <div>
+              <strong>
+                {program.visibility === "public" ? <FiGlobe /> : <FiLock />}{" "}
+                {program.visibility === "public" ? t("programs.public") : t("programs.private")}
+              </strong>
+              <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
+                {program.visibility === "public" ? t("programs.publicHelp") : t("programs.privateHelp")}
+              </div>
+            </div>
+            <div className="sf-row" style={{ gap: "0.4rem" }}>
+              {program.visibility === "public" ? (
+                <button className="sf-button sf-button-secondary sf-button-sm" onClick={copyShareLink}>
+                  <FiCopy /> {t("programs.copyLink")}
+                </button>
+              ) : null}
+              <button
+                className="sf-button sf-button-secondary sf-button-sm"
+                onClick={() => setVisibility(program.visibility === "public" ? "club" : "public")}
+                disabled={publishing}
+              >
+                {program.visibility === "public" ? t("programs.unpublish") : t("programs.publish")}
+              </button>
+            </div>
+          </div>
+
           <div className="sf-row-between">
             <div className="sf-field" style={{ margin: 0, minWidth: 220 }}>
               <label className="sf-label">{t("programs.viewAs")}</label>

@@ -4,7 +4,10 @@ import {
   FiActivity,
   FiAward,
   FiBarChart2,
+  FiChevronLeft,
+  FiChevronRight,
   FiInfo,
+  FiKey,
   FiLogOut,
   FiMail,
   FiMenu,
@@ -17,12 +20,16 @@ import {
 
 import { admin } from "../../api/services";
 import Avatar from "../common/Avatar";
+import DownloadAppButton from "../common/DownloadApp";
 import Dropdown from "../common/Dropdown";
 import LanguageDropdown from "../common/LanguageDropdown";
 import Logo from "../common/Logo";
+import Tooltip from "../common/Tooltip";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import { useTheme } from "../../context/ThemeContext";
+
+const COLLAPSED_KEY = "sf.sidebarCollapsed";
 
 export default function DashboardLayout() {
   const { t } = useI18n();
@@ -31,7 +38,12 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Collapsing the rail is a lasting preference, not a per-visit one: someone
+  // who wants the room back wants it on every screen and every session.
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === "1");
   const [openReports, setOpenReports] = useState(0);
+
+  useEffect(() => localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0"), [collapsed]);
 
   // Close the mobile drawer whenever the route changes, so tapping a link
   // doesn't leave it covering the page it just opened.
@@ -58,6 +70,7 @@ export default function DashboardLayout() {
   ];
   if (isCoach) links.push({ to: "/dashboard/exercises", label: t("nav.exercises"), icon: <FiActivity /> });
   links.push({ to: "/dashboard/settings", label: t("nav.settings"), icon: <FiUser /> });
+  links.push({ to: "/dashboard/api-keys", label: t("nav.apiKeys"), icon: <FiKey /> });
   links.push({ to: "/about", label: t("nav.about"), icon: <FiInfo /> });
   if (config?.contactEnabled) {
     links.push({ to: "/contact", label: t("nav.contact"), icon: <FiMail /> });
@@ -68,31 +81,52 @@ export default function DashboardLayout() {
 
   return (
     <div className="sf-shell">
-      <aside className={`sf-sidebar ${menuOpen ? "open" : ""}`}>
+      <aside className={`sf-sidebar ${menuOpen ? "open" : ""} ${collapsed ? "collapsed" : ""}`}>
+        <Tooltip label={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} position="right">
+          <button
+            type="button"
+            className="sf-sidebar-toggle"
+            onClick={() => setCollapsed((current) => !current)}
+            aria-label={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
+            aria-expanded={!collapsed}
+          >
+            {collapsed ? <FiChevronRight /> : <FiChevronLeft />}
+          </button>
+        </Tooltip>
+
         {/* The mark alone: the logo carries the name, so repeating it as text
-            beside it only crowds the rail. The sidebar is navy in both themes,
-            so the mark is pinned to the light-inked variant rather than
-            following the app's theme. */}
+            beside it only crowds the rail. The rail's ground is the brand navy
+            in light mode and the app's own background in dark, so the mark is
+            pinned to the light-inked variant in both rather than following the
+            theme. */}
         <Link className="sf-sidebar-brand" to="/dashboard/feed" aria-label={t("app.name")}>
           <Logo mark on="dark" alt={t("app.name")} />
         </Link>
 
         <nav>
           {links.map((link) => (
-            <NavLink key={link.to} to={link.to} className="sf-nav-link">
-              {link.icon}
-              {link.label}
-              {link.count ? <span className="sf-nav-count">{link.count}</span> : null}
-            </NavLink>
+            /* Collapsed, the icon is all that's left of a link, so the label
+               has to come back as a tooltip. Expanded, it's already on screen
+               and a bubble repeating it would just be noise. */
+            <Tooltip key={link.to} label={collapsed ? link.label : null} position="right">
+              <NavLink to={link.to} className="sf-nav-link">
+                {link.icon}
+                <span className="sf-nav-label">{link.label}</span>
+                {link.count ? <span className="sf-nav-count">{link.count}</span> : null}
+              </NavLink>
+            </Tooltip>
           ))}
+          <DownloadAppButton collapsed={collapsed} />
         </nav>
 
         <div className="sf-sidebar-footer">
           {user?.handle ? (
-            <Link className="sf-nav-link" to={`/profile/${user.handle}`}>
-              <Avatar user={user} size="sf-avatar-sm" />
-              {user.name}
-            </Link>
+            <Tooltip label={collapsed ? user.name : null} position="right">
+              <Link className="sf-nav-link" to={`/profile/${user.handle}`}>
+                <Avatar user={user} size="sf-avatar-sm" />
+                <span className="sf-nav-label">{user.name}</span>
+              </Link>
+            </Tooltip>
           ) : null}
 
           <div className="sf-sidebar-actions">
@@ -111,15 +145,17 @@ export default function DashboardLayout() {
             <LanguageDropdown variant="dark" />
           </div>
 
-          <button
-            type="button"
-            className="sf-nav-link"
-            onClick={signOut}
-            style={{ background: "none", border: 0, cursor: "pointer", width: "100%" }}
-          >
-            <FiLogOut />
-            {t("common.logout")}
-          </button>
+          <Tooltip label={collapsed ? t("common.logout") : null} position="right">
+            <button
+              type="button"
+              className="sf-nav-link"
+              onClick={signOut}
+              style={{ background: "none", border: 0, cursor: "pointer", width: "100%" }}
+            >
+              <FiLogOut />
+              <span className="sf-nav-label">{t("common.logout")}</span>
+            </button>
+          </Tooltip>
         </div>
       </aside>
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { FiArrowLeft } from "react-icons/fi";
 import Markdown from "react-markdown";
 
 import Logo from "../components/common/Logo";
@@ -19,6 +20,7 @@ import { useI18n } from "../i18n/I18nContext";
 export default function About() {
   const { t, locale } = useI18n();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [content, setContent] = useState(null);
   const [error, setError] = useState(null);
 
@@ -60,9 +62,25 @@ export default function About() {
         <Link to={user ? "/dashboard/feed" : "/login"} aria-label={t("app.name")}>
           <Logo style={{ width: 170 }} />
         </Link>
-        <Link className="sf-button sf-button-secondary" to={user ? "/dashboard/feed" : "/login"}>
-          {user ? t("nav.feed") : t("auth.login")}
-        </Link>
+        {/* Back to wherever the reader came from - the page is reachable from
+            the sidebar, from the signed-out footer and from a shared link, so
+            a fixed destination would be wrong for two of the three. History
+            can be empty (the link was opened in a new tab), and then the home
+            the reader does have is the fallback. */}
+        <div className="sf-row" style={{ gap: "0.5rem" }}>
+          <button
+            type="button"
+            className="sf-button sf-button-secondary"
+            onClick={() =>
+              window.history.length > 1 ? navigate(-1) : navigate(user ? "/dashboard/feed" : "/login")
+            }
+          >
+            <FiArrowLeft /> {t("common.back")}
+          </button>
+          <Link className="sf-button sf-button-secondary" to={user ? "/dashboard/feed" : "/login"}>
+            {user ? t("nav.feed") : t("auth.login")}
+          </Link>
+        </div>
       </div>
 
       <div className="sf-card">

@@ -3,20 +3,24 @@ package xlsximport
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"strong-fish-api/internal/loadcalc"
 )
 
-// referenceProgram is the spreadsheet the import format was reverse-engineered
-// from. It lives outside the module (it's the instruction's own asset, not a
-// fixture), so a checkout without it skips these tests rather than failing.
-const referenceProgram = "../../../ai-gen/assets/program.xlsx"
+// The spreadsheets the two import formats were reverse-engineered from. They
+// live outside the module (they're the instruction's own assets, not
+// fixtures), so a checkout without them skips these tests rather than failing.
+const (
+	referenceProgram      = "../../../ai-gen/assets/program_1.xlsx"
+	referenceBlockProgram = "../../../ai-gen/assets/program_2.xlsx"
+)
 
-func loadReference(t *testing.T) *ParsedProgram {
+func loadProgram(t *testing.T, path string) *ParsedProgram {
 	t.Helper()
 
-	data, err := os.ReadFile(filepath.Clean(referenceProgram))
+	data, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
 		t.Skipf("reference program not available (%v)", err)
 	}
@@ -25,6 +29,11 @@ func loadReference(t *testing.T) *ParsedProgram {
 		t.Fatalf("Parse: %v", err)
 	}
 	return program
+}
+
+func loadReference(t *testing.T) *ParsedProgram {
+	t.Helper()
+	return loadProgram(t, referenceProgram)
 }
 
 func TestParseReferenceProgramStructure(t *testing.T) {
@@ -197,5 +206,193 @@ func TestNoTitleRowsImportedAsExercises(t *testing.T) {
 func TestParseRejectsNonSpreadsheet(t *testing.T) {
 	if _, err := Parse([]byte("this is not a workbook")); err == nil {
 		t.Error("expected an error for a file that isn't a spreadsheet")
+	}
+}
+
+// --- block-per-sheet layout (program_2.xlsx) ---
+
+func TestParseBlockProgramStructure(t *testing.T) {
+	program := loadProgram(t, referenceBlockProgram)
+
+	// Two block sheets, four W columns and four sessions each. The blocks are
+	// consecutive, not parallel: the second block's W1 is program week 5.
+	if program.Weeks != 8 {
+		t.Errorf("weeks = %d, want 8", program.Weeks)
+	}
+	if len(program.Days) != 32 {
+		t.Errorf("days = %d, want 32", len(program.Days))
+	}
+
+	seen := map[[2]int]string{}
+	for _, day := range program.Days {
+		key := [2]int{day.Week, day.Day}
+		if previous, clash := seen[key]; clash {
+			t.Errorf("week %d day %d parsed twice (%q and %q)", day.Week, day.Day, previous, day.Title)
+		}
+		seen[key] = day.Title
+		if day.Week < 1 || day.Week > 8 || day.Day < 1 || day.Day > 4 {
+			t.Errorf("day %q numbered week %d day %d, out of range", day.Title, day.Week, day.Day)
+		}
+		if len(day.Sets) == 0 {
+			t.Errorf("week %d day %d has no sets", day.Week, day.Day)
+		}
+	}
+}
+
+// TestBlockWeeksRepeatThePrescription pins the defining property of this
+// layout: the coach writes each session once and it runs every week of the
+// block. Week 2 exists as its own set of days so a member can log it
+// separately, and it has to prescribe exactly what week 1 did.
+func TestBlockWeeksRepeatThePrescription(t *testing.T) {
+	program := loadProgram(t, referenceBlockProgram)
+
+	byKey := map[[2]int]ParsedDay{}
+	for _, day := range program.Days {
+		byKey[[2]int{day.Week, day.Day}] = day
+	}
+
+	for day := 1; day <= 4; day++ {
+		first, ok := byKey[[2]int{1, day}]
+		if !ok {
+			t.Fatalf("week 1 day %d missing", day)
+		}
+		for week := 2; week <= 4; week++ {
+			other := byKey[[2]int{week, day}]
+			if len(other.Sets) != len(first.Sets) {
+				t.Errorf("week %d day %d has %d sets, week 1 has %d", week, day, len(other.Sets), len(first.Sets))
+				continue
+			}
+			for i := range first.Sets {
+				if other.Sets[i].ExerciseSlug != first.Sets[i].ExerciseSlug ||
+					other.Sets[i].Reps != first.Sets[i].Reps {
+					t.Errorf("week %d day %d set %d = %s x%d, want %s x%d", week, day, i,
+						other.Sets[i].ExerciseSlug, other.Sets[i].Reps,
+						first.Sets[i].ExerciseSlug, first.Sets[i].Reps)
+				}
+			}
+		}
+	}
+}
+
+// TestBlockImportsNoAthleteLog guards the instruction that the W* columns are
+// one athlete's feedback, not the program: a block sheet prescribes effort
+// only, so nothing it imports may carry a weight.
+func TestBlockImportsNoAthleteLog(t *testing.T) {
+	program := loadProgram(t, referenceBlockProgram)
+
+	for _, day := range program.Days {
+		for _, set := range day.Sets {
+			if set.AbsoluteLoad != nil {
+				t.Errorf("%s: %s carries an absolute load of %g", day.Title, set.ExerciseSlug, *set.AbsoluteLoad)
+			}
+			if set.Percentage != nil {
+				t.Errorf("%s: %s carries a percentage of %g", day.Title, set.ExerciseSlug, *set.Percentage)
+			}
+			if set.LoadMode != loadcalc.ModeRPE && set.LoadMode != loadcalc.ModeBodyweight {
+				t.Errorf("%s: %s has load mode %q", day.Title, set.ExerciseSlug, set.LoadMode)
+			}
+		}
+	}
+}
+
+// TestBlockExpandsSetsAndReps covers the "3 x 8" cell: a set count and a rep
+// target, one prescribed set per count. "3 x AMRAP" has no rep number to work
+// a load out of, so it keeps the coach's word instead of inventing one.
+func TestBlockExpandsSetsAndReps(t *testing.T) {
+	cases := []struct {
+		cell      string
+		count     int
+		reps      int
+		repsLabel string
+		ok        bool
+	}{
+		{"1 x 3", 1, 3, "", true},
+		{"3 x 3", 3, 3, "", true},
+		{"4 x 10", 4, 10, "", true},
+		{"3 x AMRAP", 3, 0, "AMRAP", true},
+		{"5", 1, 5, "", true},
+		{"", 0, 0, "", false},
+		{"as it comes", 0, 0, "", false},
+		// A mis-typed cell must not expand into hundreds of sets.
+		{"300 x 5", 0, 0, "", false},
+	}
+
+	for _, c := range cases {
+		count, reps, label, ok := parseSetsReps(c.cell)
+		if ok != c.ok || count != c.count || reps != c.reps || label != c.repsLabel {
+			t.Errorf("parseSetsReps(%q) = (%d, %d, %q, %t), want (%d, %d, %q, %t)",
+				c.cell, count, reps, label, ok, c.count, c.reps, c.repsLabel, c.ok)
+		}
+	}
+}
+
+func TestBlockAmrapKeepsTheInstruction(t *testing.T) {
+	program := loadProgram(t, referenceBlockProgram)
+
+	found := false
+	for _, day := range program.Days {
+		for _, set := range day.Sets {
+			if set.ExerciseSlug != "dips-tractions" {
+				continue
+			}
+			found = true
+			if set.Reps != 0 {
+				t.Errorf("AMRAP set has reps = %d, want 0 (no rep target was prescribed)", set.Reps)
+			}
+			if !strings.Contains(set.Notes, "AMRAP") {
+				t.Errorf("AMRAP set notes = %q, want the instruction kept", set.Notes)
+			}
+			if set.LoadMode != loadcalc.ModeBodyweight {
+				t.Errorf("AMRAP set load mode = %q, want %q", set.LoadMode, loadcalc.ModeBodyweight)
+			}
+		}
+	}
+	if !found {
+		t.Error("the AMRAP movement was not imported")
+	}
+}
+
+// TestBlockNamesAreTidied covers the trailing colon these sheets end every
+// movement with: "COMP.DEADLIFT: " and "COMP.DEADLIFT" are the same exercise,
+// and importing both would split one movement's history in two.
+func TestBlockNamesAreTidied(t *testing.T) {
+	program := loadProgram(t, referenceBlockProgram)
+
+	slugs := map[string]bool{}
+	for _, exercise := range program.Exercises {
+		if strings.HasSuffix(exercise.Name, ":") || exercise.Name != strings.TrimSpace(exercise.Name) {
+			t.Errorf("exercise name %q was not tidied", exercise.Name)
+		}
+		if slugs[exercise.Slug] {
+			t.Errorf("exercise slug %q collected twice", exercise.Slug)
+		}
+		slugs[exercise.Slug] = true
+	}
+
+	// The deadlift is written "COMP.DEADLIFT:" in one session and
+	// "COMP.DEADLIFT: " in another; both must land on one entry.
+	if !slugs["comp-deadlift"] {
+		t.Errorf("comp-deadlift missing from %v", slugs)
+	}
+}
+
+// TestBothFormatsAreDetected is the instruction's actual requirement: the same
+// upload path takes either layout, told apart by the file's own shape.
+func TestBothFormatsAreDetected(t *testing.T) {
+	week := loadProgram(t, referenceProgram)
+	block := loadProgram(t, referenceBlockProgram)
+
+	// The week-per-sheet file is numbered by its own sheets and carries the
+	// reference maxes its percentages were authored against.
+	if len(week.RefOneRMs) == 0 {
+		t.Error("the week-per-sheet program lost its reference 1RMs")
+	}
+	// The block file has no refs sheet at all, and prescribes no percentages.
+	if len(block.RefOneRMs) != 0 {
+		t.Errorf("the block program invented reference 1RMs: %v", block.RefOneRMs)
+	}
+	if block.Weeks <= week.Weeks {
+		t.Errorf("block weeks = %d, week-per-sheet weeks = %d; the two files were parsed the same way",
+			block.Weeks, week.Weeks)
 	}
 }

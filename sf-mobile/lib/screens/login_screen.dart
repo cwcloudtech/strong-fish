@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../api/api_exception.dart';
 import '../providers/providers.dart';
 import '../widgets/logo.dart';
+import 'scan_qr_screen.dart';
 
 /// Login, sign-up, and the second-factor step, in one screen.
 ///
@@ -191,6 +192,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         onPressed: _busy ? null : _submit,
         child: Text(_busy ? t('common.loading') : _submitLabel(t)),
       ),
+      // Scanning a key is an alternative to the password above, not a step
+      // after it - so it only shows on the login form, never mid sign-up or
+      // mid second factor.
+      if (_mode == _Mode.login) ...[
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _scanQr,
+          icon: const Icon(Icons.qr_code_scanner, size: 18),
+          label: Text(t('auth.scanQr')),
+        ),
+      ],
       const SizedBox(height: 8),
       ..._footer(t),
     ];
@@ -283,6 +295,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         child: Text(_showServer ? t('common.close') : 'Server settings'),
       ),
     ];
+  }
+
+  /// Opens the scanner. It signs the device in by itself when a code reads;
+  /// this screen just gets out of the way once the session exists, and stays
+  /// put (with whatever the user typed) when they back out.
+  Future<void> _scanQr() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const ScanQrScreen()),
+    );
   }
 
   String _submitLabel(String Function(String, [Map<String, String>?]) t) => switch (_mode) {
