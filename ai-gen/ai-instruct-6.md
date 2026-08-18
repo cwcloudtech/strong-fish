@@ -27,3 +27,8 @@ I also want to be able to parse program like this one: [program_2](./assets/prog
 Each tabs can be an entire bloc containing multiple weeks (W1 is week 1 for example)
 
 You have to detect both format.
+
+## Public or private program
+
+A program can also be shared in public without authentication.
+(by default it's private and scoped to members of the club).
