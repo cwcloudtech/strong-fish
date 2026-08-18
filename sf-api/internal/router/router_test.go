@@ -59,6 +59,7 @@ var routes = []struct{ method, path string }{
 	{"GET", "/v1/mobile-app"},
 	{"GET", "/v1/metrics"},
 	{"GET", "/v1/public/programs/prog-1"},
+	{"GET", "/v1/public/posts/post-1"},
 	{"GET", "/v1/calendar/tok-1.ics"},
 
 	{"GET", "/v1/oidc"},

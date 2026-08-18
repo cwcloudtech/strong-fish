@@ -25,6 +25,7 @@ import Messages from "./pages/dashboard/Messages";
 import OidcCallback from "./pages/OidcCallback";
 import OneRms from "./pages/dashboard/OneRms";
 import ProgramDetail from "./pages/dashboard/ProgramDetail";
+import PublicPost from "./pages/PublicPost";
 import PublicProgram from "./pages/PublicProgram";
 import Profile from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword";
@@ -68,6 +69,7 @@ function AppRoutes() {
             {/* A program its coach shared: readable by anybody holding the
                 link, which is the whole point of publishing one. */}
             <Route path="/programs/:programId" element={<PublicProgram />} />
+            <Route path="/posts/:postId" element={<PublicPost />} />
             <Route path="/contact" element={<Contact />} />
 
             <Route

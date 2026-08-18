@@ -239,6 +239,12 @@ export const mobileApp = {
 
 // --- programs shared publicly ---
 
+export const publicPosts = {
+  // Readable with no account, and only ever a post published to everybody -
+  // the API's own visibility predicate decides, not this call.
+  get: (postId) => body(client.get(`/public/posts/${postId}`)),
+};
+
 export const publicPrograms = {
   get: (programId) => body(client.get(`/public/programs/${programId}`)),
 };

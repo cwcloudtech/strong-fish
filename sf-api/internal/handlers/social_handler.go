@@ -277,6 +277,36 @@ func (h *SocialHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, decoratePost(post, callerID, superadmin))
 }
 
+// GetPublicPost serves a post its author published to everybody, to a caller
+// who may well be anonymous - which is what makes a shared link work when a
+// stranger opens it from Instagram.
+//
+// A club-only post is reported as missing rather than forbidden: the
+// difference would confirm the id exists to somebody guessing.
+func (h *SocialHandler) GetPublicPost(w http.ResponseWriter, r *http.Request) {
+	post, err := h.social.FindPublicPost(r.Context(), chi.URLParam(r, "postId"))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Post not found", CodeNotFound)
+		return
+	}
+
+	// Paged like every other listing; the store applies its own default size
+	// when the caller asks for none.
+	page, size := pagination(r)
+	comments, total, err := h.social.ListComments(r.Context(), post.ID, page, size)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"post": post,
+		// Read-only for a visitor: replying needs an account.
+		"comments":      comments,
+		"totalComments": total,
+	})
+}
+
 func (h *SocialHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 	post, _, _, ok := h.authorizePost(w, r, true)
 	if !ok {

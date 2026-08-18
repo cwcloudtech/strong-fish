@@ -105,6 +105,10 @@ const en = {
     bodyweight: "Bodyweight",
     visibility: "Who can see my profile",
     visibilityPublic: "Everyone",
+    postUnavailable: "This post is not available. It may have been deleted, or shared only with a club.",
+    joinToReply: "Join strong-fish to like this post and reply to it.",
+    likes: "{{count}} likes",
+    comments: "{{count}} comments",
     visibilityClubs: "My clubs",
     visibilityPrivate: "My coaches only",
     visibilityHelp: {

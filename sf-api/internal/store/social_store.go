@@ -157,6 +157,19 @@ func (s *SocialStore) FindPost(ctx context.Context, id, callerID string) (models
 	return scanPost(s.pool.QueryRow(ctx, postSelect+` WHERE p.id = $2`, callerID, id))
 }
 
+// FindPublicPost returns a post only when its author published it to
+// everybody.
+//
+// The visibility predicate is in the query rather than in a caller-side check,
+// so the unauthenticated path cannot read a club-only post even if it forgets
+// to look. The caller id is the empty placeholder: there is nobody to resolve
+// "did I like this" against.
+func (s *SocialStore) FindPublicPost(ctx context.Context, id string) (models.Post, error) {
+	return scanPost(s.pool.QueryRow(ctx,
+		postSelect+` WHERE p.id = $2 AND p.data->>'visibility' = $3`,
+		anonymousUserID, id, models.VisibilityPublic))
+}
+
 func (s *SocialStore) DeletePost(ctx context.Context, id string) error {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM posts WHERE id = $1`, id)
 	if err != nil {
