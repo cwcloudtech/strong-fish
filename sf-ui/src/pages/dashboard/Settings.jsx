@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
-import { auth, mfa as mfaApi } from "../../api/services";
+import { auth, media as mediaApi, mfa as mfaApi } from "../../api/services";
 import Avatar from "../../components/common/Avatar";
 import Modal from "../../components/common/Modal";
 import { ErrorMessage, Spinner } from "../../components/common/Feedback";
@@ -175,7 +175,203 @@ export default function Settings() {
       </form>
 
       <MfaSettings />
+      <StorageSettings />
     </div>
+  );
+}
+
+/**
+ * Where this member's uploaded videos go.
+ *
+ * strong-fish hosts no video of its own, so posting one means bringing a
+ * bucket - S3-compatible or a Google Drive folder. The credentials are
+ * write-only: the API sends back a marker rather than the key, and echoing
+ * that marker back on save is what lets somebody change their bucket name
+ * without retyping a secret they can no longer read.
+ */
+function StorageSettings() {
+  const { t } = useI18n();
+  const [state, setState] = useState(null);
+  const [form, setForm] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const result = await mediaApi.storage();
+      setState(result);
+      setForm({
+        type: result.connection?.type || "s3",
+        endpoint: result.connection?.endpoint || "",
+        bucketName: result.connection?.bucketName || "",
+        region: result.connection?.region || "",
+        accessKey: result.connection?.accessKey || "",
+        secretKey: result.connection?.secretKey || "",
+        serviceAccountBase64: result.connection?.serviceAccountBase64 || "",
+        folderId: result.connection?.folderId || "",
+        path: result.connection?.path || "",
+        publicBaseUrl: result.connection?.publicBaseUrl || "",
+      });
+    } catch {
+      setState({ configured: false });
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (!state || !form) return null;
+
+  const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  const save = async (event) => {
+    event.preventDefault();
+    setBusy(true);
+    try {
+      setState(await mediaApi.setStorage(form));
+      toast.success(t("storage.saved"), toastOptions);
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t("errors.generic"), toastOptions);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clear = async () => {
+    setBusy(true);
+    try {
+      setState(await mediaApi.clearStorage());
+      toast.success(t("storage.cleared"), toastOptions);
+      await load();
+    } catch {
+      toast.error(t("errors.generic"), toastOptions);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const megabytes = state.maxSize ? Math.round(state.maxSize / (1024 * 1024)) : 20;
+
+  return (
+    <form className="sf-card" onSubmit={save}>
+      <h2>{t("storage.title")}</h2>
+      <p className="sf-subtitle">{t("storage.subtitle", { size: megabytes })}</p>
+
+      <div className="sf-field">
+        <label className="sf-label" htmlFor="storageType">
+          {t("storage.type")}
+        </label>
+        <select id="storageType" className="sf-select" value={form.type} onChange={set("type")}>
+          <option value="s3">{t("storage.typeS3")}</option>
+          <option value="google_drive">{t("storage.typeDrive")}</option>
+        </select>
+      </div>
+
+      {form.type === "s3" ? (
+        <>
+          <div className="sf-row" style={{ gap: "0.6rem" }}>
+            <div className="sf-field" style={{ flex: 2, minWidth: 200 }}>
+              <label className="sf-label" htmlFor="endpoint">
+                {t("storage.endpoint")}
+              </label>
+              <input
+                id="endpoint"
+                className="sf-input"
+                placeholder="https://s3.eu-west-3.amazonaws.com"
+                value={form.endpoint}
+                onChange={set("endpoint")}
+              />
+            </div>
+            <div className="sf-field" style={{ flex: 1, minWidth: 140 }}>
+              <label className="sf-label" htmlFor="region">
+                {t("storage.region")}
+              </label>
+              <input id="region" className="sf-input" value={form.region} onChange={set("region")} />
+            </div>
+          </div>
+          <div className="sf-field">
+            <label className="sf-label" htmlFor="bucketName">
+              {t("storage.bucket")}
+            </label>
+            <input id="bucketName" className="sf-input" value={form.bucketName} onChange={set("bucketName")} />
+          </div>
+          <div className="sf-row" style={{ gap: "0.6rem" }}>
+            <div className="sf-field" style={{ flex: 1, minWidth: 170 }}>
+              <label className="sf-label" htmlFor="accessKey">
+                {t("storage.accessKey")}
+              </label>
+              <input id="accessKey" className="sf-input" value={form.accessKey} onChange={set("accessKey")} />
+            </div>
+            <div className="sf-field" style={{ flex: 1, minWidth: 170 }}>
+              <label className="sf-label" htmlFor="secretKey">
+                {t("storage.secretKey")}
+              </label>
+              <input
+                id="secretKey"
+                className="sf-input"
+                type="password"
+                autoComplete="off"
+                value={form.secretKey}
+                onChange={set("secretKey")}
+              />
+            </div>
+          </div>
+          <div className="sf-field">
+            <label className="sf-label" htmlFor="publicBaseUrl">
+              {t("storage.publicBaseUrl")} <span className="sf-muted">({t("common.optional")})</span>
+            </label>
+            <input id="publicBaseUrl" className="sf-input" value={form.publicBaseUrl} onChange={set("publicBaseUrl")} />
+            <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+              {t("storage.publicBaseUrlHelp")}
+            </p>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="sf-field">
+            <label className="sf-label" htmlFor="folderId">
+              {t("storage.folderId")}
+            </label>
+            <input id="folderId" className="sf-input" value={form.folderId} onChange={set("folderId")} />
+          </div>
+          <div className="sf-field">
+            <label className="sf-label" htmlFor="serviceAccountBase64">
+              {t("storage.serviceAccount")}
+            </label>
+            <textarea
+              id="serviceAccountBase64"
+              className="sf-textarea"
+              rows={3}
+              autoComplete="off"
+              value={form.serviceAccountBase64}
+              onChange={set("serviceAccountBase64")}
+            />
+            <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+              {t("storage.serviceAccountHelp")}
+            </p>
+          </div>
+        </>
+      )}
+
+      <div className="sf-field">
+        <label className="sf-label" htmlFor="path">
+          {t("storage.path")} <span className="sf-muted">({t("common.optional")})</span>
+        </label>
+        <input id="path" className="sf-input" value={form.path} onChange={set("path")} />
+      </div>
+
+      <div className="sf-row" style={{ gap: "0.4rem" }}>
+        <button className="sf-button" type="submit" disabled={busy}>
+          {t("common.save")}
+        </button>
+        {state.configured ? (
+          <button type="button" className="sf-button sf-button-secondary" onClick={clear} disabled={busy}>
+            {t("storage.clear")}
+          </button>
+        ) : null}
+      </div>
+    </form>
   );
 }
 

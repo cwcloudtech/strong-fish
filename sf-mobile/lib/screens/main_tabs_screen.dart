@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
 import '../widgets/logo.dart';
 import 'coach_screen.dart';
+import 'events_screen.dart';
 import 'feed_screen.dart';
 import 'one_rms_screen.dart';
 import 'profile_screen.dart';
@@ -33,6 +34,7 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
       (label: t('nav.oneRms'), icon: Icons.emoji_events_outlined, screen: const OneRmsScreen()),
       if (isCoach)
         (label: t('programs.title'), icon: Icons.edit_note, screen: const CoachScreen()),
+      (label: t('nav.events'), icon: Icons.event_outlined, screen: const EventsScreen()),
       (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
       (label: t('nav.profile'), icon: Icons.person_outline, screen: const ProfileScreen()),
     ];

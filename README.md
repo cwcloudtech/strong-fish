@@ -23,8 +23,11 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   superadmin curates it: editing and deleting entries, and flagging which ones
   are competition movements (see [Exercise administration](#exercise-administration)).
 * **Public profiles and a feed.** Follow, post, like, comment and report;
-  posts are public or club-only, carry inline pictures, and embed a detected
-  video link with a player.
+  posts are public or club-only, carry inline pictures, and embed the first URL
+  in their text with a player - no separate link field to keep in step. Videos
+  can be uploaded to the member's own bucket (see [Video uploads](#video-uploads)).
+* **A calendar.** Meets, club sessions and camps, subscribable from Outlook or
+  Google Calendar (see [The calendar](#the-calendar)).
 * **Authentication.** Anyone can sign up. MFA with TOTP authenticator apps and
   WebAuthn security keys (YubiKey and friends). Optional OIDC login with Google,
   GitHub and Keycloak. **API keys** for scripts, and for signing the mobile app
@@ -363,6 +366,70 @@ deliberately not the authenticated handler with the membership check skipped:
 
 Turning sharing back off breaks the link immediately; nothing about it is
 cached or signed.
+
+## Video uploads
+
+A picture in a post is a base64 data URI in the same JSONB row as the post. A
+video cannot be: 20MB per post would wreck the column, and serving other
+people's training footage is not this app's business.
+
+So strong-fish hosts no video at all. A member who wants to post one configures
+their own destination in the settings - an S3-compatible bucket or a Google
+Drive folder, the same connection shape
+[cwclock](https://gitlab.cwcloud.tech/oss/cwclock) uses for an organization's
+external storage - and `POST /v1/media/videos` writes there and returns the
+object's URL. The composer appends that URL to the post's text, and from there
+it is an ordinary link: the same detection that turns a pasted YouTube URL into
+a player turns this one into a `<video>`.
+
+With nothing configured the endpoint answers **405** - the request is fine, the
+method just isn't available on that account yet - which the client shows as
+"set up your storage first" rather than as a failure.
+
+Both providers are spoken to over their plain REST APIs, with no cloud SDK as a
+dependency: an S3 request is hand-signed with SigV4 (path-style, so a
+self-hosted MinIO with no per-bucket DNS works), and a Drive one authenticates
+with a service-account JWT. Each is responsible for making its object readable
+as it writes it - `x-amz-acl: public-read` on S3, an anyone-with-the-link
+reader permission on Drive - because the URL has to work for a browser with no
+credentials.
+
+Credentials are write-only. `GET /v1/users/me/storage` returns the connection
+with the secret replaced by a marker; echoing that marker back on save keeps
+the stored secret, which is what lets somebody change their bucket name without
+retyping a key they can no longer read.
+
+`SF_MAX_VIDEO_SIZE` caps one upload (20MB by default).
+
+## The calendar
+
+`events` holds competitions, club sessions and camps. An event either belongs
+to a club - and then only its managers may write it - or belongs to none, which
+is the open calendar a superadmin curates. Reading follows the same visibility
+rule posts do, so a club can keep its own dates to itself while still
+publishing the meets it wants seen, and `GET /v1/events` is readable logged out
+(a meet anybody can enter is exactly what is worth finding before you have an
+account).
+
+Times are stored as RFC 3339 instants normalized to UTC, not as the floating
+day/time a training session uses: a meet starts at a stated hour in a stated
+place, and somebody subscribing from another timezone still has to be there
+then. Normalizing also makes the listings correct - they bound and sort by
+comparing the stored text, which only matches chronological order when every
+value shares an offset.
+
+**Subscribing** is the point. `GET /v1/calendar/{token}.ics` is an RFC 5545
+feed Outlook and Google Calendar poll directly. Neither can send an
+`Authorization` header when polling a subscription, so the token in the URL is
+the whole credential - the same trust model as any other share-by-link, which
+is why it can be regenerated and why an unknown one answers 404 rather than 401
+(a 401 makes a calendar client prompt its user for credentials that don't
+exist).
+
+The generator is covered by tests, because the failure modes are silent: an
+all-day `DTEND` has to be the day *after* the last one or Outlook renders no
+day at all, and an unescaped comma or newline in a summary doesn't merely look
+wrong - it ends the content line and corrupts every property after it.
 
 ## Cookies
 

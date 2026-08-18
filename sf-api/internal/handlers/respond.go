@@ -68,6 +68,16 @@ const (
 	CodeApiKeyDescription   = "errors.apiKeyDescription"
 	CodeInvalidExpiration   = "errors.invalidExpiration"
 	CodeConfigTokenRequired = "errors.configTokenRequired"
+	// Video uploads, and the member's own storage bucket they go to.
+	CodeStorageNotConfigured  = "errors.storageNotConfigured"
+	CodeStorageUploadFailed   = "errors.storageUploadFailed"
+	CodeVideoTooLarge         = "errors.videoTooLarge"
+	CodeUnsupportedVideo      = "errors.unsupportedVideo"
+	CodeInvalidStorageType    = "errors.invalidStorageType"
+	CodeInvalidServiceAccount = "errors.invalidServiceAccount"
+	// The events calendar.
+	CodeEventTitleRequired = "errors.eventTitleRequired"
+	CodeInvalidEventDate   = "errors.invalidEventDate"
 	// The contact form's own failures, including the ones CWCloud's
 	// contact-request API reports back (see cwcloudContactErrors).
 	CodeContactFormNotConfigured = "errors.contactFormNotConfigured"

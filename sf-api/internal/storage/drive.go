@@ -1,0 +1,261 @@
+package storage
+
+import (
+	"bytes"
+	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"net/textproto"
+	"net/url"
+	"strings"
+	"time"
+
+	"strong-fish-api/internal/models"
+	"strong-fish-api/internal/utils"
+)
+
+const (
+	driveUploadAPIBase = "https://www.googleapis.com/upload/drive/v3/files"
+	driveAPIBase       = "https://www.googleapis.com/drive/v3/files"
+	driveScope         = "https://www.googleapis.com/auth/drive"
+	defaultTokenURI    = "https://oauth2.googleapis.com/token"
+)
+
+// serviceAccountKey is the part of a Google service-account JSON key this
+// package needs.
+type serviceAccountKey struct {
+	ClientEmail string `json:"client_email"`
+	PrivateKey  string `json:"private_key"`
+	TokenURI    string `json:"token_uri"`
+}
+
+// DecodeServiceAccount validates a base64 service-account key and returns the
+// account's email. It is exported so a connection can be rejected at save time
+// rather than silently failing on the first upload, weeks later.
+func DecodeServiceAccount(base64JSON string) (string, error) {
+	key, _, err := parseServiceAccount(base64JSON)
+	if err != nil {
+		return utils.EMPTY, err
+	}
+	return key.ClientEmail, nil
+}
+
+func parseServiceAccount(base64JSON string) (serviceAccountKey, *rsa.PrivateKey, error) {
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(base64JSON))
+	if err != nil {
+		return serviceAccountKey{}, nil, fmt.Errorf("invalid base64: %w", err)
+	}
+	var key serviceAccountKey
+	if err := json.Unmarshal(raw, &key); err != nil {
+		return serviceAccountKey{}, nil, fmt.Errorf("invalid service account JSON: %w", err)
+	}
+	if utils.IsBlank(key.ClientEmail) || utils.IsBlank(key.PrivateKey) {
+		return serviceAccountKey{}, nil, fmt.Errorf("service account JSON is missing client_email or private_key")
+	}
+	if utils.IsBlank(key.TokenURI) {
+		key.TokenURI = defaultTokenURI
+	}
+
+	block, _ := pem.Decode([]byte(key.PrivateKey))
+	if block == nil {
+		return serviceAccountKey{}, nil, fmt.Errorf("service account private_key is not valid PEM")
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return serviceAccountKey{}, nil, fmt.Errorf("could not parse the service account private key: %w", err)
+	}
+	rsaKey, ok := parsed.(*rsa.PrivateKey)
+	if !ok {
+		return serviceAccountKey{}, nil, fmt.Errorf("the service account private key is not an RSA key")
+	}
+	return key, rsaKey, nil
+}
+
+// driveTarget talks to the Drive v3 REST API directly, authenticating as a
+// service account with a hand-signed JWT assertion - no google-api-go-client
+// dependency for what amounts to three HTTP calls.
+type driveTarget struct {
+	key        serviceAccountKey
+	privateKey *rsa.PrivateKey
+	folderID   string
+	httpClient *http.Client
+}
+
+func newDriveTarget(conn models.StorageConnection) (*driveTarget, error) {
+	key, privateKey, err := parseServiceAccount(conn.ServiceAccountBase64)
+	if err != nil {
+		return nil, fmt.Errorf("storage google_drive: %w", err)
+	}
+	return &driveTarget{
+		key:        key,
+		privateKey: privateKey,
+		folderID:   conn.FolderID,
+		httpClient: &http.Client{Timeout: 120 * time.Second},
+	}, nil
+}
+
+func (d *driveTarget) Upload(ctx context.Context, key string, data []byte, contentType string) (string, error) {
+	token, err := d.accessToken(ctx)
+	if err != nil {
+		return utils.EMPTY, err
+	}
+
+	// Drive addresses files by id and has no notion of a key with slashes in
+	// it, so the key's last segment becomes the file's name.
+	name := key
+	if index := strings.LastIndex(name, "/"); index >= 0 {
+		name = name[index+1:]
+	}
+
+	fileID, err := d.createFile(ctx, token, name, data, contentType)
+	if err != nil {
+		return utils.EMPTY, err
+	}
+	// A file in a service account's own folder is invisible to everybody else,
+	// including the person about to read the post. Granting anyone-with-the-
+	// link reader access is what makes the returned URL work at all.
+	if err := d.shareWithAnyone(ctx, token, fileID); err != nil {
+		return utils.EMPTY, err
+	}
+
+	// Drive's /preview endpoint is an embeddable player; its direct-download
+	// URL serves an interstitial for files this size, which a <video> tag
+	// cannot get past. media-player recognises this shape and frames it.
+	return "https://drive.google.com/file/d/" + fileID + "/preview", nil
+}
+
+func (d *driveTarget) accessToken(ctx context.Context) (string, error) {
+	now := time.Now().UTC()
+	header, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT"})
+	claims, _ := json.Marshal(map[string]any{
+		"iss":   d.key.ClientEmail,
+		"scope": driveScope,
+		"aud":   d.key.TokenURI,
+		"iat":   now.Unix(),
+		"exp":   now.Add(time.Hour).Unix(),
+	})
+	signingInput := base64URLEncode(header) + "." + base64URLEncode(claims)
+
+	hashed := sha256.Sum256([]byte(signingInput))
+	signature, err := rsa.SignPKCS1v15(rand.Reader, d.privateKey, crypto.SHA256, hashed[:])
+	if err != nil {
+		return utils.EMPTY, fmt.Errorf("storage google_drive: could not sign the JWT: %w", err)
+	}
+
+	form := url.Values{
+		"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"},
+		"assertion":  {signingInput + "." + base64URLEncode(signature)},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.key.TokenURI, strings.NewReader(form.Encode()))
+	if err != nil {
+		return utils.EMPTY, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return utils.EMPTY, fmt.Errorf("storage google_drive: token request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var body struct {
+		AccessToken string `json:"access_token"`
+		Error       string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return utils.EMPTY, fmt.Errorf("storage google_drive: invalid token response: %w", err)
+	}
+	if utils.IsBlank(body.AccessToken) {
+		return utils.EMPTY, fmt.Errorf("storage google_drive: token request rejected: %s", body.Error)
+	}
+	return body.AccessToken, nil
+}
+
+func (d *driveTarget) createFile(ctx context.Context, token, name string, data []byte, contentType string) (string, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	metadata, _ := json.Marshal(map[string]any{"name": name, "parents": []string{d.folderID}})
+	metaPart, err := writer.CreatePart(textproto.MIMEHeader{"Content-Type": {"application/json; charset=UTF-8"}})
+	if err != nil {
+		return utils.EMPTY, err
+	}
+	if _, err := metaPart.Write(metadata); err != nil {
+		return utils.EMPTY, err
+	}
+
+	mediaPart, err := writer.CreatePart(textproto.MIMEHeader{"Content-Type": {contentType}})
+	if err != nil {
+		return utils.EMPTY, err
+	}
+	if _, err := mediaPart.Write(data); err != nil {
+		return utils.EMPTY, err
+	}
+	if err := writer.Close(); err != nil {
+		return utils.EMPTY, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		driveUploadAPIBase+"?uploadType=multipart&supportsAllDrives=true&fields=id", body)
+	if err != nil {
+		return utils.EMPTY, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "multipart/related; boundary="+writer.Boundary())
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return utils.EMPTY, fmt.Errorf("storage google_drive: upload failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return utils.EMPTY, fmt.Errorf("storage google_drive: upload returned %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
+	}
+
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil || utils.IsBlank(created.ID) {
+		return utils.EMPTY, fmt.Errorf("storage google_drive: upload returned no file id")
+	}
+	return created.ID, nil
+}
+
+func (d *driveTarget) shareWithAnyone(ctx context.Context, token, fileID string) error {
+	payload, _ := json.Marshal(map[string]string{"role": "reader", "type": "anyone"})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		driveAPIBase+"/"+fileID+"/permissions?supportsAllDrives=true", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("storage google_drive: sharing failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("storage google_drive: sharing returned %d: %s", resp.StatusCode, strings.TrimSpace(string(message)))
+	}
+	return nil
+}
+
+func base64URLEncode(data []byte) string {
+	return base64.RawURLEncoding.EncodeToString(data)
+}

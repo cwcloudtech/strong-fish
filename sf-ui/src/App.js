@@ -15,6 +15,7 @@ import ApiKeys from "./pages/dashboard/ApiKeys";
 import ClubDetail from "./pages/dashboard/ClubDetail";
 import Contact from "./pages/Contact";
 import Clubs from "./pages/dashboard/Clubs";
+import Events from "./pages/dashboard/Events";
 import Exercises from "./pages/dashboard/Exercises";
 import Feed from "./pages/dashboard/Feed";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -83,6 +84,7 @@ function AppRoutes() {
               <Route path="clubs" element={<Clubs />} />
               <Route path="clubs/:clubId" element={<ClubDetail />} />
               <Route path="clubs/:clubId/programs/:programId" element={<ProgramDetail />} />
+              <Route path="events" element={<Events />} />
               <Route path="exercises" element={<Exercises />} />
               <Route path="settings" element={<Settings />} />
               <Route path="api-keys" element={<ApiKeys />} />

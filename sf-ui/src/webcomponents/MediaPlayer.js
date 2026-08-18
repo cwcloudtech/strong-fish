@@ -9,6 +9,11 @@
 // YouTube URL into an actual player.
 
 const IMAGE_EXTENSION_PATTERN = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?.*)?$/i;
+// A video a browser can play from a plain URL - which is what an upload to the
+// member's own bucket ends up as (see the API's storage package). Unlike the
+// hosted providers below there is no embed to build: the file *is* the player's
+// source.
+const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|ogv|ogg|mov|m4v)(\?.*)?$/i;
 
 function firstPathSegment(url, fromEnd = true) {
   const parts = url.pathname.split("/").filter(Boolean);
@@ -62,11 +67,27 @@ export function detectMedia(rawUrl) {
     };
   }
 
+  // A Drive file shared by link. Its direct-download URL serves an
+  // interstitial for anything but a small file, which a <video> tag cannot get
+  // past, so the /preview player is what gets framed - and a plain
+  // /file/d/{id}/view link is normalised to it rather than left as a dead
+  // link-out card.
+  if (host === "drive.google.com") {
+    const parts = url.pathname.split("/").filter(Boolean);
+    const idIndex = parts.indexOf("d");
+    const id = idIndex >= 0 ? parts[idIndex + 1] : url.searchParams.get("id");
+    if (id) return { kind: "drive", embedUrl: `https://drive.google.com/file/d/${id}/preview` };
+  }
+
   if (host === "slideshare.net") {
     // SlideShare's real embed code needs a numeric id resolved through their
     // oEmbed API, which has no CORS support - so it can't be resolved
     // client-side. Rendered as a link-out card rather than a broken iframe.
     return { kind: "slideshare", embedUrl: rawUrl };
+  }
+
+  if (VIDEO_EXTENSION_PATTERN.test(url.pathname)) {
+    return { kind: "file", embedUrl: rawUrl };
   }
 
   if (IMAGE_EXTENSION_PATTERN.test(url.pathname)) {
@@ -76,7 +97,9 @@ export function detectMedia(rawUrl) {
   return { kind: "link", embedUrl: rawUrl };
 }
 
-const VIDEO_KINDS = ["youtube", "vimeo", "dailymotion", "facebook"];
+// The kinds rendered as a framed iframe. A "file" is a video too, but it plays
+// in a native <video> element rather than in somebody else's player.
+const VIDEO_KINDS = ["youtube", "vimeo", "dailymotion", "facebook", "drive"];
 
 const STYLE = `
   :host { display: block; }
@@ -89,6 +112,13 @@ const STYLE = `
     background-color: #0000000d;
   }
   .frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .video {
+    display: block;
+    width: 100%;
+    max-height: 480px;
+    border-radius: 10px;
+    background-color: #000;
+  }
   .image {
     display: block;
     width: 100%;
@@ -164,6 +194,19 @@ class MediaPlayerElement extends HTMLElement {
       iframe.allowFullscreen = true;
       frame.appendChild(iframe);
       root.appendChild(frame);
+      return;
+    }
+
+    if (media.kind === "file") {
+      const video = document.createElement("video");
+      video.className = "video";
+      video.src = media.embedUrl;
+      video.controls = true;
+      video.preload = "metadata";
+      // Never autoplay: a feed of self-starting videos is hostile, and mobile
+      // browsers block it anyway.
+      video.playsInline = true;
+      root.appendChild(video);
       return;
     }
 

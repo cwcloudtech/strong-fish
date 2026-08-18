@@ -79,9 +79,18 @@ type User struct {
 	// MFATOTPSecret is the base32-encoded TOTP shared secret. It's written as
 	// soon as enrollment starts but MFAEnabled stays false until the user
 	// confirms a code generated from it.
-	MFATOTPSecret string    `json:"-"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	MFATOTPSecret string `json:"-"`
+	// Storage is where this member's uploaded videos go. It holds live
+	// credentials, so it is never serialized with the user - the account
+	// screen reads it back through its own endpoint, redacted.
+	Storage StorageConnection `json:"-"`
+	// CalendarFeedEnabled and CalendarFeedToken back the ICS subscription.
+	// The token is the whole credential for an unauthenticated poll by Outlook
+	// or Google Calendar, so it is never serialized either.
+	CalendarFeedEnabled bool      `json:"-"`
+	CalendarFeedToken   string    `json:"-"`
+	CreatedAt           time.Time `json:"createdAt"`
+	UpdatedAt           time.Time `json:"updatedAt"`
 }
 
 // UserResponse is what a successful login/registration returns.

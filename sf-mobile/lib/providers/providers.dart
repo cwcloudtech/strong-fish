@@ -272,6 +272,10 @@ final assignmentProvider =
   return ref.watch(apiProvider).assignment(assignmentId);
 });
 
+final eventsProvider = FutureProvider<List<Event>>((ref) async {
+  return ref.watch(apiProvider).events();
+});
+
 final clubsProvider = FutureProvider<List<Club>>((ref) async {
   ref.watch(sessionProvider.select((session) => session.user?.id));
   return ref.watch(apiProvider).clubs();

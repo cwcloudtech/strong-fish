@@ -43,6 +43,13 @@ Map<String, String> _toLabels(dynamic value) {
 
 DateTime _toDate(dynamic value) => DateTime.tryParse(_toString(value))?.toUtc() ?? DateTime.utc(1970);
 
+/// A date that may legitimately be absent - an event with no stated end -
+/// rather than _toDate's epoch fallback, which would render as 1970.
+DateTime? _optionalDate(dynamic value) {
+  final parsed = DateTime.tryParse(_toString(value));
+  return parsed?.toLocal();
+}
+
 List<String> _toStringList(dynamic value) {
   if (value is List) return value.map((item) => item.toString()).toList();
   return const [];
@@ -465,6 +472,64 @@ class AssignmentDetail {
             .whereType<Map<String, dynamic>>()
             .map(Exercise.fromJson)
             .toList(),
+      );
+}
+
+/// One entry in the calendar: a meet, a club session, a camp.
+///
+/// Times arrive as RFC 3339 instants and are kept in the device's local zone,
+/// so a meet reads at the hour it actually starts wherever the athlete is.
+class Event {
+  final String id;
+  final String clubId;
+  final String clubName;
+  final String title;
+  final String description;
+  final String location;
+  final String url;
+  final String kind;
+  final DateTime startsAt;
+  final DateTime? endsAt;
+  final bool allDay;
+  final String visibility;
+  final bool editable;
+  final bool deletable;
+
+  const Event({
+    required this.id,
+    this.clubId = '',
+    this.clubName = '',
+    this.title = '',
+    this.description = '',
+    this.location = '',
+    this.url = '',
+    this.kind = 'other',
+    required this.startsAt,
+    this.endsAt,
+    this.allDay = false,
+    this.visibility = 'public',
+    this.editable = false,
+    this.deletable = false,
+  });
+
+  factory Event.fromJson(Map<String, dynamic> json) => Event(
+        id: _toString(json['id']),
+        clubId: _toString(json['clubId']),
+        clubName: _toString(json['clubName']),
+        title: _toString(json['title']),
+        description: _toString(json['description']),
+        location: _toString(json['location']),
+        url: _toString(json['url']),
+        kind: _toString(json['kind'], 'other'),
+        // Kept in the device's own zone: the list is read as wall-clock time,
+        // and converting on every render would be the same conversion done
+        // repeatedly.
+        startsAt: _toDate(json['startsAt']).toLocal(),
+        endsAt: _optionalDate(json['endsAt']),
+        allDay: json['allDay'] == true,
+        visibility: _toString(json['visibility'], 'public'),
+        editable: json['editable'] == true,
+        deletable: json['deletable'] == true,
       );
 }
 
