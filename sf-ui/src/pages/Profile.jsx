@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { FiMessageSquare } from "react-icons/fi";
 
 import { profiles } from "../api/services";
 import Avatar from "../components/common/Avatar";
@@ -77,9 +78,17 @@ export default function Profile() {
                 </div>
               </div>
               {user && !isSelf ? (
-                <button className={`sf-button ${profile.followed ? "sf-button-secondary" : ""}`} onClick={toggleFollow}>
-                  {profile.followed ? t("profile.unfollow") : t("profile.follow")}
-                </button>
+                <div className="sf-row" style={{ gap: "0.4rem" }}>
+                  {/* Reaching this page at all means the profile is visible to
+                      the caller, which is exactly the API's condition for being
+                      allowed to message its owner. */}
+                  <Link className="sf-button sf-button-secondary" to={`/dashboard/messages?with=${profile.id}`}>
+                    <FiMessageSquare /> {t("messages.message")}
+                  </Link>
+                  <button className={`sf-button ${profile.followed ? "sf-button-secondary" : ""}`} onClick={toggleFollow}>
+                    {profile.followed ? t("profile.unfollow") : t("profile.follow")}
+                  </button>
+                </div>
               ) : null}
               {isSelf ? (
                 <Link className="sf-button sf-button-secondary" to="/dashboard/settings">

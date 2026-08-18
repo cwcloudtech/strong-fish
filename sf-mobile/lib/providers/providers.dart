@@ -272,6 +272,14 @@ final assignmentProvider =
   return ref.watch(apiProvider).assignment(assignmentId);
 });
 
+final conversationsProvider = FutureProvider<List<Conversation>>((ref) async {
+  return ref.watch(apiProvider).conversations();
+});
+
+final threadProvider = FutureProvider.family<Thread, String>((ref, userId) async {
+  return ref.watch(apiProvider).thread(userId);
+});
+
 final invitationsProvider = FutureProvider<List<Invitation>>((ref) async {
   return ref.watch(apiProvider).invitations();
 });

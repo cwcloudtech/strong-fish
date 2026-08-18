@@ -110,9 +110,13 @@ func (h *OIDCHandler) completeLogin(ctx context.Context, provider oidc.Provider,
 // finishSession turns a resolved OIDC user into a real session token, unless the
 // account has MFA enabled - in which case OIDC has only proven the first factor,
 // so it mints the same short-lived challenge a password login would.
-func (h *OIDCHandler) finishSession(ctx context.Context, user models.User) (string, *models.MFAChallengeResponse, error) {
+func (h *OIDCHandler) finishSession(r *http.Request, user models.User) (string, *models.MFAChallengeResponse, error) {
+	ctx := r.Context()
 	if !user.MFAEnabled {
 		token, err := authtoken.Generate(h.jwtSecret, user.ID)
+		if err == nil {
+			recordConnection(r, h.users, user.ID)
+		}
 		return token, nil, err
 	}
 
@@ -164,7 +168,7 @@ func (h *OIDCHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, challenge, err := h.finishSession(r.Context(), user)
+	token, challenge, err := h.finishSession(r, user)
 	if err != nil {
 		h.redirectWithError(w, r, "oidc_account_failed")
 		return
@@ -218,7 +222,7 @@ func (h *OIDCHandler) FrontendCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, challenge, err := h.finishSession(r.Context(), user)
+	token, challenge, err := h.finishSession(r, user)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error(), CodeInternal)
 		return

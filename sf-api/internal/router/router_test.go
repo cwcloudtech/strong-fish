@@ -35,7 +35,13 @@ func newTestRouter() http.Handler {
 		Calendar:   &handlers.CalendarHandler{},
 		Search:     &handlers.SearchHandler{},
 		Invitation: &handlers.InvitationHandler{},
-	}, nil, nil, Options{JWTSecret: "test"})
+		Message:    &handlers.MessageHandler{},
+	}, nil, nil, Options{
+		JWTSecret: "test",
+		// A stub is enough: the tests assert the endpoint is registered, and
+		// serving Prometheus output would need a live meter provider.
+		MetricsHandler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+	})
 }
 
 // routes lists every endpoint the API is meant to expose. A missing entry here
@@ -51,6 +57,7 @@ var routes = []struct{ method, path string }{
 	{"GET", "/v1/assets/logo.png"},
 	{"POST", "/v1/contact"},
 	{"GET", "/v1/mobile-app"},
+	{"GET", "/v1/metrics"},
 	{"GET", "/v1/public/programs/prog-1"},
 	{"GET", "/v1/calendar/tok-1.ics"},
 
@@ -163,6 +170,15 @@ var routes = []struct{ method, path string }{
 	{"PUT", "/v1/posts/post-1/comments/c-1"},
 	{"DELETE", "/v1/posts/post-1/comments/c-1"},
 
+	{"GET", "/v1/messages"},
+	{"GET", "/v1/messages/unread"},
+	{"GET", "/v1/messages/with/user-1"},
+	{"POST", "/v1/messages/with/user-1"},
+
+	{"GET", "/v1/blocks"},
+	{"POST", "/v1/blocks/user-1"},
+	{"DELETE", "/v1/blocks/user-1"},
+
 	{"POST", "/v1/media/videos"},
 
 	{"GET", "/v1/events"},
@@ -184,22 +200,42 @@ var routes = []struct{ method, path string }{
 	{"PUT", "/v1/admin/users/user-1"},
 	{"DELETE", "/v1/admin/users/user-1"},
 	{"DELETE", "/v1/admin/users/user-1/mfa"},
+	{"GET", "/v1/admin/users/user-1/ips"},
 }
 
-// TestEveryRouteResolves asserts each documented endpoint reaches a handler.
+// TestEveryRouteResolves asserts each documented endpoint is registered with
+// the method it is documented under.
 //
-// It uses chi's Match rather than serving a request, so routing is checked
-// without running any handler body - the handlers here hold nil stores, and a
-// route that resolves would otherwise fail by panicking rather than by
-// reporting the thing under test.
+// It walks the tree rather than calling chi's Match, and that difference is the
+// whole point. Mounting a subrouter on a path that already has a leaf handler
+// silently replaces the leaf with the mount; Match still answers true, because
+// the mount is registered for every method, so the endpoint looks fine while
+// actually answering 401 or 405 from inside the subrouter. Walk reports what is
+// really in the tree, so the shadowed leaf shows up as missing - which is how
+// GET /v1/events was found to be broken after /v1/clubs/{id}/programs had
+// already been broken the same way.
+//
+// Nothing is served here: the handlers hold nil stores, so a route that worked
+// would fail by panicking rather than by reporting the thing under test.
 func TestEveryRouteResolves(t *testing.T) {
-	router := newTestRouter().(chi.Routes)
+	registered := map[string][]string{}
+	err := chi.Walk(newTestRouter().(chi.Routes), func(method, pattern string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		registered[method] = append(registered[method], pattern)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walking routes: %v", err)
+	}
 
 	for _, route := range routes {
 		t.Run(route.method+" "+route.path, func(t *testing.T) {
-			if !router.Match(chi.NewRouteContext(), route.method, route.path) {
-				t.Error("route does not resolve - a subrouter may be shadowing it")
+			for _, pattern := range registered[route.method] {
+				if matchesPattern(pattern, route.path) {
+					return
+				}
 			}
+			t.Errorf("%s %s is not registered - a subrouter mounted on the same path may have replaced it",
+				route.method, route.path)
 		})
 	}
 }

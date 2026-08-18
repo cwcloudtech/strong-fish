@@ -7,6 +7,7 @@ import 'coach_screen.dart';
 import 'events_screen.dart';
 import 'feed_screen.dart';
 import 'invitations_screen.dart';
+import 'messages_screen.dart';
 import 'one_rms_screen.dart';
 import 'profile_screen.dart';
 import 'training_screen.dart';
@@ -38,6 +39,7 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
       (label: t('nav.events'), icon: Icons.event_outlined, screen: const EventsScreen()),
       (label: t('nav.invitations'), icon: Icons.mail_outline, screen: const InvitationsScreen()),
       (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
+      (label: t('nav.messages'), icon: Icons.chat_bubble_outline, screen: const MessagesScreen()),
       (label: t('nav.profile'), icon: Icons.person_outline, screen: const ProfileScreen()),
     ];
 

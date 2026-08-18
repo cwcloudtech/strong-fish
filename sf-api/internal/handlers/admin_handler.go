@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -167,6 +168,30 @@ func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]int{
 		"users": users, "openReports": openReports, "coachRequests": coachRequests,
 	})
+}
+
+// UserIPs lists the addresses one account has connected from, with a hit count
+// each - the same view ~/uprodit offers.
+//
+// There is deliberately no ban here: blocking an address is the firewall's job,
+// and a ban list in the application would be a second, weaker place for the
+// same rule to live. This is for recognizing an account, not for stopping one.
+func (h *AdminHandler) UserIPs(w http.ResponseWriter, r *http.Request) {
+	user, err := h.users.FindByID(r.Context(), chi.URLParam(r, "userId"))
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	ips := user.IPs
+	if ips == nil {
+		ips = []models.ConnectionIP{}
+	}
+	// Most recently seen first: an administrator looking at an account is
+	// asking "where is this person now", not "where did they start".
+	sort.SliceStable(ips, func(i, j int) bool { return ips[i].LastSeen.After(ips[j].LastSeen) })
+
+	writeJSON(w, http.StatusOK, ips)
 }
 
 // --- coach confirmation ---

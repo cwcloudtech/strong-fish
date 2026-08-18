@@ -24,6 +24,7 @@ const (
 
 type SocialHandler struct {
 	social       *store.SocialStore
+	messages     *store.MessageStore
 	clubs        *store.ClubStore
 	users        *store.UserStore
 	oneRMs       *store.OneRMStore
@@ -31,8 +32,11 @@ type SocialHandler struct {
 }
 
 func NewSocialHandler(social *store.SocialStore, clubs *store.ClubStore, users *store.UserStore,
-	oneRMs *store.OneRMStore, maxImageSize int64) *SocialHandler {
-	return &SocialHandler{social: social, clubs: clubs, users: users, oneRMs: oneRMs, maxImageSize: maxImageSize}
+	oneRMs *store.OneRMStore, messages *store.MessageStore, maxImageSize int64) *SocialHandler {
+	return &SocialHandler{
+		social: social, clubs: clubs, users: users, oneRMs: oneRMs,
+		messages: messages, maxImageSize: maxImageSize,
+	}
 }
 
 // decorate fills in the per-caller action flags every post carries: its author
@@ -543,6 +547,21 @@ func (h *SocialHandler) snapshotTarget(ctx context.Context, p reportPayload, cal
 			return utils.EMPTY, false
 		}
 		return comment.Content, true
+
+	case models.ReportTargetMessage:
+		// Only a participant may report a message: nobody else can see the
+		// thread, so nobody else has anything to report. The snapshot is what
+		// makes the report reviewable at all, since a moderator has no way to
+		// open a private conversation.
+		message, err := h.messages.FindMessage(ctx, p.TargetID)
+		if err != nil {
+			return utils.EMPTY, false
+		}
+		memberA, memberB, err := h.messages.ConversationMembers(ctx, message.ConversationID)
+		if err != nil || (callerID != memberA && callerID != memberB) {
+			return utils.EMPTY, false
+		}
+		return message.Content, true
 
 	case models.ReportTargetUser:
 		user, err := h.users.FindByID(ctx, p.TargetID)

@@ -33,6 +33,7 @@ type Handlers struct {
 	Calendar   *handlers.CalendarHandler
 	Search     *handlers.SearchHandler
 	Invitation *handlers.InvitationHandler
+	Message    *handlers.MessageHandler
 }
 
 // Options carries the settings the middleware chain needs.
@@ -47,10 +48,22 @@ type Options struct {
 	ManifestPath       string
 	// Version labels the generated OpenAPI document.
 	Version string
+	// Observability. Instrument wraps every route so spans, the access log and
+	// the metrics all agree on which endpoint a request hit; MetricsHandler is
+	// what /v1/metrics serves.
+	Instrument     func(http.Handler) http.Handler
+	MetricsHandler http.Handler
 }
 
 func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) http.Handler {
 	r := chi.NewRouter()
+
+	// Outermost, so a request rejected by CORS or by auth is still counted and
+	// still traced - the requests that never reach a handler are exactly the
+	// ones worth seeing on a dashboard.
+	if o.Instrument != nil {
+		r.Use(o.Instrument)
+	}
 
 	if o.CorsEnabled {
 		r.Use(cors.Handler(cors.Options{
@@ -84,6 +97,16 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		// someone reading this on a desktop. Public for the same reason the
 		// contact form is: you need the app before you have an account.
 		r.Get("/mobile-app", h.Config.MobileApp)
+
+		// Prometheus scrapes this. It is unauthenticated because a scraper
+		// cannot hold a session, and it is reachable only from wherever the
+		// deployment exposes the API - the same assumption every /metrics
+		// endpoint makes.
+		// GET only, not r.Handle: a scrape is a GET, and registering every
+		// method would put eight verbs on a read-only endpoint.
+		if o.MetricsHandler != nil {
+			r.Method(http.MethodGet, "/metrics", o.MetricsHandler)
+		}
 
 		// A program its coach chose to share. Unauthenticated by design - the
 		// point is a link that works for anybody - and it is the store's
@@ -339,15 +362,34 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 				})
 			})
 
+			// Private messages. A thread is addressed by who is in it, not by
+			// an id: there is exactly one per pair, so making the client look
+			// one up first would only add a round trip.
+			r.Get("/messages", h.Message.List)
+			r.Get("/messages/unread", h.Message.Unread)
+			r.Get("/messages/with/{userId}", h.Message.Thread)
+			r.Post("/messages/with/{userId}", h.Message.Send)
+
+			// The block list. Blocking does not require the target to be
+			// visible - needing to block somebody you can no longer see is
+			// exactly the case it exists for.
+			r.Get("/blocks", h.Message.ListBlocks)
+			r.Post("/blocks/{userId}", h.Message.Block)
+			r.Delete("/blocks/{userId}", h.Message.Unblock)
+
 			// Uploading a video is a write, so it needs a session even though
 			// reading the calendar doesn't.
 			r.Post("/media/videos", h.Media.UploadVideo)
 
-			r.Route("/events", func(r chi.Router) {
-				r.Post("/", h.Event.Create)
-				r.Put("/{eventId}", h.Event.Update)
-				r.Delete("/{eventId}", h.Event.Delete)
-			})
+			// Registered as leaves, not as an r.Route subrouter: the calendar
+			// is readable logged out, so "/events" already carries a GET in
+			// the public group above. Mounting a subrouter on that same path
+			// replaces the leaf with the mount - chi does not report this, and
+			// the GET then answers 401/405 from inside the subrouter instead
+			// of reaching its handler.
+			r.Post("/events", h.Event.Create)
+			r.Put("/events/{eventId}", h.Event.Update)
+			r.Delete("/events/{eventId}", h.Event.Delete)
 
 			r.Post("/reports", h.Social.Report)
 
@@ -367,6 +409,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Put("/{userId}", h.Admin.UpdateUser)
 					r.Delete("/{userId}", h.Admin.DeleteUser)
 					r.Delete("/{userId}/mfa", h.Admin.ClearMFA)
+					r.Get("/{userId}/ips", h.Admin.UserIPs)
 				})
 			})
 		}))

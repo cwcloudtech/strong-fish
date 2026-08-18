@@ -11,6 +11,7 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
 import About from "./pages/About";
 import Admin from "./pages/dashboard/Admin";
+import Blocks from "./pages/dashboard/Blocks";
 import ApiKeys from "./pages/dashboard/ApiKeys";
 import ClubDetail from "./pages/dashboard/ClubDetail";
 import Contact from "./pages/Contact";
@@ -21,6 +22,7 @@ import Feed from "./pages/dashboard/Feed";
 import Invitations from "./pages/dashboard/Invitations";
 import ForgotPassword from "./pages/ForgotPassword";
 import Login from "./pages/Login";
+import Messages from "./pages/dashboard/Messages";
 import OidcCallback from "./pages/OidcCallback";
 import OneRms from "./pages/dashboard/OneRms";
 import ProgramDetail from "./pages/dashboard/ProgramDetail";
@@ -88,6 +90,8 @@ function AppRoutes() {
               <Route path="clubs/:clubId/programs/:programId" element={<ProgramDetail />} />
               <Route path="events" element={<Events />} />
               <Route path="invitations" element={<Invitations />} />
+              <Route path="messages" element={<Messages />} />
+              <Route path="blocks" element={<Blocks />} />
               <Route path="search" element={<Search />} />
               <Route path="exercises" element={<Exercises />} />
               <Route path="settings" element={<Settings />} />

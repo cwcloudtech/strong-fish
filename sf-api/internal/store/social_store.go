@@ -174,6 +174,23 @@ func (s *SocialStore) DeletePost(ctx context.Context, id string) error {
 const visibilityClause = `
 	(p.club_id IS NULL OR p.club_id = ANY($2) OR p.author_id = $1)`
 
+// notBlockedClause drops posts whose author the caller has blocked, or who has
+// blocked the caller. $1 is the caller's id.
+//
+// Both directions: a block is one person's decision, but its effect is mutual -
+// the blocker should not have to see the person they blocked, and the blocked
+// person should not keep appearing in front of somebody who stopped listening.
+//
+// It lives in the query rather than filtering the results, for the same reason
+// the visibility clause does: a caller-side filter makes the page counts wrong,
+// and it is only applied where somebody remembered to apply it.
+const notBlockedClause = `
+	NOT EXISTS (
+		SELECT 1 FROM blocks b
+		WHERE (b.blocker_id = $1 AND b.blocked_id = p.author_id)
+		   OR (b.blocked_id = $1 AND b.blocker_id = p.author_id)
+	)`
+
 // ListFeed is the newspaper: posts from the people the caller follows, plus
 // their own, plus anything posted to a club they're in - newest first.
 func (s *SocialStore) ListFeed(ctx context.Context, callerID string, clubIDs []string, page, size int) ([]models.Post, int, error) {
@@ -181,6 +198,7 @@ func (s *SocialStore) ListFeed(ctx context.Context, callerID string, clubIDs []s
 
 	const scope = `
 		WHERE ` + visibilityClause + `
+		  AND ` + notBlockedClause + `
 		  AND (p.author_id = $1
 		       OR p.author_id IN (SELECT following_id FROM follows WHERE follower_id = $1)
 		       OR p.club_id = ANY($2))`
@@ -205,14 +223,22 @@ func (s *SocialStore) ListFeed(ctx context.Context, callerID string, clubIDs []s
 func (s *SocialStore) ListDiscoverFeed(ctx context.Context, callerID string, page, size int) ([]models.Post, int, error) {
 	limit, offset := clampPage(page, size, 100)
 
+	// Discover is reachable by a logged-out visitor, who has blocked nobody -
+	// the placeholder id keeps the same SQL working for both.
+	caller := callerID
+	if utils.IsBlank(caller) {
+		caller = anonymousUserID
+	}
+
+	const scope = ` WHERE p.club_id IS NULL AND ` + notBlockedClause
+
 	var total int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM posts WHERE club_id IS NULL`).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM posts p`+scope, caller).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	rows, err := s.pool.Query(ctx, postSelect+`
-		WHERE p.club_id IS NULL
-		ORDER BY p.created_at DESC LIMIT $2 OFFSET $3`, callerID, limit, offset)
+	rows, err := s.pool.Query(ctx, postSelect+scope+`
+		ORDER BY p.created_at DESC LIMIT $2 OFFSET $3`, caller, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -225,13 +251,14 @@ func (s *SocialStore) ListDiscoverFeed(ctx context.Context, callerID string, pag
 func (s *SocialStore) ListClubFeed(ctx context.Context, clubID, callerID string, page, size int) ([]models.Post, int, error) {
 	limit, offset := clampPage(page, size, 100)
 
+	const scope = ` WHERE p.club_id = $2 AND ` + notBlockedClause
+
 	var total int
-	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM posts WHERE club_id = $1`, clubID).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM posts p`+scope, callerID, clubID).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	rows, err := s.pool.Query(ctx, postSelect+`
-		WHERE p.club_id = $2
+	rows, err := s.pool.Query(ctx, postSelect+scope+`
 		ORDER BY p.created_at DESC LIMIT $3 OFFSET $4`, callerID, clubID, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -253,7 +280,7 @@ func (s *SocialStore) ListProfilePosts(ctx context.Context, authorID, callerID s
 		caller = anonymousUserID
 	}
 
-	const scope = ` WHERE p.author_id = $3 AND ` + visibilityClause
+	const scope = ` WHERE p.author_id = $3 AND ` + visibilityClause + ` AND ` + notBlockedClause
 
 	var total int
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM posts p`+scope, caller, clubIDs, authorID).Scan(&total); err != nil {

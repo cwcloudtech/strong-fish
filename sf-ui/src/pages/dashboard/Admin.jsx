@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiShield, FiTrash2 } from "react-icons/fi";
+import { FiGlobe, FiShield, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { admin as adminApi, clubs as clubsApi } from "../../api/services";
@@ -73,6 +73,7 @@ function UsersTab() {
   const [users, setUsers] = useState(null);
   const [editing, setEditing] = useState(null);
   const [confirming, setConfirming] = useState(null);
+  const [showingIps, setShowingIps] = useState(null);
   const [error, setError] = useState(null);
 
   const load = useCallback(() => {
@@ -144,6 +145,13 @@ function UsersTab() {
                       <button className="sf-button sf-button-secondary sf-button-sm" onClick={() => setEditing(user)}>
                         {t("common.edit")}
                       </button>
+                      <button
+                        className="sf-button sf-button-secondary sf-button-sm"
+                        onClick={() => setShowingIps(user)}
+                        title={t("admin.ips")}
+                      >
+                        <FiGlobe />
+                      </button>
                       {user.mfaEnabled ? (
                         <button className="sf-button sf-button-secondary sf-button-sm" onClick={() => clearMfa(user)} title={t("admin.clearMfaHelp")}>
                           {t("admin.clearMfa")}
@@ -175,6 +183,8 @@ function UsersTab() {
           }}
         />
       ) : null}
+
+      {showingIps ? <UserIpsModal user={showingIps} onClose={() => setShowingIps(null)} /> : null}
 
       {confirming ? (
         <ConfirmModal
@@ -270,6 +280,67 @@ function UserFormModal({ user, isSelf, onClose, onSaved }) {
  * one down requires a motive, because the applicant is emailed it and "no" on
  * its own tells them nothing about whether to try again.
  */
+/**
+ * The addresses one account has connected from, with a hit count each - the
+ * same view ~/uprodit offers.
+ *
+ * There is deliberately no ban button: blocking an address is the firewall's
+ * job, and a second, weaker version of that rule living in the application
+ * would only be a place for the two to disagree.
+ */
+function UserIpsModal({ user, onClose }) {
+  const { t } = useI18n();
+  const [ips, setIps] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    adminApi
+      .userIps(user.id)
+      .then(setIps)
+      .catch(setError);
+  }, [user.id]);
+
+  return (
+    <Modal title={t("admin.ipsTitle", { name: `${user.name} ${user.surname}`.trim() })} onClose={onClose} wide>
+      <p className="sf-muted" style={{ marginTop: 0 }}>
+        {t("admin.ipsHelp")}
+      </p>
+      <ErrorMessage error={error} />
+
+      {ips === null ? (
+        <Spinner />
+      ) : ips.length === 0 ? (
+        <EmptyState title={t("admin.noIpsTitle")} message={t("admin.noIpsBody")} />
+      ) : (
+        <div className="sf-table-wrapper">
+          <table className="sf-table">
+            <thead>
+              <tr>
+                <th>{t("admin.ip")}</th>
+                <th className="sf-table-num">{t("admin.ipCount")}</th>
+                <th>{t("admin.ipFirstSeen")}</th>
+                <th>{t("admin.ipLastSeen")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ips.map((entry) => (
+                <tr key={entry.ip}>
+                  <td>
+                    <code>{entry.ip}</code>
+                  </td>
+                  <td className="sf-table-num">{entry.count}</td>
+                  <td className="sf-muted">{new Date(entry.firstSeen).toLocaleString()}</td>
+                  <td className="sf-muted">{new Date(entry.lastSeen).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function CoachRequestsTab() {
   const { t } = useI18n();
   const [requests, setRequests] = useState(null);

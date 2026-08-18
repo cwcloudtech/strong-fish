@@ -118,7 +118,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		h.sendConfirmationEmail(r.Context(), user, localeOf(user, r))
 	}
 
-	h.respondSession(w, user, http.StatusCreated)
+	h.respondSession(w, r, user, http.StatusCreated)
 }
 
 // notifyCoachRequest tells every superadmin somebody is waiting. Best-effort,
@@ -149,12 +149,13 @@ func (h *UserHandler) sendConfirmationEmail(ctx context.Context, user models.Use
 }
 
 // respondSession issues a real session token for a fully authenticated user.
-func (h *UserHandler) respondSession(w http.ResponseWriter, user models.User, status int) {
+func (h *UserHandler) respondSession(w http.ResponseWriter, r *http.Request, user models.User, status int) {
 	token, err := authtoken.Generate(h.jwtSecret, user.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error(), CodeInternal)
 		return
 	}
+	recordConnection(r, h.users, user.ID)
 	writeJSON(w, status, models.UserResponse{
 		ID: user.ID, Email: user.Email, Name: user.Name, Surname: user.Surname,
 		Handle: user.Handle, Role: user.Role, Token: token, Picture: user.Picture,
@@ -188,7 +189,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.respondMFAChallenge(w, r, user)
 		return
 	}
-	h.respondSession(w, user, http.StatusOK)
+	h.respondSession(w, r, user, http.StatusOK)
 }
 
 // respondMFAChallenge replaces the normal login response when the account has

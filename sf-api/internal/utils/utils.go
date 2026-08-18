@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"net"
+	"net/http"
 	"os"
 	"regexp"
 	"slices"
@@ -191,4 +193,39 @@ func Slugify(name string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
+}
+
+// clientIPHeaders are the headers a reverse proxy puts the real client address
+// in, most specific first. They are only trustworthy behind a proxy that sets
+// them - which is why the RemoteAddr fallback exists, and why nothing security-
+// critical is decided from this.
+var clientIPHeaders = []string{"X-Real-IP", "X-Forwarded-For", "X-Forwarded-By"}
+
+// ClientIP resolves the address a request came from.
+//
+// X-Forwarded-For may carry a chain ("client, proxy1, proxy2"); the first entry
+// is the client. RemoteAddr is the fallback, with its port stripped - it is the
+// only honest answer when there is no proxy in front.
+func ClientIP(r *http.Request) string {
+	if r == nil {
+		return EMPTY
+	}
+	for _, header := range clientIPHeaders {
+		value := strings.TrimSpace(r.Header.Get(header))
+		if IsBlank(value) {
+			continue
+		}
+		if comma := strings.Index(value, ","); comma >= 0 {
+			value = strings.TrimSpace(value[:comma])
+		}
+		if IsNotBlank(value) {
+			return value
+		}
+	}
+
+	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err != nil {
+		return strings.TrimSpace(r.RemoteAddr)
+	}
+	return host
 }

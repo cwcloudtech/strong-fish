@@ -160,6 +160,23 @@ export const invitations = {
   withdraw: (clubId, invitationId) => body(client.delete(`/clubs/${clubId}/invitations/${invitationId}`)),
 };
 
+// --- private messages and the block list ---
+
+export const messages = {
+  conversations: () => body(client.get("/messages")),
+  unread: () => body(client.get("/messages/unread")),
+  // Addressed by who, not by conversation id: there is exactly one thread per
+  // pair, so the id is the API's business rather than the client's.
+  thread: (userId) => body(client.get(`/messages/with/${userId}`)),
+  send: (userId, content) => body(client.post(`/messages/with/${userId}`, { content })),
+};
+
+export const blocks = {
+  list: () => body(client.get("/blocks")),
+  block: (userId) => body(client.post(`/blocks/${userId}`)),
+  unblock: (userId) => body(client.delete(`/blocks/${userId}`)),
+};
+
 // --- media, events and the calendar feed ---
 
 export const media = {
@@ -242,6 +259,7 @@ export const admin = {
   updateUser: (userId, payload) => body(client.put(`/admin/users/${userId}`, payload)),
   removeUser: (userId) => body(client.delete(`/admin/users/${userId}`)),
   clearMfa: (userId) => body(client.delete(`/admin/users/${userId}/mfa`)),
+  userIps: (userId) => body(client.get(`/admin/users/${userId}/ips`)),
   coachRequests: () => body(client.get("/admin/coach-requests")),
   decideCoachRequest: (userId, status, motive) =>
     body(client.put(`/admin/coach-requests/${userId}`, { status, motive })),

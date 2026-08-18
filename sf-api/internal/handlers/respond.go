@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/store"
@@ -85,6 +87,11 @@ const (
 	CodeAlreadyInvited           = "errors.alreadyInvited"
 	CodeNoCoachRequest           = "errors.noCoachRequest"
 	CodeRejectMotiveRequired     = "errors.rejectMotiveRequired"
+	// Private messages and the block list.
+	CodeCannotMessage     = "errors.cannotMessage"
+	CodeCannotMessageSelf = "errors.cannotMessageSelf"
+	CodeCannotBlockSelf   = "errors.cannotBlockSelf"
+	CodeEmptyMessage      = "errors.emptyMessage"
 	// The contact form's own failures, including the ones CWCloud's
 	// contact-request API reports back (see cwcloudContactErrors).
 	CodeContactFormNotConfigured = "errors.contactFormNotConfigured"
@@ -187,6 +194,28 @@ func meResponse(user models.User, activationMode string) models.UserMeResponse {
 		CoachRequest: user.CoachRequest, Bodyweight: user.Bodyweight,
 		MFAEnabled: user.MFAEnabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
 		I18nCode: models.I18nCodeForRole(user.Role, activationMode),
+	}
+}
+
+// connectionRecorder is the one store method recordConnection needs, kept
+// narrow so both handlers can take it without either depending on the other.
+type connectionRecorder interface {
+	RecordConnection(ctx context.Context, userID, ip string, at time.Time) error
+}
+
+// recordConnection notes the address a session was minted from.
+//
+// It is best-effort and deliberately silent on failure: this is administrative
+// data, and losing a counter tick must never fail a login. It runs on session
+// creation rather than per request - the alternative is a database write on
+// every single call for a number nobody reads that often.
+func recordConnection(r *http.Request, users connectionRecorder, userID string) {
+	ip := utils.ClientIP(r)
+	if utils.IsBlank(ip) || users == nil {
+		return
+	}
+	if err := users.RecordConnection(r.Context(), userID, ip, time.Now().UTC()); err != nil {
+		slog.Warn("failed to record a connection address", "userId", userID, "error", err)
 	}
 }
 

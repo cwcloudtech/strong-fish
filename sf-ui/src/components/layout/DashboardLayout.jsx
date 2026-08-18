@@ -10,6 +10,7 @@ import {
   FiInfo,
   FiKey,
   FiMail as FiMailIcon,
+  FiMessageSquare,
   FiSearch,
   FiLogOut,
   FiMail,
@@ -21,7 +22,7 @@ import {
   FiUsers,
 } from "react-icons/fi";
 
-import { admin, invitations as invitationsApi } from "../../api/services";
+import { admin, invitations as invitationsApi, messages as messagesApi } from "../../api/services";
 import Avatar from "../common/Avatar";
 import DownloadAppButton from "../common/DownloadApp";
 import Dropdown from "../common/Dropdown";
@@ -47,6 +48,7 @@ export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(COLLAPSED_KEY) === "1");
   const [openReports, setOpenReports] = useState(0);
   const [pendingInvitations, setPendingInvitations] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const version = useAppVersion(config?.version);
 
   useEffect(() => localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0"), [collapsed]);
@@ -70,6 +72,10 @@ export default function DashboardLayout() {
       .mine()
       .then((list) => setPendingInvitations(list.length))
       .catch(() => setPendingInvitations(0));
+    messagesApi
+      .unread()
+      .then(({ unread }) => setUnreadMessages(unread || 0))
+      .catch(() => setUnreadMessages(0));
   }, [location.pathname]);
 
   const signOut = () => {
@@ -83,6 +89,12 @@ export default function DashboardLayout() {
     { to: "/dashboard/one-rms", label: t("nav.oneRms"), icon: <FiAward /> },
     { to: "/dashboard/clubs", label: t("nav.clubs"), icon: <FiUsers /> },
     { to: "/dashboard/events", label: t("nav.events"), icon: <FiCalendar /> },
+    {
+      to: "/dashboard/messages",
+      label: t("nav.messages"),
+      icon: <FiMessageSquare />,
+      count: unreadMessages,
+    },
     { to: "/dashboard/search", label: t("nav.search"), icon: <FiSearch /> },
     {
       to: "/dashboard/invitations",
@@ -105,6 +117,26 @@ export default function DashboardLayout() {
   return (
     <div className="sf-shell">
       <aside className={`sf-sidebar ${menuOpen ? "open" : ""} ${collapsed ? "collapsed" : ""}`}>
+        {/* The mark alone: the logo carries the name, so repeating it as text
+            beside it only crowds the rail. The rail's ground is the brand navy
+            in light mode and the app's own background in dark, so the mark is
+            pinned to the light-inked variant in both rather than following the
+            theme. */}
+        <Link className="sf-sidebar-brand" to="/dashboard/feed" aria-label={t("app.name")}>
+          <Logo mark on="dark" alt={t("app.name")} />
+        </Link>
+
+        {/* Directly under the mark: the version belongs to the product, not to
+            the account, so it sits with the branding rather than down with the
+            sign-out controls. */}
+        {version ? (
+          <div className="sf-version-wrap">
+            <span className="sf-version-badge">v{version}</span>
+          </div>
+        ) : null}
+
+        {/* Immediately above the first destination, so the control that changes
+            the nav's shape sits with the nav it changes. */}
         <Tooltip label={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")} position="right">
           <button
             type="button"
@@ -116,15 +148,6 @@ export default function DashboardLayout() {
             {collapsed ? <FiChevronRight /> : <FiChevronLeft />}
           </button>
         </Tooltip>
-
-        {/* The mark alone: the logo carries the name, so repeating it as text
-            beside it only crowds the rail. The rail's ground is the brand navy
-            in light mode and the app's own background in dark, so the mark is
-            pinned to the light-inked variant in both rather than following the
-            theme. */}
-        <Link className="sf-sidebar-brand" to="/dashboard/feed" aria-label={t("app.name")}>
-          <Logo mark on="dark" alt={t("app.name")} />
-        </Link>
 
         <nav>
           {links.map((link) => (
@@ -167,12 +190,6 @@ export default function DashboardLayout() {
             />
             <LanguageDropdown variant="dark" />
           </div>
-
-          {version ? (
-            <div className="sf-version-wrap">
-              <span className="sf-version-badge">v{version}</span>
-            </div>
-          ) : null}
 
           <Tooltip label={collapsed ? t("common.logout") : null} position="right">
             <button

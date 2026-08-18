@@ -82,12 +82,13 @@ func (h *MFAHandler) loadWebAuthnUser(ctx context.Context, user models.User) (*w
 
 // respondSession finishes a login (password or OIDC, plus a verified second
 // factor) by minting the real session token.
-func (h *MFAHandler) respondSession(w http.ResponseWriter, user models.User) {
+func (h *MFAHandler) respondSession(w http.ResponseWriter, r *http.Request, user models.User) {
 	token, err := authtoken.Generate(h.jwtSecret, user.ID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error(), CodeInternal)
 		return
 	}
+	recordConnection(r, h.users, user.ID)
 	writeJSON(w, http.StatusOK, models.UserResponse{
 		ID: user.ID, Email: user.Email, Name: user.Name, Surname: user.Surname,
 		Handle: user.Handle, Role: user.Role, Token: token, Picture: user.Picture,
@@ -132,7 +133,7 @@ func (h *MFAHandler) LoginTOTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Invalid code", CodeInvalidMFACode)
 		return
 	}
-	h.respondSession(w, user)
+	h.respondSession(w, r, user)
 }
 
 type mfaChallengeTokenPayload struct {
@@ -230,7 +231,7 @@ func (h *MFAHandler) LoginWebAuthnFinish(w http.ResponseWriter, r *http.Request)
 		writeStoreError(w, err)
 		return
 	}
-	h.respondSession(w, user)
+	h.respondSession(w, r, user)
 }
 
 // Status reports the connected user's current MFA enrollment, for the

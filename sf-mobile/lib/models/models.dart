@@ -480,6 +480,96 @@ class AssignmentDetail {
       );
 }
 
+/// A private thread with one other member.
+///
+/// There is exactly one per pair of people, so it is addressed by who is in it
+/// rather than by an id the client has to look up first.
+class Conversation {
+  final String id;
+  final User other;
+  final String lastMessage;
+  final String lastSenderId;
+  final int unread;
+  final DateTime updatedAt;
+
+  const Conversation({
+    required this.id,
+    this.other = const User(id: ''),
+    this.lastMessage = '',
+    this.lastSenderId = '',
+    this.unread = 0,
+    required this.updatedAt,
+  });
+
+  factory Conversation.fromJson(Map<String, dynamic> json) => Conversation(
+        id: _toString(json['id']),
+        other: User.fromJson(json['other'] is Map<String, dynamic>
+            ? json['other'] as Map<String, dynamic>
+            : const {}),
+        lastMessage: _toString(json['lastMessage']),
+        lastSenderId: _toString(json['lastSenderId']),
+        unread: _toInt(json['unread']),
+        updatedAt: _toDate(json['updatedAt']).toLocal(),
+      );
+}
+
+/// One line in a conversation.
+class PrivateMessage {
+  final String id;
+  final String senderId;
+  final User sender;
+  final String content;
+
+  /// Whether this side wrote it - which is all the UI needs to decide where to
+  /// draw the bubble.
+  final bool mine;
+  final DateTime createdAt;
+
+  const PrivateMessage({
+    required this.id,
+    this.senderId = '',
+    this.sender = const User(id: ''),
+    this.content = '',
+    this.mine = false,
+    required this.createdAt,
+  });
+
+  factory PrivateMessage.fromJson(Map<String, dynamic> json) => PrivateMessage(
+        id: _toString(json['id']),
+        senderId: _toString(json['senderId']),
+        sender: User.fromJson(json['sender'] is Map<String, dynamic>
+            ? json['sender'] as Map<String, dynamic>
+            : const {}),
+        content: _toString(json['content']),
+        mine: json['mine'] == true,
+        createdAt: _toDate(json['createdAt']).toLocal(),
+      );
+}
+
+/// One open thread: who it is with, and what has been said.
+class Thread {
+  final String conversationId;
+  final User other;
+  final List<PrivateMessage> messages;
+
+  const Thread({
+    this.conversationId = '',
+    this.other = const User(id: ''),
+    this.messages = const [],
+  });
+
+  factory Thread.fromJson(Map<String, dynamic> json) => Thread(
+        conversationId: _toString(json['conversationId']),
+        other: User.fromJson(json['other'] is Map<String, dynamic>
+            ? json['other'] as Map<String, dynamic>
+            : const {}),
+        messages: (json['messages'] is List ? json['messages'] as List : const [])
+            .map((item) => PrivateMessage.fromJson(
+                item is Map<String, dynamic> ? item : const <String, dynamic>{}))
+            .toList(),
+      );
+}
+
 /// A club asking somebody to join it.
 ///
 /// Invitations are addressed by email rather than by user id, so one sent

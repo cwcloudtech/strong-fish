@@ -53,6 +53,11 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   `public/about.md` (and `about.fr.md`) at runtime.
 * **A contact form**, forwarded to CWCloud's contact-request API (see
   [Contact form](#contact-form)).
+* **Private messages.** Direct conversations with the members whose profile you
+  can see, reportable to a moderator, plus a block list that clears somebody out
+  of your feed and your inbox (see [Messages and blocks](#messages-and-blocks)).
+* **Observability.** Structured logs, traces and metrics through one OTLP
+  collector, and a Prometheus endpoint (see [Observability](#observability)).
 * **A self-describing API.** The API's root serves a Swagger UI over an OpenAPI
   document generated from the live router, so it cannot drift out of step with
   the routes it documents.
@@ -93,6 +98,7 @@ failing a registration. Two more knobs are worth knowing:
 | --- | --- |
 | `SF_MOBILE_URL_PATTERN` | Where the Android build is published; `{version}` is substituted, and a path is resolved against `SF_UI_URL`. Blank hides the download entry rather than offering a dead link. |
 | `SF_GIT_REPO_URL` | The sources link shown on the signed-out screens. |
+| `SF_OTEL_ENDPOINT` | The collector traces, logs and metrics are pushed to. Blank disables export; logs and `/v1/metrics` are unaffected. |
 
 ### Running the pieces separately
 
@@ -465,6 +471,79 @@ role, and only to an account that is already confirmed: one still waiting on its
 activation link keeps waiting, and a banned one stays banned. Rejecting
 **requires a motive**, because it is emailed to the applicant and "no" on its
 own tells them nothing about whether to ask again.
+
+## Connection addresses
+
+Every address an account signs in from is recorded in its own payload with a hit
+counter, a first-seen and a last-seen, and the superadmin's user list shows them -
+the same view [uprodit](https://uprodit.com) offers.
+
+There is deliberately **no ban**: blocking an address is the firewall's job, and
+a second, weaker copy of that rule inside the application would only be a place
+for the two to disagree. This is for recognizing an account, not for stopping
+one.
+
+It is recorded when a session is minted rather than per request - the alternative
+is a database write on every single call for a number nobody reads that often -
+and it is best-effort: losing a counter tick must never fail a login. The list
+is capped (`models.MaxConnectionIPs`), because an account connecting from a new
+address every time would otherwise grow its own row without limit.
+
+## Messages and blocks
+
+A conversation is addressed by **who is in it**, not by an id: there is exactly
+one thread per pair of members, so `GET /v1/messages/with/{userId}` opens it and
+creates it on first use. Making a client look an id up first would only add a
+round trip and a way to get it wrong.
+
+Who may write to whom reuses the profile rules rather than adding a second
+setting: **you can message somebody whose profile you can see.** The visibility
+a member chose is already a statement about their reach, and asking the same
+question twice would only let the two answers disagree. It is re-checked on
+every send, not only when the thread was opened - somebody may have narrowed
+their profile, or blocked the sender, in between.
+
+**Blocking** is stored directionally - who blocked whom - and enforced in both:
+the blocker stops seeing the blocked member's posts, the blocked member stops
+seeing theirs, and neither can message the other. What stays one-directional is
+who may lift it. The feed queries carry the exclusion in SQL (`notBlockedClause`)
+rather than filtering their results, for the same reason the visibility rules
+do: a caller-side filter makes the page counts wrong, and it only applies where
+somebody remembered it.
+
+Being blocked is never reported as such - the API answers "you cannot message
+this member". That somebody blocked you is information they did not agree to
+share.
+
+A message can be **reported**. Unlike a post, a moderator cannot go and look at
+it in context, so the report carries the message's text as its snapshot, and
+only a participant in the thread may file one.
+
+## Observability
+
+Ported from [cwclock](https://gitlab.cwcloud.tech/oss/cwclock): logs, traces and
+metrics through one collector, configured by `SF_OTEL_ENDPOINT` and
+`SF_OTEL_PROTO` (`otlp/grpc` by default, `otlp/http` to opt out).
+
+* **Logs** always go to stdout/stderr, whether or not export is configured - a
+  container's logs are the one thing that has to work when the collector is what
+  is down. When an endpoint is set the same records are additionally exported
+  over OTLP.
+* **Traces**: one span per request.
+* **Metrics**: `GET /v1/metrics` serves Prometheus, and the same instruments are
+  pushed over OTLP when an endpoint is configured. Alongside the Go and process
+  collectors there are request counts and durations, and gauges for accounts per
+  role, clubs and programs.
+
+The span, the access log line and the metric all use the **resolved chi route
+pattern**, not the raw path. The span has to be opened before the handler chain
+runs, when the pattern isn't known yet, so it starts named after the path and is
+renamed once chi has matched - otherwise every request for a different program
+id would be its own endpoint and none of it would aggregate.
+
+`SF_OTEL_ENDPOINT` unset disables export and nothing else: `/v1/metrics` still
+serves and the logs still land, so a local run is fully observable with no
+collector at all.
 
 ## Video uploads
 
