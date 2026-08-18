@@ -118,8 +118,7 @@ responsable d'un contenu donné.
 
 ## Mentions légales
 
-_strong-fish_ est une application open source (licence MIT) que chacun peut
+_StrongFish_ est une application open source (licence MIT) que chacun peut
 héberger lui-même.
 
-L'instance principale, www.strong-fish.com, est fournie et hébergée par
-[CWCloud](https://www.cwcloud.tech).
+L'instance principale, [strong-fish.com](https://www.strong-fish.com), est fournie et hébergée par [CWCloud](https://www.cwcloud.tech).

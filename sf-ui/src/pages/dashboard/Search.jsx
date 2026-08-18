@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { FiSearch, FiUsers } from "react-icons/fi";
 
@@ -6,6 +6,7 @@ import Avatar from "../../components/common/Avatar";
 import { search as searchApi } from "../../api/services";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
+import { SF_PAGINATION_SIZE } from "../../utils/pagination";
 
 const EMPTY = { terms: "", name: "", surname: "", email: "" };
 
@@ -18,6 +19,10 @@ const EMPTY = { terms: "", name: "", surname: "", email: "" };
  * rules run inside its query, so nothing is filtered here and the counts are
  * honest. A profile someone hid is not merely absent from the page, it never
  * counted towards the total.
+ *
+ * It opens on results rather than on an empty state: with no criteria the API
+ * returns everybody the caller may see, so the screen is useful before anything
+ * is typed and narrows as it is. Further pages load on scroll.
  */
 export default function Search() {
   const { t } = useI18n();
@@ -35,26 +40,30 @@ export default function Search() {
   const [total, setTotal] = useState(0);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // The last page asked for. Kept in a ref as well as state because the
+  // observer callback below closes over it and must see the current value
+  // rather than the one from the render that registered it.
+  const pageRef = useRef(0);
+  const sentinelRef = useRef(null);
 
   const criteria = Object.fromEntries(
     ["terms", "name", "surname", "email"].map((key) => [key, params.get(key) || ""])
   );
   const hasCriteria = Object.values(criteria).some(Boolean);
 
+  /** The first page for the current criteria, replacing whatever was shown. */
   const run = useCallback(async () => {
-    if (!Object.values(criteria).some(Boolean)) {
-      setResults(null);
-      setTotal(0);
-      return;
-    }
     setBusy(true);
     setError(null);
+    pageRef.current = 0;
     try {
-      const page = await searchApi.members(criteria);
-      setResults(page.results || []);
-      setTotal(page.totalResults || 0);
+      const page = await searchApi.members({ ...criteria, page: 0, size: SF_PAGINATION_SIZE });
+      setResults(page?.results || []);
+      setTotal(page?.totalResults || 0);
     } catch (err) {
       setError(err);
+      setResults([]);
     } finally {
       setBusy(false);
     }
@@ -65,6 +74,56 @@ export default function Search() {
   useEffect(() => {
     run();
   }, [run]);
+
+  /**
+   * The next page, appended.
+   *
+   * Guarded on every count that could fire it twice - already loading, first
+   * page still in flight, nothing more to fetch - because an observer can fire
+   * repeatedly while the sentinel stays on screen.
+   */
+  const loadMore = useCallback(async () => {
+    if (busy || loadingMore || !results || results.length >= total) return;
+
+    setLoadingMore(true);
+    const next = pageRef.current + 1;
+    try {
+      const page = await searchApi.members({ ...criteria, page: next, size: SF_PAGINATION_SIZE });
+      const rows = page?.results || [];
+      pageRef.current = next;
+      // Concatenated by id rather than blindly: a member added between two
+      // requests shifts the window, and the same row can arrive twice.
+      setResults((current) => {
+        const seen = new Set(current.map((member) => member.id));
+        return [...current, ...rows.filter((member) => !seen.has(member.id))];
+      });
+      setTotal(page?.totalResults || total);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoadingMore(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, loadingMore, results, total, params]);
+
+  /**
+   * Infinite scroll, as an observer on a sentinel after the last row rather
+   * than a scroll listener: it fires only when the end is actually reached, and
+   * costs nothing while it is not.
+   */
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => entries[0]?.isIntersecting && loadMore(),
+      // Start fetching a little before the end comes into view, so the next
+      // rows are usually there by the time they are wanted.
+      { rootMargin: "200px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
 
@@ -149,10 +208,8 @@ export default function Search() {
 
       <ErrorMessage error={error} />
 
-      {busy ? (
+      {busy || results === null ? (
         <Spinner />
-      ) : results === null ? (
-        <EmptyState title={t("search.startTitle")} message={t("search.startBody")} />
       ) : results.length === 0 ? (
         <EmptyState title={t("search.noneTitle")} message={t("search.noneBody")} />
       ) : (
@@ -183,6 +240,14 @@ export default function Search() {
               </li>
             ))}
           </ul>
+
+          {/* Watched by the observer above. It stays in the tree only while
+              there is another page, so reaching the end simply stops asking. */}
+          {results.length < total ? (
+            <div ref={sentinelRef} style={{ padding: "0.5rem 0" }}>
+              {loadingMore ? <Spinner /> : null}
+            </div>
+          ) : null}
         </>
       )}
     </div>

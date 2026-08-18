@@ -643,6 +643,7 @@ const en = {
   messages: {
     title: "Messages",
     current: "Conversations",
+    findSomeone: "Find someone",
     subtitle: "Private conversations with the members you can see.",
     message: "Message",
     send: "Send",

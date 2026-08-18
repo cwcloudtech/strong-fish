@@ -531,7 +531,7 @@ const Map<String, dynamic> fr = {
   'about': {
     'title': 'À propos',
     'unavailable': 'Cette page n\'a pas encore été rédigée.',
-    'openSource': 'strong-fish est un produit open source de CWCloud. Les sources sont disponibles',
+    'openSource': 'StrongFish est un produit open source de CWCloud. Les sources sont disponibles',
     'openSourceLink': 'ici',
   },
   'apiKeys': {
@@ -640,6 +640,7 @@ const Map<String, dynamic> fr = {
   'messages': {
     'title': 'Messages',
     'current': 'Conversations',
+    'findSomeone': 'Trouver quelqu\'un',
     'subtitle': 'Conversations privées avec les membres que vous pouvez voir.',
     'message': 'Envoyer un message',
     'send': 'Envoyer',

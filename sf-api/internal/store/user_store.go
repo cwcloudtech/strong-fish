@@ -285,11 +285,6 @@ type MemberSearch struct {
 
 // blank reports whether the search has nothing to go on. An empty search must
 // not enumerate the whole membership.
-func (m MemberSearch) blank() bool {
-	return utils.IsBlank(m.Terms) && utils.IsBlank(m.Name) &&
-		utils.IsBlank(m.Surname) && utils.IsBlank(m.Email)
-}
-
 // SearchMembers finds accounts by email, name or surname, returning only the
 // profiles callerID is allowed to see.
 //
@@ -303,10 +298,10 @@ func (m MemberSearch) blank() bool {
 // pending registration is not a member yet, and a banned one is not one any
 // more.
 func (s *UserStore) SearchMembers(ctx context.Context, m MemberSearch, callerID string, superadmin bool) ([]models.User, int, error) {
-	if m.blank() {
-		return []models.User{}, 0, nil
-	}
-
+	// No criteria is a browse, not an error: the screen opens on everybody the
+	// caller may see, ordered by name, and typing narrows it. The visibility
+	// predicate below is what makes that safe - an empty search still cannot
+	// return a profile its owner hid.
 	size := m.Size
 	if size <= 0 || size > 100 {
 		size = 20

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiFlag, FiSend, FiSlash, FiUser } from "react-icons/fi";
+import { FiFlag, FiSearch, FiSend, FiSlash, FiUser } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import Avatar from "../../components/common/Avatar";
@@ -45,9 +45,17 @@ export default function Messages() {
           <h1 className="sf-title">{t("messages.title")}</h1>
           <p className="sf-subtitle">{t("messages.subtitle")}</p>
         </div>
-        <Link className="sf-button sf-button-secondary" to="/dashboard/blocks">
-          <FiSlash /> {t("blocks.title")}
-        </Link>
+        <div className="sf-row" style={{ gap: "0.4rem" }}>
+          {/* Starting a conversation means finding somebody first, and there is
+              nowhere else on this screen to do it - every thread here already
+              exists. */}
+          <Link className="sf-button" to="/dashboard/search">
+            <FiSearch /> {t("messages.findSomeone")}
+          </Link>
+          <Link className="sf-button sf-button-secondary" to="/dashboard/blocks">
+            <FiSlash /> {t("blocks.title")}
+          </Link>
+        </div>
       </div>
 
       <ErrorMessage error={error} />
@@ -57,7 +65,11 @@ export default function Messages() {
           {conversations === null ? (
             <Spinner />
           ) : conversations.length === 0 ? (
-            <EmptyState title={t("messages.emptyTitle")} message={t("messages.emptyBody")} />
+            <EmptyState title={t("messages.emptyTitle")} message={t("messages.emptyBody")}>
+              <Link className="sf-button sf-button-sm" to="/dashboard/search">
+                <FiSearch /> {t("messages.findSomeone")}
+              </Link>
+            </EmptyState>
           ) : (
             conversations.map((conversation) => (
               <button
