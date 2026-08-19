@@ -327,8 +327,49 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 							manager(r).Get("/assignments", h.Program.ListAssignments)
 							manager(r).Post("/assignments", h.Program.Assign)
 							manager(r).Delete("/assignments/{assignmentId}", h.Program.Unassign)
+							// Readable by anybody who may read the program:
+							// an athlete printing the block they were given
+							// is not a coaching action.
+							r.Get("/export.pdf", h.Program.ExportPDF)
+							// Not manager-gated: any member of this club may
+							// copy a program they can read into their own
+							// library. Copying it into *another club* is a
+							// coaching action, and the handler checks the
+							// destination for that.
+							r.Post("/copy", h.Program.CopyToClub)
 						})
 					})
+				})
+			})
+
+			// A member's own programs: the block an athlete writes for
+			// themselves, which belongs to no club.
+			//
+			// The same handlers as the club routes above, deliberately: the
+			// only difference is who is allowed in, which authorizeProgram
+			// decides from whether the path names a club. Duplicating the
+			// twelve editing endpoints for a second set of rules is how the
+			// two would come to disagree.
+			r.Route("/programs", func(r chi.Router) {
+				r.Get("/", h.Program.ListMine)
+				r.Post("/", h.Program.Create)
+				r.Post("/import", h.Program.Import)
+
+				r.Route("/{programId}", func(r chi.Router) {
+					r.Get("/", h.Program.Get)
+					r.Put("/", h.Program.Update)
+					r.Delete("/", h.Program.Delete)
+					r.Get("/export.pdf", h.Program.ExportPDF)
+					r.Post("/copy", h.Program.CopyToClub)
+					r.Post("/days", h.Program.AddDay)
+					r.Put("/days/{dayId}", h.Program.UpdateDay)
+					r.Delete("/days/{dayId}", h.Program.DeleteDay)
+					r.Post("/days/{dayId}/sets", h.Program.AddSet)
+					r.Put("/sets/{setId}", h.Program.UpdateSet)
+					r.Delete("/sets/{setId}", h.Program.DeleteSet)
+					r.Get("/assignments", h.Program.ListAssignments)
+					r.Post("/assignments", h.Program.Assign)
+					r.Delete("/assignments/{assignmentId}", h.Program.Unassign)
 				})
 			})
 

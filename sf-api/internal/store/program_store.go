@@ -56,7 +56,7 @@ type setData struct {
 }
 
 var programSelect = `
-	SELECT p.id, p.club_id, p.author_id, p.data, p.created_at, p.updated_at,
+	SELECT p.id, coalesce(p.club_id::text, ''), p.author_id, p.data, p.created_at, p.updated_at,
 	       ` + displayFullName("u") + `,
 	       (SELECT count(*) FROM program_days WHERE program_id = p.id),
 	       (SELECT count(*) FROM program_sets WHERE program_id = p.id),
@@ -64,7 +64,10 @@ var programSelect = `
 	       coalesce(c.data->>'name', '')
 	FROM programs p
 	JOIN users u ON u.id = p.author_id
-	JOIN clubs c ON c.id = p.club_id`
+	-- LEFT, because a program somebody wrote for themselves belongs to no
+	-- club. An inner join here does not fail, it silently returns nothing -
+	-- which is every personal program disappearing from every listing.
+	LEFT JOIN clubs c ON c.id = p.club_id`
 
 func scanProgram(row pgx.Row) (models.Program, error) {
 	var p models.Program
@@ -150,8 +153,8 @@ func (s *ProgramStore) Create(ctx context.Context, p NewProgram) (models.Program
 
 	var programID string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO programs (club_id, author_id, data) VALUES ($1, $2, $3) RETURNING id
-	`, p.ClubID, p.AuthorID, data).Scan(&programID); err != nil {
+		INSERT INTO programs (club_id, author_id, data) VALUES ($1::uuid, $2, $3) RETURNING id
+	`, clubIDArg(p.ClubID), p.AuthorID, data).Scan(&programID); err != nil {
 		return models.Program{}, err
 	}
 
@@ -214,6 +217,32 @@ func (s *ProgramStore) ListForClub(ctx context.Context, clubID string) ([]models
 
 // UpdateMeta renames a program or changes its description; the sessions
 // themselves are edited set by set.
+// ListForAuthor returns the programs one member wrote for themselves - the
+// ones with no club. A coach's club programs are listed by club, not here.
+func (s *ProgramStore) ListForAuthor(ctx context.Context, authorID string) ([]models.Program, error) {
+	rows, err := s.pool.Query(ctx,
+		programSelect+` WHERE p.author_id = $1 AND p.club_id IS NULL ORDER BY p.created_at DESC`, authorID)
+	if err != nil {
+		return nil, err
+	}
+	return scanPrograms(rows)
+}
+
+// SetClub moves a program to another club, or - with a blank id - out of every
+// club and into its author's own library.
+func (s *ProgramStore) SetClub(ctx context.Context, id, clubID string) (models.Program, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE programs SET club_id = $2::uuid, updated_at = now() WHERE id = $1
+	`, id, clubIDArg(clubID))
+	if err != nil {
+		return models.Program{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		return models.Program{}, ErrNotFound
+	}
+	return s.FindByID(ctx, id)
+}
+
 func (s *ProgramStore) UpdateMeta(ctx context.Context, id, name, description, visibility string) (models.Program, error) {
 	patch, err := json.Marshal(map[string]any{
 		"name": name, "description": description,
@@ -524,13 +553,14 @@ type assignmentData struct {
 
 var assignmentSelect = `
 	SELECT a.id, a.program_id, a.user_id, a.data, a.created_at, a.updated_at,
-	       coalesce(p.data->>'name', ''), p.club_id, coalesce(c.data->>'name', ''),
+	       coalesce(p.data->>'name', ''), coalesce(p.club_id::text, ''), coalesce(c.data->>'name', ''),
 	       ` + displayFullName("u") + `, u.email,
 	       (SELECT count(*) FROM program_sets WHERE program_id = a.program_id),
 	       (SELECT count(*) FROM set_logs WHERE assignment_id = a.id AND (data->>'done')::boolean IS TRUE)
 	FROM program_assignments a
 	JOIN programs p ON p.id = a.program_id
-	JOIN clubs c ON c.id = p.club_id
+	-- LEFT: see programSelect. An assignment of a personal program has no club.
+	LEFT JOIN clubs c ON c.id = p.club_id
 	JOIN users u ON u.id = a.user_id`
 
 func scanAssignment(row pgx.Row) (models.ProgramAssignment, error) {

@@ -36,6 +36,7 @@ import Settings from "./pages/dashboard/Settings";
 import SignUp from "./pages/SignUp";
 import Training from "./pages/dashboard/Training";
 import TrainingSession from "./pages/dashboard/TrainingSession";
+import MyPrograms from "./pages/dashboard/MyPrograms";
 
 export default function App() {
   return (
@@ -130,6 +131,10 @@ function AppRoutes() {
               <Route path="clubs" element={<Clubs />} />
               <Route path="clubs/:clubId" element={<ClubDetail />} />
               <Route path="clubs/:clubId/programs/:programId" element={<ProgramDetail />} />
+              {/* The same editor, without a club: a program somebody wrote for
+                  themselves. */}
+              <Route path="programs" element={<MyPrograms />} />
+              <Route path="programs/:programId" element={<ProgramDetail />} />
               <Route path="events" element={<Events />} />
               <Route path="invitations" element={<Invitations />} />
               <Route path="messages" element={<Messages />} />

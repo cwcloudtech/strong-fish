@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
@@ -24,6 +26,9 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
   ProgramDetail? _detail;
   String? _error;
 
+  /// True while the printable sheet is being fetched.
+  bool _exporting = false;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +52,49 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Downloads the printable sheet and hands it to whatever opens PDFs on
+  /// this phone.
+  ///
+  /// Saved to the app's own documents directory rather than a shared one: it
+  /// needs no permission, and the file is a copy of something the server can
+  /// render again at any time.
+  Future<void> _exportPdf() async {
+    final t = ref.read(tProvider);
+    setState(() => _exporting = true);
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final path = await ref.read(apiProvider).downloadProgramPdf(
+            widget.clubId,
+            widget.programId,
+            directory: directory.path,
+            fileName: '${_safeFileName(_detail?.program.name ?? 'program')}.pdf',
+            locale: ref.read(localeProvider),
+          );
+
+      final result = await OpenFilex.open(path);
+      if (result.type != ResultType.done && mounted) {
+        // A phone with no PDF viewer is a real case, and "nothing happened" is
+        // the worst way to find out.
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(t('programs.exportNoViewer'))));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  /// Keeps a program's name usable as a filename, since it is whatever
+  /// somebody typed.
+  static String _safeFileName(String name) {
+    final cleaned = name.replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '').trim().replaceAll(' ', '-');
+    return cleaned.isEmpty ? 'program' : cleaned;
   }
 
   Future<void> _addSession() async {
@@ -119,7 +167,18 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
     final locale = ref.watch(localeProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(_detail?.program.name ?? t('programs.title'))),
+      appBar: AppBar(
+        title: Text(_detail?.program.name ?? t('programs.title')),
+        actions: [
+          IconButton(
+            icon: _exporting
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: t('programs.exportPdf'),
+            onPressed: _detail == null || _exporting ? null : _exportPdf,
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addSession,
         icon: const Icon(Icons.add),

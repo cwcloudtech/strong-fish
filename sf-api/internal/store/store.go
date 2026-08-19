@@ -72,3 +72,14 @@ func clampPage(page, size, maxSize int) (limit, offset int) {
 	}
 	return size, page * size
 }
+
+// clubIDArg turns a blank club id into a NULL, which is how a row that belongs
+// to no club is stored - a public post, or a program somebody wrote for
+// themselves. Passing the empty string straight through would be rejected by
+// the uuid column rather than read as "none".
+func clubIDArg(clubID string) any {
+	if utils.IsBlank(clubID) {
+		return nil
+	}
+	return clubID
+}

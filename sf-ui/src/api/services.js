@@ -74,39 +74,63 @@ export const oneRms = {
 
 // --- programs ---
 
+/**
+ * Where a program lives.
+ *
+ * A club's programs hang off the club; a program somebody wrote for themselves
+ * hangs off nothing, and its routes are the same handlers with a different rule
+ * about who may reach them. One helper rather than a second client, so a screen
+ * can work on either kind by passing a club id or not passing one.
+ */
+const programsBase = (clubId) => (clubId ? `/clubs/${clubId}/programs` : "/programs");
+
 export const programs = {
-  list: (clubId) => body(client.get(`/clubs/${clubId}/programs`)),
-  create: (clubId, payload) => body(client.post(`/clubs/${clubId}/programs`, payload)),
+  // Programs of a club, or - with no club - the ones the caller wrote for
+  // themselves.
+  list: (clubId) => body(client.get(programsBase(clubId))),
+  create: (clubId, payload) => body(client.post(programsBase(clubId), payload)),
   get: (clubId, programId, memberId) =>
-    body(client.get(`/clubs/${clubId}/programs/${programId}`, { params: memberId ? { memberId } : {} })),
-  update: (clubId, programId, payload) => body(client.put(`/clubs/${clubId}/programs/${programId}`, payload)),
-  remove: (clubId, programId) => body(client.delete(`/clubs/${clubId}/programs/${programId}`)),
+    body(client.get(`${programsBase(clubId)}/${programId}`, { params: memberId ? { memberId } : {} })),
+  update: (clubId, programId, payload) => body(client.put(`${programsBase(clubId)}/${programId}`, payload)),
+  remove: (clubId, programId) => body(client.delete(`${programsBase(clubId)}/${programId}`)),
   importFile: (clubId, file, name, description) => {
     const form = new FormData();
     form.append("file", file);
     if (name) form.append("name", name);
     if (description) form.append("description", description);
-    return body(client.post(`/clubs/${clubId}/programs/import`, form));
+    return body(client.post(`${programsBase(clubId)}/import`, form));
   },
-  addDay: (clubId, programId, payload) =>
-    body(client.post(`/clubs/${clubId}/programs/${programId}/days`, payload)),
+  // Duplicates the program into another club, or into the caller's own
+  // library with a blank clubId. `move` transfers it instead.
+  copy: (clubId, programId, payload) =>
+    body(client.post(`${programsBase(clubId)}/${programId}/copy`, payload)),
+  // The printable sheet, a page per week. Fetched as a blob rather than
+  // linked, because the request carries the session's Authorization header -
+  // a plain <a href> would arrive logged out.
+  exportPdf: (clubId, programId, { memberId, locale } = {}) =>
+    client
+      .get(`${programsBase(clubId)}/${programId}/export.pdf`, {
+        params: { ...(memberId ? { memberId } : {}), ...(locale ? { locale } : {}) },
+        responseType: "blob",
+      })
+      .then((response) => response.data),
+  addDay: (clubId, programId, payload) => body(client.post(`${programsBase(clubId)}/${programId}/days`, payload)),
   updateDay: (clubId, programId, dayId, payload) =>
-    body(client.put(`/clubs/${clubId}/programs/${programId}/days/${dayId}`, payload)),
+    body(client.put(`${programsBase(clubId)}/${programId}/days/${dayId}`, payload)),
   removeDay: (clubId, programId, dayId) =>
-    body(client.delete(`/clubs/${clubId}/programs/${programId}/days/${dayId}`)),
+    body(client.delete(`${programsBase(clubId)}/${programId}/days/${dayId}`)),
   addSet: (clubId, programId, dayId, payload) =>
-    body(client.post(`/clubs/${clubId}/programs/${programId}/days/${dayId}/sets`, payload)),
+    body(client.post(`${programsBase(clubId)}/${programId}/days/${dayId}/sets`, payload)),
   updateSet: (clubId, programId, setId, payload) =>
-    body(client.put(`/clubs/${clubId}/programs/${programId}/sets/${setId}`, payload)),
+    body(client.put(`${programsBase(clubId)}/${programId}/sets/${setId}`, payload)),
   removeSet: (clubId, programId, setId) =>
-    body(client.delete(`/clubs/${clubId}/programs/${programId}/sets/${setId}`)),
-  assignments: (clubId, programId) => body(client.get(`/clubs/${clubId}/programs/${programId}/assignments`)),
+    body(client.delete(`${programsBase(clubId)}/${programId}/sets/${setId}`)),
+  assignments: (clubId, programId) => body(client.get(`${programsBase(clubId)}/${programId}/assignments`)),
   assign: (clubId, programId, payload) =>
-    body(client.post(`/clubs/${clubId}/programs/${programId}/assignments`, payload)),
+    body(client.post(`${programsBase(clubId)}/${programId}/assignments`, payload)),
   unassign: (clubId, programId, assignmentId) =>
-    body(client.delete(`/clubs/${clubId}/programs/${programId}/assignments/${assignmentId}`)),
+    body(client.delete(`${programsBase(clubId)}/${programId}/assignments/${assignmentId}`)),
 };
-
 // --- the member's own training ---
 
 export const training = {

@@ -209,6 +209,8 @@ const Map<String, dynamic> en = {
     'feedback': 'Feedback',
   },
   'programs': {
+    'exportPdf': 'Export as PDF',
+    'exportNoViewer': 'No app on this phone can open a PDF.',
     'title': 'Programs',
     'import': 'Import a spreadsheet',
     'importHelp': 'Upload the coach\'s .xlsx. Two layouts are read automatically: one sheet per week, each session starting with an "Exercice | Reps | RPE | Percentage | Load" header row; or one sheet per block, with an "EXERCICES | SÉRIES/REPS | RPE" header and a W1..Wn column per week. Any weights the file works out itself are ignored - loads are always recomputed from each athlete\'s own maxes.',
