@@ -82,7 +82,9 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
               ? SfErrorState(message: _error!, onRetry: _load, retryLabel: t('common.back'))
               : profile == null
                   ? SfEmptyState(icon: Icons.person_off_outlined, title: t('profile.notVisible'))
-                  : ListView(
+                  : RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView(
                       padding: const EdgeInsets.all(16),
                       children: [
                         Row(
@@ -140,6 +142,7 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                           text: t('share.profileText', {'name': profile.fullName}),
                         ),
                       ],
+                    ),
                     ),
     );
   }

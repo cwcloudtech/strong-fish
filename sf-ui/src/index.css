@@ -1982,3 +1982,40 @@ button {
 
 .sf-thread-who strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 a.sf-thread-who:hover strong { color: var(--sf-primary); text-decoration: underline; }
+
+/* Event colour picker: swatches for the common case, a native picker beside
+   them for anybody who wants a specific shade (same shape as cwclock's). */
+.sf-color-field { display: flex; align-items: center; gap: var(--sf-spacing-sm); flex-wrap: wrap; }
+
+.sf-color-input {
+  width: 42px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  background-color: var(--sf-surface);
+  cursor: pointer;
+}
+
+.sf-color-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.sf-color-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* The ring sits outside the swatch so the colour itself stays undimmed. */
+.sf-color-swatch.active { border-color: var(--sf-surface); box-shadow: 0 0 0 2px var(--sf-text); }
+
+.sf-color-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: 1px;
+}

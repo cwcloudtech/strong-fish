@@ -767,7 +767,7 @@ func (s *ProgramStore) ListFeedbackForClub(ctx context.Context, clubID string, p
 
 	rows, err := s.pool.Query(ctx, `
 		SELECT sl.id, sl.assignment_id, sl.set_id, sl.user_id, sl.data, sl.created_at, sl.updated_at,
-		       ` + displayFullName("u") + `,
+		       `+displayFullName("u")+`,
 		       coalesce(u.data->>'handle', ''), coalesce(u.data->>'picture', ''),
 		       p.id, coalesce(p.data->>'name', ''),
 		       coalesce((pd.data->>'week')::int, 0), coalesce((pd.data->>'day')::int, 0),

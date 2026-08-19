@@ -213,7 +213,7 @@ func TestReadQueriesExecute(t *testing.T) {
 		{"ListForUser", func() error { _, err := clubs.ListForUser(ctx, caller); return err }},
 		{"ListClubIDsForUser", func() error { _, err := clubs.ListClubIDsForUser(ctx, caller); return err }},
 
-		{"events.ListVisible", func() error { _, err := events.ListVisible(ctx, nil, time.Now()); return err }},
+		{"events.ListVisible", func() error { _, err := events.ListVisible(ctx, nil, time.Now(), "", false); return err }},
 		{"events.ListPublic", func() error { _, err := events.ListPublic(ctx, time.Time{}); return err }},
 
 		{"ListFeed", func() error { _, _, err := social.ListFeed(ctx, caller, []string{}, 0, 20); return err }},
@@ -552,5 +552,116 @@ func TestSearchMatchesUsername(t *testing.T) {
 				t.Errorf("found = %t, want %t", got, c.want)
 			}
 		})
+	}
+}
+
+// TestEventColorRoundTrips writes a colour, reads it back, and checks a junk
+// one is dropped. The colour lives in the JSONB payload rather than a column,
+// so nothing but a real write and read proves it survives the trip - and it
+// ends up in a `style` attribute, which is why the junk case matters.
+func TestEventColorRoundTrips(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	events := NewEventStore(pool)
+	author := seedUser(t, pool, "colour-round-trip@example.com")
+
+	fields := func(color string) EventFields {
+		return EventFields{
+			Title: "Regional meet", Kind: "competition", Color: color,
+			Visibility: models.EventVisibilityPrivate, StartsAt: time.Now().Add(time.Hour),
+		}
+	}
+
+	created, err := events.Create(ctx, author, fields("#1CB9F7"))
+	if err != nil {
+		t.Fatalf("creating: %v", err)
+	}
+	t.Cleanup(func() { _ = events.Delete(context.Background(), created.ID) })
+
+	if created.Color != "#1cb9f7" {
+		t.Fatalf("created colour = %q, want %q", created.Color, "#1cb9f7")
+	}
+
+	found, err := events.FindByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("reading back: %v", err)
+	}
+	if found.Color != "#1cb9f7" {
+		t.Fatalf("colour after a round trip = %q, want %q", found.Color, "#1cb9f7")
+	}
+
+	// A colour that isn't one must not reach the stylesheet the UI builds from
+	// it, and an event that loses its colour is still an event.
+	updated, err := events.Update(ctx, created.ID, fields("red; background: url(x)"))
+	if err != nil {
+		t.Fatalf("updating: %v", err)
+	}
+	if updated.Color != "" {
+		t.Fatalf("junk colour survived as %q, want it dropped", updated.Color)
+	}
+}
+
+// TestClearingOptionalEventFields covers a bug the colour work exposed: Update
+// merges the new payload into the old one, so every field marked `omitempty`
+// silently kept its previous value. Removing an event's location, its link or
+// its end time did nothing at all.
+//
+// It also checks the event is still listed afterwards. An event with no end
+// time used to have no `endsAt` key; it now has an empty one, and the listing
+// filter reads coalesce(endsAt, startsAt) - which catches a missing key but
+// not an empty string, so without a nullif the cleared event would silently
+// drop out of every calendar.
+func TestClearingOptionalEventFields(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	events := NewEventStore(pool)
+	author := seedUser(t, pool, "clearing-fields@example.com")
+
+	full := EventFields{
+		Title: "Regional meet", Kind: "competition", Color: "#1cb9f7",
+		Visibility: models.EventVisibilityPrivate, Description: "Bring your singlet",
+		Location: "Lyon", URL: "https://example.com",
+		StartsAt: time.Now().Add(time.Hour), EndsAt: time.Now().Add(3 * time.Hour),
+	}
+	created, err := events.Create(ctx, author, full)
+	if err != nil {
+		t.Fatalf("creating: %v", err)
+	}
+	t.Cleanup(func() { _ = events.Delete(context.Background(), created.ID) })
+
+	cleared := full
+	cleared.Description, cleared.Location, cleared.URL, cleared.Color = "", "", "", ""
+	cleared.EndsAt = time.Time{}
+
+	got, err := events.Update(ctx, created.ID, cleared)
+	if err != nil {
+		t.Fatalf("updating: %v", err)
+	}
+	for _, field := range []struct{ name, value string }{
+		{"description", got.Description},
+		{"location", got.Location},
+		{"url", got.URL},
+		{"color", got.Color},
+	} {
+		if field.value != "" {
+			t.Errorf("%s = %q, want it cleared", field.name, field.value)
+		}
+	}
+	if !got.EndsAt.IsZero() {
+		t.Errorf("endsAt = %v, want it cleared", got.EndsAt)
+	}
+
+	listed, err := events.ListVisible(ctx, nil, time.Now(), author, false)
+	if err != nil {
+		t.Fatalf("listing: %v", err)
+	}
+	found := false
+	for _, event := range listed {
+		if event.ID == created.ID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("an event with no end time dropped out of the listing")
 	}
 }

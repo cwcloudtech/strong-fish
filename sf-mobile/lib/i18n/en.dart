@@ -581,6 +581,8 @@ const Map<String, dynamic> en = {
     'description': 'Details',
     'visibility': 'Who can see it',
     'visibilityPublic': 'Everyone',
+    'visibilityPrivate': 'Only me',
+    'visibilityPrivateHelp': 'Kept to your own calendar. Nobody else sees it, apart from an administrator.',
     'visibilityClub': 'Club members only',
     'showPast': 'Show past events',
     'calendarLayout': 'Calendar',

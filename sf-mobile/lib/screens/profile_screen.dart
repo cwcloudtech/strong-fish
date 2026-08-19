@@ -35,6 +35,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     });
   }
 
+  /// Re-reads everything this screen shows.
+  ///
+  /// The update check is part of it deliberately: a build published while the
+  /// app was open should be reachable by pulling down, not only by restarting.
+  Future<void> _refresh() async {
+    await ref.read(sessionProvider.notifier).refresh();
+    ref.invalidate(oneRmsProvider);
+    await ref.read(appUpdateProvider.notifier).checkForUpdate();
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = info.version);
+  }
+
   Future<void> _install() async {
     final t = ref.read(tProvider);
     try {
@@ -80,7 +92,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final bests = maxes.where((max) => const {'squat', 'bench', 'deadlift'}.contains(max.slug)).toList();
     final total = bests.fold<double>(0, (sum, best) => sum + best.value);
 
-    return ListView(
+    // Pull to refresh, like every other screen: it re-reads the profile and
+    // re-checks for a newer build, which is how the upgrade entry appears
+    // without having to leave and come back.
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Card(
@@ -291,6 +308,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ),
       ],
+      ),
     );
   }
 }

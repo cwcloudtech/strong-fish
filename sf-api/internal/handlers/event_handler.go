@@ -36,6 +36,7 @@ type eventPayload struct {
 	Location    string `json:"location"`
 	URL         string `json:"url"`
 	Kind        string `json:"kind"`
+	Color       string `json:"color"`
 	StartsAt    string `json:"startsAt"`
 	EndsAt      string `json:"endsAt"`
 	Visibility  string `json:"visibility"`
@@ -68,7 +69,7 @@ func (h *EventHandler) fields(w http.ResponseWriter, p eventPayload) (store.Even
 
 	return store.EventFields{
 		ClubID: p.ClubID, Title: p.Title, Description: p.Description,
-		Location: p.Location, URL: p.URL, Kind: p.Kind,
+		Location: p.Location, URL: p.URL, Kind: p.Kind, Color: p.Color,
 		StartsAt: startsAt, EndsAt: endsAt, Visibility: p.Visibility,
 	}, true
 }
@@ -76,7 +77,11 @@ func (h *EventHandler) fields(w http.ResponseWriter, p eventPayload) (store.Even
 // canWrite decides who may create or change an event: a manager of the club it
 // belongs to, or a superadmin (who is also the only one who can put an event
 // on the open, club-less calendar).
-func (h *EventHandler) canWrite(r *http.Request, userID, clubID string) bool {
+func (h *EventHandler) canWrite(r *http.Request, userID, clubID, visibility string) bool {
+	if utils.IsBlank(userID) {
+		return false
+	}
+
 	user, err := h.users.FindByID(r.Context(), userID)
 	if err != nil {
 		return false
@@ -84,9 +89,15 @@ func (h *EventHandler) canWrite(r *http.Request, userID, clubID string) bool {
 	if user.Role == models.GlobalRoleSuperadmin {
 		return true
 	}
+
+	// A member's own calendar: no club, and visible to nobody but them (and a
+	// superadmin, who moderates everything). They have no club to publish to
+	// and no standing to publish to the open calendar, but noting a meet they
+	// mean to enter is theirs to do.
 	if utils.IsBlank(clubID) {
-		return false
+		return visibility == models.EventVisibilityPrivate
 	}
+
 	membership, err := h.clubs.FindMembership(r.Context(), clubID, userID)
 	if err != nil {
 		return false
@@ -129,7 +140,8 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 		from = time.Time{}
 	}
 
-	events, err := h.events.ListVisible(r.Context(), h.clubIDsOf(r, userID), from)
+	events, err := h.events.ListVisible(r.Context(), h.clubIDsOf(r, userID), from,
+		userID, h.isSuperadmin(r, userID))
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -167,9 +179,33 @@ func (h *EventHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.decorate(r, []models.Event{event}, userID)[0])
 }
 
+// isSuperadmin answers the one question the listing needs beyond the caller's
+// clubs.
+func (h *EventHandler) isSuperadmin(r *http.Request, userID string) bool {
+	if utils.IsBlank(userID) {
+		return false
+	}
+	user, err := h.users.FindByID(r.Context(), userID)
+	return err == nil && user.Role == models.GlobalRoleSuperadmin
+}
+
 func (h *EventHandler) canRead(r *http.Request, event models.Event, userID string) bool {
 	if event.Visibility == models.VisibilityPublic {
 		return true
+	}
+	// Their own, and the superadmin who moderates it.
+	if utils.IsNotBlank(userID) && (event.AuthorID == userID || h.isSuperadmin(r, userID)) {
+		return true
+	}
+	// A private event is also their coach's business: the same rule a private
+	// profile follows, so the people who write somebody's training can see the
+	// meet they entered.
+	if event.Visibility == models.EventVisibilityPrivate {
+		if utils.IsBlank(userID) {
+			return false
+		}
+		relation, err := h.clubs.RelationTo(r.Context(), event.AuthorID, userID)
+		return err == nil && relation.ManagesClub
 	}
 	if utils.IsBlank(userID) || utils.IsBlank(event.ClubID) {
 		return false
@@ -183,9 +219,15 @@ func (h *EventHandler) canRead(r *http.Request, event models.Event, userID strin
 func (h *EventHandler) decorate(r *http.Request, events []models.Event, userID string) []models.Event {
 	writable := map[string]bool{}
 	for i, event := range events {
+		// Their own, whatever it belongs to.
+		if utils.IsNotBlank(userID) && event.AuthorID == userID {
+			events[i].Editable = true
+			events[i].Deletable = true
+			continue
+		}
 		allowed, known := writable[event.ClubID]
 		if !known {
-			allowed = utils.IsNotBlank(userID) && h.canWrite(r, userID, event.ClubID)
+			allowed = utils.IsNotBlank(userID) && h.canWrite(r, userID, event.ClubID, event.Visibility)
 			writable[event.ClubID] = allowed
 		}
 		events[i].Editable = allowed
@@ -201,7 +243,7 @@ func (h *EventHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &p) {
 		return
 	}
-	if !h.canWrite(r, userID, p.ClubID) {
+	if !h.canWrite(r, userID, p.ClubID, p.Visibility) {
 		writeError(w, http.StatusForbidden, "Only a coach can add an event to this calendar", CodeForbidden)
 		return
 	}
@@ -226,7 +268,9 @@ func (h *EventHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	if !h.canWrite(r, userID, existing.ClubID) {
+	// The author of a private event may always edit it; otherwise the club's
+	// managers may.
+	if existing.AuthorID != userID && !h.canWrite(r, userID, existing.ClubID, existing.Visibility) {
 		writeError(w, http.StatusForbidden, "You cannot edit this event", CodeForbidden)
 		return
 	}
@@ -259,7 +303,7 @@ func (h *EventHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	if !h.canWrite(r, userID, existing.ClubID) {
+	if existing.AuthorID != userID && !h.canWrite(r, userID, existing.ClubID, existing.Visibility) {
 		writeError(w, http.StatusForbidden, "You cannot delete this event", CodeForbidden)
 		return
 	}

@@ -16,6 +16,21 @@ const KINDS = ["competition", "training", "other"];
 const LAYOUT_KEY = "sf.eventsLayout";
 
 /**
+ * The palette a new event's colour is drawn from.
+ *
+ * Pre-selected at random rather than defaulting to one: a calendar where every
+ * event is the same colour tells you nothing, and nobody picks a colour for the
+ * first entry if the form already looks filled in. Picking randomly means a
+ * month of events is legible without anybody having thought about it.
+ */
+const EVENT_COLORS = [
+  "#0e5e9b", "#2b8fd4", "#16a34a", "#65a30d", "#d97706",
+  "#dc2626", "#db2777", "#7c3aed", "#0891b2", "#4b5563",
+];
+
+const randomColor = () => EVENT_COLORS[Math.floor(Math.random() * EVENT_COLORS.length)];
+
+/**
  * The calendar: meets, club sessions, camps.
  *
  * A member sees the open calendar plus their own clubs' dates; a coach can add
@@ -108,7 +123,10 @@ export default function Events() {
     () => clubs.filter((club) => club.role === "owner" || club.role === "admin"),
     [clubs]
   );
-  const canCreate = writableClubs.length > 0 || user?.role === "superadmin";
+  // Anybody signed in can add to their own calendar - the form limits what
+  // they may publish, not whether they may write anything at all.
+  const canPublish = writableClubs.length > 0 || user?.role === "superadmin";
+  const canCreate = Boolean(user);
 
   const remove = async () => {
     try {
@@ -231,6 +249,7 @@ export default function Events() {
           event={editing}
           clubs={writableClubs}
           canPostGlobally={user?.role === "superadmin"}
+          canPublish={canPublish}
           onClose={() => setEditing(null)}
           onSaved={async () => {
             setEditing(null);
@@ -276,6 +295,11 @@ function EventCard({ event, locale, t, onEdit, onDelete }) {
     <div className="sf-card">
       <div className="sf-row-between" style={{ alignItems: "flex-start" }}>
         <div style={{ minWidth: 0 }}>
+          {/* The agenda is the same events as the grids, so it carries the
+              same colour - otherwise switching layout loses the cue. */}
+          {event.color ? (
+            <span className="sf-color-dot" style={{ backgroundColor: event.color }} aria-hidden="true" />
+          ) : null}
           <span className={`sf-badge sf-badge-${event.kind}`}>{t(`events.kind.${event.kind}`)}</span>
           <h3 style={{ margin: "0.4rem 0 0.2rem" }}>{event.title}</h3>
           <p className="sf-muted" style={{ margin: 0 }}>
@@ -407,7 +431,7 @@ function EventDetailModal({ event, locale, t, onClose, onEdit, onDelete }) {
  * making the coach do the timezone arithmetic would be a good way to get it
  * wrong.
  */
-function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
+function EventFormModal({ event, clubs, canPostGlobally, canPublish, onClose, onSaved }) {
   const { t } = useI18n();
   const [form, setForm] = useState(() => ({
     clubId: event.clubId || (clubs.length === 1 && !canPostGlobally ? clubs[0].id : ""),
@@ -416,12 +440,15 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
     location: event.location || "",
     url: event.url || "",
     kind: event.kind || "competition",
+    color: event.color || randomColor(),
     // startsOn arrives when the form was opened by clicking a day in the grid:
     // that day at 09:00, which is a working guess somebody adjusts rather than
     // a blank field they have to fill from nothing.
     startsAt: toInputValue(event.startsAt) || defaultStart(event.startsOn, event.fromMinutes),
     endsAt: toInputValue(event.endsAt) || defaultStart(event.startsOn, event.toMinutes),
-    visibility: event.visibility || "public",
+    // A member with nowhere to publish is writing in their own calendar, so
+    // that is what the form starts on rather than an option they cannot use.
+    visibility: event.visibility || (canPublish ? "public" : "private"),
   }));
   const [busy, setBusy] = useState(false);
 
@@ -434,8 +461,11 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
     formEvent.preventDefault();
     setBusy(true);
     try {
+      // A private event is nobody's club's: sending one would put it on a
+      // calendar its author did not choose.
       const payload = {
         ...form,
+        clubId: form.visibility === "private" ? "" : form.clubId,
         startsAt: toInstant(form.startsAt),
         endsAt: form.endsAt ? toInstant(form.endsAt) : "",
       };
@@ -492,7 +522,7 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
 
           {/* The club is fixed once an event exists: moving it would change who
               can see it after the fact. */}
-          {!event.id ? (
+          {!event.id && canPublish && form.visibility !== "private" ? (
             <div className="sf-field" style={{ flex: 1, minWidth: 150 }}>
               <label className="sf-label" htmlFor="clubId">
                 {t("events.club")}
@@ -559,13 +589,49 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
         </div>
 
         <div className="sf-field">
+          <label className="sf-label" htmlFor="color">
+            {t("events.color")}
+          </label>
+          <div className="sf-color-field">
+            <input
+              id="color"
+              className="sf-color-input"
+              type="color"
+              value={/^#[0-9a-f]{6}$/i.test(form.color) ? form.color : "#0e5e9b"}
+              onChange={set("color")}
+            />
+            {/* The swatches are the quick path; the picker beside them is for
+                anybody who wants a specific colour. */}
+            <div className="sf-color-swatches">
+              {EVENT_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`sf-color-swatch ${form.color === color ? "active" : ""}`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setForm((current) => ({ ...current, color }))}
+                  aria-label={color}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="sf-field">
           <label className="sf-label" htmlFor="visibility">
             {t("events.visibility")}
           </label>
           <select id="visibility" className="sf-select" value={form.visibility} onChange={set("visibility")}>
-            <option value="public">{t("events.visibilityPublic")}</option>
-            <option value="club">{t("events.visibilityClub")}</option>
+            {/* Only somebody with a club to publish to is offered the wider
+                audiences: an option that always fails is worse than its
+                absence. */}
+            {canPublish ? <option value="public">{t("events.visibilityPublic")}</option> : null}
+            {canPublish ? <option value="club">{t("events.visibilityClub")}</option> : null}
+            <option value="private">{t("events.visibilityPrivate")}</option>
           </select>
+          <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+            {form.visibility === "private" ? t("events.visibilityPrivateHelp") : null}
+          </p>
         </div>
       </form>
     </Modal>

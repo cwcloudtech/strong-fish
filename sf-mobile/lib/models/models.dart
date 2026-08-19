@@ -701,6 +701,10 @@ class Event {
   final String location;
   final String url;
   final String kind;
+
+  /// Hex the event is drawn in, as `#rrggbb`, or empty when it has none and
+  /// the kind's own colour stands.
+  final String color;
   final DateTime startsAt;
   final DateTime? endsAt;
   final String visibility;
@@ -716,6 +720,7 @@ class Event {
     this.location = '',
     this.url = '',
     this.kind = 'other',
+    this.color = '',
     required this.startsAt,
     this.endsAt,
     this.visibility = 'public',
@@ -732,6 +737,7 @@ class Event {
         location: _toString(json['location']),
         url: _toString(json['url']),
         kind: _toString(json['kind'], 'other'),
+        color: _toString(json['color']),
         // Kept in the device's own zone: the list is read as wall-clock time,
         // and converting on every render would be the same conversion done
         // repeatedly.

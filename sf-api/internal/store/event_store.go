@@ -27,14 +27,21 @@ func NewEventStore(pool *pgxpool.Pool) *EventStore {
 // at a real moment in a real place - and they are stored in one zone because
 // the listings compare them as text: two RFC 3339 strings only sort
 // chronologically when they share an offset.
+//
+// Deliberately no `omitempty` on the optional fields. Update merges the new
+// payload into the old one (`data || $2::jsonb`), so a key that is omitted is
+// a key that keeps its previous value - which made every optional field
+// impossible to clear: removing an event's location left the old one on it.
+// Writing the empty string overwrites it.
 type eventData struct {
 	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Location    string `json:"location,omitempty"`
-	URL         string `json:"url,omitempty"`
+	Description string `json:"description"`
+	Location    string `json:"location"`
+	URL         string `json:"url"`
 	Kind        string `json:"kind"`
+	Color       string `json:"color"`
 	StartsAt    string `json:"startsAt"`
-	EndsAt      string `json:"endsAt,omitempty"`
+	EndsAt      string `json:"endsAt"`
 	Visibility  string `json:"visibility"`
 }
 
@@ -73,8 +80,9 @@ func scanEvent(row pgx.Row) (models.Event, error) {
 	e.Location = d.Location
 	e.URL = d.URL
 	e.Kind = models.NormalizeEventKind(d.Kind)
+	e.Color = models.NormalizeHexColor(d.Color)
 	e.Visibility = d.Visibility
-	if e.Visibility != models.VisibilityPublic {
+	if e.Visibility != models.VisibilityPublic && e.Visibility != models.EventVisibilityPrivate {
 		e.Visibility = models.VisibilityClub
 	}
 	e.StartsAt, _ = time.Parse(time.RFC3339, d.StartsAt)
@@ -103,6 +111,7 @@ type EventFields struct {
 	Location    string
 	URL         string
 	Kind        string
+	Color       string
 	StartsAt    time.Time
 	EndsAt      time.Time
 	Visibility  string
@@ -112,14 +121,25 @@ func (f EventFields) payload() eventData {
 	data := eventData{
 		Title: f.Title, Description: f.Description, Location: f.Location, URL: f.URL,
 		Kind:     models.NormalizeEventKind(f.Kind),
+		Color:    models.NormalizeHexColor(f.Color),
 		StartsAt: f.StartsAt.UTC().Format(time.RFC3339),
 	}
 	if !f.EndsAt.IsZero() {
 		data.EndsAt = f.EndsAt.UTC().Format(time.RFC3339)
 	}
-	data.Visibility = models.VisibilityClub
-	if f.Visibility == models.VisibilityPublic {
+	// Anything unrecognized lands on club-only, and a club-less event on
+	// private: an event with nowhere to belong must not default to the open
+	// calendar.
+	switch f.Visibility {
+	case models.VisibilityPublic:
 		data.Visibility = models.VisibilityPublic
+	case models.EventVisibilityPrivate:
+		data.Visibility = models.EventVisibilityPrivate
+	default:
+		data.Visibility = models.VisibilityClub
+		if f.ClubID == "" {
+			data.Visibility = models.EventVisibilityPrivate
+		}
 	}
 	return data
 }
@@ -188,15 +208,38 @@ func (s *EventStore) FindByID(ctx context.Context, id string) (models.Event, err
 // clubIDs is passed in rather than joined on club_members so the same query
 // serves an anonymous caller (no clubs, public events only) without a second
 // code path deciding what "visible" means.
-func (s *EventStore) ListVisible(ctx context.Context, clubIDs []string, from time.Time) ([]models.Event, error) {
+func (s *EventStore) ListVisible(ctx context.Context, clubIDs []string, from time.Time,
+	viewerID string, superadmin bool) ([]models.Event, error) {
 	if clubIDs == nil {
 		clubIDs = []string{}
 	}
+	// An author always sees their own, whatever its visibility - that is what
+	// makes a private event a personal calendar rather than a write-only one.
+	//
+	// A private one is also visible to the coaches of the clubs its author
+	// belongs to, the same rule a private *profile* follows: the people who
+	// write your training are the people who should see the meet you entered.
+	// The caller id is cast to text so an anonymous "" compares cleanly against
+	// a uuid column instead of failing to parse.
 	rows, err := s.pool.Query(ctx, eventSelect+`
-		WHERE (e.data->>'visibility' = $1 OR e.club_id::text = ANY($2))
-		  AND ($3 = '' OR coalesce(e.data->>'endsAt', e.data->>'startsAt') >= $3)
+		WHERE (
+		        e.data->>'visibility' = $1
+		     OR e.club_id::text = ANY($2)
+		     OR e.author_id::text = $4
+		     OR $5
+		     OR (
+		          e.data->>'visibility' = 'private'
+		          AND EXISTS (
+		                SELECT 1 FROM club_members author
+		                JOIN club_members caller
+		                  ON caller.club_id = author.club_id AND caller.user_id::text = $4
+		                WHERE author.user_id = e.author_id AND caller.role IN ('owner', 'admin')
+		              )
+		        )
+		      )
+		  AND ($3 = '' OR coalesce(nullif(e.data->>'endsAt', ''), e.data->>'startsAt') >= $3)
 		ORDER BY e.data->>'startsAt'
-	`, models.VisibilityPublic, clubIDs, rfc3339OrEmpty(from))
+	`, models.VisibilityPublic, clubIDs, rfc3339OrEmpty(from), viewerID, superadmin)
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +250,7 @@ func (s *EventStore) ListVisible(ctx context.Context, clubIDs []string, from tim
 func (s *EventStore) ListForClub(ctx context.Context, clubID string, from time.Time) ([]models.Event, error) {
 	rows, err := s.pool.Query(ctx, eventSelect+`
 		WHERE e.club_id = $1
-		  AND ($2 = '' OR coalesce(e.data->>'endsAt', e.data->>'startsAt') >= $2)
+		  AND ($2 = '' OR coalesce(nullif(e.data->>'endsAt', ''), e.data->>'startsAt') >= $2)
 		ORDER BY e.data->>'startsAt'
 	`, clubID, rfc3339OrEmpty(from))
 	if err != nil {
@@ -218,7 +261,7 @@ func (s *EventStore) ListForClub(ctx context.Context, clubID string, from time.T
 
 // ListPublic returns the open calendar, for a visitor with no account.
 func (s *EventStore) ListPublic(ctx context.Context, from time.Time) ([]models.Event, error) {
-	return s.ListVisible(ctx, nil, from)
+	return s.ListVisible(ctx, nil, from, "", false)
 }
 
 // rfc3339OrEmpty renders a lower bound for the string comparison the queries

@@ -65,10 +65,25 @@ class _EventCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Chip(
-              label: Text(t('events.kind.${event.kind}')),
-              backgroundColor: _kindColor(colors, event.kind),
-              visualDensity: VisualDensity.compact,
+            Row(
+              children: [
+                // The colour its author picked, shown as a dot rather than by
+                // tinting the chip: the chip already carries the kind, and two
+                // meanings in one swatch reads as neither.
+                if (_eventColor() != null) ...[
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(color: _eventColor(), shape: BoxShape.circle),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Chip(
+                  label: Text(t('events.kind.${event.kind}')),
+                  backgroundColor: _kindColor(colors, event.kind),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
             const SizedBox(height: 8),
             Text(event.title, style: Theme.of(context).textTheme.titleMedium),
@@ -100,6 +115,15 @@ class _EventCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// The event's own colour, or null when it has none or the server sent
+  /// something that is not a `#rrggbb` - a bad value drops the dot rather than
+  /// throwing on a card that would otherwise render.
+  Color? _eventColor() {
+    final value = event.color.trim();
+    if (!RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) return null;
+    return Color(0xFF000000 | int.parse(value.substring(1), radix: 16));
   }
 
   Color _kindColor(AppColors colors, String kind) => switch (kind) {
