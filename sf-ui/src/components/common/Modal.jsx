@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -6,6 +7,17 @@ import { useI18n } from "../../i18n/I18nContext";
  * A dialog with cwclock's structure: a header carrying the title and a close
  * button, a scrolling body, and a footer holding the actions. Escape closes it,
  * and so does a click on the backdrop.
+ *
+ * It is portaled to <body>, and that is load-bearing rather than tidy. A dialog
+ * opened from the sidebar used to render inside it, and `position: sticky`
+ * creates a stacking context whether or not it carries a z-index - so the whole
+ * dialog was trapped at the sidebar's level in the paint order, underneath the
+ * content column that follows it. A post's video embed drew straight over the
+ * top of it.
+ *
+ * No z-index could have fixed that: a value only orders siblings within their
+ * own stacking context, and the dialog's problem was which context it was in.
+ * Rendering at the document root is what lets its z-index mean what it says.
  */
 export default function Modal({ title, onClose, children, actions, wide = false }) {
   const { t } = useI18n();
@@ -16,7 +28,7 @@ export default function Modal({ title, onClose, children, actions, wide = false 
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  return (
+  return createPortal(
     <div className="sf-modal-backdrop" onMouseDown={onClose}>
       <div
         className="sf-modal"
@@ -34,7 +46,8 @@ export default function Modal({ title, onClose, children, actions, wide = false 
         <div className="sf-modal-body">{children}</div>
         {actions ? <div className="sf-modal-footer">{actions}</div> : null}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
