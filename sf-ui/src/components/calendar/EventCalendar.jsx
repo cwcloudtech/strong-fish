@@ -3,6 +3,7 @@ import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
 
 import WeekGrid from "./WeekGrid";
 import { useI18n } from "../../i18n/I18nContext";
+import isWholeDay from "../../utils/wholeDay";
 
 /**
  * The month and week grid, the way Outlook's meeting calendar works: the dates
@@ -288,11 +289,11 @@ export default function EventCalendar({
 }
 
 /**
- * The chip's leading time. Birthdays occupy the whole day and have no hour
- * worth showing; everything else starts when it starts.
+ * The chip's leading time. A whole-day entry has no hour worth showing;
+ * everything else starts when it starts.
  */
 function chipTime(event, intlLocale) {
-  if (event.kind === "birthday") return "";
+  if (isWholeDay(event)) return "";
   const start = new Date(event.startsAt);
   if (Number.isNaN(start.getTime())) return "";
   return new Intl.DateTimeFormat(intlLocale, { hour: "2-digit", minute: "2-digit" }).format(start);

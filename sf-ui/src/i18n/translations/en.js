@@ -578,6 +578,8 @@ const en = {
     url: "More information",
     description: "Details",
     color: "Colour",
+    allDay: "All day",
+    lastDay: "Last day",
     visibility: "Who can see it",
     visibilityPublic: "Everyone",
     visibilityPrivate: "Only me",

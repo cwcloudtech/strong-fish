@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import { FiEdit2, FiFlag, FiHeart, FiMessageSquare, FiShare2, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
-import { social } from "../../api/services";
+import { clubs as clubsApi, social } from "../../api/services";
 import Avatar from "../common/Avatar";
 import Modal, { ConfirmModal } from "../common/Modal";
 import ShareButtons from "../common/ShareButtons";
@@ -12,6 +12,7 @@ import { postShareUrl, shareTextFor } from "../../utils/shareText";
 import { ErrorMessage } from "../common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
+import LinkifiedText from "../common/LinkifiedText";
 
 /**
  * One post in the feed. Links are rendered through the <media-player> custom
@@ -30,9 +31,23 @@ export default function PostCard({ post, onChanged, onDeleted }) {
   const [commentDraft, setCommentDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
+  const [editVisibility, setEditVisibility] = useState(post.visibility);
+  const [editClubId, setEditClubId] = useState(post.clubId || "");
+  // The author's own clubs, for moving the post between them. Loaded when the
+  // editor opens rather than with the card: a feed renders dozens of these and
+  // almost none of them are ever edited.
+  const [myClubs, setMyClubs] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!editing || myClubs) return;
+    clubsApi
+      .list()
+      .then((list) => setMyClubs(list || []))
+      .catch(() => setMyClubs([]));
+  }, [editing, myClubs]);
 
   useEffect(() => {
     if (!showComments || comments) return;
@@ -46,6 +61,16 @@ export default function PostCard({ post, onChanged, onDeleted }) {
   // Not post.editable: a superadmin can edit anybody's post and is still free
   // to like it.
   const isAuthor = user?.id === post.author?.id;
+
+  // The clubs this post may be moved into. The author picks from their own; a
+  // superadmin moderating somebody else's gets only the club it is already in,
+  // because publishing an author into a club they never joined is not a
+  // moderation power - the API rejects it, and the UI should not offer it.
+  const movableClubs = isAuthor
+    ? myClubs || []
+    : post.clubId
+      ? [{ id: post.clubId, name: post.clubName || t("feed.visibilityClub") }]
+      : [];
 
   const toggleLike = async () => {
     try {
@@ -94,11 +119,25 @@ export default function PostCard({ post, onChanged, onDeleted }) {
     }
   };
 
+  const startEditing = () => {
+    setEditContent(post.content);
+    setEditVisibility(post.visibility);
+    setEditClubId(post.clubId || "");
+    setEditing(true);
+  };
+
   const saveEdit = async () => {
     try {
       // No links are sent: the API re-derives them from the edited text, so
       // fixing a typo'd URL fixes the embed instead of leaving a stale one.
-      onChanged(await social.updatePost(post.id, { content: editContent, pictures: post.pictures }));
+      onChanged(
+        await social.updatePost(post.id, {
+          content: editContent,
+          pictures: post.pictures,
+          visibility: editVisibility,
+          clubId: editVisibility === "club" ? editClubId : "",
+        })
+      );
       setEditing(false);
     } catch (err) {
       setError(err);
@@ -147,6 +186,50 @@ export default function PostCard({ post, onChanged, onDeleted }) {
       {editing ? (
         <div style={{ marginTop: "0.7rem" }}>
           <textarea className="sf-textarea" value={editContent} onChange={(event) => setEditContent(event.target.value)} />
+
+          {/* Where the post is published, changeable by its author or by a
+              superadmin - who can take a post off a club feed, but only ever
+              into a club its author already belongs to. Their own club list is
+              not the author's, so a non-author is offered the post's current
+              club and nothing else; the API enforces the same rule. */}
+          <div className="sf-row" style={{ gap: "0.35rem", marginTop: "0.5rem" }}>
+            <select
+              className="sf-select sf-input-sm"
+              style={{ width: "auto" }}
+              value={editVisibility}
+              onChange={(event) => {
+                const next = event.target.value;
+                setEditVisibility(next);
+                // Moving to a club with only one to choose from should not
+                // need a second click.
+                if (next === "club" && !editClubId && movableClubs.length === 1) {
+                  setEditClubId(movableClubs[0].id);
+                }
+              }}
+              aria-label={t("feed.visibility")}
+            >
+              <option value="public">{t("feed.visibilityPublic")}</option>
+              {movableClubs.length > 0 ? <option value="club">{t("feed.visibilityClub")}</option> : null}
+            </select>
+
+            {editVisibility === "club" ? (
+              <select
+                className="sf-select sf-input-sm"
+                style={{ width: "auto" }}
+                value={editClubId}
+                onChange={(event) => setEditClubId(event.target.value)}
+                aria-label={t("feed.pickClub")}
+              >
+                <option value="">{t("feed.pickClub")}</option>
+                {movableClubs.map((club) => (
+                  <option key={club.id} value={club.id}>
+                    {club.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+          </div>
+
           <div className="sf-row" style={{ justifyContent: "flex-end", gap: "0.4rem", marginTop: "0.4rem" }}>
             <button className="sf-button sf-button-secondary sf-button-sm" onClick={() => setEditing(false)}>
               {t("common.cancel")}
@@ -157,7 +240,11 @@ export default function PostCard({ post, onChanged, onDeleted }) {
           </div>
         </div>
       ) : (
-        post.content && <p className="sf-post-content">{post.content}</p>
+        post.content && (
+          <p className="sf-post-content">
+            <LinkifiedText text={post.content} />
+          </p>
+        )
       )}
 
       {(post.pictures?.length || post.links?.length) ? (
@@ -211,7 +298,7 @@ export default function PostCard({ post, onChanged, onDeleted }) {
         ) : null}
         <span className="sf-spacer" />
         {post.editable ? (
-          <button type="button" className="sf-button-ghost" onClick={() => setEditing(true)} aria-label={t("common.edit")}>
+          <button type="button" className="sf-button-ghost" onClick={startEditing} aria-label={t("common.edit")}>
             <FiEdit2 />
           </button>
         ) : null}
@@ -282,7 +369,9 @@ export default function PostCard({ post, onChanged, onDeleted }) {
                     </button>
                   </form>
                 ) : (
-                  <div>{comment.content}</div>
+                  <div>
+                    <LinkifiedText text={comment.content} />
+                  </div>
                 )}
               </div>
 

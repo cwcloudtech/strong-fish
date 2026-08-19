@@ -665,3 +665,117 @@ func TestClearingOptionalEventFields(t *testing.T) {
 		t.Fatal("an event with no end time dropped out of the listing")
 	}
 }
+
+// TestPostVisibilityMoves covers moving a post between the public feed and a
+// club. It asserts on who can *see* the post afterwards rather than on the
+// stored label, because the two are separate: every feed query reads
+// readability off the club_id column, and the visibility in the payload is
+// only what the UI prints. A change that wrote one without the other would
+// leave a post labelled private that everybody could still read.
+func TestPostVisibilityMoves(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	social := NewSocialStore(pool)
+	clubs := NewClubStore(pool)
+
+	author := seedUser(t, pool, "visibility-author@example.com")
+	outsider := seedUser(t, pool, "visibility-outsider@example.com")
+
+	club, err := clubs.Create(ctx, author, ClubFields{Name: "Barbell club"})
+	if err != nil {
+		t.Fatalf("creating a club: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM clubs WHERE id = $1`, club.ID)
+	})
+
+	post, err := social.CreatePost(ctx, author, PostFields{
+		Content: "Squat session", Visibility: models.VisibilityClub, ClubID: club.ID,
+	})
+	if err != nil {
+		t.Fatalf("creating a post: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM posts WHERE id = $1`, post.ID)
+	})
+
+	// An outsider has no clubs, so a club post is out of reach.
+	seenBy := func() bool {
+		visible, err := social.CanSeePost(ctx, post.ID, outsider, []string{})
+		if err != nil {
+			t.Fatalf("checking visibility: %v", err)
+		}
+		return visible
+	}
+	if seenBy() {
+		t.Fatal("a club post was readable by somebody outside the club")
+	}
+
+	moved, err := social.UpdatePost(ctx, post.ID, author, PostFields{
+		Content: "Squat session", Visibility: models.VisibilityPublic,
+	})
+	if err != nil {
+		t.Fatalf("moving to public: %v", err)
+	}
+	if moved.Visibility != models.VisibilityPublic {
+		t.Fatalf("visibility = %q, want %q", moved.Visibility, models.VisibilityPublic)
+	}
+	if !seenBy() {
+		t.Fatal("a post moved to the public feed is still hidden: the club_id column did not follow")
+	}
+
+	// And back: making it club-only again must actually take it away.
+	back, err := social.UpdatePost(ctx, post.ID, author, PostFields{
+		Content: "Squat session", Visibility: models.VisibilityClub, ClubID: club.ID,
+	})
+	if err != nil {
+		t.Fatalf("moving back to the club: %v", err)
+	}
+	if back.Visibility != models.VisibilityClub {
+		t.Fatalf("visibility = %q, want %q", back.Visibility, models.VisibilityClub)
+	}
+	if seenBy() {
+		t.Fatal("a post made club-only again is still readable by an outsider")
+	}
+}
+
+// TestEventAllDayRoundTrips checks the flag survives a write and a read, and -
+// the part that matters - that turning it off again actually turns it off.
+// It lives in the JSONB payload, which Update shallow-merges, so a `false`
+// that serialized to nothing would leave the event stuck all-day forever.
+func TestEventAllDayRoundTrips(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	events := NewEventStore(pool)
+	author := seedUser(t, pool, "all-day@example.com")
+
+	start := time.Now().Add(24 * time.Hour)
+	created, err := events.Create(ctx, author, EventFields{
+		Title: "Training camp", Kind: "training", AllDay: true,
+		Visibility: models.EventVisibilityPrivate,
+		StartsAt:   start, EndsAt: start.AddDate(0, 0, 3),
+	})
+	if err != nil {
+		t.Fatalf("creating: %v", err)
+	}
+	t.Cleanup(func() { _ = events.Delete(context.Background(), created.ID) })
+
+	if !created.AllDay {
+		t.Fatal("allDay did not survive the write")
+	}
+	if !created.WholeDay() {
+		t.Fatal("an all-day event must report itself as whole-day")
+	}
+
+	timed, err := events.Update(ctx, created.ID, EventFields{
+		Title: "Training camp", Kind: "training", AllDay: false,
+		Visibility: models.EventVisibilityPrivate,
+		StartsAt:   start, EndsAt: start.Add(2 * time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("updating: %v", err)
+	}
+	if timed.AllDay {
+		t.Fatal("an event switched back to a timed one is still marked all-day")
+	}
+}

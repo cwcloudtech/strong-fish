@@ -315,6 +315,21 @@ class SfApi {
 
   Future<void> deletePost(String postId) => client.dio.delete('/posts/$postId');
 
+  /// Moves a post between the public feed and one of its author's clubs.
+  ///
+  /// The content and pictures go with it because the API rewrites the whole
+  /// post: sending only the visibility would blank the text. Links are left
+  /// out on purpose - the API re-derives them from the content.
+  Future<Post> updatePostVisibility(Post post, String visibility, String clubId) async {
+    final response = await client.dio.put('/posts/${post.id}', data: {
+      'content': post.content,
+      'pictures': post.pictures,
+      'visibility': visibility,
+      'clubId': visibility == 'club' ? clubId : '',
+    });
+    return Post.fromJson(_map(response.data));
+  }
+
   Future<Page<Comment>> comments(String postId, {int page = 0}) async {
     final response =
         await client.dio.get('/posts/$postId/comments', queryParameters: {'page': page, 'size': 20});

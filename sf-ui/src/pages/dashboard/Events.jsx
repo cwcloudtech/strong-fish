@@ -10,6 +10,9 @@ import { calendarFeed, clubs as clubsApi, events as eventsApi } from "../../api/
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
+import Switch from "../../components/common/Switch";
+import isWholeDay from "../../utils/wholeDay";
+import LinkifiedText from "../../components/common/LinkifiedText";
 
 const KINDS = ["competition", "training", "other"];
 
@@ -279,7 +282,7 @@ function EventCard({ event, locale, t, onEdit, onDelete }) {
   // Birthdays are the one entry that occupies a day rather than a time of day,
   // and they are generated rather than authored - everything somebody creates
   // happens at a stated hour.
-  const wholeDay = event.kind === "birthday";
+  const wholeDay = isWholeDay(event);
   const dateLabel = wholeDay
     ? start.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "long", year: "numeric" })
     : start.toLocaleString(locale, {
@@ -334,7 +337,11 @@ function EventCard({ event, locale, t, onEdit, onDelete }) {
         ) : null}
       </div>
 
-      {event.description ? <p style={{ whiteSpace: "pre-wrap" }}>{event.description}</p> : null}
+      {event.description ? (
+        <p style={{ whiteSpace: "pre-wrap" }}>
+          <LinkifiedText text={event.description} />
+        </p>
+      ) : null}
 
       {event.url ? (
         <a href={event.url} target="_blank" rel="noopener noreferrer" className="sf-row" style={{ gap: "0.3rem" }}>
@@ -355,7 +362,7 @@ function EventCard({ event, locale, t, onEdit, onDelete }) {
 function EventDetailModal({ event, locale, t, onClose, onEdit, onDelete }) {
   const start = new Date(event.startsAt);
   const end = event.endsAt ? new Date(event.endsAt) : null;
-  const wholeDay = event.kind === "birthday";
+  const wholeDay = isWholeDay(event);
 
   const when = wholeDay
     ? start.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" })
@@ -392,7 +399,9 @@ function EventDetailModal({ event, locale, t, onClose, onEdit, onDelete }) {
       ) : null}
 
       {event.description ? (
-        <p style={{ whiteSpace: "pre-wrap", marginTop: "0.8rem" }}>{event.description}</p>
+        <p style={{ whiteSpace: "pre-wrap", marginTop: "0.8rem" }}>
+          <LinkifiedText text={event.description} />
+        </p>
       ) : null}
 
       {event.url ? (
@@ -444,6 +453,7 @@ function EventFormModal({ event, clubs, canPostGlobally, canPublish, onClose, on
     // startsOn arrives when the form was opened by clicking a day in the grid:
     // that day at 09:00, which is a working guess somebody adjusts rather than
     // a blank field they have to fill from nothing.
+    allDay: Boolean(event.allDay),
     startsAt: toInputValue(event.startsAt) || defaultStart(event.startsOn, event.fromMinutes),
     endsAt: toInputValue(event.endsAt) || defaultStart(event.startsOn, event.toMinutes),
     // A member with nowhere to publish is writing in their own calendar, so
@@ -466,8 +476,17 @@ function EventFormModal({ event, clubs, canPostGlobally, canPublish, onClose, on
       const payload = {
         ...form,
         clubId: form.visibility === "private" ? "" : form.clubId,
-        startsAt: toInstant(form.startsAt),
-        endsAt: form.endsAt ? toInstant(form.endsAt) : "",
+        // An all-day event is sent as midnight to midnight in the author's own
+        // zone - the same convention as every other event here, where a time is
+        // a wall-clock moment where the thing happens. The end is the *start*
+        // of the day after the last one, which is what iCalendar means by an
+        // exclusive DTEND and what the week grid's all-day row reads.
+        startsAt: toInstant(form.allDay ? startOfDay(form.startsAt) : form.startsAt),
+        endsAt: form.allDay
+          ? toInstant(nextDay(form.endsAt || form.startsAt))
+          : form.endsAt
+            ? toInstant(form.endsAt)
+            : "",
       };
       if (event.id) {
         await eventsApi.update(event.id, payload);
@@ -539,6 +558,33 @@ function EventFormModal({ event, clubs, canPostGlobally, canPublish, onClose, on
           ) : null}
         </div>
 
+        {/* All day, the way cwclock's calendar does it: a switch that turns
+            both pickers from datetime-local into plain dates. Unlike cwclock's
+            time records - which carry a single day - an event has its own end,
+            so a multi-day camp stays editable rather than being pinned to one
+            day. */}
+        <div className="sf-switch-field">
+          <Switch
+            id="allDay"
+            checked={form.allDay}
+            onChange={(fieldEvent) => {
+              const allDay = fieldEvent.target.checked;
+              setForm((current) => ({
+                ...current,
+                allDay,
+                // Keep whatever day was already picked, dropping the time when
+                // switching on: a date input rejects a value carrying one.
+                startsAt: allDay ? startOfDay(current.startsAt) : current.startsAt,
+                endsAt: allDay ? startOfDay(current.endsAt) : current.endsAt,
+              }));
+            }}
+            aria-label={t("events.allDay")}
+          />
+          <label className="sf-label" htmlFor="allDay" style={{ margin: 0 }}>
+            {t("events.allDay")}
+          </label>
+        </div>
+
         <div className="sf-row" style={{ gap: "0.6rem" }}>
           <div className="sf-field" style={{ flex: 1, minWidth: 170 }}>
             <label className="sf-label" htmlFor="startsAt">
@@ -547,21 +593,22 @@ function EventFormModal({ event, clubs, canPostGlobally, canPublish, onClose, on
             <input
               id="startsAt"
               className="sf-input"
-              type="datetime-local"
-              value={form.startsAt}
+              type={form.allDay ? "date" : "datetime-local"}
+              value={form.allDay ? dayPart(form.startsAt) : form.startsAt}
               onChange={set("startsAt")}
               required
             />
           </div>
           <div className="sf-field" style={{ flex: 1, minWidth: 170 }}>
             <label className="sf-label" htmlFor="endsAt">
-              {t("events.endsAt")} <span className="sf-muted">({t("common.optional")})</span>
+              {t(form.allDay ? "events.lastDay" : "events.endsAt")}{" "}
+              <span className="sf-muted">({t("common.optional")})</span>
             </label>
             <input
               id="endsAt"
               className="sf-input"
-              type="datetime-local"
-              value={form.endsAt}
+              type={form.allDay ? "date" : "datetime-local"}
+              value={form.allDay ? dayPart(form.endsAt) : form.endsAt}
               onChange={set("endsAt")}
             />
           </div>
@@ -747,6 +794,33 @@ function defaultStart(day, minutes) {
     // which is the correct instant for an event that ends at 24:00.
     at.setHours(0, minutes, 0, 0);
   }
+  return toInputValue(at.toISOString());
+}
+
+/** The date half of an input value: what a `date` input accepts. */
+function dayPart(value) {
+  return (value || "").slice(0, 10);
+}
+
+/** Midnight on the day of an input value, as an input value. */
+function startOfDay(value) {
+  const day = dayPart(value);
+  return day ? `${day}T00:00` : "";
+}
+
+/**
+ * Midnight on the day *after* an input value.
+ *
+ * An all-day event's end is exclusive - iCalendar's DTEND, and what the grids
+ * read - so an event whose last day is the 9th ends at the start of the 10th.
+ * The author picks the last day, which is what they mean by it.
+ */
+function nextDay(value) {
+  const day = dayPart(value);
+  if (!day) return "";
+  const at = new Date(`${day}T00:00`);
+  if (Number.isNaN(at.getTime())) return "";
+  at.setDate(at.getDate() + 1);
   return toInputValue(at.toISOString());
 }
 

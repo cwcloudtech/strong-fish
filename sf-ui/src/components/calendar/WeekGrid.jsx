@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useI18n } from "../../i18n/I18nContext";
+import isWholeDay from "../../utils/wholeDay";
 
 /**
  * The week as an hour-by-hour grid, where dragging down a column selects a time
@@ -91,6 +92,30 @@ export default function WeekGrid({ days, byDay, todayIso, onSelectRange, onSelec
         ))}
       </div>
 
+      {/* All-day entries get their own row above the hours, the way cwclock's
+          week view does it - and Outlook, and Google. They have no hour to be
+          placed at, and stretching one down a column would claim a time its
+          author never gave. */}
+      <div className="sf-week-allday">
+        <div className="sf-week-allday-label">{t("events.allDay")}</div>
+        {days.map((day) => (
+          <div key={day.iso} className={`sf-week-allday-cell ${day.weekend ? "weekend" : ""}`}>
+            {(byDay[day.iso] || []).filter(isWholeDay).map((event) => (
+              <button
+                key={`${event.id}-${day.iso}-allday`}
+                type="button"
+                className={`sf-calendar-chip sf-calendar-chip-${event.kind}`}
+                style={event.color ? { color: event.color } : undefined}
+                title={event.title}
+                onClick={() => onSelectEvent(event)}
+              >
+                <span className="sf-calendar-chip-title">{event.title}</span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+
       <div className="sf-week-body" ref={scrollRef}>
         <div className="sf-week-axis">
           {HOURS.map((hour) => (
@@ -143,7 +168,9 @@ export default function WeekGrid({ days, byDay, todayIso, onSelectRange, onSelec
               />
             ))}
 
-            {(byDay[day.iso] || []).map((event) => {
+            {/* Whole-day entries live in the row above; drawing them here too
+                would show each one twice. */}
+            {(byDay[day.iso] || []).filter((event) => !isWholeDay(event)).map((event) => {
               const geometry = blockGeometry(event, day.date);
               if (!geometry) return null;
               return (

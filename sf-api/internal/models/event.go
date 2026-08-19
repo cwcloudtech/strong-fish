@@ -92,7 +92,11 @@ type Event struct {
 	Color    string    `json:"color,omitempty"`
 	StartsAt time.Time `json:"startsAt"`
 	EndsAt   time.Time `json:"endsAt,omitempty"`
-	AllDay   bool      `json:"allDay"`
+	// AllDay marks an entry that occupies whole days rather than a time of
+	// day. The instants are still stored: an all-day event runs from the start
+	// of its first day to the start of the day after its last, in the author's
+	// own zone, the same way every other event carries a wall-clock moment.
+	AllDay bool `json:"allDay"`
 	// Visibility reuses the post visibilities: club-only, or public (which is
 	// what puts a meet in front of somebody who isn't a member yet).
 	Visibility string    `json:"visibility"`
@@ -114,9 +118,9 @@ func (e Event) End() time.Time {
 
 // WholeDay reports whether this entry occupies a day rather than a time of day.
 //
-// It is derived from the kind, not chosen: a birthday is the only whole-day
-// thing in this calendar, and it is generated rather than authored. Events
-// people create always happen at a stated time - a meet starts when it starts.
+// Either because its author said so, or because it is a birthday - the one
+// whole-day entry nobody authors, since it is derived from a birthdate and has
+// no time of day to derive.
 func (e Event) WholeDay() bool {
-	return e.Kind == EventKindBirthday
+	return e.AllDay || e.Kind == EventKindBirthday
 }

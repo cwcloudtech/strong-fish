@@ -2019,3 +2019,52 @@ a.sf-thread-who:hover strong { color: var(--sf-primary); text-decoration: underl
   border-radius: 50%;
   vertical-align: 1px;
 }
+
+/* A URL somebody typed into a post, a comment or a message. Underlined and
+   wrapped: it sits inside a paragraph, where a link has to be visible as one
+   without a hover, and a long URL must not push the card wider than the feed. */
+.sf-inline-link {
+  color: var(--sf-primary-dark);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+/* A switch beside its label, on one line - the shape cwclock's calendar uses
+   for "all day". Not .sf-field, which stacks label above control. */
+.sf-switch-field {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-spacing-sm);
+  margin-bottom: var(--sf-spacing-md);
+}
+
+/* The week's all-day row: same column track as the header and the hour body,
+   so its cells line up with the day columns underneath. */
+.sf-week-allday {
+  display: grid;
+  grid-template-columns: 56px repeat(7, 1fr);
+  border-bottom: 1px solid var(--sf-border);
+  background-color: var(--sf-bg-alt);
+}
+
+.sf-week-allday-label {
+  padding: 4px 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--sf-text-muted);
+  text-align: right;
+  align-self: center;
+}
+
+.sf-week-allday-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* Enough for one chip when the row is empty, so the grid below doesn't jump
+     as events come and go. */
+  min-height: 24px;
+  padding: 2px;
+  border-left: 1px solid var(--sf-border);
+}
+
+.sf-week-allday-cell.weekend { background-color: color-mix(in srgb, var(--sf-border) 25%, transparent); }

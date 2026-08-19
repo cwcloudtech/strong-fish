@@ -368,6 +368,7 @@ const Map<String, dynamic> en = {
     'visibilityPublic': 'Everyone',
     'visibilityClub': 'Club only',
     'pickClub': 'Pick a club',
+    'changeVisibility': 'Change who can see this',
     'addPicture': 'Add a picture',
     'addVideo': 'Add a video',
     'uploadingVideo': 'Uploading the video... {{percent}}%',

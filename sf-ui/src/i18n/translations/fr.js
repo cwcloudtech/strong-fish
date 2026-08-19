@@ -593,6 +593,8 @@ const fr = {
     url: "Plus d'informations",
     description: "Détails",
     color: "Couleur",
+    allDay: "Toute la journée",
+    lastDay: "Dernier jour",
     visibility: "Qui peut le voir",
     visibilityPublic: "Tout le monde",
     visibilityPrivate: "Moi uniquement",

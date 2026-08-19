@@ -250,8 +250,13 @@ func (h *SocialHandler) GetPost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, decoratePost(post, callerID, superadmin))
 }
 
-// UpdatePost rewrites a post's content. A superadmin may edit anyone's, which is
-// the moderation power the instruction asks for.
+// UpdatePost rewrites a post, including where it is published. A superadmin may
+// edit anyone's, which is the moderation power the instruction asks for.
+//
+// Visibility moves with the rest: an author who published to the wrong place,
+// or thought better of it afterwards, can move the post rather than delete it
+// and write it again. A client that sends no visibility keeps the current one,
+// so an older client still edits content without silently republishing.
 func (h *SocialHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	existing, callerID, superadmin, ok := h.authorizePost(w, r, true)
 	if !ok {
@@ -262,17 +267,26 @@ func (h *SocialHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &p) {
 		return
 	}
-	// Visibility is settled at creation: moving a post between clubs, or from a
-	// club to the public feed, would retroactively expose it to people who
-	// couldn't see it.
-	p.Visibility = existing.Visibility
-	p.ClubID = existing.ClubID
+	if utils.IsBlank(p.Visibility) {
+		p.Visibility = existing.Visibility
+		p.ClubID = existing.ClubID
+	}
 	if !h.validate(w, &p) {
 		return
+	}
+	// The club is checked against the *author*, not whoever is editing: the
+	// post stays theirs, and a superadmin moving it into a club its author
+	// does not belong to would publish them somewhere they never joined.
+	if p.Visibility == models.VisibilityClub && p.ClubID != existing.ClubID {
+		if _, err := h.clubs.FindMembership(r.Context(), p.ClubID, existing.AuthorID); err != nil {
+			writeError(w, http.StatusForbidden, "The author is not a member of this club", CodeNotAClubMember)
+			return
+		}
 	}
 
 	post, err := h.social.UpdatePost(r.Context(), existing.ID, callerID, store.PostFields{
 		Content: p.Content, Pictures: p.Pictures, Links: p.Links,
+		Visibility: p.Visibility, ClubID: p.ClubID,
 	})
 	if err != nil {
 		writeStoreError(w, err)
