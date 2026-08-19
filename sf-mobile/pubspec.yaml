@@ -27,6 +27,9 @@ dependencies:
   # Downloading and handing a newer APK to Android's package installer.
   path_provider: ^2.1.6
   open_filex: ^4.7.0
+  # Records a voice message. Android needs RECORD_AUDIO, declared in the
+  # manifest; the package asks for it at the moment the mic button is pressed.
+  record: ^7.1.1
 
 dev_dependencies:
   flutter_test:

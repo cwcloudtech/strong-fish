@@ -5,6 +5,8 @@
     <!-- Reading the sign-in QR code the web app shows. The camera is optional
          hardware: a device without one can still sign in with a password. -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- Recording a voice message in a private conversation. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <!-- Handing the downloaded APK to Android's package installer, which is
          what makes the in-app upgrade an update rather than a re-install. The
