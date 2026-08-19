@@ -2020,13 +2020,20 @@ a.sf-thread-who:hover strong { color: var(--sf-primary); text-decoration: underl
   vertical-align: 1px;
 }
 
-/* A URL somebody typed into a post, a comment or a message. Underlined and
-   wrapped: it sits inside a paragraph, where a link has to be visible as one
-   without a hover, and a long URL must not push the card wider than the feed. */
+/* A URL somebody typed into a post, a comment or a message.
+   No underline - the colour already marks it as a link, and a feed of posts
+   full of underlined URLs reads as noise (same treatment as uprodit's
+   newspaper). The underline comes back on hover, so the affordance is still
+   there when somebody reaches for it. Wrapped anywhere, because one long URL
+   must not push the card wider than the feed. */
 .sf-inline-link {
   color: var(--sf-primary-dark);
-  text-decoration: underline;
+  text-decoration: none;
   overflow-wrap: anywhere;
+}
+
+.sf-inline-link:hover {
+  text-decoration: underline;
 }
 
 /* A switch beside its label, on one line - the shape cwclock's calendar uses
