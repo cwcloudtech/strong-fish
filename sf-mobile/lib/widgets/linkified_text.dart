@@ -83,7 +83,9 @@ class _LinkifiedTextState extends State<LinkifiedText> {
 
       spans.add(TextSpan(
         text: url,
-        style: TextStyle(color: colors.primary, decoration: TextDecoration.underline),
+        // Colour alone, no underline: a feed of posts full of underlined URLs
+        // reads as noise, and this matches how the web frontend draws them.
+        style: TextStyle(color: colors.primary),
         recognizer: recognizer,
       ));
       if (tail.isNotEmpty) spans.add(TextSpan(text: tail));
