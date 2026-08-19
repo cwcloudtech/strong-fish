@@ -15,17 +15,25 @@ import 'package:path_provider/path_provider.dart';
 /// track the release the app was installed from, and nothing a session says
 /// can redirect them.
 ///
-/// A fork running its own builds overrides both at compile time:
-/// `flutter build apk --dart-define=SF_UPDATE_URL=https://strong-fish.example`.
+/// This is the **API**, not the website. /v1/mobile-app is served by the
+/// backend, at its own host: pointing this at the frontend asks nginx for a
+/// path it does not have, and an SPA host answers an unknown path with the app
+/// shell - a 200 carrying HTML. The check then failed on parsing rather than on
+/// the request, which is why it went quiet instead of reporting anything.
+///
+/// A fork running its own builds overrides these at compile time:
+/// `flutter build apk --dart-define=SF_UPDATE_URL=https://api.example.com`.
 const _updateBaseUrl = String.fromEnvironment(
   'SF_UPDATE_URL',
-  defaultValue: 'https://www.strong-fish.com',
+  defaultValue: 'https://api.strong-fish.com',
 );
+
 /// Where the build is published, for the case where the API cannot say.
 ///
-/// The www matters: CI publishes the APK alongside the frontend, whose address
-/// is www.strong-fish.com. A guess at the apex domain here is what used to
-/// download an error page and hand it to the installer.
+/// A different host from the one above, and deliberately so: the APK is
+/// published alongside the frontend, and the endpoint that describes it is
+/// served by the API. The www matters too - a guess at the apex domain here is
+/// what used to download an error page and hand it to the installer.
 const _downloadBaseUrl = String.fromEnvironment(
   'SF_DOWNLOAD_URL',
   defaultValue: 'https://www.strong-fish.com',
@@ -101,6 +109,23 @@ class AppUpdateState {
 /// In place matters: the session token and the API key live in secure storage,
 /// which an update leaves alone, so nobody has to sign in again afterwards.
 class AppUpdateNotifier extends Notifier<AppUpdateState> {
+  /// Fetches a JSON object, or null for anything that is not one.
+  ///
+  /// Null covers every way this can go wrong together - a refused connection, a
+  /// 404, and the one that actually bit: a host answering with an HTML page,
+  /// which is a perfectly successful response that is not an object. Letting
+  /// that surface as a type error skipped the fallback below and reported
+  /// nothing at all.
+  Future<Map<String, dynamic>?> _fetchJson(String url) async {
+    try {
+      final response = await Dio().get<dynamic>(url);
+      final data = response.data;
+      return data is Map<String, dynamic> ? data : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   AppUpdateState build() => const AppUpdateState();
 
@@ -112,18 +137,20 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
       String? remote;
       String? url;
 
-      try {
-        final response = await Dio().get<Map<String, dynamic>>(_mobileAppUrl);
-        remote = response.data?['version'] as String?;
-        url = response.data?['url'] as String?;
-      } on DioException {
+      final described = await _fetchJson(_mobileAppUrl);
+      if (described != null) {
+        remote = described['version'] as String?;
+        url = described['url'] as String?;
+      }
+
+      if (remote == null || remote.isEmpty) {
         // An older deployment has no /v1/mobile-app, and every deployment has
         // the manifest. Falling back to it - and to the published URL pattern -
         // is what keeps the check working against a backend that predates the
         // endpoint; requiring the endpoint outright stopped updates being
         // detected at all.
-        final manifest = await Dio().get<Map<String, dynamic>>(_manifestUrl);
-        remote = manifest.data?['version'] as String?;
+        final manifest = await _fetchJson(_manifestUrl);
+        remote = manifest?['version'] as String?;
       }
 
       if (remote == null || remote.isEmpty) return;
