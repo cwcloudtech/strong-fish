@@ -610,7 +610,7 @@ const Map<String, dynamic> fr = {
     'help': 'Télécharge la nouvelle version et la confie à Android pour l\'installer. Vous restez connecté.',
     'install': 'Mettre à jour',
     'downloading': 'Téléchargement de la mise à jour...',
-    'failed': 'La mise à jour n\'a pas pu être installée.',
+    'failed': 'La mise à jour n\'a pas pu être téléchargée ou installée. Veuillez réessayer plus tard.',
   },
   'storage': {
     'title': 'Stockage des vidéos',
