@@ -294,6 +294,22 @@ func (s *MessageStore) FindMessage(ctx context.Context, id string) (models.Messa
 	return m, nil
 }
 
+// DeleteMessage removes one message. Callers must have checked who may.
+//
+// Really deleted, not blanked: a private message somebody asked to remove
+// should not stay legible in the database, and there is nothing else in the
+// row worth keeping.
+func (s *MessageStore) DeleteMessage(ctx context.Context, id string) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM messages WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // MarkRead stamps everything the caller hasn't opened in one thread. Scoped to
 // messages somebody else sent: marking your own as read is meaningless, and
 // would clear the other side's "delivered" state.

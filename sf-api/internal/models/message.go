@@ -39,7 +39,11 @@ type Message struct {
 	Audio string `json:"audio,omitempty"`
 	// Mine saves the client comparing ids to decide which side to draw the
 	// bubble on.
-	Mine      bool       `json:"mine"`
+	Mine bool `json:"mine"`
+	// Deletable tells the client whether to offer the delete control: its
+	// sender, or a superadmin moderating. Sent rather than derived, so the two
+	// clients cannot disagree with the API about who may do what.
+	Deletable bool       `json:"deletable"`
 	ReadAt    *time.Time `json:"readAt,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
 }

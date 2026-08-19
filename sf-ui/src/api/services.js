@@ -171,6 +171,9 @@ export const messages = {
   // The payload carries text, pictures and a voice message's URL - the API
   // derives the link from the text, as it does for a post.
   send: (userId, payload) => body(client.post(`/messages/with/${userId}`, payload)),
+  // Its sender may take back what they wrote; a superadmin may remove
+  // anything. The API decides, and reports it as `deletable` on each message.
+  remove: (messageId) => body(client.delete(`/messages/${messageId}`)),
 };
 
 export const blocks = {

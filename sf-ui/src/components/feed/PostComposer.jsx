@@ -10,6 +10,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import { readImageAsDataUrl } from "../../utils/image";
 import { firstUrl } from "../../utils/links";
+import Select from "../common/Select";
+import MultiSelect from "../common/MultiSelect";
 
 const MAX_PICTURES = 4;
 
@@ -36,7 +38,9 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
   const [content, setContent] = useState("");
   const [pictures, setPictures] = useState([]);
   const [visibility, setVisibility] = useState(defaultClubId ? "club" : "public");
-  const [clubId, setClubId] = useState(defaultClubId || "");
+  // Several clubs, not one: a coach who runs two writes the same session note
+  // for both and should not have to post it twice.
+  const [clubIds, setClubIds] = useState(defaultClubId ? [defaultClubId] : []);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(null);
@@ -89,7 +93,7 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
         content,
         pictures,
         visibility,
-        clubId: visibility === "club" ? clubId : "",
+        clubIds: visibility === "club" ? clubIds : [],
       });
       toast.success(t("feed.posted"), toastOptions);
       setContent("");
@@ -102,7 +106,10 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
     }
   };
 
-  const canPost = Boolean(content.trim() || pictures.length) && (visibility !== "club" || clubId) && !uploading;
+  const canPost =
+    Boolean(content.trim() || pictures.length) && (visibility !== "club" || clubIds.length > 0) && !uploading;
+
+  const clubOptions = (clubs || []).map((club) => ({ value: club.id, label: club.name }));
 
   return (
     <form className="sf-card" onSubmit={submit}>
@@ -172,32 +179,25 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
         </div>
 
         <div className="sf-row" style={{ gap: "0.35rem" }}>
-          <select
-            className="sf-select sf-input-sm"
-            style={{ width: "auto" }}
+          <Select
+            className="sf-select-inline"
+            options={[
+              { value: "public", label: t("feed.visibilityPublic") },
+              ...(clubOptions.length > 0 ? [{ value: "club", label: t("feed.visibilityClub") }] : []),
+            ]}
             value={visibility}
-            onChange={(event) => setVisibility(event.target.value)}
-            aria-label={t("feed.visibility")}
-          >
-            <option value="public">{t("feed.visibilityPublic")}</option>
-            {(clubs || []).length > 0 ? <option value="club">{t("feed.visibilityClub")}</option> : null}
-          </select>
+            onChange={setVisibility}
+            placeholder={t("feed.visibility")}
+          />
 
           {visibility === "club" ? (
-            <select
-              className="sf-select sf-input-sm"
-              style={{ width: "auto" }}
-              value={clubId}
-              onChange={(event) => setClubId(event.target.value)}
-              aria-label={t("feed.pickClub")}
-            >
-              <option value="">{t("feed.pickClub")}</option>
-              {(clubs || []).map((club) => (
-                <option key={club.id} value={club.id}>
-                  {club.name}
-                </option>
-              ))}
-            </select>
+            <MultiSelect
+              className="sf-select-inline"
+              options={clubOptions}
+              selected={clubIds}
+              onChange={setClubIds}
+              placeholder={t("feed.pickClubs")}
+            />
           ) : null}
 
           <button className="sf-button sf-button-sm" type="submit" disabled={busy || !canPost}>

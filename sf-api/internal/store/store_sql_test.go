@@ -690,7 +690,7 @@ func TestPostVisibilityMoves(t *testing.T) {
 	})
 
 	post, err := social.CreatePost(ctx, author, PostFields{
-		Content: "Squat session", Visibility: models.VisibilityClub, ClubID: club.ID,
+		Content: "Squat session", Visibility: models.VisibilityClub, ClubIDs: []string{club.ID},
 	})
 	if err != nil {
 		t.Fatalf("creating a post: %v", err)
@@ -726,7 +726,7 @@ func TestPostVisibilityMoves(t *testing.T) {
 
 	// And back: making it club-only again must actually take it away.
 	back, err := social.UpdatePost(ctx, post.ID, author, PostFields{
-		Content: "Squat session", Visibility: models.VisibilityClub, ClubID: club.ID,
+		Content: "Squat session", Visibility: models.VisibilityClub, ClubIDs: []string{club.ID},
 	})
 	if err != nil {
 		t.Fatalf("moving back to the club: %v", err)
@@ -777,5 +777,89 @@ func TestEventAllDayRoundTrips(t *testing.T) {
 	}
 	if timed.AllDay {
 		t.Fatal("an event switched back to a timed one is still marked all-day")
+	}
+}
+
+// TestPostReachesEveryClubItWasSharedWith is the point of the join table: a
+// coach who runs two clubs writes one note for both. It also covers the case
+// that used to be a leak - deleting a club must take the post out of *that*
+// club and leave it in the others, where the old cascading column deleted the
+// post outright.
+func TestPostReachesEveryClubItWasSharedWith(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	social := NewSocialStore(pool)
+	clubs := NewClubStore(pool)
+
+	author := seedUser(t, pool, "two-clubs-author@example.com")
+	memberA := seedUser(t, pool, "two-clubs-a@example.com")
+	memberB := seedUser(t, pool, "two-clubs-b@example.com")
+	outsider := seedUser(t, pool, "two-clubs-outsider@example.com")
+
+	clubA, err := clubs.Create(ctx, author, ClubFields{Name: "Club A"})
+	if err != nil {
+		t.Fatalf("creating club A: %v", err)
+	}
+	clubB, err := clubs.Create(ctx, author, ClubFields{Name: "Club B"})
+	if err != nil {
+		t.Fatalf("creating club B: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM clubs WHERE id = ANY($1)`,
+			[]string{clubA.ID, clubB.ID})
+	})
+
+	post, err := social.CreatePost(ctx, author, PostFields{
+		Content:    "Deload week for everyone",
+		Visibility: models.VisibilityClub,
+		ClubIDs:    []string{clubA.ID, clubB.ID},
+	})
+	if err != nil {
+		t.Fatalf("creating the post: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM posts WHERE id = $1`, post.ID)
+	})
+
+	if len(post.ClubIDs) != 2 || len(post.ClubNames) != 2 {
+		t.Fatalf("post carries %d clubs and %d names, want 2 of each", len(post.ClubIDs), len(post.ClubNames))
+	}
+
+	seenBy := func(who string, clubIDs []string) bool {
+		visible, err := social.CanSeePost(ctx, post.ID, who, clubIDs)
+		if err != nil {
+			t.Fatalf("checking visibility: %v", err)
+		}
+		return visible
+	}
+
+	if !seenBy(memberA, []string{clubA.ID}) {
+		t.Error("a member of the first club cannot see the post")
+	}
+	if !seenBy(memberB, []string{clubB.ID}) {
+		t.Error("a member of the second club cannot see the post")
+	}
+	if seenBy(outsider, []string{}) {
+		t.Error("somebody in neither club can see a club-only post")
+	}
+
+	// Deleting one club must not take the post with it.
+	if _, err := pool.Exec(ctx, `DELETE FROM clubs WHERE id = $1`, clubA.ID); err != nil {
+		t.Fatalf("deleting club A: %v", err)
+	}
+	if _, err := social.FindPost(ctx, post.ID, author); err != nil {
+		t.Fatalf("the post did not survive its first club being deleted: %v", err)
+	}
+	if !seenBy(memberB, []string{clubB.ID}) {
+		t.Error("the surviving club lost sight of the post")
+	}
+	// And the one whose club is gone must not inherit it.
+	if seenBy(memberA, []string{}) {
+		t.Error("a member of the deleted club can still see the post")
+	}
+	// Above all: losing a club must not turn a club-only post public, which is
+	// why readability is decided by the label rather than by having no clubs.
+	if seenBy(outsider, []string{}) {
+		t.Error("a club-only post became public when one of its clubs was deleted")
 	}
 }

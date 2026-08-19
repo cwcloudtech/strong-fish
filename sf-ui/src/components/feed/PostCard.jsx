@@ -13,6 +13,8 @@ import { ErrorMessage } from "../common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import LinkifiedText from "../common/LinkifiedText";
+import Select from "../common/Select";
+import MultiSelect from "../common/MultiSelect";
 
 /**
  * One post in the feed. Links are rendered through the <media-player> custom
@@ -32,7 +34,7 @@ export default function PostCard({ post, onChanged, onDeleted }) {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
   const [editVisibility, setEditVisibility] = useState(post.visibility);
-  const [editClubId, setEditClubId] = useState(post.clubId || "");
+  const [editClubIds, setEditClubIds] = useState(post.clubIds || []);
   // The author's own clubs, for moving the post between them. Loaded when the
   // editor opens rather than with the card: a feed renders dozens of these and
   // almost none of them are ever edited.
@@ -68,9 +70,10 @@ export default function PostCard({ post, onChanged, onDeleted }) {
   // moderation power - the API rejects it, and the UI should not offer it.
   const movableClubs = isAuthor
     ? myClubs || []
-    : post.clubId
-      ? [{ id: post.clubId, name: post.clubName || t("feed.visibilityClub") }]
-      : [];
+    : (post.clubIds || []).map((id, index) => ({
+        id,
+        name: post.clubNames?.[index] || t("feed.visibilityClub"),
+      }));
 
   const toggleLike = async () => {
     try {
@@ -122,7 +125,7 @@ export default function PostCard({ post, onChanged, onDeleted }) {
   const startEditing = () => {
     setEditContent(post.content);
     setEditVisibility(post.visibility);
-    setEditClubId(post.clubId || "");
+    setEditClubIds(post.clubIds || []);
     setEditing(true);
   };
 
@@ -135,7 +138,7 @@ export default function PostCard({ post, onChanged, onDeleted }) {
           content: editContent,
           pictures: post.pictures,
           visibility: editVisibility,
-          clubId: editVisibility === "club" ? editClubId : "",
+          clubIds: editVisibility === "club" ? editClubIds : [],
         })
       );
       setEditing(false);
@@ -173,7 +176,9 @@ export default function PostCard({ post, onChanged, onDeleted }) {
           </strong>
           <div className="sf-muted">
             {new Date(post.createdAt).toLocaleString(locale)}
-            {post.clubName ? ` · ${post.clubName}` : ""}
+            {/* Every club it was shared with, not just the first: a post in
+                two clubs says so. */}
+            {post.clubNames?.length ? ` · ${post.clubNames.join(", ")}` : ""}
             {post.updatedAt !== post.createdAt ? ` · ${t("feed.edited")}` : ""}
           </div>
         </div>
@@ -193,40 +198,32 @@ export default function PostCard({ post, onChanged, onDeleted }) {
               not the author's, so a non-author is offered the post's current
               club and nothing else; the API enforces the same rule. */}
           <div className="sf-row" style={{ gap: "0.35rem", marginTop: "0.5rem" }}>
-            <select
-              className="sf-select sf-input-sm"
-              style={{ width: "auto" }}
+            <Select
+              className="sf-select-inline"
+              options={[
+                { value: "public", label: t("feed.visibilityPublic") },
+                ...(movableClubs.length > 0 ? [{ value: "club", label: t("feed.visibilityClub") }] : []),
+              ]}
               value={editVisibility}
-              onChange={(event) => {
-                const next = event.target.value;
+              onChange={(next) => {
                 setEditVisibility(next);
                 // Moving to a club with only one to choose from should not
                 // need a second click.
-                if (next === "club" && !editClubId && movableClubs.length === 1) {
-                  setEditClubId(movableClubs[0].id);
+                if (next === "club" && editClubIds.length === 0 && movableClubs.length === 1) {
+                  setEditClubIds([movableClubs[0].id]);
                 }
               }}
-              aria-label={t("feed.visibility")}
-            >
-              <option value="public">{t("feed.visibilityPublic")}</option>
-              {movableClubs.length > 0 ? <option value="club">{t("feed.visibilityClub")}</option> : null}
-            </select>
+              placeholder={t("feed.visibility")}
+            />
 
             {editVisibility === "club" ? (
-              <select
-                className="sf-select sf-input-sm"
-                style={{ width: "auto" }}
-                value={editClubId}
-                onChange={(event) => setEditClubId(event.target.value)}
-                aria-label={t("feed.pickClub")}
-              >
-                <option value="">{t("feed.pickClub")}</option>
-                {movableClubs.map((club) => (
-                  <option key={club.id} value={club.id}>
-                    {club.name}
-                  </option>
-                ))}
-              </select>
+              <MultiSelect
+                className="sf-select-inline"
+                options={movableClubs.map((club) => ({ value: club.id, label: club.name }))}
+                selected={editClubIds}
+                onChange={setEditClubIds}
+                placeholder={t("feed.pickClubs")}
+              />
             ) : null}
           </div>
 
@@ -458,12 +455,16 @@ function ReportModal({ post, onClose }) {
     >
       <div className="sf-field">
         <label className="sf-label">{t("feed.reportReason")}</label>
-        <select className="sf-select" value={reason} onChange={(event) => setReason(event.target.value)}>
-          <option value="spam">{t("feed.reportSpam")}</option>
-          <option value="abuse">{t("feed.reportAbuse")}</option>
-          <option value="inappropriate">{t("feed.reportInappropriate")}</option>
-          <option value="other">{t("feed.reportOther")}</option>
-        </select>
+        <Select
+          options={[
+            { value: "spam", label: t("feed.reportSpam") },
+            { value: "abuse", label: t("feed.reportAbuse") },
+            { value: "inappropriate", label: t("feed.reportInappropriate") },
+            { value: "other", label: t("feed.reportOther") },
+          ]}
+          value={reason}
+          onChange={setReason}
+        />
       </div>
       <div className="sf-field">
         <label className="sf-label">{t("feed.reportComment")}</label>

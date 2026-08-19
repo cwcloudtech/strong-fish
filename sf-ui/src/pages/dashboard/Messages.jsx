@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiFlag, FiImage, FiSearch, FiSend, FiSlash, FiUser, FiVideo, FiX } from "react-icons/fi";
+import { FiFlag, FiImage, FiSearch, FiSend, FiSlash, FiTrash2, FiUser, FiVideo, FiX } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import Avatar from "../../components/common/Avatar";
@@ -13,6 +13,7 @@ import { readImageAsDataUrl } from "../../utils/image";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 import LinkifiedText from "../../components/common/LinkifiedText";
+import { isFramedMedia } from "../../webcomponents/MediaPlayer";
 
 /**
  * Private messages: the list of conversations on the left, the open thread on
@@ -131,6 +132,7 @@ function Thread({ userId, onSent }) {
   // Upload progress, 0..1, or null when nothing is uploading.
   const [uploading, setUploading] = useState(null);
   const [reporting, setReporting] = useState(null);
+  const [deleting, setDeleting] = useState(null);
   const [blocking, setBlocking] = useState(false);
   const bottom = useRef(null);
 
@@ -300,7 +302,17 @@ function Thread({ userId, onSent }) {
                 {/* A voice message plays where it sits - the browser's own
                     controls, no player to build. */}
                 {message.audio ? (
-                  <audio className="sf-bubble-audio" src={message.audio} controls preload="metadata" />
+                  // A voice note in Google Drive is not a file this browser can
+                  // fetch: the API stores Drive's /preview URL, which is an
+                  // embed page, and an <audio src> pointed at an HTML page
+                  // simply never plays. Framed through the media player in that
+                  // case, and played natively when the storage serves the file
+                  // itself - which is what an S3 bucket does.
+                  isFramedMedia(message.audio) ? (
+                    <media-player url={message.audio} />
+                  ) : (
+                    <audio className="sf-bubble-audio" src={message.audio} controls preload="metadata" />
+                  )
                 ) : null}
 
                 {/* The same detection the feed uses, so a video shared in a
@@ -326,6 +338,22 @@ function Thread({ userId, onSent }) {
                   </button>
                 </Tooltip>
               )}
+
+              {/* Offered on the API's say-so rather than on `mine`: a
+                  superadmin may remove anything, and the two clients should
+                  not each carry their own copy of that rule. */}
+              {message.deletable ? (
+                <Tooltip label={t("common.delete")}>
+                  <button
+                    type="button"
+                    className="sf-icon-button sf-icon-button-plain"
+                    onClick={() => setDeleting(message)}
+                    aria-label={t("common.delete")}
+                  >
+                    <FiTrash2 />
+                  </button>
+                </Tooltip>
+              ) : null}
             </div>
           ))
         )}
@@ -417,6 +445,28 @@ function Thread({ userId, onSent }) {
             setReporting(null);
             toast.success(t("messages.reported"), toastOptions);
           }}
+        />
+      ) : null}
+
+      {deleting ? (
+        <ConfirmModal
+          title={t("messages.deleteTitle")}
+          message={t("messages.deleteBody")}
+          confirmLabel={t("common.delete")}
+          onConfirm={async () => {
+            try {
+              await messagesApi.remove(deleting.id);
+              // Reloaded rather than spliced out locally: the thread's unread
+              // counts and the conversation list both move with it.
+              await load();
+              toast.success(t("messages.deleted"), toastOptions);
+            } catch (err) {
+              setError(err);
+            } finally {
+              setDeleting(null);
+            }
+          }}
+          onClose={() => setDeleting(null)}
         />
       ) : null}
 

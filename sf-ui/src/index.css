@@ -2075,3 +2075,135 @@ a.sf-thread-who:hover strong { color: var(--sf-primary); text-decoration: underl
 }
 
 .sf-week-allday-cell.weekend { background-color: color-mix(in srgb, var(--sf-border) 25%, transparent); }
+
+/* ---------------------------------------------------------------------------
+   Autocomplete selects (Select, MultiSelect) - the cwclock pattern.
+
+   The trigger deliberately matches .sf-input/.sf-select so a form reads as one
+   set of fields; the panel is portaled to the body, so it is positioned in
+   viewport coordinates by the component and only styled here.
+   --------------------------------------------------------------------------- */
+.sf-select-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-spacing-sm);
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  background-color: var(--sf-surface);
+  color: var(--sf-text);
+  font-family: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--sf-transition), box-shadow var(--sf-transition);
+}
+
+.sf-select-trigger:hover:not(:disabled) { border-color: var(--sf-primary); }
+
+.sf-select-trigger.is-open,
+.sf-select-trigger:focus-visible {
+  outline: none;
+  border-color: var(--sf-primary);
+  box-shadow: 0 0 0 3px var(--sf-primary-tint);
+}
+
+.sf-select-trigger:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.sf-select-trigger-label {
+  flex-shrink: 0;
+  color: var(--sf-text-muted);
+  font-size: 0.8rem;
+}
+
+/* A long club name ellipsizes instead of stretching the field: unlike a real
+   <select>, this trigger is a button and a span, with no clipping of its own. */
+.sf-select-trigger-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.sf-select-trigger-summary.is-placeholder { color: var(--sf-text-muted); font-weight: 400; }
+
+.sf-select-caret {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--sf-text-muted);
+  transition: transform var(--sf-transition);
+}
+
+.sf-select-caret.is-open { transform: rotate(180deg); }
+
+.sf-select-panel {
+  position: fixed;
+  z-index: 1300;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(360px, calc(100vw - 2rem));
+  padding: 8px;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  background-color: var(--sf-surface);
+  box-shadow: var(--sf-shadow-lg);
+}
+
+.sf-select-search { font-size: 0.9rem; }
+
+.sf-select-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.sf-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--sf-radius-sm);
+  background: none;
+  color: var(--sf-text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sf-select-option:hover { background-color: var(--sf-bg-alt); }
+.sf-select-option.active { color: var(--sf-primary-dark); font-weight: 600; }
+.sf-select-option.is-button > span:first-child { flex: 1; }
+.sf-select-option input { flex-shrink: 0; accent-color: var(--sf-primary); }
+
+.sf-select-empty { margin: 0; padding: 6px 8px; color: var(--sf-text-muted); font-size: 0.9rem; }
+
+.sf-select-actions { display: flex; gap: 4px; }
+
+.sf-select-action {
+  padding: 4px 8px;
+  border: 0;
+  background: none;
+  color: var(--sf-primary-dark);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sf-select-action:hover { text-decoration: underline; }
+
+/* A select sitting in a toolbar row rather than in a stacked form: sized to
+   its content instead of filling the row. */
+.sf-select-inline {
+  width: auto;
+  min-width: 130px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}

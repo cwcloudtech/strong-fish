@@ -101,6 +101,19 @@ export function detectMedia(rawUrl) {
 // in a native <video> element rather than in somebody else's player.
 const VIDEO_KINDS = ["youtube", "vimeo", "dailymotion", "facebook", "drive"];
 
+/**
+ * Reports whether a URL has to be framed rather than handed to a media element.
+ *
+ * A Google Drive link is the case that matters: what the API stores is Drive's
+ * /preview address, which is an HTML player page, not the file. An <audio> or
+ * <video> element pointed at it loads a web page and plays nothing - and does
+ * so silently, which is exactly how a voice message uploaded perfectly happily
+ * came out mute.
+ */
+export function isFramedMedia(url) {
+  return VIDEO_KINDS.includes(detectMedia(url).kind);
+}
+
 const STYLE = `
   :host { display: block; }
   .frame {

@@ -325,7 +325,16 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
                   controller: _scroll,
                   padding: const EdgeInsets.all(16),
                   itemCount: messages.length,
-                  itemBuilder: (context, index) => _Bubble(message: messages[index]),
+                  itemBuilder: (context, index) => _Bubble(
+                    message: messages[index],
+                    onDeleted: () {
+                      // Reloaded rather than spliced out locally: the thread's
+                      // own list and the conversation summary both move with it.
+                      setState(() => _sent.clear());
+                      ref.invalidate(threadProvider(widget.userId));
+                      ref.invalidate(conversationsProvider);
+                    },
+                  ),
                 );
               },
             ),
@@ -435,7 +444,10 @@ class _Attachment extends StatelessWidget {
 class _Bubble extends ConsumerWidget {
   final PrivateMessage message;
 
-  const _Bubble({required this.message});
+  /// Called once a message has been removed, so the thread can reload.
+  final VoidCallback onDeleted;
+
+  const _Bubble({required this.message, required this.onDeleted});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -459,7 +471,7 @@ class _Bubble extends ConsumerWidget {
           ],
           if (message.audio.isNotEmpty) ...[
             const SizedBox(height: 6),
-            AudioBubble(url: message.audio),
+            AudioBubble(url: message.audio, baseUrl: ref.read(apiProvider).client.apiUrl),
           ],
           // The same players the feed renders, so a link shared in a thread
           // behaves like one shared publicly.
@@ -479,8 +491,19 @@ class _Bubble extends ConsumerWidget {
     // Your own messages need no avatar - you know who you are. The other
     // side's carries one on every message, and tapping it opens their profile,
     // which is the gesture every messenger has trained people to expect.
+    // Long-press to delete, rather than a button on every bubble: a thread is
+    // read far more often than it is edited, and a row of controls beside each
+    // message is noise. Offered on the API's say-so - its sender, or a
+    // superadmin - not on whether the message is this side's.
+    final pressable = message.deletable
+        ? GestureDetector(
+            onLongPress: () => _confirmDelete(context, ref),
+            child: bubble,
+          )
+        : bubble;
+
     if (message.mine) {
-      return Align(alignment: Alignment.centerRight, child: bubble);
+      return Align(alignment: Alignment.centerRight, child: pressable);
     }
 
     return Row(
@@ -493,9 +516,41 @@ class _Bubble extends ConsumerWidget {
             child: SfAvatar.of(message.sender, radius: 16),
           ),
         ),
-        Flexible(child: bubble),
+        Flexible(child: pressable),
       ],
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final t = ref.read(tProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('messages.deleteTitle')),
+        content: Text(t('messages.deleteBody')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t('common.delete')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ref.read(apiProvider).deleteMessage(message.id);
+      onDeleted();
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    }
   }
 
   /// Opens the sender's profile, when there is one to open.
