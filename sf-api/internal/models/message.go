@@ -28,6 +28,15 @@ type Message struct {
 	SenderID       string      `json:"senderId"`
 	Sender         UserSummary `json:"sender"`
 	Content        string      `json:"content"`
+	// Pictures are base64 data URIs carried inline, the way a post's are.
+	Pictures []string `json:"pictures,omitempty"`
+	// Links is derived from the content, never submitted: whatever URL the
+	// sender pasted is what gets rendered as a player or a card. Same rule as
+	// a post, so a video shared in a thread behaves like one shared in the feed.
+	Links []string `json:"links,omitempty"`
+	// Audio is a voice message: a URL in the sender's own storage, since this
+	// app hosts no media of its own.
+	Audio string `json:"audio,omitempty"`
 	// Mine saves the client comparing ids to decide which side to draw the
 	// bubble on.
 	Mine      bool       `json:"mine"`

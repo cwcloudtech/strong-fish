@@ -98,7 +98,9 @@ func TestMessageQueries(t *testing.T) {
 		t.Errorf("a pair produced two conversations: %s and %s", conversationID, again)
 	}
 
-	if _, err := messages.Send(ctx, conversationID, bob, "Squat felt like RPE 8."); err != nil {
+	if _, err := messages.Send(ctx, conversationID, bob, MessageFields{
+		Content: "Squat felt like RPE 8.",
+	}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 
@@ -358,7 +360,7 @@ func TestAnonymityHoldsAcrossQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindOrCreateConversation: %v", err)
 	}
-	if _, err := messages.Send(ctx, conversationID, subject, "hello"); err != nil {
+	if _, err := messages.Send(ctx, conversationID, subject, MessageFields{Content: "hello"}); err != nil {
 		t.Fatalf("Send: %v", err)
 	}
 

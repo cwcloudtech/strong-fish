@@ -38,6 +38,19 @@ class ApiClient {
 
   String get apiUrl => _apiUrl;
 
+  /// Where the web app lives, derived from the API's own address.
+  ///
+  /// Shared links have to open the web app, not the API - and the two are the
+  /// same deployment, so "api." becoming "www." is the convention rather than
+  /// another setting for somebody to get wrong. A URL that does not follow it
+  /// falls back to itself, which is at least the right deployment.
+  String get frontendUrl {
+    final uri = Uri.tryParse(_apiUrl);
+    if (uri == null || uri.host.isEmpty) return _apiUrl;
+    if (!uri.host.startsWith('api.')) return _apiUrl;
+    return uri.replace(host: 'www.${uri.host.substring(4)}').toString();
+  }
+
   bool get hasSession =>
       (_token != null && _token!.isNotEmpty) || (_apiKey != null && _apiKey!.isNotEmpty);
 

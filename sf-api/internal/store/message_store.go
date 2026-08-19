@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"strong-fish-api/internal/models"
+	"strong-fish-api/internal/utils"
 )
 
 type MessageStore struct {
@@ -70,7 +71,7 @@ func (s *MessageStore) ListConversations(ctx context.Context, callerID string) (
 		SELECT c.id, c.created_at, c.updated_at,
 		       coalesce(c.data->>'lastMessage', ''), coalesce(c.data->>'lastSenderId', ''),
 		       other.id, coalesce(other.data->>'handle', ''),
-		       ` + displayName("other") + `, ` + displaySurname("other") + `,
+		       `+displayName("other")+`, `+displaySurname("other")+`,
 		       coalesce(other.data->>'picture', ''),
 		       (SELECT count(*) FROM messages m
 		        WHERE m.conversation_id = c.id AND m.sender_id <> $1::uuid AND m.data->>'readAt' IS NULL)
@@ -141,8 +142,8 @@ func (s *MessageStore) ListMessages(ctx context.Context, conversationID string, 
 	}
 	rows, err := s.pool.Query(ctx, `
 		SELECT m.id, m.conversation_id, m.sender_id, m.data, m.created_at,
-		       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
-		       ` + displaySurname("u") + `, coalesce(u.data->>'picture', '')
+		       coalesce(u.data->>'handle', ''), `+displayName("u")+`,
+		       `+displaySurname("u")+`, coalesce(u.data->>'picture', '')
 		FROM messages m
 		JOIN users u ON u.id = m.sender_id
 		WHERE m.conversation_id = $1
@@ -167,6 +168,9 @@ func (s *MessageStore) ListMessages(ctx context.Context, conversationID string, 
 			return nil, err
 		}
 		m.Content = d.Content
+		m.Pictures = d.Pictures
+		m.Links = d.Links
+		m.Audio = d.Audio
 		m.ReadAt = d.ReadAt
 		m.Sender.ID = m.SenderID
 		messages = append(messages, m)
@@ -184,15 +188,46 @@ func (s *MessageStore) ListMessages(ctx context.Context, conversationID string, 
 }
 
 type messageData struct {
-	Content string     `json:"content"`
-	ReadAt  *time.Time `json:"readAt,omitempty"`
+	Content  string     `json:"content"`
+	Pictures []string   `json:"pictures,omitempty"`
+	Links    []string   `json:"links,omitempty"`
+	Audio    string     `json:"audio,omitempty"`
+	ReadAt   *time.Time `json:"readAt,omitempty"`
 }
 
 // Send writes a message and updates its conversation's preview in one
 // transaction: a message whose thread still shows the previous line would sort
 // to the wrong place in everybody's list.
-func (s *MessageStore) Send(ctx context.Context, conversationID, senderID, content string) (models.Message, error) {
-	data, err := json.Marshal(messageData{Content: content})
+// previewOf is the line a thread shows for its latest message.
+//
+// A voice message or a picture has no text to preview, so it is described
+// instead - a blank line in the conversation list would read as a message that
+// failed to send.
+func previewOf(f MessageFields) string {
+	if utils.IsNotBlank(f.Content) {
+		return f.Content
+	}
+	if utils.IsNotBlank(f.Audio) {
+		return "\U0001F3A4"
+	}
+	if len(f.Pictures) > 0 {
+		return "\U0001F5BC"
+	}
+	return ""
+}
+
+// MessageFields is one message as its sender composed it.
+type MessageFields struct {
+	Content  string
+	Pictures []string
+	Links    []string
+	Audio    string
+}
+
+func (s *MessageStore) Send(ctx context.Context, conversationID, senderID string, f MessageFields) (models.Message, error) {
+	data, err := json.Marshal(messageData{
+		Content: f.Content, Pictures: f.Pictures, Links: f.Links, Audio: f.Audio,
+	})
 	if err != nil {
 		return models.Message{}, err
 	}
@@ -211,7 +246,7 @@ func (s *MessageStore) Send(ctx context.Context, conversationID, senderID, conte
 	}
 
 	preview, err := json.Marshal(map[string]any{
-		"lastMessage": truncatePreview(content), "lastSenderId": senderID,
+		"lastMessage": truncatePreview(previewOf(f)), "lastSenderId": senderID,
 	})
 	if err != nil {
 		return models.Message{}, err
@@ -233,8 +268,8 @@ func (s *MessageStore) FindMessage(ctx context.Context, id string) (models.Messa
 	var raw []byte
 	err := s.pool.QueryRow(ctx, `
 		SELECT m.id, m.conversation_id, m.sender_id, m.data, m.created_at,
-		       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
-		       ` + displaySurname("u") + `, coalesce(u.data->>'picture', '')
+		       coalesce(u.data->>'handle', ''), `+displayName("u")+`,
+		       `+displaySurname("u")+`, coalesce(u.data->>'picture', '')
 		FROM messages m JOIN users u ON u.id = m.sender_id
 		WHERE m.id = $1
 	`, id).Scan(&m.ID, &m.ConversationID, &m.SenderID, &raw, &m.CreatedAt,
@@ -251,6 +286,9 @@ func (s *MessageStore) FindMessage(ctx context.Context, id string) (models.Messa
 		return models.Message{}, err
 	}
 	m.Content = d.Content
+	m.Pictures = d.Pictures
+	m.Links = d.Links
+	m.Audio = d.Audio
 	m.ReadAt = d.ReadAt
 	m.Sender.ID = m.SenderID
 	return m, nil
@@ -312,8 +350,8 @@ func (s *MessageStore) Unblock(ctx context.Context, blockerID, blockedID string)
 func (s *MessageStore) ListBlocks(ctx context.Context, blockerID string) ([]models.Block, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT b.id, b.blocked_id, b.created_at,
-		       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
-		       ` + displaySurname("u") + `, coalesce(u.data->>'picture', '')
+		       coalesce(u.data->>'handle', ''), `+displayName("u")+`,
+		       `+displaySurname("u")+`, coalesce(u.data->>'picture', '')
 		FROM blocks b JOIN users u ON u.id = b.blocked_id
 		WHERE b.blocker_id = $1
 		ORDER BY b.created_at DESC

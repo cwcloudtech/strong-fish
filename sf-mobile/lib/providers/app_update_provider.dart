@@ -21,8 +21,20 @@ const _updateBaseUrl = String.fromEnvironment(
   'SF_UPDATE_URL',
   defaultValue: 'https://www.strong-fish.com',
 );
+/// Where the build is published, for the case where the API cannot say.
+///
+/// The www matters: CI publishes the APK alongside the frontend, whose address
+/// is www.strong-fish.com. A guess at the apex domain here is what used to
+/// download an error page and hand it to the installer.
+const _downloadBaseUrl = String.fromEnvironment(
+  'SF_DOWNLOAD_URL',
+  defaultValue: 'https://www.strong-fish.com',
+);
+
 String get _mobileAppUrl => '$_updateBaseUrl/v1/mobile-app';
 String get _manifestUrl => '$_updateBaseUrl/v1/manifest';
+
+String _fallbackApkUrl(String version) => '$_downloadBaseUrl/strong-fish-v$version.apk';
 
 /// An APK is a ZIP, so it starts with ZIP's local file header. Checking those
 /// four bytes is what tells a real download apart from an error page saved
@@ -105,14 +117,19 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
         remote = response.data?['version'] as String?;
         url = response.data?['url'] as String?;
       } on DioException {
-        // An older deployment has no /v1/mobile-app. Fall back to the manifest
-        // for the version; without a URL there is nothing to download, so no
-        // button is offered rather than one that cannot work.
+        // An older deployment has no /v1/mobile-app, and every deployment has
+        // the manifest. Falling back to it - and to the published URL pattern -
+        // is what keeps the check working against a backend that predates the
+        // endpoint; requiring the endpoint outright stopped updates being
+        // detected at all.
         final manifest = await Dio().get<Map<String, dynamic>>(_manifestUrl);
         remote = manifest.data?['version'] as String?;
       }
 
-      if (remote == null || url == null || url.isEmpty) return;
+      if (remote == null || remote.isEmpty) return;
+      // The API's answer is preferred - it is built from the deployment's own
+      // settings - and the pattern is only the last resort.
+      url = (url != null && url.isNotEmpty) ? url : _fallbackApkUrl(remote);
 
       final info = await PackageInfo.fromPlatform();
       if (compareVersions(remote, info.version) > 0) {

@@ -168,7 +168,9 @@ export const messages = {
   // Addressed by who, not by conversation id: there is exactly one thread per
   // pair, so the id is the API's business rather than the client's.
   thread: (userId) => body(client.get(`/messages/with/${userId}`)),
-  send: (userId, content) => body(client.post(`/messages/with/${userId}`, { content })),
+  // The payload carries text, pictures and a voice message's URL - the API
+  // derives the link from the text, as it does for a post.
+  send: (userId, payload) => body(client.post(`/messages/with/${userId}`, payload)),
 };
 
 export const blocks = {
@@ -191,6 +193,13 @@ export const media = {
           onProgress?.(event.total ? Math.round((event.loaded * 100) / event.total) : 0),
       })
     );
+  },
+  // Same storage, same 405 when none is configured. Kept separate from the
+  // video upload because the accepted types and the size cap differ.
+  uploadAudio: (blob, filename) => {
+    const form = new FormData();
+    form.append("file", blob, filename);
+    return body(client.post("/media/audio", form));
   },
   storage: () => body(client.get("/users/me/storage")),
   setStorage: (payload) => body(client.put("/users/me/storage", payload)),
