@@ -8,7 +8,7 @@ Nous sommes une équipe de powerlifters et d'ingénieurs français qui consacren
 bénévolement leur temps au développement d'une application et d'un réseau social
 de force athlétique.
 
-## Conditions d'utilisation de strong-fish
+## Conditions d'utilisation de StrongFish
 
 Lorsque vous utilisez cette application, que ce soit en tant qu'invité ou en tant
 que membre inscrit, vous devez respecter les règles suivantes. Si l'une d'elles
@@ -24,7 +24,7 @@ Dans l'ensemble de ce document :
 * les mots « équipe », « nous », « gestionnaires » et « modérateurs » désignent
   les membres disposant d'un compte administrateur, ainsi que les salariés et
   les dirigeants de Comwork ;
-* les mots « strong-fish », « l'application » et « le produit » désignent
+* les mots « StrongFish », « l'application » et « le produit » désignent
   l'ensemble de notre code, de nos exécutables compilés ou interprétés et des
   ressources hébergées par CWCloud sur tous les serveurs accessibles à l'adresse
   strong-fish.com.
@@ -46,7 +46,7 @@ Il est strictement interdit de :
 * téléverser des fichiers dans un format non pris en charge par l'application
   (un exécutable, par exemple).
 
-### Utilisation d'un compte strong-fish
+### Utilisation d'un compte StrongFish
 
 Les points suivants doivent être strictement respectés :
 

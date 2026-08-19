@@ -22,6 +22,8 @@ dependencies:
   # Reads the QR code the web app's API-keys screen shows, which is what
   # enrols this device without typing a password.
   mobile_scanner: ^7.4.0
+  # The provider embeds a post's video link resolves to (see widgets/media_player.dart).
+  webview_flutter: ^4.14.1
   # Downloading and handing a newer APK to Android's package installer.
   path_provider: ^2.1.6
   open_filex: ^4.7.0

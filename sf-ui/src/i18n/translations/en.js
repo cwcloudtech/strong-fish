@@ -1,6 +1,6 @@
 const en = {
   app: {
-    name: "strong-fish",
+    name: "StrongFish",
     tagline: "Powerlifting app",
   },
   common: {
@@ -62,10 +62,10 @@ const en = {
     imAnAthleteHelp: "You follow the programs your coach writes.",
     imACoach: "A coach",
     imACoachHelp: "You write programs and run clubs. A superadmin confirms this first.",
-    coachRequestSent: "Your coach account is waiting for confirmation. You can already use strong-fish as an athlete.",
+    coachRequestSent: "Your coach account is waiting for confirmation. You can already use StrongFish as an athlete.",
     scanQr: "Sign in by scanning a QR code",
     scanQrHelp: "Open the API keys page on the web app, create a key, and scan the QR code it shows.",
-    scanFailed: "This code doesn't carry a strong-fish configuration.",
+    scanFailed: "This code doesn't carry a StrongFish configuration.",
     login: "Log in",
     signup: "Sign up",
     email: "Email",
@@ -107,7 +107,7 @@ const en = {
     visibility: "Who can see my profile",
     visibilityPublic: "Everyone",
     postUnavailable: "This post is not available. It may have been deleted, or shared only with a club.",
-    joinToReply: "Join strong-fish to like this post and reply to it.",
+    joinToReply: "Join StrongFish to like this post and reply to it.",
     likes: "{{count}} likes",
     comments: "{{count}} comments",
     visibilityClubs: "My clubs",
@@ -528,7 +528,7 @@ const en = {
   about: {
     title: "About",
     unavailable: "This page has not been written yet.",
-    openSource: "strong-fish is an open-source product by CWCloud. Sources are available",
+    openSource: "StrongFish is an open-source product by CWCloud. Sources are available",
     openSourceLink: "here",
   },
   apiKeys: {
@@ -616,7 +616,7 @@ const en = {
   storage: {
     title: "Video storage",
     subtitle:
-      "strong-fish keeps no video of its own, so posting one means using your own storage. Up to {{size}} MB per video.",
+      "StrongFish keeps no video of its own, so posting one means using your own storage. Up to {{size}} MB per video.",
     type: "Where to store them",
     typeS3: "S3-compatible bucket",
     typeDrive: "Google Drive folder",
@@ -679,8 +679,8 @@ const en = {
     copyFor: "{{network}} has no web sharing - copy the link instead",
     copiedFor: "Link copied. Paste it into {{network}}.",
     copyLink: "Copy the link",
-    profileText: "{{name}} on strong-fish",
-    postText: "Seen on strong-fish",
+    profileText: "{{name}} on StrongFish",
+    postText: "Seen on StrongFish",
   },
   search: {
     title: "Find people",
@@ -722,7 +722,7 @@ const en = {
   },
   cookieBanner: {
     title: "Cookie notice",
-    message: "strong-fish is an open-source product. The cookies and local storage it uses are required only for the app to function (sign-in, your theme and language) - never for tracking or analytics.",
+    message: "StrongFish is an open-source product. The cookies and local storage it uses are required only for the app to function (sign-in, your theme and language) - never for tracking or analytics.",
     understand: "I understand",
   },
   contact: {

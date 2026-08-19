@@ -10,7 +10,7 @@ dans le nôtre.
 
 ## Pourquoi votre propre bucket
 
-strong-fish n'héberge aucune vidéo. Vingt mégaoctets par publication mettraient
+StrongFish n'héberge aucune vidéo. Vingt mégaoctets par publication mettraient
 la base de données à genoux, et payer pour diffuser les vidéos d'entraînement
 des autres n'est pas la vocation de cette application.
 
@@ -29,7 +29,7 @@ l'API S3.
 1. Créez un bucket, et une clé d'accès autorisée à y écrire.
 2. **Les objets doivent être lisibles publiquement.** Le lien part dans une
    publication et est lu par un lecteur vidéo dans le navigateur de quelqu'un
-   d'autre, sans aucun justificatif. strong-fish dépose chaque objet avec une ACL
+   d'autre, sans aucun justificatif. StrongFish dépose chaque objet avec une ACL
    `public-read` ; un bucket dont les ACL sont désactivées refusera l'envoi, et
    c'est le bon moment pour s'en apercevoir.
 3. Dans l'application : **Paramètres → Stockage des vidéos**, choisissez *Bucket
@@ -67,7 +67,7 @@ l'API S3.
    dossier.
 7. Enregistrez.
 
-strong-fish accorde à chaque fichier déposé un accès en lecture « toute personne
+StrongFish accorde à chaque fichier déposé un accès en lecture « toute personne
 disposant du lien » au moment de l'écriture, et publie le lecteur Drive.
 
 ## Publier

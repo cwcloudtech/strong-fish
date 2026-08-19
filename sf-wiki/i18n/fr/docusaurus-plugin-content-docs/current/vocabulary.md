@@ -5,7 +5,7 @@ sidebar_position: 3
 ---
 
 Trois nombres traversent toute l'application. Ils méritent dix minutes, car
-toutes les charges affichées par strong-fish en découlent.
+toutes les charges affichées par StrongFish en découlent.
 
 ## 1RM — votre maximum sur une répétition
 
@@ -46,14 +46,14 @@ vécue. La RPE est une consigne sur la journée que vous vivez réellement : si
 vous avez mal dormi, « 3 @ RPE 8 » est une barre plus légère que la semaine
 dernière, et c'est toujours le bon entraînement.
 
-### Comment strong-fish convertit la RPE en kilos
+### Comment StrongFish convertit la RPE en kilos
 
 À partir de la **table RTS/Tuchscherer** : un tableau donnant la fraction de
 votre maximum que représente un nombre de répétitions à une RPE donnée. Un
 single à RPE 10 vaut 100 % par définition ; 5 répétitions à RPE 8 valent environ
 76 %.
 
-La table, pas une formule. L'importateur de strong-fish a d'abord été écrit avec
+La table, pas une formule. L'importateur de StrongFish a d'abord été écrit avec
 l'équation d'Epley et produisait des charges en désaccord avec le tableur du
 coach sur 12 séries sur 15 : c'est à partir de la table que les vrais programmes
 sont écrits, donc c'est à partir d'elle que l'application calcule.

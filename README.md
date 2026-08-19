@@ -1,6 +1,6 @@
-# strong-fish
+# StrongFish
 
-![strong-fish](./img/logo.png)
+![StrongFish](./img/logo.png)
 
 A powerlifting app: RPE-based programs whose loads are computed from each
 athlete's own current 1RM, clubs to coach them in, and a training feed.
@@ -572,7 +572,7 @@ A picture in a post is a base64 data URI in the same JSONB row as the post. A
 video cannot be: 20MB per post would wreck the column, and serving other
 people's training footage is not this app's business.
 
-So strong-fish hosts no video at all. A member who wants to post one configures
+So StrongFish hosts no video at all. A member who wants to post one configures
 their own destination in the settings - an S3-compatible bucket or a Google
 Drive folder, the same connection shape
 [cwclock](https://gitlab.cwcloud.tech/oss/cwclock) uses for an organization's
@@ -637,7 +637,7 @@ wrong - it ends the content line and corrupts every property after it.
 
 ## Cookies
 
-strong-fish only ever puts functional data in local storage - the session token,
+StrongFish only ever puts functional data in local storage - the session token,
 the chosen theme and the chosen language. There are no third-party tracking or
 analytics cookies, so the banner (ported from cwclock, with its wording) is a
 one-time informational notice rather than an accept/reject consent flow.
