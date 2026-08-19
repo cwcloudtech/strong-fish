@@ -37,6 +37,7 @@ type eventPayload struct {
 	URL         string `json:"url"`
 	Kind        string `json:"kind"`
 	Color       string `json:"color"`
+	AllDay      bool   `json:"allDay"`
 	StartsAt    string `json:"startsAt"`
 	EndsAt      string `json:"endsAt"`
 	Visibility  string `json:"visibility"`
@@ -67,10 +68,17 @@ func (h *EventHandler) fields(w http.ResponseWriter, p eventPayload) (store.Even
 		}
 	}
 
+	// An all-day event with no end covers the day it starts on. Stored as an
+	// instant like everything else, so the listings, the ICS feed and the week
+	// grid keep comparing one kind of value; the flag only says how to draw it.
+	if p.AllDay && endsAt.IsZero() {
+		endsAt = startsAt.AddDate(0, 0, 1)
+	}
+
 	return store.EventFields{
 		ClubID: p.ClubID, Title: p.Title, Description: p.Description,
 		Location: p.Location, URL: p.URL, Kind: p.Kind, Color: p.Color,
-		StartsAt: startsAt, EndsAt: endsAt, Visibility: p.Visibility,
+		AllDay: p.AllDay, StartsAt: startsAt, EndsAt: endsAt, Visibility: p.Visibility,
 	}, true
 }
 

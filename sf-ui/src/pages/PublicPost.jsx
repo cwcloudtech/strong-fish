@@ -9,6 +9,7 @@ import { publicPosts } from "../api/services";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
 import { postShareUrl, shareTextFor } from "../utils/shareText";
+import LinkifiedText from "../components/common/LinkifiedText";
 
 /**
  * One post, opened from a shared link.
@@ -69,7 +70,9 @@ export default function PublicPost() {
             </div>
 
             {post.content ? (
-              <p style={{ whiteSpace: "pre-wrap", marginTop: "0.8rem" }}>{post.content}</p>
+              <p style={{ whiteSpace: "pre-wrap", marginTop: "0.8rem" }}>
+                <LinkifiedText text={post.content} />
+              </p>
             ) : null}
 
             {(post.pictures || []).map((picture, index) => (
@@ -99,7 +102,9 @@ export default function PublicPost() {
                 <strong>
                   {comment.author.name} {comment.author.surname}
                 </strong>
-                <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>{comment.content}</p>
+                <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                  <LinkifiedText text={comment.content} />
+                </p>
               </div>
             </div>
           ))}

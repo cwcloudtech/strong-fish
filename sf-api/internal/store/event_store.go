@@ -42,6 +42,7 @@ type eventData struct {
 	Color       string `json:"color"`
 	StartsAt    string `json:"startsAt"`
 	EndsAt      string `json:"endsAt"`
+	AllDay      bool   `json:"allDay"`
 	Visibility  string `json:"visibility"`
 }
 
@@ -85,6 +86,7 @@ func scanEvent(row pgx.Row) (models.Event, error) {
 	if e.Visibility != models.VisibilityPublic && e.Visibility != models.EventVisibilityPrivate {
 		e.Visibility = models.VisibilityClub
 	}
+	e.AllDay = d.AllDay
 	e.StartsAt, _ = time.Parse(time.RFC3339, d.StartsAt)
 	e.EndsAt, _ = time.Parse(time.RFC3339, d.EndsAt)
 	return e, nil
@@ -112,6 +114,7 @@ type EventFields struct {
 	URL         string
 	Kind        string
 	Color       string
+	AllDay      bool
 	StartsAt    time.Time
 	EndsAt      time.Time
 	Visibility  string
@@ -122,6 +125,7 @@ func (f EventFields) payload() eventData {
 		Title: f.Title, Description: f.Description, Location: f.Location, URL: f.URL,
 		Kind:     models.NormalizeEventKind(f.Kind),
 		Color:    models.NormalizeHexColor(f.Color),
+		AllDay:   f.AllDay,
 		StartsAt: f.StartsAt.UTC().Format(time.RFC3339),
 	}
 	if !f.EndsAt.IsZero() {

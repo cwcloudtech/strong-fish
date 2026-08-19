@@ -129,21 +129,25 @@ func (s *SocialStore) CreatePost(ctx context.Context, authorID string, f PostFie
 	return s.FindPost(ctx, id, authorID)
 }
 
-// UpdatePost rewrites a post's content. The visibility and club are settled at
-// creation: moving a post between clubs (or from a club to the public feed)
-// would retroactively expose it to people who couldn't see it.
+// UpdatePost rewrites a post, including where it is published.
+//
+// The club moves with the visibility, in the same statement: every feed query
+// reads readability off the club_id column, not off the visibility label in
+// the payload, so writing one without the other would leave a post whose label
+// and audience disagree - the worst possible outcome for a privacy control.
 func (s *SocialStore) UpdatePost(ctx context.Context, id, callerID string, f PostFields) (models.Post, error) {
 	patch, err := json.Marshal(map[string]any{
-		"content":  f.Content,
-		"pictures": f.Pictures,
-		"links":    f.Links,
+		"content":    f.Content,
+		"pictures":   f.Pictures,
+		"links":      f.Links,
+		"visibility": f.Visibility,
 	})
 	if err != nil {
 		return models.Post{}, err
 	}
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE posts SET data = data || $2::jsonb, updated_at = now() WHERE id = $1
-	`, id, patch)
+		UPDATE posts SET data = data || $2::jsonb, club_id = $3, updated_at = now() WHERE id = $1
+	`, id, patch, clubIDArg(f.ClubID))
 	if err != nil {
 		return models.Post{}, err
 	}

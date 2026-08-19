@@ -11,6 +11,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/media_player.dart';
 import '../widgets/social_share.dart';
+import '../widgets/linkified_text.dart';
 
 /// The feed: posts from the people you follow, your own, and your clubs'.
 /// "Discover" switches to every public post, which is what a new account needs
@@ -185,7 +186,7 @@ class _PostCard extends ConsumerWidget {
             ),
             if (post.content.isNotEmpty) ...[
               const SizedBox(height: 10),
-              Text(post.content),
+              LinkifiedText(post.content),
             ],
             for (final picture in post.pictures) ...[
               const SizedBox(height: 10),
@@ -269,6 +270,14 @@ class _PostCard extends ConsumerWidget {
                   onPressed: () => _openComments(context, ref),
                 ),
                 const Spacer(),
+                // Where the post is published, changeable by its author and by
+                // a superadmin - which is exactly what `editable` reports.
+                if (post.editable)
+                  IconButton(
+                    icon: const Icon(Icons.visibility_outlined),
+                    tooltip: t('feed.changeVisibility'),
+                    onPressed: () => _changeVisibility(context, ref),
+                  ),
                 if (post.deletable)
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
@@ -287,6 +296,62 @@ class _PostCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Offers the public feed and the clubs this post may be moved into.
+  ///
+  /// The author picks from their own clubs; anybody else editing it - a
+  /// superadmin moderating - gets only the club it is already in, because
+  /// publishing an author into a club they never joined is not a moderation
+  /// power. The API enforces the same rule, so this only keeps a control that
+  /// would be refused off the screen.
+  Future<void> _changeVisibility(BuildContext context, WidgetRef ref) async {
+    final t = ref.read(tProvider);
+    final isAuthor = post.author.id == ref.read(sessionProvider).user?.id;
+
+    var clubs = <Club>[];
+    if (isAuthor) {
+      clubs = await ref.read(clubsProvider.future).catchError((_) => <Club>[]);
+    } else if (post.clubId.isNotEmpty) {
+      clubs = [Club(id: post.clubId, name: post.clubName)];
+    }
+    if (!context.mounted) return;
+
+    final choice = await showModalBottomSheet<({String visibility, String clubId})>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.public),
+              title: Text(t('feed.visibilityPublic')),
+              selected: post.visibility == 'public',
+              onTap: () => Navigator.of(sheetContext).pop((visibility: 'public', clubId: '')),
+            ),
+            for (final club in clubs)
+              ListTile(
+                leading: const Icon(Icons.groups_outlined),
+                title: Text(club.name),
+                subtitle: Text(t('feed.visibilityClub')),
+                selected: post.visibility == 'club' && post.clubId == club.id,
+                onTap: () => Navigator.of(sheetContext).pop((visibility: 'club', clubId: club.id)),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null) return;
+    if (choice.visibility == post.visibility && choice.clubId == post.clubId) return;
+
+    try {
+      onChanged(await ref.read(apiProvider).updatePostVisibility(post, choice.visibility, choice.clubId));
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    }
   }
 
   Future<void> _openComments(BuildContext context, WidgetRef ref) async {
@@ -508,7 +573,7 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                             ],
                           ],
                         ),
-                        subtitle: Text(comment.content),
+                        subtitle: LinkifiedText(comment.content),
                         dense: true,
                         trailing: comment.editable
                             ? IconButton(

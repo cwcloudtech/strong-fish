@@ -12,6 +12,7 @@ import VoiceRecorder from "../../components/messages/VoiceRecorder";
 import { readImageAsDataUrl } from "../../utils/image";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
+import LinkifiedText from "../../components/common/LinkifiedText";
 
 /**
  * Private messages: the list of conversations on the left, the open thread on
@@ -261,7 +262,9 @@ function Thread({ userId, onSent }) {
             <div key={message.id} className={`sf-bubble-row ${message.mine ? "mine" : ""}`}>
               <div className="sf-bubble">
                 {message.content ? (
-                  <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{message.content}</p>
+                  <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>
+                    <LinkifiedText text={message.content} />
+                  </p>
                 ) : null}
 
                 {(message.pictures || []).map((picture, index) => (

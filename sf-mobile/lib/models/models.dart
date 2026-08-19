@@ -705,6 +705,8 @@ class Event {
   /// Hex the event is drawn in, as `#rrggbb`, or empty when it has none and
   /// the kind's own colour stands.
   final String color;
+  /// Whether this entry occupies whole days rather than a time of day.
+  final bool allDay;
   final DateTime startsAt;
   final DateTime? endsAt;
   final String visibility;
@@ -721,6 +723,7 @@ class Event {
     this.url = '',
     this.kind = 'other',
     this.color = '',
+    this.allDay = false,
     required this.startsAt,
     this.endsAt,
     this.visibility = 'public',
@@ -741,6 +744,7 @@ class Event {
         // Kept in the device's own zone: the list is read as wall-clock time,
         // and converting on every render would be the same conversion done
         // repeatedly.
+        allDay: json['allDay'] == true,
         startsAt: _toDate(json['startsAt']).toLocal(),
         endsAt: _optionalDate(json['endsAt']),
         visibility: _toString(json['visibility'], 'public'),
@@ -753,6 +757,10 @@ class Post {
   final String id;
   final String authorId;
   final User author;
+
+  /// The club a club-only post belongs to, empty for a public one. Needed to
+  /// move the post between the club feed and the public one.
+  final String clubId;
   final String clubName;
   final String content;
   final List<String> pictures;
@@ -769,6 +777,7 @@ class Post {
     required this.id,
     this.authorId = '',
     this.author = const User(id: ''),
+    this.clubId = '',
     this.clubName = '',
     this.content = '',
     this.pictures = const [],
@@ -788,6 +797,7 @@ class Post {
         author: json['author'] is Map<String, dynamic>
             ? User.fromJson(json['author'])
             : const User(id: ''),
+        clubId: _toString(json['clubId']),
         clubName: _toString(json['clubName']),
         content: _toString(json['content']),
         pictures: _toStringList(json['pictures']),

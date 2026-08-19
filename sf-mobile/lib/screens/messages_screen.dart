@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import 'public_profile_screen.dart';
 import '../widgets/media_player.dart';
+import '../widgets/linkified_text.dart';
 
 /// The list of private conversations.
 ///
@@ -261,7 +262,7 @@ class _Bubble extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (message.content.isNotEmpty) Text(message.content),
+          if (message.content.isNotEmpty) LinkifiedText(message.content),
           for (final picture in message.pictures) ...[
             const SizedBox(height: 6),
             SfBase64Image(data: picture),

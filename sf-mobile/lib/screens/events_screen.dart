@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/linkified_text.dart';
 
 /// The calendar: meets, club sessions and camps.
 ///
@@ -101,7 +102,7 @@ class _EventCard extends ConsumerWidget {
               ),
             if (event.description.isNotEmpty) ...[
               const SizedBox(height: 8),
-              Text(event.description),
+              LinkifiedText(event.description),
             ],
             if (event.url.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -139,9 +140,9 @@ class _EventCard extends ConsumerWidget {
   String _when(Event event) {
     final start = event.startsAt;
     final day = '${_pad(start.day)}/${_pad(start.month)}/${start.year}';
-    // Birthdays occupy a day rather than a time of day, and they are generated
-    // rather than authored - everything somebody creates happens at an hour.
-    if (event.kind == 'birthday') return day;
+    // A whole-day entry has no hour to show: either its author marked it so,
+    // or it is a birthday, which is derived from a birthdate and never had one.
+    if (event.allDay || event.kind == 'birthday') return day;
     return '$day  ${_pad(start.hour)}:${_pad(start.minute)}';
   }
 

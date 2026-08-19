@@ -65,8 +65,8 @@ func TestBuildICSBirthdayIsAWholeDay(t *testing.T) {
 	}
 }
 
-// TestBuildICSAuthoredEventsAreTimed is the other half: with the all-day option
-// gone, anything somebody created carries a real start and end time.
+// TestBuildICSAuthoredEventsAreTimed is the other half: an event nobody marked
+// all-day carries a real start and end time, whatever its kind.
 func TestBuildICSAuthoredEventsAreTimed(t *testing.T) {
 	for _, kind := range []string{
 		models.EventKindCompetition, models.EventKindTraining, models.EventKindOther,
@@ -143,5 +143,43 @@ func TestBuildICSSkipsUndatedEvents(t *testing.T) {
 	}
 	if strings.Contains(ics, "Undated") {
 		t.Errorf("an event with no start date should be skipped:\n%s", ics)
+	}
+}
+
+// TestBuildICSAllDayEvent covers an event whose author marked it all-day.
+// Outlook and Google only render one as occupying days when both ends are DATE
+// values - a midnight-to-midnight DATE-TIME shows as a timed entry at 00:00
+// instead, which is the wrong row of the grid.
+func TestBuildICSAllDayEvent(t *testing.T) {
+	ics := BuildICS([]models.Event{{
+		ID: "ev-allday", Title: "Training camp", Kind: models.EventKindTraining, AllDay: true,
+		StartsAt: at("2026-07-06T00:00:00Z"), EndsAt: at("2026-07-09T00:00:00Z"),
+	}})
+
+	if !strings.Contains(ics, "DTSTART;VALUE=DATE:20260706\r\n") {
+		t.Errorf("all-day DTSTART wrong:\n%s", ics)
+	}
+	if !strings.Contains(ics, "DTEND;VALUE=DATE:20260709\r\n") {
+		t.Errorf("a multi-day all-day event lost its span:\n%s", ics)
+	}
+	// Only a birthday recurs; a camp happens once.
+	if strings.Contains(ics, "RRULE") {
+		t.Errorf("an authored all-day event must not recur:\n%s", ics)
+	}
+}
+
+// TestBuildICSAllDayEventWithoutAnEnd covers the single-day case. The handler
+// defaults the end to the next day, but the feed must not depend on it: an
+// event stored before all-day existed has no end at all, and End()'s
+// hour-later default would format to the same date - which Outlook reads as
+// occupying no days, and hides.
+func TestBuildICSAllDayEventWithoutAnEnd(t *testing.T) {
+	ics := BuildICS([]models.Event{{
+		ID: "ev-allday-1", Title: "Rest day", Kind: models.EventKindOther, AllDay: true,
+		StartsAt: at("2026-07-06T00:00:00Z"),
+	}})
+
+	if !strings.Contains(ics, "DTEND;VALUE=DATE:20260707\r\n") {
+		t.Errorf("a one-day all-day event must end on the next day:\n%s", ics)
 	}
 }
