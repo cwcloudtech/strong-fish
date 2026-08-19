@@ -334,3 +334,32 @@ class _WebViewPageState extends State<WebViewPage> {
     );
   }
 }
+
+/// The platform's own audio controls, in a minimal page.
+///
+/// Flutter has no audio element, and a plugin for play/pause alone would be a
+/// dependency to carry forever - the WebView is already here for video.
+class AudioWebView extends StatefulWidget {
+  final String url;
+
+  const AudioWebView({super.key, required this.url});
+
+  @override
+  State<AudioWebView> createState() => _AudioWebViewState();
+}
+
+class _AudioWebViewState extends State<AudioWebView> {
+  late final WebViewController _controller = WebViewController()
+    ..setJavaScriptMode(JavaScriptMode.unrestricted)
+    ..setBackgroundColor(Colors.transparent)
+    ..loadHtmlString(
+      '<!DOCTYPE html><html><head>'
+      '<meta name="viewport" content="width=device-width, initial-scale=1">'
+      '<style>html,body{margin:0;background:transparent}'
+      'audio{width:100%;height:44px}</style></head>'
+      '<body><audio src="${widget.url}" controls preload="metadata"></audio></body></html>',
+    );
+
+  @override
+  Widget build(BuildContext context) => WebViewWidget(controller: _controller);
+}

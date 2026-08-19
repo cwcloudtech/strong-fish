@@ -720,6 +720,18 @@ button {
 .sf-conversation:hover { background-color: var(--sf-bg-alt); }
 .sf-conversation.active { background-color: var(--sf-primary-tint); }
 
+/* An unread thread: a coloured edge and a heavier line, so a long list is
+   scannable at a glance rather than one badge at a time. Weight rather than a
+   background, which the active row already uses - the two are different
+   questions and both can be true at once. */
+.sf-conversation.unread {
+  border-left: 3px solid var(--sf-danger);
+  padding-left: calc(var(--sf-spacing-sm) - 3px);
+}
+
+.sf-conversation.unread .sf-conversation-name { font-weight: 700; }
+.sf-conversation.unread .sf-conversation-preview { color: var(--sf-text); font-weight: 500; }
+
 .sf-conversation-body {
   display: flex;
   flex-direction: column;
@@ -1903,3 +1915,70 @@ button {
   font-size: 0.9rem;
   cursor: default;
 }
+
+/* --- message media --- */
+
+.sf-bubble-picture,
+.sf-bubble-audio {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  border-radius: var(--sf-radius-sm);
+}
+
+.sf-bubble-picture { max-height: 320px; object-fit: cover; }
+.sf-bubble-audio { min-width: 220px; }
+.sf-bubble media-player { display: block; margin-top: 6px; }
+
+.sf-thread-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-spacing-xs);
+}
+
+.sf-voice-timer { font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+.sf-voice-error { font-size: 0.8rem; }
+.sf-voice-preview { height: 34px; max-width: 220px; }
+
+.sf-thread-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-spacing-xs);
+  padding: 0 var(--sf-spacing-sm) var(--sf-spacing-sm);
+}
+
+.sf-thread-attachment { position: relative; }
+
+.sf-thread-attachment img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--sf-radius-sm);
+}
+
+.sf-thread-attachment button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  background-color: rgba(15, 23, 42, 0.7);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* The person a thread is with, as one target: avatar and name together, since
+   clicking either means the same thing. */
+.sf-thread-who {
+  display: flex;
+  align-items: center;
+  gap: var(--sf-spacing-sm);
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+}
+
+.sf-thread-who strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.sf-thread-who:hover strong { color: var(--sf-primary); text-decoration: underline; }

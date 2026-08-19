@@ -10,6 +10,7 @@ import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/media_player.dart';
+import '../widgets/social_share.dart';
 
 /// The feed: posts from the people you follow, your own, and your clubs'.
 /// "Discover" switches to every public post, which is what a new account needs
@@ -234,6 +235,33 @@ class _PostCard extends ConsumerWidget {
                         }
                       }
                     },
+                  ),
+                // Only a public post can be shared: a club-only post's link
+                // would 404 for whoever opened it.
+                if (post.visibility == 'public')
+                  IconButton(
+                    icon: const Icon(Icons.share_outlined),
+                    tooltip: ref.read(tProvider)('share.label'),
+                    onPressed: () => showModalBottomSheet<void>(
+                      context: context,
+                      showDragHandle: true,
+                      builder: (_) => SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(ref.read(tProvider)('share.label')),
+                              const SizedBox(height: 8),
+                              SocialShareRow(
+                                url: '${ref.read(apiProvider).client.frontendUrl}/posts/${post.id}',
+                                text: shareTextFor(post.content, ref.read(tProvider)('share.postText')),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 TextButton.icon(
                   icon: const Icon(Icons.mode_comment_outlined),

@@ -5,6 +5,8 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'public_profile_screen.dart';
+import '../widgets/media_player.dart';
 
 /// The list of private conversations.
 ///
@@ -42,14 +44,25 @@ class MessagesScreen extends ConsumerWidget {
             separatorBuilder: (context, index) => const Divider(height: 1),
             itemBuilder: (context, index) {
               final conversation = list[index];
+              final unread = conversation.unread > 0;
               return ListTile(
+                // An unread thread carries weight and a tint, not just a
+                // badge: a badge down the right is easy to miss when scanning
+                // a long list for what still needs you.
+                tileColor: unread ? colors.primaryTint.withValues(alpha: 0.35) : null,
                 leading: SfAvatar.of(conversation.other),
-                title: Text('${conversation.other.name} ${conversation.other.surname}'.trim()),
+                title: Text(
+                  '${conversation.other.name} ${conversation.other.surname}'.trim(),
+                  style: TextStyle(fontWeight: unread ? FontWeight.w700 : FontWeight.w500),
+                ),
                 subtitle: Text(
                   conversation.lastMessage,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colors.textMuted),
+                  style: TextStyle(
+                    color: unread ? colors.text : colors.textMuted,
+                    fontWeight: unread ? FontWeight.w500 : FontWeight.w400,
+                  ),
                 ),
                 trailing: conversation.unread > 0
                     ? Badge(label: Text('${conversation.unread}'))
@@ -228,38 +241,87 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
   }
 }
 
-class _Bubble extends StatelessWidget {
+class _Bubble extends ConsumerWidget {
   final PrivateMessage message;
 
   const _Bubble({required this.message});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = AppColors.of(context);
 
-    return Align(
-      alignment: message.mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
-        decoration: BoxDecoration(
-          color: message.mine ? colors.primaryTint : colors.backgroundMuted,
-          borderRadius: BorderRadius.circular(AppRadius.value),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(message.content),
-            const SizedBox(height: 2),
-            Text(
-              _time(message.createdAt),
-              style: TextStyle(color: colors.textMuted, fontSize: 11),
-            ),
+    final bubble = Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+      decoration: BoxDecoration(
+        color: message.mine ? colors.primaryTint : colors.backgroundMuted,
+        borderRadius: BorderRadius.circular(AppRadius.value),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (message.content.isNotEmpty) Text(message.content),
+          for (final picture in message.pictures) ...[
+            const SizedBox(height: 6),
+            SfBase64Image(data: picture),
           ],
-        ),
+          if (message.audio.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            AudioBubble(url: message.audio),
+          ],
+          // The same players the feed renders, so a link shared in a thread
+          // behaves like one shared publicly.
+          for (final link in message.links) ...[
+            const SizedBox(height: 6),
+            MediaPlayer(url: link, baseUrl: ref.read(apiProvider).client.apiUrl),
+          ],
+          const SizedBox(height: 2),
+          Text(
+            _time(message.createdAt),
+            style: TextStyle(color: colors.textMuted, fontSize: 11),
+          ),
+        ],
       ),
     );
+
+    // Your own messages need no avatar - you know who you are. The other
+    // side's carries one on every message, and tapping it opens their profile,
+    // which is the gesture every messenger has trained people to expect.
+    if (message.mine) {
+      return Align(alignment: Alignment.centerRight, child: bubble);
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 8, bottom: 8),
+          child: GestureDetector(
+            onTap: () => _openProfile(context, ref),
+            child: SfAvatar.of(message.sender, radius: 16),
+          ),
+        ),
+        Flexible(child: bubble),
+      ],
+    );
+  }
+
+  /// Opens the sender's profile, when there is one to open.
+  ///
+  /// A handle is the app's own signal that a profile is reachable: the API
+  /// leaves it out of a summary the caller may not read, so its absence is the
+  /// answer rather than something to discover by navigating and failing.
+  void _openProfile(BuildContext context, WidgetRef ref) {
+    if (message.sender.handle.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ref.read(tProvider)('profile.notVisible'))),
+      );
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PublicProfileScreen(handle: message.sender.handle),
+    ));
   }
 
   String _time(DateTime at) =>

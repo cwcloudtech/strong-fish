@@ -25,6 +25,18 @@ var videoContentTypes = map[string]string{
 	"video/quicktime": ".mov",
 }
 
+// audioContentTypes are the containers a browser can play back. A voice
+// message recorded in a browser arrives as webm or mp4 depending on the engine;
+// the rest are here because a phone may record them.
+var audioContentTypes = map[string]string{
+	"audio/webm": ".webm",
+	"audio/ogg":  ".ogg",
+	"audio/mp4":  ".m4a",
+	"audio/mpeg": ".mp3",
+	"audio/aac":  ".aac",
+	"audio/wav":  ".wav",
+}
+
 // MediaHandler uploads a member's video to the object store they configured
 // for themselves (see package storage). strong-fish stores no video of its
 // own; what comes back is a URL, which the client pastes into the post it is
@@ -32,10 +44,11 @@ var videoContentTypes = map[string]string{
 type MediaHandler struct {
 	users        *store.UserStore
 	maxVideoSize int64
+	maxAudioSize int64
 }
 
-func NewMediaHandler(users *store.UserStore, maxVideoSize int64) *MediaHandler {
-	return &MediaHandler{users: users, maxVideoSize: maxVideoSize}
+func NewMediaHandler(users *store.UserStore, maxVideoSize, maxAudioSize int64) *MediaHandler {
+	return &MediaHandler{users: users, maxVideoSize: maxVideoSize, maxAudioSize: maxAudioSize}
 }
 
 // UploadVideo stores one video and returns its public URL.
@@ -43,7 +56,23 @@ func NewMediaHandler(users *store.UserStore, maxVideoSize int64) *MediaHandler {
 // With no storage connection configured it answers 405, not 400: the request
 // is well-formed, the method simply isn't available on this account until the
 // member points it at a bucket. That is the status the client toasts.
+// UploadAudio stores a voice message. Same storage, same refusal when none is
+// configured - the only differences are the accepted types and a smaller cap,
+// since a spoken message is a fraction of a video's size and letting it use the
+// video budget would just invite a 20MB recording nobody wants to wait for.
+func (h *MediaHandler) UploadAudio(w http.ResponseWriter, r *http.Request) {
+	h.upload(w, r, audioContentTypes, h.maxAudioSize, "voice")
+}
+
 func (h *MediaHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
+	h.upload(w, r, videoContentTypes, h.maxVideoSize, "video")
+}
+
+// upload is the shared path: check the member has storage, bound the transfer,
+// accept only a type that can be played back, and hand the bytes to their own
+// bucket.
+func (h *MediaHandler) upload(w http.ResponseWriter, r *http.Request,
+	accepted map[string]string, maxSize int64, kind string) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
 	user, err := h.users.FindByID(r.Context(), userID)
@@ -60,7 +89,7 @@ func (h *MediaHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	// The limit is enforced twice: MaxBytesReader stops the transfer at the
 	// cap rather than buffering a gigabyte to find out it was too big, and the
 	// explicit length check is what produces a message the member can act on.
-	r.Body = http.MaxBytesReader(w, r.Body, h.maxVideoSize+1024)
+	r.Body = http.MaxBytesReader(w, r.Body, maxSize+1024)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		writeError(w, http.StatusRequestEntityTooLarge, "This video is too large", CodeVideoTooLarge)
 		return
@@ -73,24 +102,24 @@ func (h *MediaHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	if header.Size > h.maxVideoSize {
+	if header.Size > maxSize {
 		writeError(w, http.StatusRequestEntityTooLarge, "This video is too large", CodeVideoTooLarge)
 		return
 	}
 
 	contentType := strings.ToLower(strings.TrimSpace(strings.Split(header.Header.Get("Content-Type"), ";")[0]))
-	extension, ok := videoContentTypes[contentType]
+	extension, ok := accepted[contentType]
 	if !ok {
-		writeError(w, http.StatusBadRequest, "This file is not a video a browser can play", CodeUnsupportedVideo)
+		writeError(w, http.StatusBadRequest, "This file is not something a browser can play", CodeUnsupportedVideo)
 		return
 	}
 
-	data, err := io.ReadAll(io.LimitReader(file, h.maxVideoSize+1))
+	data, err := io.ReadAll(io.LimitReader(file, maxSize+1))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Could not read the uploaded file", CodeInvalidRequestBody)
 		return
 	}
-	if int64(len(data)) > h.maxVideoSize {
+	if int64(len(data)) > maxSize {
 		writeError(w, http.StatusRequestEntityTooLarge, "This video is too large", CodeVideoTooLarge)
 		return
 	}
@@ -101,7 +130,7 @@ func (h *MediaHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url, err := target.Upload(r.Context(), videoKey(userID, header.Filename, extension), data, contentType)
+	url, err := target.Upload(r.Context(), mediaKey(userID, kind, header.Filename, extension), data, contentType)
 	if err != nil {
 		// The member's own bucket rejected this, so the message is theirs to
 		// act on - a wrong key, a missing bucket, ACLs disabled - and saying
@@ -112,25 +141,25 @@ func (h *MediaHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]string{"url": url})
 }
 
-// videoKey is where the object is written: one folder per member, and a random
-// name carrying the original's extension.
+// mediaKey is where the object is written: one folder per member and kind, and
+// a random name carrying the original's extension.
 //
 // The uploaded filename is deliberately not reused - it is attacker-controlled
 // text going into a URL path - beyond taking a short, slugified hint from it so
 // a bucket's listing is still readable by a human.
-func videoKey(userID, filename, extension string) string {
+func mediaKey(userID, kind, filename, extension string) string {
 	hint := utils.Slugify(strings.TrimSuffix(path.Base(filename), path.Ext(filename)))
 	if len(hint) > 40 {
 		hint = hint[:40]
 	}
 	if utils.IsBlank(hint) {
-		hint = "video"
+		hint = kind
 	}
 	random, err := utils.RandomHex(8)
 	if err != nil {
 		random = "0"
 	}
-	return fmt.Sprintf("strong-fish/%s/%s-%s%s", userID, hint, random, extension)
+	return fmt.Sprintf("strong-fish/%s/%s/%s-%s%s", userID, kind, hint, random, extension)
 }
 
 // --- the member's own storage connection ---

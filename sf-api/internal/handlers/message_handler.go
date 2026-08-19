@@ -15,7 +15,12 @@ import (
 
 // maxMessageLength bounds one private message. Long enough for a paragraph of
 // coaching, short enough that a thread stays a conversation.
-const maxMessageLength = 4000
+const (
+	maxMessageLength = 4000
+	// The same cap a post has: pictures ride inline in the JSONB payload, so
+	// this is also what keeps a row from growing without bound.
+	maxMessagePictures = 4
+)
 
 // MessageHandler is private messaging, and the block list that governs it.
 //
@@ -24,13 +29,15 @@ const maxMessageLength = 4000
 // at, and having one setting mean two things is better than asking them the
 // same question twice.
 type MessageHandler struct {
-	messages *store.MessageStore
-	users    *store.UserStore
-	profile  *ProfileHandler
+	messages     *store.MessageStore
+	users        *store.UserStore
+	maxImageSize int64
+	profile      *ProfileHandler
 }
 
-func NewMessageHandler(messages *store.MessageStore, users *store.UserStore, profile *ProfileHandler) *MessageHandler {
-	return &MessageHandler{messages: messages, users: users, profile: profile}
+func NewMessageHandler(messages *store.MessageStore, users *store.UserStore, profile *ProfileHandler,
+	maxImageSize int64) *MessageHandler {
+	return &MessageHandler{messages: messages, users: users, profile: profile, maxImageSize: maxImageSize}
 }
 
 func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +142,12 @@ func (h *MessageHandler) Thread(w http.ResponseWriter, r *http.Request) {
 }
 
 type messagePayload struct {
-	Content string `json:"content"`
+	Content  string   `json:"content"`
+	Pictures []string `json:"pictures"`
+	// Audio is a voice message's URL, returned by the upload endpoint. The
+	// caller supplies it because that upload went to their own storage, which
+	// this API never holds a copy of.
+	Audio string `json:"audio"`
 }
 
 func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
@@ -147,13 +159,33 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.Content = strings.TrimSpace(p.Content)
-	if utils.IsBlank(p.Content) {
-		writeError(w, http.StatusBadRequest, "A message needs some text", CodeEmptyMessage)
-		return
-	}
 	if len(p.Content) > maxMessageLength {
 		writeError(w, http.StatusBadRequest, "This message is too long", CodeEmptyMessage)
 		return
+	}
+	// A message needs *something* in it - but a picture or a voice message is
+	// something, so text is no longer the only way to have said anything.
+	if utils.IsBlank(p.Content) && len(p.Pictures) == 0 && utils.IsBlank(p.Audio) {
+		writeError(w, http.StatusBadRequest, "A message needs some text", CodeEmptyMessage)
+		return
+	}
+	if len(p.Pictures) > maxMessagePictures {
+		writeError(w, http.StatusBadRequest, "Too many pictures on this message", CodeEmptyMessage)
+		return
+	}
+	for _, picture := range p.Pictures {
+		if utils.ImageSizeExceeds(picture, h.maxImageSize) {
+			writeError(w, http.StatusBadRequest, "One of the pictures is too large", CodeImageTooLarge)
+			return
+		}
+	}
+
+	// Derived from the text, exactly as a post's is: whatever URL the sender
+	// pasted is the message's embed, so a video shared in a thread renders the
+	// way one shared in the feed does.
+	var links []string
+	if link := utils.FirstURL(p.Content); utils.IsNotBlank(link) {
+		links = []string{link}
 	}
 
 	// Re-checked on every send, not just when the thread was opened: somebody
@@ -168,7 +200,9 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, err := h.messages.Send(r.Context(), conversationID, callerID, p.Content)
+	message, err := h.messages.Send(r.Context(), conversationID, callerID, store.MessageFields{
+		Content: p.Content, Pictures: p.Pictures, Links: links, Audio: p.Audio,
+	})
 	if err != nil {
 		writeStoreError(w, err)
 		return

@@ -585,6 +585,16 @@ class PrivateMessage {
   final User sender;
   final String content;
 
+  /// Pictures carried inline as base64 data URIs, the way a post's are.
+  final List<String> pictures;
+
+  /// Derived from the content by the API: whatever URL was pasted is the
+  /// message's embed, so a video shared here plays like one shared in the feed.
+  final List<String> links;
+
+  /// A voice message's URL, in the sender's own storage.
+  final String audio;
+
   /// Whether this side wrote it - which is all the UI needs to decide where to
   /// draw the bubble.
   final bool mine;
@@ -595,6 +605,9 @@ class PrivateMessage {
     this.senderId = '',
     this.sender = const User(id: ''),
     this.content = '',
+    this.pictures = const [],
+    this.links = const [],
+    this.audio = '',
     this.mine = false,
     required this.createdAt,
   });
@@ -606,6 +619,9 @@ class PrivateMessage {
             ? json['sender'] as Map<String, dynamic>
             : const {}),
         content: _toString(json['content']),
+        pictures: _toStringList(json['pictures']),
+        links: _toStringList(json['links']),
+        audio: _toString(json['audio']),
         mine: json['mine'] == true,
         createdAt: _toDate(json['createdAt']).toLocal(),
       );

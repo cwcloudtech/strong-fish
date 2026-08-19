@@ -42,6 +42,7 @@ type Config struct {
 	ActivationMode           string
 	MobileURLPattern         string
 	MaxVideoSize             int64
+	MaxAudioSize             int64
 	// OTELEndpoint is the single collector traces, logs and metrics are all
 	// pushed to. Blank disables export - logs still go to stdout/stderr, and
 	// /v1/metrics still serves, so a deployment with no collector is fully
@@ -71,6 +72,10 @@ const (
 	// this is about what is reasonable to push through the API, not about what
 	// a row can hold.
 	defaultMaxVideoSize int64 = 20 * 1024 * 1024
+	// defaultMaxAudioSize caps one voice message. Far below the video cap: a
+	// spoken message is a fraction of the size, and sharing the video budget
+	// would only invite a 20MB recording nobody wants to wait for.
+	defaultMaxAudioSize int64 = 5 * 1024 * 1024
 	// defaultPlateIncrement is the weight step computed loads are rounded to
 	// for the "on the bar" column: 2.5kg is one small plate per side.
 	defaultPlateIncrement = 2.5
@@ -114,6 +119,11 @@ func Load() Config {
 	maxVideoSize, err := strconv.ParseInt(os.Getenv("SF_MAX_VIDEO_SIZE"), 10, 64)
 	if err != nil || maxVideoSize <= 0 {
 		maxVideoSize = defaultMaxVideoSize
+	}
+
+	maxAudioSize, err := strconv.ParseInt(os.Getenv("SF_MAX_AUDIO_SIZE"), 10, 64)
+	if err != nil || maxAudioSize <= 0 {
+		maxAudioSize = defaultMaxAudioSize
 	}
 
 	confirmationHours, err := strconv.Atoi(os.Getenv("SF_CONFIRMATION_EMAIL_EXPIRATION"))
@@ -160,6 +170,7 @@ func Load() Config {
 		ActivationMode:           activationMode,
 		MobileURLPattern:         utils.GetEnv("SF_MOBILE_URL_PATTERN", "/strong-fish-v{version}.apk"),
 		MaxVideoSize:             maxVideoSize,
+		MaxAudioSize:             maxAudioSize,
 		OTELEndpoint:             os.Getenv("SF_OTEL_ENDPOINT"),
 		OTELProto:                utils.GetEnv("SF_OTEL_PROTO", "otlp/grpc"),
 		AboutURL:                 utils.GetEnv("SF_ABOUT_URL", "https://doc.strong-fish.com/docs/about"),

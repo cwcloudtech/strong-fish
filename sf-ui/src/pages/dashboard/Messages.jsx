@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiFlag, FiSearch, FiSend, FiSlash, FiUser } from "react-icons/fi";
+import { FiFlag, FiImage, FiSearch, FiSend, FiSlash, FiUser, FiX } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import Avatar from "../../components/common/Avatar";
 import Modal, { ConfirmModal } from "../../components/common/Modal";
 import Tooltip from "../../components/common/Tooltip";
-import { blocks as blocksApi, messages as messagesApi, social } from "../../api/services";
+import { blocks as blocksApi, media as mediaApi, messages as messagesApi, social } from "../../api/services";
+import VoiceRecorder from "../../components/messages/VoiceRecorder";
+import { readImageAsDataUrl } from "../../utils/image";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -75,15 +77,24 @@ export default function Messages() {
               <button
                 type="button"
                 key={conversation.id}
-                className={`sf-conversation ${conversation.other.id === openWith ? "active" : ""}`}
+                // Unread threads carry their own state: the count alone is
+                // easy to miss down the side of a long list, and what somebody
+                // scanning it wants is which rows still need them.
+                className={[
+                  "sf-conversation",
+                  conversation.other.id === openWith ? "active" : "",
+                  conversation.unread ? "unread" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 onClick={() => setParams({ with: conversation.other.id })}
               >
                 <Avatar user={conversation.other} size="sf-avatar-sm" />
                 <span className="sf-conversation-body">
-                  <strong>
+                  <strong className="sf-conversation-name">
                     {conversation.other.name} {conversation.other.surname}
                   </strong>
-                  <span className="sf-muted">{conversation.lastMessage}</span>
+                  <span className="sf-muted sf-conversation-preview">{conversation.lastMessage}</span>
                 </span>
                 {conversation.unread ? <span className="sf-nav-count">{conversation.unread}</span> : null}
               </button>
@@ -108,8 +119,13 @@ function Thread({ userId, onSent }) {
   const { t } = useI18n();
   const [thread, setThread] = useState(null);
   const [draft, setDraft] = useState("");
+  const [pictures, setPictures] = useState([]);
+  // The recording as made, not yet uploaded: discarding one should never leave
+  // a file in the sender's storage.
+  const [recording, setRecording] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const fileInput = useRef(null);
   const [reporting, setReporting] = useState(null);
   const [blocking, setBlocking] = useState(false);
   const bottom = useRef(null);
@@ -134,15 +150,43 @@ function Thread({ userId, onSent }) {
     bottom.current?.scrollIntoView({ block: "end" });
   }, [thread]);
 
+  const addPicture = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      // Read before updating: the updater passed to setPictures is not async,
+      // and awaiting inside it is a syntax error rather than a wait.
+      const dataUrl = await readImageAsDataUrl(file);
+      setPictures((current) => [...current, dataUrl].slice(0, 4));
+    } catch (err) {
+      setError(err.message === "too-large" ? t("errors.imageTooLarge") : err);
+    }
+  };
+
   const send = async (event) => {
     event.preventDefault();
     const content = draft.trim();
-    if (!content) return;
+    if (!content && !pictures.length && !recording) return;
+
     setBusy(true);
+    setError(null);
     try {
-      const message = await messagesApi.send(userId, content);
+      // Uploaded at send time, to the sender's own storage. A 405 here means
+      // they have not configured one, and the error says so.
+      let audio = "";
+      if (recording) {
+        const extension = recording.blob.type.includes("mp4") ? "m4a" : "webm";
+        const uploaded = await mediaApi.uploadAudio(recording.blob, `voice.${extension}`);
+        audio = uploaded.url;
+      }
+
+      const message = await messagesApi.send(userId, { content, pictures, audio });
       setThread((current) => ({ ...current, messages: [...(current?.messages || []), message] }));
       setDraft("");
+      setPictures([]);
+      if (recording?.url) URL.revokeObjectURL(recording.url);
+      setRecording(null);
       onSent();
     } catch (err) {
       setError(err);
@@ -169,10 +213,25 @@ function Thread({ userId, onSent }) {
   return (
     <>
       <div className="sf-thread-header">
-        <Avatar user={thread.other} size="sf-avatar-sm" />
-        <strong style={{ flex: 1, minWidth: 0 }}>
-          {thread.other.name} {thread.other.surname}
-        </strong>
+        {/* The avatar and the name go through to the profile: it is the first
+            thing anybody clicks, and a picture that does nothing reads as
+            broken. Only when there is a handle to go to - a profile you cannot
+            see has no page to open. */}
+        {thread.other.handle ? (
+          <Link className="sf-thread-who" to={`/profile/${thread.other.handle}`}>
+            <Avatar user={thread.other} size="sf-avatar-sm" />
+            <strong>
+              {thread.other.name} {thread.other.surname}
+            </strong>
+          </Link>
+        ) : (
+          <span className="sf-thread-who">
+            <Avatar user={thread.other} size="sf-avatar-sm" />
+            <strong>
+              {thread.other.name} {thread.other.surname}
+            </strong>
+          </span>
+        )}
         {thread.other.handle ? (
           <Tooltip label={t("search.openProfile")}>
             <Link className="sf-icon-button sf-icon-button-plain" to={`/profile/${thread.other.handle}`}>
@@ -201,7 +260,26 @@ function Thread({ userId, onSent }) {
           thread.messages.map((message) => (
             <div key={message.id} className={`sf-bubble-row ${message.mine ? "mine" : ""}`}>
               <div className="sf-bubble">
-                <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{message.content}</p>
+                {message.content ? (
+                  <p style={{ whiteSpace: "pre-wrap", margin: 0 }}>{message.content}</p>
+                ) : null}
+
+                {(message.pictures || []).map((picture, index) => (
+                  <img key={index} className="sf-bubble-picture" src={picture} alt="" />
+                ))}
+
+                {/* A voice message plays where it sits - the browser's own
+                    controls, no player to build. */}
+                {message.audio ? (
+                  <audio className="sf-bubble-audio" src={message.audio} controls preload="metadata" />
+                ) : null}
+
+                {/* The same detection the feed uses, so a video shared in a
+                    thread renders as a player rather than as a bare URL. */}
+                {(message.links || []).map((link) => (
+                  <media-player key={link} url={link} />
+                ))}
+
                 <span className="sf-bubble-time">
                   {new Date(message.createdAt).toLocaleString()}
                 </span>
@@ -243,10 +321,47 @@ function Thread({ userId, onSent }) {
             }
           }}
         />
-        <button className="sf-button" type="submit" disabled={busy || !draft.trim()}>
-          <FiSend /> {t("messages.send")}
-        </button>
+
+        <div className="sf-thread-tools">
+          <button
+            type="button"
+            className="sf-button-ghost"
+            onClick={() => fileInput.current?.click()}
+            disabled={pictures.length >= 4}
+            aria-label={t("feed.addPicture")}
+          >
+            <FiImage />
+          </button>
+          <input ref={fileInput} type="file" accept="image/*" hidden onChange={addPicture} />
+
+          <VoiceRecorder recording={recording} onRecordingChange={setRecording} disabled={busy} />
+
+          <button
+            className="sf-button"
+            type="submit"
+            disabled={busy || (!draft.trim() && !pictures.length && !recording)}
+          >
+            <FiSend /> {t("messages.send")}
+          </button>
+        </div>
       </form>
+
+      {pictures.length ? (
+        <div className="sf-thread-attachments">
+          {pictures.map((picture, index) => (
+            <span key={index} className="sf-thread-attachment">
+              <img src={picture} alt="" />
+              <button
+                type="button"
+                onClick={() => setPictures((current) => current.filter((_, i) => i !== index))}
+                aria-label={t("common.delete")}
+              >
+                <FiX />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {reporting ? (
         <ReportMessageModal

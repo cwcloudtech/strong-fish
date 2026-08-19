@@ -384,6 +384,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			// Uploading a video is a write, so it needs a session even though
 			// reading the calendar doesn't.
 			r.Post("/media/videos", h.Media.UploadVideo)
+			r.Post("/media/audio", h.Media.UploadAudio)
 
 			// Registered as leaves, not as an r.Route subrouter: the calendar
 			// is readable logged out, so "/events" already carries a GET in

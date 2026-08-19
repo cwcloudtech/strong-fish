@@ -121,6 +121,7 @@ const fr = {
     birthdate: "Date de naissance",
     birthdateHelp:
       "Une fois renseignée, les membres de vos clubs qui peuvent voir votre profil retrouvent votre anniversaire dans leur calendrier.",
+    notVisible: "Ce profil ne vous est pas visible.",
     bests: "Records",
     total: "Total",
     followers: "Abonnés",
@@ -663,6 +664,10 @@ const fr = {
     title: "Messages",
     current: "Conversations",
     findSomeone: "Trouver quelqu'un",
+    record: "Enregistrer un message vocal",
+    stopRecording: "Arrêter l'enregistrement",
+    recordingUnsupported: "Ce navigateur ne peut pas enregistrer d'audio.",
+    microphoneDenied: "L'accès au microphone a été refusé.",
     subtitle: "Conversations privées avec les membres que vous pouvez voir.",
     message: "Envoyer un message",
     send: "Envoyer",

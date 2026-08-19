@@ -181,6 +181,7 @@ var routes = []struct{ method, path string }{
 	{"DELETE", "/v1/blocks/user-1"},
 
 	{"POST", "/v1/media/videos"},
+	{"POST", "/v1/media/audio"},
 
 	{"GET", "/v1/events"},
 	{"POST", "/v1/events"},
