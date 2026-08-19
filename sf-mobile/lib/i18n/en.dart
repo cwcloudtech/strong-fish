@@ -610,7 +610,7 @@ const Map<String, dynamic> en = {
     'help': 'Downloads the new build and hands it to Android to install. You stay signed in.',
     'install': 'Update',
     'downloading': 'Downloading the update...',
-    'failed': 'The update could not be installed.',
+    'failed': 'The update could not be downloaded or installed. Please try again later.',
   },
   'storage': {
     'title': 'Video storage',

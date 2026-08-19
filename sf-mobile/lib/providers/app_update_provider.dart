@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
@@ -17,16 +19,17 @@ import 'package:path_provider/path_provider.dart';
 /// `flutter build apk --dart-define=SF_UPDATE_URL=https://strong-fish.example`.
 const _updateBaseUrl = String.fromEnvironment(
   'SF_UPDATE_URL',
-  defaultValue: 'https://api.strong-fish.com',
+  defaultValue: 'https://www.strong-fish.com',
 );
-const _downloadBaseUrl = String.fromEnvironment(
-  'SF_DOWNLOAD_URL',
-  defaultValue: 'https://strong-fish.com',
-);
-
+String get _mobileAppUrl => '$_updateBaseUrl/v1/mobile-app';
 String get _manifestUrl => '$_updateBaseUrl/v1/manifest';
 
-String _apkUrl(String version) => '$_downloadBaseUrl/strong-fish-v$version.apk';
+/// An APK is a ZIP, so it starts with ZIP's local file header. Checking those
+/// four bytes is what tells a real download apart from an error page saved
+/// under an .apk name - which is how a wrong URL used to surface, as Android
+/// refusing the file with "there's a problem with the app file" long after the
+/// actual mistake.
+const _zipMagic = [0x50, 0x4B, 0x03, 0x04];
 
 /// Compares dotted version strings segment by segment and numerically, with
 /// missing segments read as 0.
@@ -49,14 +52,32 @@ int compareVersions(String a, String b) {
 class AppUpdateState {
   /// The newer version on offer, or null when this build is current.
   final String? availableVersion;
+
+  /// Where to download it, as the server named it. Not built here from a
+  /// hardcoded host: the APK is served by the frontend, whose address the
+  /// deployment configures, and a second guess at it in this file is exactly
+  /// what silently broke - it said strong-fish.com while the build was
+  /// published at www.strong-fish.com.
+  final String? downloadUrl;
   final bool downloading;
   final double progress;
 
-  const AppUpdateState({this.availableVersion, this.downloading = false, this.progress = 0});
+  const AppUpdateState({
+    this.availableVersion,
+    this.downloadUrl,
+    this.downloading = false,
+    this.progress = 0,
+  });
 
-  AppUpdateState copyWith({String? availableVersion, bool? downloading, double? progress}) =>
+  AppUpdateState copyWith({
+    String? availableVersion,
+    String? downloadUrl,
+    bool? downloading,
+    double? progress,
+  }) =>
       AppUpdateState(
         availableVersion: availableVersion ?? this.availableVersion,
+        downloadUrl: downloadUrl ?? this.downloadUrl,
         downloading: downloading ?? this.downloading,
         progress: progress ?? this.progress,
       );
@@ -73,13 +94,29 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
 
   Future<void> checkForUpdate() async {
     try {
-      final response = await Dio().get<Map<String, dynamic>>(_manifestUrl);
-      final remote = response.data?['version'] as String?;
-      if (remote == null) return;
+      // The API reports both the published version and the URL it is published
+      // at, built from the same settings the web app's download link uses. That
+      // is the point: one source of truth, so the two cannot drift.
+      String? remote;
+      String? url;
+
+      try {
+        final response = await Dio().get<Map<String, dynamic>>(_mobileAppUrl);
+        remote = response.data?['version'] as String?;
+        url = response.data?['url'] as String?;
+      } on DioException {
+        // An older deployment has no /v1/mobile-app. Fall back to the manifest
+        // for the version; without a URL there is nothing to download, so no
+        // button is offered rather than one that cannot work.
+        final manifest = await Dio().get<Map<String, dynamic>>(_manifestUrl);
+        remote = manifest.data?['version'] as String?;
+      }
+
+      if (remote == null || url == null || url.isEmpty) return;
 
       final info = await PackageInfo.fromPlatform();
       if (compareVersions(remote, info.version) > 0) {
-        state = state.copyWith(availableVersion: remote);
+        state = state.copyWith(availableVersion: remote, downloadUrl: url);
       }
     } catch (_) {
       // Silent on purpose. A failed or offline check simply shows no upgrade
@@ -90,21 +127,32 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
 
   Future<void> downloadAndInstall() async {
     final version = state.availableVersion;
-    if (version == null || state.downloading) return;
+    final url = state.downloadUrl;
+    if (version == null || url == null || state.downloading) return;
 
     state = state.copyWith(downloading: true, progress: 0);
     try {
       final directory = await getTemporaryDirectory();
-      final path = '${directory.path}/strong-fish-v$version.apk';
+      final file = File('${directory.path}/strong-fish-v$version.apk');
       await Dio().download(
-        _apkUrl(version),
-        path,
+        url,
+        file.path,
         onReceiveProgress: (received, total) {
           if (total > 0) state = state.copyWith(progress: received / total);
         },
       );
 
-      final result = await OpenFilex.open(path);
+      // A 200 is not proof of an APK. A misconfigured host answers a missing
+      // file with an HTML page, which downloads perfectly happily and then
+      // fails at the installer with a message pointing nowhere near the cause.
+      // Checking here fails at the step that is actually wrong.
+      final head = await file.openRead(0, _zipMagic.length).expand((bytes) => bytes).toList();
+      if (!_listEquals(head, _zipMagic)) {
+        await file.delete();
+        throw Exception('The download from $url is not an installable package');
+      }
+
+      final result = await OpenFilex.open(file.path);
       if (result.type != ResultType.done) {
         throw Exception(result.message);
       }
@@ -115,3 +163,11 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
 }
 
 final appUpdateProvider = NotifierProvider<AppUpdateNotifier, AppUpdateState>(AppUpdateNotifier.new);
+
+bool _listEquals(List<int> a, List<int> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
