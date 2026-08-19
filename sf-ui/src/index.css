@@ -2141,7 +2141,10 @@ a.sf-thread-who:hover strong { color: var(--sf-primary); text-decoration: underl
 
 .sf-select-panel {
   position: fixed;
-  z-index: 1300;
+  /* Above the modal backdrop (2000), because these fields mostly live inside
+     modals - assigning a program, copying one, composing an event. Below the
+     tooltip layer (3000), which should still be able to sit over one. */
+  z-index: 2500;
   display: flex;
   flex-direction: column;
   gap: 6px;

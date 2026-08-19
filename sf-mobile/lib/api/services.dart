@@ -90,6 +90,32 @@ class SfApi {
   Future<List<Program>> programs(String clubId) async =>
       _list((await client.dio.get('/clubs/$clubId/programs')).data).map(Program.fromJson).toList();
 
+  /// The club's roster, for choosing who to hand a program to.
+  Future<List<ClubMember>> clubMembers(String clubId) async =>
+      _list((await client.dio.get('/clubs/$clubId/members')).data).map(ClubMember.fromJson).toList();
+
+  /// Hands a program to one or more members in a single request.
+  ///
+  /// Plural because a coach starting a block runs it with a group: the API
+  /// checks every member before writing any assignment, so a refusal leaves
+  /// nobody half-assigned.
+  Future<int> assignProgram(
+    String clubId,
+    String programId, {
+    required List<String> userIds,
+    String startDate = '',
+    String note = '',
+  }) async {
+    final base = clubId.isEmpty ? '/programs' : '/clubs/$clubId/programs';
+    final response = await client.dio.post('$base/$programId/assignments', data: {
+      'userIds': userIds,
+      if (startDate.isNotEmpty) 'startDate': startDate,
+      if (note.isNotEmpty) 'note': note,
+    });
+    final data = response.data;
+    return data is List ? data.length : 1;
+  }
+
   Future<Program> createProgram(String clubId, String name, String description) async {
     final response = await client.dio
         .post('/clubs/$clubId/programs', data: {'name': name, 'description': description});

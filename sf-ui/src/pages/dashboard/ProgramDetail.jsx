@@ -13,6 +13,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import Select from "../../components/common/Select";
 import Switch from "../../components/common/Switch";
+import MultiSelect from "../../components/common/MultiSelect";
 
 /**
  * A program as its coach sees it: the sessions, and who is running it.
@@ -239,16 +240,19 @@ export default function ProgramDetail() {
           <div className="sf-row-between">
             <div className="sf-field" style={{ margin: 0, minWidth: 220 }}>
               <label className="sf-label">{t("programs.viewAs")}</label>
-              <select className="sf-select" value={viewAs} onChange={(event) => setViewAs(event.target.value)}>
-                <option value="">{t("programs.myself")}</option>
-                {members
-                  .filter((member) => member.userId !== user?.id)
-                  .map((member) => (
-                    <option key={member.userId} value={member.userId}>
-                      {member.name} {member.surname}
-                    </option>
-                  ))}
-              </select>
+              <Select
+                options={[
+                  { value: "", label: t("programs.myself") },
+                  ...members
+                    .filter((member) => member.userId !== user?.id)
+                    .map((member) => ({
+                      value: member.userId,
+                      label: `${member.name} ${member.surname}`.trim() || member.email,
+                    })),
+                ]}
+                value={viewAs}
+                onChange={setViewAs}
+              />
             </div>
           </div>
 
@@ -383,7 +387,10 @@ export default function ProgramDetail() {
 
 function AssignModal({ clubId, programId, members, assigned, onClose, onAssigned }) {
   const { t } = useI18n();
-  const [userId, setUserId] = useState("");
+  // Several at once: a coach starting a block runs it with a group, and
+  // reopening this modal once per athlete is the kind of repetition that stops
+  // people assigning it at all.
+  const [userIds, setUserIds] = useState([]);
   const [startDate, setStartDate] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState(null);
@@ -393,7 +400,7 @@ function AssignModal({ clubId, programId, members, assigned, onClose, onAssigned
     setBusy(true);
     setError(null);
     try {
-      await programsApi.assign(clubId, programId, { userId, startDate, note });
+      await programsApi.assign(clubId, programId, { userIds, startDate, note });
       onAssigned();
     } catch (err) {
       setError(err);
@@ -412,22 +419,25 @@ function AssignModal({ clubId, programId, members, assigned, onClose, onAssigned
           <button className="sf-button sf-button-secondary" onClick={onClose}>
             {t("common.cancel")}
           </button>
-          <button className="sf-button" onClick={submit} disabled={busy || !userId}>
-            {t("programs.assign")}
+          <button className="sf-button" onClick={submit} disabled={busy || userIds.length === 0}>
+            {userIds.length > 1 ? t("programs.assignCount", { count: userIds.length }) : t("programs.assign")}
           </button>
         </>
       }
     >
       <div className="sf-field">
-        <label className="sf-label">{t("clubs.member")}</label>
-        <select className="sf-select" value={userId} onChange={(event) => setUserId(event.target.value)}>
-          <option value="">{t("common.none")}</option>
-          {available.map((member) => (
-            <option key={member.userId} value={member.userId}>
-              {member.name} {member.surname} ({member.email})
-            </option>
-          ))}
-        </select>
+        <label className="sf-label">{t("clubs.members")}</label>
+        <MultiSelect
+          options={available.map((member) => ({
+            value: member.userId,
+            // The email is in the label so the search finds people by it, and
+            // so two members with the same name are still told apart.
+            label: `${member.name} ${member.surname} (${member.email})`.trim(),
+          }))}
+          selected={userIds}
+          onChange={setUserIds}
+          placeholder={t("programs.pickMembers")}
+        />
       </div>
       <div className="sf-field">
         <label className="sf-label">

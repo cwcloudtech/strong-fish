@@ -700,9 +700,27 @@ func (h *ProgramHandler) DeleteSet(w http.ResponseWriter, r *http.Request) {
 // --- assignments ---
 
 type assignPayload struct {
+	// UserIDs are everybody the program is being handed to. A coach starting a
+	// block runs it with a group, not with one person at a time.
+	UserIDs []string `json:"userIds"`
+	// UserID is the singular form an older client sends; folded into UserIDs.
 	UserID    string `json:"userId"`
 	StartDate string `json:"startDate"`
 	Note      string `json:"note"`
+}
+
+// targets folds the two forms into one list, without duplicates.
+func (p assignPayload) targets() []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(p.UserIDs)+1)
+	for _, id := range append(append([]string{}, p.UserIDs...), p.UserID) {
+		if utils.IsBlank(id) || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }
 
 // Assign hands a program to a member of the club.
@@ -714,37 +732,50 @@ func (h *ProgramHandler) Assign(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &p) {
 		return
 	}
-	if utils.IsBlank(p.UserID) {
+	members := p.targets()
+	if len(members) == 0 {
 		writeError(w, http.StatusBadRequest, "Please add a user id", CodeAllFieldsRequired)
 		return
 	}
-	// A program of somebody's own has no club to be a member of, so the rule
-	// there is simply that it is theirs: an athlete running their own block,
-	// or a coach following the one they wrote for themselves.
-	if utils.IsBlank(clubID) {
-		callerID, _ := middleware.UserIDFromContext(r.Context())
-		if p.UserID != callerID {
-			writeError(w, http.StatusForbidden,
-				"A personal program can only be assigned to yourself", CodeForbidden)
-			return
+	// Everybody is checked before anybody is written: half a group assigned and
+	// then a refusal would leave a coach to work out who got it and who did not.
+	callerID, _ := middleware.UserIDFromContext(r.Context())
+	for _, userID := range members {
+		// A program of somebody's own has no club to be a member of, so the
+		// rule there is simply that it is theirs: an athlete running their own
+		// block, or a coach following the one they wrote for themselves.
+		if utils.IsBlank(clubID) {
+			if userID != callerID {
+				writeError(w, http.StatusForbidden,
+					"A personal program can only be assigned to yourself", CodeForbidden)
+				return
+			}
+			continue
 		}
-	} else if _, err := h.clubs.FindMembership(r.Context(), clubID, p.UserID); err != nil {
 		// A club's program goes to a member of that club - which includes the
 		// coach assigning it, since coaching a club means belonging to it.
 		// Nothing here excludes the caller: a coach running their own block is
 		// the ordinary case, not a special one.
-		writeError(w, http.StatusBadRequest, "This user is not a member of the club", CodeNotAClubMember)
-		return
+		if _, err := h.clubs.FindMembership(r.Context(), clubID, userID); err != nil {
+			writeError(w, http.StatusBadRequest, "This user is not a member of the club", CodeNotAClubMember)
+			return
+		}
 	}
 
-	assignment, err := h.programs.Assign(r.Context(), programID, p.UserID, p.StartDate, p.Note)
-	if err != nil {
-		writeStoreError(w, err)
-		return
+	assignments := make([]models.ProgramAssignment, 0, len(members))
+	for _, userID := range members {
+		assignment, err := h.programs.Assign(r.Context(), programID, userID, p.StartDate, p.Note)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		h.notifyAssignment(r, assignment)
+		assignments = append(assignments, assignment)
 	}
 
-	h.notifyAssignment(r, assignment)
-	writeJSON(w, http.StatusCreated, assignment)
+	// A list, always - even for one - so a client never has to branch on how
+	// many it asked for.
+	writeJSON(w, http.StatusCreated, assignments)
 }
 
 // notifyAssignment emails the member (best-effort).
