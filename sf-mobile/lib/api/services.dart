@@ -324,6 +324,13 @@ class SfApi {
   Future<Comment> addComment(String postId, String content) async => Comment.fromJson(
       _map((await client.dio.post('/posts/$postId/comments', data: {'content': content})).data));
 
+  /// Rewrites a comment. Allowed for its author and for a superadmin, which is
+  /// what the comment's own `editable` flag reports.
+  Future<Comment> updateComment(String postId, String commentId, String content) async =>
+      Comment.fromJson(_map(
+        (await client.dio.put('/posts/$postId/comments/$commentId', data: {'content': content})).data,
+      ));
+
   Future<void> deleteComment(String postId, String commentId) =>
       client.dio.delete('/posts/$postId/comments/$commentId');
 

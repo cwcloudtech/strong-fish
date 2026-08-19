@@ -62,12 +62,13 @@ func (h *SearchHandler) Members(w http.ResponseWriter, r *http.Request) {
 	page, size := pagination(r)
 	query := r.URL.Query()
 	users, total, err := h.users.SearchMembers(r.Context(), store.MemberSearch{
-		Terms:   query.Get("terms"),
-		Name:    query.Get("name"),
-		Surname: query.Get("surname"),
-		Email:   query.Get("email"),
-		Page:    page,
-		Size:    size,
+		Terms:    query.Get("terms"),
+		Name:     query.Get("name"),
+		Surname:  query.Get("surname"),
+		Username: query.Get("username"),
+		Email:    query.Get("email"),
+		Page:     page,
+		Size:     size,
 	}, callerID, superadmin)
 	if err != nil {
 		writeStoreError(w, err)

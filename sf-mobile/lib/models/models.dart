@@ -801,16 +801,28 @@ class Comment {
   final String id;
   final User author;
   final String content;
+  final bool editable;
   final bool deletable;
   final DateTime createdAt;
+  final DateTime updatedAt;
 
   Comment({
     required this.id,
     this.author = const User(id: ''),
     this.content = '',
+    this.editable = false,
     this.deletable = false,
     DateTime? createdAt,
-  }) : createdAt = createdAt ?? DateTime.utc(1970);
+    DateTime? updatedAt,
+  })  : createdAt = createdAt ?? DateTime.utc(1970),
+        updatedAt = updatedAt ?? DateTime.utc(1970);
+
+  /// Whether it has been changed since it was written.
+  ///
+  /// Strict, and it can be: both timestamps default to now(), which Postgres
+  /// holds fixed for the whole transaction, so a freshly written row carries
+  /// two identical stamps.
+  bool get wasEdited => updatedAt.isAfter(createdAt);
 
   factory Comment.fromJson(Map<String, dynamic> json) => Comment(
         id: _toString(json['id']),
@@ -818,8 +830,10 @@ class Comment {
             ? User.fromJson(json['author'])
             : const User(id: ''),
         content: _toString(json['content']),
+        editable: json['editable'] == true,
         deletable: json['deletable'] == true,
         createdAt: _toDate(json['createdAt']),
+        updatedAt: _toDate(json['updatedAt']),
       );
 }
 

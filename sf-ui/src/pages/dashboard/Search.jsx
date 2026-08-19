@@ -8,7 +8,7 @@ import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedb
 import { useI18n } from "../../i18n/I18nContext";
 import { SF_PAGINATION_SIZE } from "../../utils/pagination";
 
-const EMPTY = { terms: "", name: "", surname: "", email: "" };
+const EMPTY = { terms: "", name: "", surname: "", username: "", email: "" };
 
 /**
  * Finding people, shaped like uprodit's search: a free-text box plus the
@@ -31,10 +31,13 @@ export default function Search() {
     terms: params.get("terms") || "",
     name: params.get("name") || "",
     surname: params.get("surname") || "",
+    username: params.get("username") || "",
     email: params.get("email") || "",
   }));
   const [advanced, setAdvanced] = useState(
-    Boolean(params.get("name") || params.get("surname") || params.get("email"))
+    Boolean(
+      params.get("name") || params.get("surname") || params.get("username") || params.get("email")
+    )
   );
   const [results, setResults] = useState(null);
   const [total, setTotal] = useState(0);
@@ -48,7 +51,7 @@ export default function Search() {
   const sentinelRef = useRef(null);
 
   const criteria = Object.fromEntries(
-    ["terms", "name", "surname", "email"].map((key) => [key, params.get(key) || ""])
+    ["terms", "name", "surname", "username", "email"].map((key) => [key, params.get(key) || ""])
   );
   const hasCriteria = Object.values(criteria).some(Boolean);
 
@@ -177,6 +180,12 @@ export default function Search() {
                 {t("auth.surname")}
               </label>
               <input id="surname" className="sf-input" value={form.surname} onChange={set("surname")} />
+            </div>
+            <div className="sf-field" style={{ flex: 1, minWidth: 150 }}>
+              <label className="sf-label" htmlFor="username">
+                {t("profile.username")}
+              </label>
+              <input id="username" className="sf-input" value={form.username} onChange={set("username")} />
             </div>
             <div className="sf-field" style={{ flex: 1, minWidth: 180 }}>
               <label className="sf-label" htmlFor="email">

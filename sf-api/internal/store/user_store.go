@@ -275,12 +275,13 @@ func (s *UserStore) SearchByEmail(ctx context.Context, query string, limit int) 
 // they are combined with AND, the way uprodit's own search composes its query
 // parameters - Terms is the free-text box that matches any of the three.
 type MemberSearch struct {
-	Terms   string
-	Name    string
-	Surname string
-	Email   string
-	Page    int
-	Size    int
+	Terms    string
+	Name     string
+	Surname  string
+	Username string
+	Email    string
+	Page     int
+	Size     int
 }
 
 // blank reports whether the search has nothing to go on. An empty search must
@@ -333,11 +334,25 @@ func (s *UserStore) SearchMembers(ctx context.Context, m MemberSearch, callerID 
 	const notAnonymous = `coalesce(data->>'anonymous', 'false') <> 'true'`
 	shown := `lower(` + displayFullName("users") + `)`
 
+	// The username is matched for everybody, anonymized or not - unlike the
+	// real name and the email, which are hidden for an anonymized account. It
+	// is the name they chose to be known by and the handle is derived from it,
+	// so matching on it reveals nothing the handle does not already.
+	//
+	// It is worth its own clause rather than relying on the handle: the handle
+	// is a slug of the username, so "Marie.D" is searchable as "marie-d" and
+	// not as what its owner actually typed.
+	const username = `lower(coalesce(data->>'username', ''))`
+
 	if utils.IsNotBlank(m.Terms) {
 		args = append(args, "%"+strings.ToLower(strings.TrimSpace(m.Terms))+"%")
 		where = append(where, fmt.Sprintf(
-			"(%s LIKE $%d OR lower(coalesce(data->>'handle', '')) LIKE $%d OR (%s AND lower(email) LIKE $%d))",
-			shown, len(args), len(args), notAnonymous, len(args)))
+			"(%s LIKE $%d OR %s LIKE $%d OR lower(coalesce(data->>'handle', '')) LIKE $%d"+
+				" OR (%s AND lower(email) LIKE $%d))",
+			shown, len(args), username, len(args), len(args), notAnonymous, len(args)))
+	}
+	if utils.IsNotBlank(m.Username) {
+		like(username, m.Username)
 	}
 	if utils.IsNotBlank(m.Name) {
 		like(`lower(`+displayName("users")+`)`, m.Name)

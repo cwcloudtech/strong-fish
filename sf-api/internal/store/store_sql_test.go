@@ -471,3 +471,84 @@ func TestUsernameIsUnique(t *testing.T) {
 		t.Error("an account is blocked by its own username")
 	}
 }
+
+// TestSearchMatchesUsername covers the criterion added on top of name, surname
+// and email.
+//
+// The username is deliberately matched for an anonymized account too, unlike
+// the real name and the email: it is the name they chose to be known by, and
+// the handle everybody can already see is derived from it. Hiding it would hide
+// the only name such an account has.
+func TestSearchMatchesUsername(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+
+	users := NewUserStore(pool)
+	caller := seedUser(t, pool, "searcher.sql@example.test")
+
+	// Two accounts with usernames: one open, one anonymized. Both public, so
+	// the visibility rules are not what is under test here.
+	open := seedUser(t, pool, "open.sql@example.test")
+	hidden := seedUser(t, pool, "hidden.sql@example.test")
+	if _, err := users.merge(ctx, open, map[string]any{
+		"name": "Marie", "surname": "Dubois", "username": "marie.d",
+		"handle": "marie-d", "profileVisibility": models.ProfileVisibilityPublic,
+	}); err != nil {
+		t.Fatalf("seeding the open account: %v", err)
+	}
+	// The username deliberately shares nothing with the real name: one that
+	// contained it ("ironthomas") would match a search for "Thomas" quite
+	// correctly - through the username, not through the hidden name - and the
+	// test would be unable to tell the two apart.
+	if _, err := users.merge(ctx, hidden, map[string]any{
+		"name": "Thomas", "surname": "Bernard", "username": "barbell42",
+		"handle": "barbell42", "anonymous": true,
+		"profileVisibility": models.ProfileVisibilityPublic,
+	}); err != nil {
+		t.Fatalf("seeding the anonymized account: %v", err)
+	}
+
+	finds := func(search MemberSearch, wanted string) bool {
+		results, _, err := users.SearchMembers(ctx, search, caller, false)
+		if err != nil {
+			t.Fatalf("SearchMembers(%+v): %v", search, err)
+		}
+		for _, user := range results {
+			if user.ID == wanted {
+				return true
+			}
+		}
+		return false
+	}
+
+	cases := []struct {
+		name   string
+		search MemberSearch
+		target string
+		want   bool
+	}{
+		// The dedicated criterion, and the free-text box.
+		{"username criterion", MemberSearch{Username: "marie.d"}, open, true},
+		{"username partially", MemberSearch{Username: "arie."}, open, true},
+		{"terms match the username", MemberSearch{Terms: "marie.d"}, open, true},
+		// The point of the new clause: the handle is a slug of the username, so
+		// somebody searching what its owner actually typed used to find nothing.
+		{"a username the handle does not spell", MemberSearch{Terms: "marie.d"}, open, true},
+		{"a different username does not match", MemberSearch{Username: "someone-else"}, open, false},
+
+		// An anonymized account is findable by its username - that is its name.
+		{"an anonymized username is searchable", MemberSearch{Username: "barbell42"}, hidden, true},
+		{"terms reach an anonymized username", MemberSearch{Terms: "barbell"}, hidden, true},
+		// But still not by what it hid.
+		{"an anonymized real name stays hidden", MemberSearch{Name: "Thomas"}, hidden, false},
+		{"an anonymized email stays hidden", MemberSearch{Email: "hidden.sql"}, hidden, false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := finds(c.search, c.target); got != c.want {
+				t.Errorf("found = %t, want %t", got, c.want)
+			}
+		})
+	}
+}

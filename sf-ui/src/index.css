@@ -1891,3 +1891,15 @@ button {
   padding: 0 var(--sf-spacing-sm) var(--sf-spacing-xs);
   font-size: 0.8rem;
 }
+
+/* The like count as the author sees it: the same shape as the button beside it,
+   without the affordance - there is nothing here to press. */
+.sf-post-likes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  color: var(--sf-text-muted);
+  font-size: 0.9rem;
+  cursor: default;
+}
