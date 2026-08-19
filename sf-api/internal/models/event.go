@@ -1,6 +1,34 @@
 package models
 
-import "time"
+import (
+	"regexp"
+	"strings"
+	"time"
+)
+
+// hexColor is the only colour shape the calendar can draw: six digits with a
+// leading hash. Anything else - a name, a shorthand, something a client made
+// up - is dropped rather than passed through to a stylesheet.
+var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// NormalizeHexColor keeps a usable colour and discards anything else. An empty
+// result means "no colour of its own", and the client falls back to the kind's.
+func NormalizeHexColor(value string) string {
+	value = strings.TrimSpace(value)
+	if hexColor.MatchString(value) {
+		return strings.ToLower(value)
+	}
+	return ""
+}
+
+// EventVisibilityPrivate is an event only its author - and a superadmin, who
+// moderates everything - can see.
+//
+// It is what a member gets when they add something to their own calendar: a
+// meet they mean to enter, a session they plan. They have no club to publish
+// to and no business publishing to the open calendar, but a personal calendar
+// is still worth having.
+const EventVisibilityPrivate = "private"
 
 // Event kinds. The kind is a label, not a behaviour - a competition and a
 // training camp are stored and served identically - but it's what lets the
@@ -54,8 +82,14 @@ type Event struct {
 	Description string      `json:"description,omitempty"`
 	Location    string      `json:"location,omitempty"`
 	// URL is the meet's own page - the entry form, the federation listing.
-	URL      string    `json:"url,omitempty"`
-	Kind     string    `json:"kind"`
+	URL  string `json:"url,omitempty"`
+	Kind string `json:"kind"`
+	// Color is the hex the calendar draws this event in. Chosen per event
+	// rather than per kind, because what somebody wants to tell apart at a
+	// glance is their own blocks, not the four labels the app knows about.
+	// Empty means "no colour of its own", and the client falls back to the
+	// kind's.
+	Color    string    `json:"color,omitempty"`
 	StartsAt time.Time `json:"startsAt"`
 	EndsAt   time.Time `json:"endsAt,omitempty"`
 	AllDay   bool      `json:"allDay"`

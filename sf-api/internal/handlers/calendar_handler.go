@@ -112,7 +112,9 @@ func (h *CalendarHandler) Feed(w http.ResponseWriter, r *http.Request) {
 	// The whole calendar, past included: a subscriber's history is part of
 	// what they subscribed to, and calendar clients expect to keep what they
 	// have already synced rather than watch it disappear.
-	events, err := h.events.ListVisible(r.Context(), clubIDs, time.Time{})
+	// The feed is the subscriber's own calendar, so it carries their private
+	// events too - that is the point of putting a meet in it.
+	events, err := h.events.ListVisible(r.Context(), clubIDs, time.Time{}, user.ID, false)
 	if err != nil {
 		writeStoreError(w, err)
 		return

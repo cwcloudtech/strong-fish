@@ -151,7 +151,12 @@ export default function WeekGrid({ days, byDay, todayIso, onSelectRange, onSelec
                   key={`${event.id}-${day.iso}`}
                   type="button"
                   className={`sf-week-event sf-calendar-chip-${event.kind}`}
-                  style={{ top: geometry.top, height: geometry.height }}
+                  style={{
+                    top: geometry.top,
+                    height: geometry.height,
+                    // See EventCalendar: the block is drawn from currentColor.
+                    ...(event.color ? { color: event.color } : {}),
+                  }}
                   title={event.title}
                   onClick={(clickEvent) => {
                     clickEvent.stopPropagation();

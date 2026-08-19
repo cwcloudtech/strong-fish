@@ -255,6 +255,10 @@ export default function EventCalendar({
                         key={`${event.id}-${iso}`}
                         type="button"
                         className={`sf-calendar-chip sf-calendar-chip-${event.kind}`}
+                        // Border, fill and hover shade are all currentColor in
+                        // the stylesheet, so setting the colour here recolours
+                        // the whole chip. No colour: the kind's class stands.
+                        style={event.color ? { color: event.color } : undefined}
                         title={event.title}
                         onClick={(clickEvent) => {
                           // Otherwise the day underneath also fires and opens

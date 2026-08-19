@@ -581,6 +581,8 @@ const Map<String, dynamic> fr = {
     'description': 'Détails',
     'visibility': 'Qui peut le voir',
     'visibilityPublic': 'Tout le monde',
+    'visibilityPrivate': 'Moi uniquement',
+    'visibilityPrivateHelp': 'Gardé dans votre propre calendrier. Personne d\'autre ne le voit, hormis un administrateur.',
     'visibilityClub': 'Membres du club uniquement',
     'showPast': 'Afficher les événements passés',
     'calendarLayout': 'Calendrier',
