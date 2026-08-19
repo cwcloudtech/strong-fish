@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/multi_select.dart';
 
 /// Authoring a program on the phone: sessions, and the sets in them.
 ///
@@ -52,6 +53,44 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Hands the program to one or more members of the club.
+  ///
+  /// A group in one go, because that is how a block is started - the picker is
+  /// a multi-select for the same reason the web app's is.
+  Future<void> _assign() async {
+    final t = ref.read(tProvider);
+
+    List<ClubMember> members;
+    try {
+      members = await ref.read(apiProvider).clubMembers(widget.clubId);
+    } catch (error) {
+      if (mounted) _toast(ref.read(tErrorProvider)(error));
+      return;
+    }
+    if (!mounted) return;
+    if (members.isEmpty) {
+      _toast(t('programs.noMembers'));
+      return;
+    }
+
+    final picked = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => _AssignDialog(members: members),
+    );
+    if (picked == null || picked.isEmpty) return;
+
+    try {
+      final count = await ref.read(apiProvider).assignProgram(
+            widget.clubId,
+            widget.programId,
+            userIds: picked,
+          );
+      _toast(t('programs.assigned', {'count': '$count'}));
+    } catch (error) {
+      _toast(ref.read(tErrorProvider)(error));
+    }
   }
 
   /// Downloads the printable sheet and hands it to whatever opens PDFs on
@@ -170,6 +209,11 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
       appBar: AppBar(
         title: Text(_detail?.program.name ?? t('programs.title')),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.group_add_outlined),
+            tooltip: t('programs.assign'),
+            onPressed: _detail == null || widget.clubId.isEmpty ? null : _assign,
+          ),
           IconButton(
             icon: _exporting
                 ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -466,3 +510,56 @@ class _SetEditorSheetState extends ConsumerState<_SetEditorSheet> {
 }
 
 String _fmt(double value) => value % 1 == 0 ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
+
+/// Picks who a program is handed to.
+///
+/// Its own dialog rather than a bare sheet, because the choice needs a
+/// confirm step: assigning a block emails everybody picked, which is not
+/// something to fire on a stray tap.
+class _AssignDialog extends ConsumerStatefulWidget {
+  final List<ClubMember> members;
+
+  const _AssignDialog({required this.members});
+
+  @override
+  ConsumerState<_AssignDialog> createState() => _AssignDialogState();
+}
+
+class _AssignDialogState extends ConsumerState<_AssignDialog> {
+  List<String> _picked = [];
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+
+    return AlertDialog(
+      title: Text(t('programs.assignTo')),
+      content: SfMultiSelect(
+        label: t('clubs.members'),
+        placeholder: t('programs.pickMembers'),
+        // The address is in the label so the search finds people by it, and so
+        // two members with the same name are still told apart.
+        options: [
+          for (final member in widget.members)
+            SelectOption(value: member.userId, label: '${member.label} (${member.email})'),
+        ],
+        selected: _picked,
+        onChanged: (values) => setState(() => _picked = values),
+        searchHint: t('common.search'),
+        noResults: t('common.noResults'),
+        selectedCount: t('common.selectedCount', {'count': '{{count}}'}),
+        clearLabel: t('common.clear'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(t('common.cancel')),
+        ),
+        FilledButton(
+          onPressed: _picked.isEmpty ? null : () => Navigator.of(context).pop(_picked),
+          child: Text(t('programs.assign')),
+        ),
+      ],
+    );
+  }
+}

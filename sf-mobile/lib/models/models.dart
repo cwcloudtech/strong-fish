@@ -152,6 +152,38 @@ class LoginResult {
       );
 }
 
+/// One member of a club, as the club's roster lists them.
+class ClubMember {
+  final String userId;
+  final String email;
+  final String name;
+  final String surname;
+  final String role;
+
+  const ClubMember({
+    required this.userId,
+    this.email = '',
+    this.name = '',
+    this.surname = '',
+    this.role = '',
+  });
+
+  /// What to call them in a list: their name, falling back to the address,
+  /// which is the only other thing every account is guaranteed to have.
+  String get label {
+    final full = '$name $surname'.trim();
+    return full.isEmpty ? email : full;
+  }
+
+  factory ClubMember.fromJson(Map<String, dynamic> json) => ClubMember(
+        userId: _toString(json['userId']),
+        email: _toString(json['email']),
+        name: _toString(json['name']),
+        surname: _toString(json['surname']),
+        role: _toString(json['role']),
+      );
+}
+
 class Club {
   final String id;
   final String name;
