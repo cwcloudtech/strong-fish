@@ -28,7 +28,7 @@ hand out.
 4. Optionally set an expiry date. A key with no expiry works until you revoke it.
 5. Choose **Create**.
 
-![The API keys screen, with two keys already created](/img/screenshots/api-keys.png)
+![The API keys screen, with two keys already created](../../static/img/screenshots/api-keys.png)
 
 A dialog opens with the key. **It will not come back.** From here you can:
 

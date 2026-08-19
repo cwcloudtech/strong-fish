@@ -37,7 +37,7 @@ utile. Un club, c'est ce qui vous relie à un coach.
 Les quatre premières étapes sont identiques : choisissez **Je suis un coach** à
 l'étape 3.
 
-![Le formulaire d'inscription avec « Un coach » sélectionné](/img/screenshots/signup-coach.png)
+![Le formulaire d'inscription avec « Un coach » sélectionné](../../../../../static/img/screenshots/signup-coach.png)
 
 Ce qui change, c'est la suite :
 

@@ -209,6 +209,8 @@ const Map<String, dynamic> fr = {
     'feedback': 'Retours',
   },
   'programs': {
+    'exportPdf': 'Exporter en PDF',
+    'exportNoViewer': 'Aucune application de ce téléphone ne peut ouvrir un PDF.',
     'title': 'Programmes',
     'import': 'Importer un tableur',
     'importHelp': 'Envoyez le .xlsx du coach. Deux formats sont reconnus automatiquement : une feuille par semaine, chaque séance commençant par une ligne d\'en-tête « Exercice | Reps | RPE | Percentage | Load » ; ou une feuille par bloc, avec un en-tête « EXERCICES | SÉRIES/REPS | RPE » et une colonne W1..Wn par semaine. Les charges calculées dans le fichier sont ignorées : elles sont toujours recalculées à partir des maxima de chaque athlète.',

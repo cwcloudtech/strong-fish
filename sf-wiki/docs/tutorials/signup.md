@@ -34,7 +34,7 @@ you to a coach.
 
 The first four steps are the same - pick **I'm a coach** at step 3.
 
-![The sign-up form with "A coach" selected](/img/screenshots/signup-coach.png)
+![The sign-up form with "A coach" selected](../../static/img/screenshots/signup-coach.png)
 
 What differs is what happens next:
 

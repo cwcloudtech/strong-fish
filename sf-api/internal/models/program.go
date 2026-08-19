@@ -5,7 +5,9 @@ import "time"
 // Program is a training block a coach uploaded into a club - typically an
 // imported spreadsheet, one sheet per week.
 type Program struct {
-	ID          string `json:"id"`
+	ID string `json:"id"`
+	// ClubID is empty for a program somebody wrote for themselves, which
+	// belongs to no club and is governed by its visibility alone.
 	ClubID      string `json:"clubId"`
 	ClubName    string `json:"clubName,omitempty"`
 	AuthorID    string `json:"authorId"`
@@ -16,8 +18,9 @@ type Program struct {
 	// SourceFileName is the uploaded spreadsheet's name, kept so a coach can
 	// tell two imports of the same block apart.
 	SourceFileName string `json:"sourceFileName,omitempty"`
-	// Visibility is who may read the program: its club's members
-	// (ProgramVisibilityClub, the default) or anybody holding the link
+	// Visibility is who may read the program: its author alone
+	// (ProgramVisibilityPrivate), the club's members or the author's clubmates
+	// (ProgramVisibilityClub, the default), or anybody holding the link
 	// (ProgramVisibilityPublic). Sharing is always opted into - a program with
 	// no stored visibility reads as club-only.
 	Visibility string    `json:"visibility"`
@@ -27,16 +30,23 @@ type Program struct {
 	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
-// Program visibilities.
+// Program visibilities, widest first.
 const (
-	ProgramVisibilityClub   = "club"
+	// ProgramVisibilityPublic is readable by anybody holding the link.
 	ProgramVisibilityPublic = "public"
+	// ProgramVisibilityClub is readable by the members of the club it belongs
+	// to - or, for a program of somebody's own, by the people they train with.
+	ProgramVisibilityClub = "club"
+	// ProgramVisibilityPrivate is readable by its author alone (and by a
+	// superadmin, who moderates everything). This is what an athlete writing a
+	// block for themselves gets by default.
+	ProgramVisibilityPrivate = "private"
 )
 
 // IsValidProgramVisibility reports whether visibility is one this app knows.
 func IsValidProgramVisibility(visibility string) bool {
 	switch visibility {
-	case ProgramVisibilityClub, ProgramVisibilityPublic:
+	case ProgramVisibilityClub, ProgramVisibilityPublic, ProgramVisibilityPrivate:
 		return true
 	}
 	return false
@@ -46,8 +56,11 @@ func IsValidProgramVisibility(visibility string) bool {
 // string a program written before sharing existed carries - onto club-only, so
 // an unknown value can never widen an audience.
 func NormalizeProgramVisibility(visibility string) string {
-	if visibility == ProgramVisibilityPublic {
+	switch visibility {
+	case ProgramVisibilityPublic:
 		return ProgramVisibilityPublic
+	case ProgramVisibilityPrivate:
+		return ProgramVisibilityPrivate
 	}
 	return ProgramVisibilityClub
 }

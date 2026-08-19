@@ -8,6 +8,7 @@ import {
   FiChevronRight,
   FiCalendar,
   FiBookOpen,
+  FiFileText,
   FiInfo,
   FiKey,
   FiMessageSquare,
@@ -100,6 +101,9 @@ export default function DashboardLayout({ children }) {
   const links = [
     { to: "/dashboard/feed", label: t("nav.feed"), icon: <FiActivity /> },
     { to: "/dashboard/training", label: t("nav.training"), icon: <FiBarChart2 /> },
+    // A member's own programs, beside the training they were assigned: both
+    // are "the block I am running", one written by a coach and one by them.
+    { to: "/dashboard/programs", label: t("nav.myPrograms"), icon: <FiFileText /> },
     { to: "/dashboard/one-rms", label: t("nav.oneRms"), icon: <FiAward /> },
     { to: "/dashboard/clubs", label: t("nav.clubs"), icon: <FiUsers /> },
     { to: "/dashboard/events", label: t("nav.events"), icon: <FiCalendar /> },

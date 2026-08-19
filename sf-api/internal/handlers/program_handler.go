@@ -70,13 +70,8 @@ func (h *ProgramHandler) Get(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := middleware.UserIDFromContext(r.Context())
 	programID := chi.URLParam(r, "programId")
 
-	program, err := h.programs.FindByID(r.Context(), programID)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	if program.ClubID != chi.URLParam(r, "clubId") {
-		writeError(w, http.StatusNotFound, "Program not found", CodeNotFound)
+	program, ok := h.authorizeProgram(w, r)
+	if !ok {
 		return
 	}
 
@@ -277,6 +272,21 @@ type programMetaPayload struct {
 // is the alternative to importing a spreadsheet. It starts with no sessions: a
 // program's shape comes from the sessions added to it, not from a week count
 // declared up front.
+// ListMine returns the programs the caller wrote for themselves.
+//
+// Their own only, and only the club-less ones: a coach's club programs are
+// listed under their club, where the people who may read them look for them.
+func (h *ProgramHandler) ListMine(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := middleware.UserIDFromContext(r.Context())
+
+	programs, err := h.programs.ListForAuthor(r.Context(), callerID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, programs)
+}
+
 func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 	authorID, _ := middleware.UserIDFromContext(r.Context())
 
@@ -289,9 +299,19 @@ func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clubID := chi.URLParam(r, "clubId")
+	visibility := p.Visibility
+	// A program somebody writes for themselves starts private. The default
+	// everywhere else is club-only, which for a program with no club means
+	// "everybody I train with" - a wider audience than an athlete jotting
+	// down their own block is asking for.
+	if utils.IsBlank(clubID) && utils.IsBlank(visibility) {
+		visibility = models.ProgramVisibilityPrivate
+	}
+
 	program, err := h.programs.Create(r.Context(), store.NewProgram{
-		ClubID: chi.URLParam(r, "clubId"), AuthorID: authorID,
-		Name: p.Name, Description: p.Description, Visibility: p.Visibility,
+		ClubID: clubID, AuthorID: authorID,
+		Name: p.Name, Description: p.Description, Visibility: visibility,
 	})
 	if err != nil {
 		writeStoreError(w, err)
@@ -388,7 +408,7 @@ type dayPayload struct {
 func (h *ProgramHandler) AddDay(w http.ResponseWriter, r *http.Request) {
 	programID := chi.URLParam(r, "programId")
 
-	program, ok := h.programOfClub(w, r)
+	program, ok := h.authorizeProgram(w, r)
 	if !ok {
 		return
 	}
@@ -468,25 +488,52 @@ func dayTitle(title string, week, day int) string {
 	return fmt.Sprintf("Week %d Day %d", week, day)
 }
 
-// programOfClub loads the addressed program, refusing one that belongs to a
-// different club than the URL says - the club is what the membership middleware
-// authorized, so a mismatched program id must not be reachable through it.
-func (h *ProgramHandler) programOfClub(w http.ResponseWriter, r *http.Request) (models.Program, bool) {
+// authorizeProgram loads the addressed program and decides whether this caller
+// may work on it. It is the one place that answers that question, so the two
+// route groups cannot drift apart on it.
+//
+// Through a club's path, the club in the URL is what the membership middleware
+// authorized: a program belonging to a different club must not be reachable
+// there, whoever asks. Through the personal path there is no club to check, so
+// the rule is authorship - a member writing their own block - plus a
+// superadmin, who moderates everything.
+func (h *ProgramHandler) authorizeProgram(w http.ResponseWriter, r *http.Request) (models.Program, bool) {
 	program, err := h.programs.FindByID(r.Context(), chi.URLParam(r, "programId"))
 	if err != nil {
 		writeStoreError(w, err)
 		return models.Program{}, false
 	}
-	if program.ClubID != chi.URLParam(r, "clubId") {
+
+	// Not found rather than forbidden throughout: whether a program id exists
+	// is not something a caller who may not read it should learn.
+	if clubID := chi.URLParam(r, "clubId"); utils.IsNotBlank(clubID) {
+		if program.ClubID != clubID {
+			writeError(w, http.StatusNotFound, "Program not found", CodeNotFound)
+			return models.Program{}, false
+		}
+		return program, true
+	}
+
+	callerID, _ := middleware.UserIDFromContext(r.Context())
+	if program.AuthorID != callerID && !h.isSuperadmin(r, callerID) {
 		writeError(w, http.StatusNotFound, "Program not found", CodeNotFound)
 		return models.Program{}, false
 	}
 	return program, true
 }
 
+// isSuperadmin reports whether the caller moderates everything.
+func (h *ProgramHandler) isSuperadmin(r *http.Request, callerID string) bool {
+	if utils.IsBlank(callerID) {
+		return false
+	}
+	user, err := h.users.FindByID(r.Context(), callerID)
+	return err == nil && user.Role == models.GlobalRoleSuperadmin
+}
+
 // dayOfProgram loads the addressed session, checking the same way.
 func (h *ProgramHandler) dayOfProgram(w http.ResponseWriter, r *http.Request) (models.ProgramDay, bool) {
-	program, ok := h.programOfClub(w, r)
+	program, ok := h.authorizeProgram(w, r)
 	if !ok {
 		return models.ProgramDay{}, false
 	}
@@ -671,7 +718,21 @@ func (h *ProgramHandler) Assign(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Please add a user id", CodeAllFieldsRequired)
 		return
 	}
-	if _, err := h.clubs.FindMembership(r.Context(), clubID, p.UserID); err != nil {
+	// A program of somebody's own has no club to be a member of, so the rule
+	// there is simply that it is theirs: an athlete running their own block,
+	// or a coach following the one they wrote for themselves.
+	if utils.IsBlank(clubID) {
+		callerID, _ := middleware.UserIDFromContext(r.Context())
+		if p.UserID != callerID {
+			writeError(w, http.StatusForbidden,
+				"A personal program can only be assigned to yourself", CodeForbidden)
+			return
+		}
+	} else if _, err := h.clubs.FindMembership(r.Context(), clubID, p.UserID); err != nil {
+		// A club's program goes to a member of that club - which includes the
+		// coach assigning it, since coaching a club means belonging to it.
+		// Nothing here excludes the caller: a coach running their own block is
+		// the ordinary case, not a special one.
 		writeError(w, http.StatusBadRequest, "This user is not a member of the club", CodeNotAClubMember)
 		return
 	}

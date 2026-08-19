@@ -1,23 +1,28 @@
 ---
 id: video-upload
-title: Posting a video
+title: Videos and voice messages
 sidebar_position: 3
 ---
 
-You can attach a video to a post - a competition attempt, a form check - but it
-goes into **your own storage**, not ours.
+Video links from YouTube, Vimeo and the like play in the feed on their own -
+paste one into a post and the player appears. You can also attach a video file
+directly - a competition attempt, a form check - send one in a private message,
+or record a voice message in a conversation. Those three upload to **your own
+storage**, not ours.
 
 ## Why your own bucket
 
-StrongFish hosts no video at all. Twenty megabytes per post would wreck the
-database, and paying to serve other people's training footage is not what this
-app is for.
+StrongFish hosts no video or audio at all, because we want to stay free and
+open source - and that comes with some trade-offs.
 
 So you bring a destination: an **S3-compatible bucket** or a **Google Drive
 folder**. The app uploads there and the post carries a link to the file. Until
-you configure one, the video button answers *"set up your storage first"* - the
-API returns a 405, which is the app saying the request was fine, the feature is
-simply not available on your account yet.
+you configure one, the video and microphone buttons answer *"set up your
+storage first"* - the API returns a 405, which is the app saying the request
+was fine, the feature is simply not available on your account yet.
+
+Configure it once and it covers all three: videos in posts, videos in messages,
+and voice messages.
 
 ## Option 1: an S3-compatible bucket
 
@@ -25,62 +30,69 @@ Works with AWS S3, MinIO, Scaleway, DigitalOcean Spaces - anything speaking the
 S3 API.
 
 1. Create a bucket, and an access key that can write to it.
-2. **Object reads must be public.** The link goes into a post and is played by a
-   plain video player in someone else's browser, with no credentials. StrongFish
-   uploads each object with a public-read ACL; a bucket with ACLs disabled will
-   reject the upload, which is the right moment to find out.
+2. **Object reads must be public.** The link goes into a post and is played by a plain video player in someone else's browser, with no credentials. StrongFish uploads each object with a public-read ACL; a bucket with ACLs disabled will reject the upload, which is the right moment to find out.
 3. In the app: **Settings → Video storage**, pick *S3-compatible bucket*.
 4. Fill in:
 
-   | Field | Example |
-   | --- | --- |
-   | Endpoint | `https://s3.eu-west-3.amazonaws.com` |
-   | Region | `eu-west-3` |
-   | Bucket | `my-lifting-videos` |
-   | Access key / Secret key | from your provider |
-   | Subfolder *(optional)* | `strong-fish` |
-   | Public address *(optional)* | your CDN or custom domain, if the bucket is served through one |
+| Field | Example |
+| --- | --- |
+| Endpoint | `https://s3.eu-west-3.amazonaws.com` |
+| Region | `eu-west-3` |
+| Bucket | `my-lifting-videos` |
+| Access key / Secret key | from your provider |
+| Subfolder *(optional)* | `strong-fish` |
+| Public address *(optional)* | your CDN or custom domain, if the bucket is served through one |
 
 5. Save.
 
-![Video storage configured against an S3 bucket](/img/screenshots/video-storage.png)
+![Video storage configured against an S3 bucket](../../static/img/screenshots/video-storage.png)
 
 ## Option 2: a Google Drive folder
 
-1. In the Google Cloud console, create a **service account** and download its
-   **JSON key**.
-2. Create (or pick) a Drive folder, and **share it with the service account's
-   email address** with edit rights. Without this it cannot write anything -
-   this is the step people miss.
-3. Copy the folder's id: it is the last part of its URL,
-   `https://drive.google.com/drive/folders/<this bit>`.
+1. In the Google Cloud console, create a [**service account**](https://docs.cloud.google.com/iam/docs/service-account-overview) and download its **JSON key**.
+2. Create (or pick) a Drive folder, and **share it with the service account's email address** with edit rights. Without this it cannot write anything - this is the step people miss.
+3. Copy the folder's id: it is the last part of its URL, `https://drive.google.com/drive/folders/<this bit>`.
 4. In the app: **Settings → Video storage**, pick *Google Drive folder*.
 5. Upload the JSON key file and paste the folder id.
-6. Optionally set a **subfolder** - `strong-fish/videos`, say. It is created
-   inside the shared folder if it does not exist yet, so you do not have to make
-   it by hand first. Leave it empty to write straight into the folder.
+6. Optionally set a **subfolder** - `strong-fish/videos`, say. It is created inside the shared folder if it does not exist yet, so you do not have to make it by hand first. Leave it empty to write straight into the folder.
 7. Save.
 
-StrongFish grants each uploaded file anyone-with-the-link read access as it
-writes it, and posts the Drive preview player.
+![drive-sa](../../static/img/screenshots/drive-sa.png)
 
-## Posting
+StrongFish grants each uploaded file anyone-with-the-link read access as it writes it, and posts the Drive preview player.
+
+## Posting a video
 
 1. Go to the feed and start a post.
-2. Choose **Add a video** and pick a file - MP4, WebM or MOV, up to 20MB by
-   default.
+2. Choose **Add a video** and pick a file - MP4, WebM or MOV, up to 20MB by default.
 3. The upload's URL is appended to your post's text.
 4. Write whatever you want around it and post.
 
-The player appears automatically. There is no separate link field: **the first
-URL in a post is its embed**, whether you uploaded it or pasted a YouTube link.
+The player appears automatically. There is no separate link field: **the first URL in a post is its embed**, whether you uploaded it or pasted a YouTube link.
+
+This works the same in the **mobile app**: the camera icon under the composer picks a video from your phone.
+
+## Sending a video in a message
+
+A private conversation has the same buttons: a picture, a video and a microphone. A video sent this way is uploaded exactly as one in a post and appended to the message as a link, so it plays in the thread.
+
+## Recording a voice message
+
+Press the **microphone** in a conversation to start recording and press it again to stop.
+
+The recording is uploaded when you stop, not when you send, so the message goes the moment you press send.
+
+Both the web app and the phone can record. On a phone Android asks for permission to use the microphone the first time.
+
+A voice message stored in **Google Drive** plays in Drive's own player rather than in a plain audio bar - Drive serves an embed page for a file, not the file itself. Nothing to configure; it is worth knowing so the difference between two members' messages does not look like a bug.
 
 ## Troubleshooting
 
 | What you see | What it usually is |
 | --- | --- |
-| "Set up your own video storage" | No storage configured yet. |
+| "Set up your own video storage" | No storage configured yet. The same message covers videos and voice messages. |
 | "Your storage rejected this upload" | Wrong keys, wrong bucket name, or ACLs disabled on the bucket. |
 | "This video is too large" | Over the size limit - the app tells you what it is on the storage screen. |
 | "Not a video a browser can play" | Re-encode as MP4 (H.264). |
 | The post shows a link card, not a player | The file's URL is not publicly readable. Check the bucket's policy, or the Drive folder's sharing. |
+| The microphone button does nothing on the phone | Permission to record was refused. Grant it in Android's app settings. |

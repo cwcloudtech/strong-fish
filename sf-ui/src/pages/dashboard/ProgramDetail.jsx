@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiCopy, FiEdit2, FiGlobe, FiLock, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiCopy, FiDownload, FiEdit2, FiGlobe, FiLock, FiPlus, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { clubs as clubsApi, programs as programsApi } from "../../api/services";
@@ -11,6 +11,8 @@ import SessionDay from "../../components/training/SessionDay";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
+import Select from "../../components/common/Select";
+import Switch from "../../components/common/Switch";
 
 /**
  * A program as its coach sees it: the sessions, and who is running it.
@@ -39,19 +41,30 @@ export default function ProgramDetail() {
   const [building, setBuilding] = useState(false);
   const [addingSession, setAddingSession] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [copying, setCopying] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [programResult, club] = await Promise.all([
-        programsApi.get(clubId, programId, viewAs || undefined),
-        clubsApi.get(clubId),
-      ]);
+      const programResult = await programsApi.get(clubId, programId, viewAs || undefined);
       setProgram(programResult);
-      const manage = club.role === "owner" || club.role === "admin" || user?.role === "superadmin";
+
+      // A program of somebody's own has no club to ask about: it is theirs to
+      // manage because they wrote it. Asking a club anyway would 404 on a
+      // club id that is not there.
+      const manage = clubId
+        ? await (async () => {
+            const club = await clubsApi.get(clubId);
+            return club.role === "owner" || club.role === "admin" || user?.role === "superadmin";
+          })()
+        : programResult.authorId === user?.id || user?.role === "superadmin";
       setCanManage(manage);
+
       if (manage) {
         const [memberList, assignmentList] = await Promise.all([
-          clubsApi.members(clubId),
+          // Only a club has members to assign to. A personal program is
+          // assigned to its author and nobody else.
+          clubId ? clubsApi.members(clubId) : Promise.resolve([]),
           programsApi.assignments(clubId, programId),
         ]);
         setMembers(memberList);
@@ -60,11 +73,40 @@ export default function ProgramDetail() {
     } catch (err) {
       setError(err);
     }
-  }, [clubId, programId, viewAs, user?.role]);
+  }, [clubId, programId, viewAs, user?.role, user?.id]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  /**
+   * Downloads the printable sheet.
+   *
+   * Fetched and handed to the browser as a blob rather than linked directly:
+   * the request needs the session's Authorization header, which a plain
+   * <a href> would not send - the download would arrive as a 401.
+   */
+  const exportPdf = async () => {
+    setExporting(true);
+    try {
+      const blob = await programsApi.exportPdf(clubId, programId, {
+        memberId: viewAs || undefined,
+        locale,
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${program?.name || "program"}.pdf`;
+      link.click();
+      // Revoked once the click has been handled, or the blob is held for the
+      // life of the tab.
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const remove = async () => {
     setConfirmDelete(false);
@@ -133,6 +175,17 @@ export default function ProgramDetail() {
             {program.sourceFileName ? ` · ${program.sourceFileName}` : ""}
           </p>
         </div>
+        <div className="sf-row">
+          {/* Offered to anybody who can open the program: an athlete printing
+              the block they were given is not a coaching action. */}
+          <button className="sf-button sf-button-secondary" onClick={exportPdf} disabled={exporting}>
+            <FiDownload /> {exporting ? t("programs.exporting") : t("programs.exportPdf")}
+          </button>
+          <button className="sf-button sf-button-secondary" onClick={() => setCopying(true)}>
+            <FiCopy /> {t("programs.copy")}
+          </button>
+        </div>
+
         {canManage ? (
           <div className="sf-row">
             <button
@@ -295,6 +348,27 @@ export default function ProgramDetail() {
         />
       ) : null}
 
+      {copying ? (
+        <CopyProgramModal
+          program={program}
+          clubId={clubId}
+          canManage={canManage}
+          onClose={() => setCopying(false)}
+          onCopied={(copy) => {
+            setCopying(false);
+            toast.success(t("programs.copied"), toastOptions);
+            // Straight to the copy: what somebody wants after making one is
+            // to edit it, and it is not in the list they are looking at.
+            navigate(copy.clubId ? `/dashboard/clubs/${copy.clubId}/programs/${copy.id}` : `/dashboard/programs/${copy.id}`);
+          }}
+          onMoved={(moved) => {
+            setCopying(false);
+            toast.success(t("programs.moved"), toastOptions);
+            navigate(moved.clubId ? `/dashboard/clubs/${moved.clubId}/programs/${moved.id}` : `/dashboard/programs/${moved.id}`);
+          }}
+        />
+      ) : null}
+
       {confirmDelete ? (
         <ConfirmModal
           title={t("common.delete")}
@@ -367,6 +441,91 @@ function AssignModal({ clubId, programId, members, assigned, onClose, onAssigned
         </label>
         <textarea className="sf-textarea" value={note} onChange={(event) => setNote(event.target.value)} />
       </div>
+      <ErrorMessage error={error} />
+    </Modal>
+  );
+}
+
+/**
+ * Copies a program somewhere else, or moves it.
+ *
+ * Two destinations that behave the same way: another club, for a coach running
+ * the block with a second group, or the caller's own library, for a member who
+ * wants to adapt what their club gave them. Only the clubs the caller may write
+ * in are offered, and the API checks again.
+ */
+function CopyProgramModal({ program, clubId, canManage, onClose, onCopied, onMoved }) {
+  const { t } = useI18n();
+  const [clubs, setClubs] = useState([]);
+  const [destination, setDestination] = useState("");
+  const [move, setMove] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    clubsApi
+      .list()
+      .then((list) => setClubs(list.filter((club) => club.role === "owner" || club.role === "admin")))
+      .catch(() => setClubs([]));
+  }, []);
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await programsApi.copy(clubId, program.id, { clubId: destination, move });
+      (move ? onMoved : onCopied)(result);
+    } catch (err) {
+      setError(err);
+      setBusy(false);
+    }
+  };
+
+  // The club it is already in is not a destination, and a personal program's
+  // "own library" is not one either when that is where it already is.
+  const options = [
+    ...(clubId ? [{ value: "", label: t("programs.myLibrary") }] : []),
+    ...clubs.filter((club) => club.id !== clubId).map((club) => ({ value: club.id, label: club.name })),
+  ];
+
+  return (
+    <Modal
+      title={t("programs.copy")}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="sf-button sf-button-secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </button>
+          <button className="sf-button" onClick={submit} disabled={busy || (!destination && !clubId)}>
+            {move ? t("programs.move") : t("programs.copy")}
+          </button>
+        </>
+      }
+    >
+      <p className="sf-muted" style={{ marginTop: 0 }}>
+        {t("programs.copyHelp")}
+      </p>
+
+      <div className="sf-field">
+        <label className="sf-label">{t("programs.destination")}</label>
+        <Select
+          options={options}
+          value={destination}
+          onChange={setDestination}
+          placeholder={t("programs.pickDestination")}
+        />
+      </div>
+
+      {/* Moving takes the program away from everybody reading it where it is
+          now, so it is offered only to somebody who may manage it there. */}
+      {canManage ? (
+        <label className="sf-row" style={{ gap: "0.5rem", alignItems: "center" }}>
+          <Switch checked={move} onChange={setMove} />
+          <span>{t("programs.moveInstead")}</span>
+        </label>
+      ) : null}
+
       <ErrorMessage error={error} />
     </Modal>
   );

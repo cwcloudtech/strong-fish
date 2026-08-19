@@ -102,6 +102,33 @@ class SfApi {
   Future<void> deleteProgram(String clubId, String programId) =>
       client.dio.delete('/clubs/$clubId/programs/$programId');
 
+  /// Downloads the program's printable sheet - a page per week - and returns
+  /// where it was saved.
+  ///
+  /// Rendered by the API rather than here: the loads on it are the ones the
+  /// server computed, and a second implementation of the RPE chart on the
+  /// phone could disagree with the screen it was printed from.
+  Future<String> downloadProgramPdf(
+    String clubId,
+    String programId, {
+    required String directory,
+    required String fileName,
+    String memberId = '',
+    String locale = 'en',
+  }) async {
+    final base = clubId.isEmpty ? '/programs' : '/clubs/$clubId/programs';
+    final path = '$directory/$fileName';
+    await client.dio.download(
+      '$base/$programId/export.pdf',
+      path,
+      queryParameters: {
+        if (memberId.isNotEmpty) 'memberId': memberId,
+        'locale': locale,
+      },
+    );
+    return path;
+  }
+
   /// Leaving week/day at 0 continues the program's own numbering server-side,
   /// which is what adding sessions one after another wants.
   Future<ProgramDay> addDay(String clubId, String programId,

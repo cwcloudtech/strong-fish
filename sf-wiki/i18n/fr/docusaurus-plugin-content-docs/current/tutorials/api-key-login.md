@@ -38,7 +38,7 @@ Une fenêtre s'ouvre avec la clé. **Elle ne reviendra pas.** Vous pouvez :
   lit tel quel ;
 * **afficher le QR code**, celui que l'application mobile scanne.
 
-![La nouvelle clé, avec son QR code affiché](/img/screenshots/api-key-created.png)
+![La nouvelle clé, avec son QR code affiché](../../../../../static/img/screenshots/api-key-created.png)
 
 ## Connecter l'application
 
