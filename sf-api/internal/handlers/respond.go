@@ -66,6 +66,7 @@ const (
 	CodeInvalidVisibility    = "errors.invalidVisibility"
 	CodeClubRequired         = "errors.clubRequired"
 	CodeEmptyComment         = "errors.emptyComment"
+	CodeCannotLikeOwnPost    = "errors.cannotLikeOwnPost"
 	CodeInvalidReportTarget  = "errors.invalidReportTarget"
 	CodeReportReasonRequired = "errors.reportReasonRequired"
 	CodeForbidden            = "errors.forbidden"

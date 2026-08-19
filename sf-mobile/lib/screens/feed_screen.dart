@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/media_player.dart';
 
@@ -202,21 +203,38 @@ class _PostCard extends ConsumerWidget {
             const Divider(height: 20),
             Row(
               children: [
-                TextButton.icon(
-                  icon: Icon(post.liked ? Icons.favorite : Icons.favorite_border,
-                      color: post.liked ? Theme.of(context).colorScheme.error : null),
-                  label: Text('${post.likes}'),
-                  onPressed: () async {
-                    try {
-                      onChanged(await ref.read(apiProvider).like(post.id, post.liked));
-                    } catch (error) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+                // A like says how a post landed with other people, so its
+                // author only ever sees the count. The API refuses a self-like
+                // too; this keeps a dead control off the screen.
+                if (post.author.id == ref.watch(sessionProvider).user?.id)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.favorite_border, size: 18, color: AppColors.of(context).textMuted),
+                        const SizedBox(width: 6),
+                        Text('${post.likes}',
+                            style: TextStyle(color: AppColors.of(context).textMuted)),
+                      ],
+                    ),
+                  )
+                else
+                  TextButton.icon(
+                    icon: Icon(post.liked ? Icons.favorite : Icons.favorite_border,
+                        color: post.liked ? Theme.of(context).colorScheme.error : null),
+                    label: Text('${post.likes}'),
+                    onPressed: () async {
+                      try {
+                        onChanged(await ref.read(apiProvider).like(post.id, post.liked));
+                      } catch (error) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+                        }
                       }
-                    }
-                  },
-                ),
+                    },
+                  ),
                 TextButton.icon(
                   icon: const Icon(Icons.mode_comment_outlined),
                   label: Text('${post.comments}'),
@@ -367,6 +385,46 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
     super.dispose();
   }
 
+  /// Edits one comment, in a dialog rather than inline: a bottom sheet's list
+  /// is already scrolling inside a constrained box, and growing a row into a
+  /// form inside it fights the keyboard for what little height is left.
+  Future<void> _edit(Comment comment) async {
+    final t = ref.read(tProvider);
+    final controller = TextEditingController(text: comment.content);
+
+    final content = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t('common.edit')),
+        content: TextField(controller: controller, maxLines: 4, autofocus: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('common.cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: Text(t('common.save')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    if (content == null || content.isEmpty || content == comment.content) return;
+    try {
+      final updated = await ref.read(apiProvider).updateComment(widget.post.id, comment.id, content);
+      if (mounted) {
+        setState(() => _comments = [
+              for (final item in _comments ?? <Comment>[])
+                if (item.id == updated.id) updated else item,
+            ]);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    }
+  }
+
   Future<void> _submit() async {
     final content = _input.text.trim();
     if (content.isEmpty) return;
@@ -408,9 +466,29 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                     for (final comment in _comments!)
                       ListTile(
                         leading: SfAvatar.of(comment.author, radius: 16),
-                        title: Text(comment.author.fullName),
+                        title: Row(
+                          children: [
+                            Flexible(child: Text(comment.author.fullName, overflow: TextOverflow.ellipsis)),
+                            // Says so when it has been changed since: a comment
+                            // somebody replied to may not be the one on screen.
+                            if (comment.wasEdited) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                t('feed.edited'),
+                                style: TextStyle(fontSize: 11, color: AppColors.of(context).textMuted),
+                              ),
+                            ],
+                          ],
+                        ),
                         subtitle: Text(comment.content),
                         dense: true,
+                        trailing: comment.editable
+                            ? IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 18),
+                                tooltip: t('common.edit'),
+                                onPressed: () => _edit(comment),
+                              )
+                            : null,
                       ),
                   ],
                 ),

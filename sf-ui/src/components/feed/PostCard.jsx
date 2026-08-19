@@ -10,6 +10,7 @@ import Modal, { ConfirmModal } from "../common/Modal";
 import ShareButtons from "../common/ShareButtons";
 import { postShareUrl, shareTextFor } from "../../utils/shareText";
 import { ErrorMessage } from "../common/Feedback";
+import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 
 /**
@@ -19,10 +20,14 @@ import { useI18n } from "../../i18n/I18nContext";
  */
 export default function PostCard({ post, onChanged, onDeleted }) {
   const { t, locale } = useI18n();
+  const { user } = useAuth();
   const [comments, setComments] = useState(null);
   const [showComments, setShowComments] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [newComment, setNewComment] = useState("");
+  // The comment being edited, and the text as it is being retyped.
+  const [editingComment, setEditingComment] = useState(null);
+  const [commentDraft, setCommentDraft] = useState("");
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -37,9 +42,29 @@ export default function PostCard({ post, onChanged, onDeleted }) {
       .catch(setError);
   }, [showComments, comments, post.id]);
 
+  // The post's own author, which decides whether the like control is offered.
+  // Not post.editable: a superadmin can edit anybody's post and is still free
+  // to like it.
+  const isAuthor = user?.id === post.author?.id;
+
   const toggleLike = async () => {
     try {
       onChanged(post.liked ? await social.unlike(post.id) : await social.like(post.id));
+    } catch (err) {
+      setError(err);
+    }
+  };
+
+  const saveComment = async (event) => {
+    event.preventDefault();
+    const content = commentDraft.trim();
+    if (!content) return;
+    try {
+      const updated = await social.updateComment(post.id, editingComment.id, content);
+      setComments((current) =>
+        (current || []).map((item) => (item.id === updated.id ? updated : item))
+      );
+      setEditingComment(null);
     } catch (err) {
       setError(err);
     }
@@ -149,9 +174,24 @@ export default function PostCard({ post, onChanged, onDeleted }) {
       <ErrorMessage error={error} />
 
       <div className="sf-post-actions">
-        <button type="button" className="sf-button-ghost" onClick={toggleLike} style={{ color: post.liked ? "var(--sf-danger)" : undefined }}>
-          <FiHeart /> {post.likes || 0}
-        </button>
+        {/* The author sees the count but cannot add to it: a like says how a
+            post landed with other people, which is not something its writer can
+            contribute. The API refuses it too - this only keeps a dead control
+            off the screen. */}
+        {isAuthor ? (
+          <span className="sf-post-likes" title={t("feed.ownPostLikes")}>
+            <FiHeart /> {post.likes || 0}
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="sf-button-ghost"
+            onClick={toggleLike}
+            style={{ color: post.liked ? "var(--sf-danger)" : undefined }}
+          >
+            <FiHeart /> {post.likes || 0}
+          </button>
+        )}
         <button type="button" className="sf-button-ghost" onClick={() => setShowComments((open) => !open)}>
           <FiMessageSquare /> {post.comments || 0}
         </button>
@@ -211,8 +251,54 @@ export default function PostCard({ post, onChanged, onDeleted }) {
                   {comment.author.name} {comment.author.surname}
                 </strong>{" "}
                 <span className="sf-muted">{new Date(comment.createdAt).toLocaleString(locale)}</span>
-                <div>{comment.content}</div>
+                {/* Says so when it has been changed since. A comment somebody
+                    replied to may not be the one on screen any more, and the
+                    thread should not hide that. */}
+                {wasEdited(comment) ? (
+                  <span className="sf-muted" title={new Date(comment.updatedAt).toLocaleString(locale)}>
+                    {" · "}
+                    {t("feed.editedAt", { date: new Date(comment.updatedAt).toLocaleString(locale) })}
+                  </span>
+                ) : null}
+
+                {editingComment?.id === comment.id ? (
+                  <form onSubmit={saveComment} className="sf-row" style={{ marginTop: "0.3rem", flexWrap: "nowrap" }}>
+                    <input
+                      className="sf-input sf-input-sm"
+                      value={commentDraft}
+                      autoFocus
+                      onChange={(event) => setCommentDraft(event.target.value)}
+                      onKeyDown={(event) => event.key === "Escape" && setEditingComment(null)}
+                    />
+                    <button className="sf-button sf-button-sm" type="submit" disabled={!commentDraft.trim()}>
+                      {t("common.save")}
+                    </button>
+                    <button
+                      type="button"
+                      className="sf-button-ghost sf-button-sm"
+                      onClick={() => setEditingComment(null)}
+                    >
+                      {t("common.cancel")}
+                    </button>
+                  </form>
+                ) : (
+                  <div>{comment.content}</div>
+                )}
               </div>
+
+              {comment.editable && editingComment?.id !== comment.id ? (
+                <button
+                  type="button"
+                  className="sf-button-ghost"
+                  onClick={() => {
+                    setEditingComment(comment);
+                    setCommentDraft(comment.content);
+                  }}
+                  aria-label={t("common.edit")}
+                >
+                  <FiEdit2 />
+                </button>
+              ) : null}
               {comment.deletable ? (
                 <button type="button" className="sf-button-ghost" onClick={() => removeComment(comment)} aria-label={t("common.delete")}>
                   <FiTrash2 />
@@ -297,4 +383,16 @@ function ReportModal({ post, onClose }) {
       <ErrorMessage error={error} />
     </Modal>
   );
+}
+
+/**
+ * Whether a comment has been changed since it was written.
+ *
+ * Strict, and it can be: both timestamps default to now(), which Postgres holds
+ * fixed for the whole transaction, so a freshly written row carries two
+ * identical stamps. This is the same comparison the post above it uses - the
+ * rule should not differ between a post and a comment.
+ */
+function wasEdited(comment) {
+  return Boolean(comment.updatedAt) && comment.updatedAt !== comment.createdAt;
 }

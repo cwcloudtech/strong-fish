@@ -47,9 +47,13 @@ func decoratePost(post models.Post, callerID string, superadmin bool) models.Pos
 	return post
 }
 
+// decorateComment marks what the caller may do, and has to agree with what
+// authorizeComment actually enforces - a superadmin has always been able to
+// edit a comment, but this reported otherwise, so no client ever offered it.
 func decorateComment(comment models.Comment, callerID string, superadmin bool) models.Comment {
-	comment.Editable = comment.AuthorID == callerID
-	comment.Deletable = comment.AuthorID == callerID || superadmin
+	writable := comment.AuthorID == callerID || superadmin
+	comment.Editable = writable
+	comment.Deletable = writable
 	return comment
 }
 
@@ -320,9 +324,19 @@ func (h *SocialHandler) DeletePost(w http.ResponseWriter, r *http.Request) {
 }
 
 // Like and Unlike toggle the caller's like on a post.
+// Like records that somebody liked a post - somebody other than its author.
+//
+// Refused at the API rather than only hidden in the client: a like count is a
+// signal about how a post landed with other people, and one the author can add
+// to themselves is not that. The client hides the control, and this is what
+// makes the rule true regardless of which client is asking.
 func (h *SocialHandler) Like(w http.ResponseWriter, r *http.Request) {
 	post, callerID, superadmin, ok := h.authorizePost(w, r, false)
 	if !ok {
+		return
+	}
+	if post.AuthorID == callerID {
+		writeError(w, http.StatusForbidden, "You cannot like your own post", CodeCannotLikeOwnPost)
 		return
 	}
 	if err := h.social.Like(r.Context(), post.ID, callerID); err != nil {
