@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import 'api_client.dart';
 import '../models/models.dart';
 
@@ -248,6 +250,37 @@ class SfApi {
     await client.dio.put('/admin/coach-requests/$userId', data: {'status': status, 'motive': motive});
   }
 
+  // --- media ---
+
+  /// Uploads a video to the member's own storage and returns its URL.
+  ///
+  /// The file never lands in this app's database: the API forwards it to the
+  /// bucket or Drive folder the member configured, and what comes back is a
+  /// link. A member who has configured neither gets a 405, which surfaces as
+  /// "set up your storage first" rather than as a failure.
+  Future<String> uploadVideo(String path, {void Function(double)? onProgress}) {
+    return _uploadMedia('/media/videos', path, onProgress: onProgress);
+  }
+
+  /// Uploads a recorded voice message. Separate from the video endpoint
+  /// because the accepted types and the size cap differ.
+  Future<String> uploadAudio(String path, {void Function(double)? onProgress}) {
+    return _uploadMedia('/media/audio', path, onProgress: onProgress);
+  }
+
+  Future<String> _uploadMedia(String endpoint, String path, {void Function(double)? onProgress}) async {
+    final form = FormData.fromMap({'file': await MultipartFile.fromFile(path)});
+    final response = await client.dio.post(
+      endpoint,
+      data: form,
+      onSendProgress: (sent, total) {
+        if (total > 0) onProgress?.call(sent / total);
+      },
+    );
+    final url = _map(response.data)['url'];
+    return url is String ? url : '';
+  }
+
   // --- private messages ---
 
   Future<List<Conversation>> conversations() async {
@@ -269,8 +302,17 @@ class SfApi {
     return Thread.fromJson(_map(response.data));
   }
 
-  Future<PrivateMessage> sendMessage(String userId, String content) async {
-    final response = await client.dio.post('/messages/with/$userId', data: {'content': content});
+  Future<PrivateMessage> sendMessage(
+    String userId, {
+    String content = '',
+    List<String> pictures = const [],
+    String audio = '',
+  }) async {
+    final response = await client.dio.post('/messages/with/$userId', data: {
+      'content': content,
+      'pictures': pictures,
+      'audio': audio,
+    });
     return PrivateMessage.fromJson(_map(response.data));
   }
 

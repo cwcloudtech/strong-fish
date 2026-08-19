@@ -629,6 +629,11 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
   bool _busy = false;
   String? _error;
 
+  /// Upload progress, 0..1, or null when nothing is uploading. A video goes to
+  /// the member's own storage over their phone's connection, which is slow
+  /// often enough to need saying.
+  double? _uploading;
+
   @override
   void dispose() {
     _content.dispose();
@@ -641,6 +646,38 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
     final bytes = await picked.readAsBytes();
     if (!mounted) return;
     setState(() => _pictures.add('data:image/jpeg;base64,${base64Encode(bytes)}'));
+  }
+
+  /// Uploads a video and appends its URL to the post's text.
+  ///
+  /// Appended rather than stored beside the post: from there it is an ordinary
+  /// link, and the same detection that renders a pasted YouTube URL plays it.
+  /// The web composer does exactly this.
+  Future<void> _addVideo() async {
+    final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    if (picked == null) return;
+
+    setState(() => _uploading = 0);
+    try {
+      final url = await ref.read(apiProvider).uploadVideo(
+            picked.path,
+            onProgress: (value) {
+              if (mounted) setState(() => _uploading = value);
+            },
+          );
+      if (!mounted || url.isEmpty) return;
+      final text = _content.text.trim();
+      _content.text = text.isEmpty ? url : '$text\n$url';
+    } catch (error) {
+      // A member with no storage configured gets a 405, which carries its own
+      // i18n code and reads as "set up your storage first".
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = null);
+    }
   }
 
   Future<void> _submit() async {
@@ -697,10 +734,24 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
             _Base64Image(data: picture),
             const SizedBox(height: 8),
           ],
-          OutlinedButton.icon(
-            icon: const Icon(Icons.image_outlined),
-            label: Text(t('feed.addPicture')),
-            onPressed: _addPicture,
+          if (_uploading != null) ...[
+            LinearProgressIndicator(value: _uploading),
+            const SizedBox(height: 8),
+          ],
+          Row(
+            children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.image_outlined),
+                label: Text(t('feed.addPicture')),
+                onPressed: _uploading != null ? null : _addPicture,
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.videocam_outlined),
+                label: Text(t('feed.addVideo')),
+                onPressed: _uploading != null ? null : _addVideo,
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(

@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
@@ -98,26 +103,50 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
   final _draft = TextEditingController();
   final _scroll = ScrollController();
   final List<PrivateMessage> _sent = [];
+  final _recorder = AudioRecorder();
   bool _busy = false;
+
+  /// Pictures attached to the message being written, as base64 data URIs -
+  /// the same form the feed's composer uses, and what the API stores inline.
+  final List<String> _pictures = [];
+
+  /// A recorded voice message, already uploaded and waiting to be sent.
+  String _audio = '';
+  bool _recording = false;
+
+  /// Upload progress, 0..1, or null when nothing is uploading. A voice note or
+  /// a video goes to the member's own storage over their phone's connection,
+  /// which is slow often enough to need saying.
+  double? _uploading;
 
   @override
   void dispose() {
     _draft.dispose();
     _scroll.dispose();
+    _recorder.dispose();
     super.dispose();
   }
 
   Future<void> _send() async {
     final content = _draft.text.trim();
-    if (content.isEmpty) return;
+    if (content.isEmpty && _pictures.isEmpty && _audio.isEmpty) return;
 
     setState(() => _busy = true);
     try {
-      final message = await ref.read(apiProvider).sendMessage(widget.userId, content);
+      final message = await ref.read(apiProvider).sendMessage(
+            widget.userId,
+            content: content,
+            pictures: _pictures,
+            audio: _audio,
+          );
       _draft.clear();
       // Appended locally rather than refetching: the thread is already on
       // screen, and a full reload would lose the scroll position mid-sentence.
-      setState(() => _sent.add(message));
+      setState(() {
+        _sent.add(message);
+        _pictures.clear();
+        _audio = '';
+      });
       ref.invalidate(conversationsProvider);
       _scrollToBottom();
     } catch (error) {
@@ -128,6 +157,95 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Attaches a photo, carried inline as base64 the way a post's pictures are.
+  Future<void> _addPicture() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 80);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() => _pictures.add('data:image/jpeg;base64,${base64Encode(bytes)}'));
+  }
+
+  /// Uploads a video and appends its URL to the draft.
+  ///
+  /// Appended to the text rather than stored beside the message: from there it
+  /// is an ordinary link, and the same detection that renders a pasted YouTube
+  /// URL plays it. Exactly what the web composer does.
+  Future<void> _addVideo() async {
+    final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    if (picked == null) return;
+
+    setState(() => _uploading = 0);
+    try {
+      final url = await ref.read(apiProvider).uploadVideo(
+            picked.path,
+            onProgress: (value) {
+              if (mounted) setState(() => _uploading = value);
+            },
+          );
+      if (!mounted || url.isEmpty) return;
+      final text = _draft.text.trim();
+      _draft.text = text.isEmpty ? url : '$text\n$url';
+    } catch (error) {
+      // A member with no storage configured gets a 405, which carries its own
+      // i18n code and reads as "set up your storage first".
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = null);
+    }
+  }
+
+  /// Starts or stops recording a voice message.
+  ///
+  /// The recording is uploaded on stop rather than on send, so the wait happens
+  /// while the sender is still deciding, and the message goes the instant they
+  /// press send.
+  Future<void> _toggleRecording() async {
+    final t = ref.read(tProvider);
+
+    if (_recording) {
+      final path = await _recorder.stop();
+      setState(() => _recording = false);
+      if (path == null) return;
+
+      setState(() => _uploading = 0);
+      try {
+        final url = await ref.read(apiProvider).uploadAudio(
+              path,
+              onProgress: (value) {
+                if (mounted) setState(() => _uploading = value);
+              },
+            );
+        if (mounted) setState(() => _audio = url);
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+        }
+      } finally {
+        if (mounted) setState(() => _uploading = null);
+      }
+      return;
+    }
+
+    if (!await _recorder.hasPermission()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('messages.micDenied'))));
+      }
+      return;
+    }
+    final directory = await getTemporaryDirectory();
+    // Named from the conversation rather than the clock: this file is
+    // overwritten by the next recording in the same thread, and never needs to
+    // outlive the upload.
+    final path = '${directory.path}/voice-${widget.userId}.m4a';
+    await _recorder.start(const RecordConfig(), path: path);
+    if (mounted) setState(() => _recording = true);
   }
 
   Future<void> _block() async {
@@ -216,21 +334,74 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
             top: false,
             child: Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _draft,
-                      minLines: 1,
-                      maxLines: 4,
-                      decoration: InputDecoration(hintText: t('messages.placeholder')),
+                  if (_uploading != null) ...[
+                    LinearProgressIndicator(value: _uploading),
+                    const SizedBox(height: 8),
+                  ],
+
+                  // What is already attached, so nothing is sent unseen.
+                  if (_pictures.isNotEmpty || _audio.isNotEmpty) ...[
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (var i = 0; i < _pictures.length; i++)
+                          _Attachment(
+                            label: t('feed.addPicture'),
+                            icon: Icons.image_outlined,
+                            onRemove: () => setState(() => _pictures.removeAt(i)),
+                          ),
+                        if (_audio.isNotEmpty)
+                          _Attachment(
+                            label: t('messages.voiceMessage'),
+                            icon: Icons.mic,
+                            onRemove: () => setState(() => _audio = ''),
+                          ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    icon: const Icon(Icons.send),
-                    onPressed: _busy ? null : _send,
+                    const SizedBox(height: 8),
+                  ],
+
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.image_outlined),
+                        tooltip: t('feed.addPicture'),
+                        onPressed: _busy || _uploading != null || _pictures.length >= 4 ? null : _addPicture,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.videocam_outlined),
+                        tooltip: t('feed.addVideo'),
+                        onPressed: _busy || _uploading != null ? null : _addVideo,
+                      ),
+                      IconButton(
+                        // Red while recording: the one control here with a
+                        // running state, and the only way to tell the mic is
+                        // live without a waveform.
+                        icon: Icon(_recording ? Icons.stop : Icons.mic_none),
+                        color: _recording ? Theme.of(context).colorScheme.error : null,
+                        tooltip: t('messages.recordVoice'),
+                        onPressed: _busy || _uploading != null ? null : _toggleRecording,
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _draft,
+                          minLines: 1,
+                          maxLines: 4,
+                          decoration: InputDecoration(hintText: t('messages.placeholder')),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        icon: const Icon(Icons.send),
+                        onPressed: _busy || _uploading != null ? null : _send,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -238,6 +409,25 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// One attached picture or voice note in the composer, with a way to drop it.
+class _Attachment extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onRemove;
+
+  const _Attachment({required this.label, required this.icon, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      avatar: Icon(icon, size: 16),
+      label: Text(label),
+      onDeleted: onRemove,
+      visualDensity: VisualDensity.compact,
     );
   }
 }

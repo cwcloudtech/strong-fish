@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiFlag, FiImage, FiSearch, FiSend, FiSlash, FiUser, FiX } from "react-icons/fi";
+import { FiFlag, FiImage, FiSearch, FiSend, FiSlash, FiUser, FiVideo, FiX } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import Avatar from "../../components/common/Avatar";
@@ -127,6 +127,9 @@ function Thread({ userId, onSent }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const fileInput = useRef(null);
+  const videoInput = useRef(null);
+  // Upload progress, 0..1, or null when nothing is uploading.
+  const [uploading, setUploading] = useState(null);
   const [reporting, setReporting] = useState(null);
   const [blocking, setBlocking] = useState(false);
   const bottom = useRef(null);
@@ -162,6 +165,29 @@ function Thread({ userId, onSent }) {
       setPictures((current) => [...current, dataUrl].slice(0, 4));
     } catch (err) {
       setError(err.message === "too-large" ? t("errors.imageTooLarge") : err);
+    }
+  };
+
+  // Uploading a video appends its URL to the draft rather than attaching it:
+  // from there it is an ordinary link, and the same detection that renders a
+  // pasted YouTube URL plays it. The feed's composer does exactly this.
+  const addVideo = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setUploading(0);
+    setError(null);
+    try {
+      const { url } = await mediaApi.uploadVideo(file, setUploading);
+      setDraft((current) => (current.trim() ? `${current.trim()}\n${url}` : url));
+    } catch (err) {
+      // The API's 405 for "no storage configured" carries its own i18n code,
+      // so it reads as "set up your storage first" like every other failure -
+      // reported inline here, the way this screen reports the rest.
+      setError(err);
+    } finally {
+      setUploading(null);
     }
   };
 
@@ -325,6 +351,12 @@ function Thread({ userId, onSent }) {
           }}
         />
 
+        {uploading !== null ? (
+          <p className="sf-muted" style={{ margin: "0.4rem 0 0" }}>
+            {t("feed.uploadingVideo", { percent: uploading })}
+          </p>
+        ) : null}
+
         <div className="sf-thread-tools">
           <button
             type="button"
@@ -336,6 +368,17 @@ function Thread({ userId, onSent }) {
             <FiImage />
           </button>
           <input ref={fileInput} type="file" accept="image/*" hidden onChange={addPicture} />
+
+          <button
+            type="button"
+            className="sf-button-ghost"
+            onClick={() => videoInput.current?.click()}
+            disabled={uploading !== null}
+            aria-label={t("feed.addVideo")}
+          >
+            <FiVideo />
+          </button>
+          <input ref={videoInput} type="file" accept="video/*" hidden onChange={addVideo} />
 
           <VoiceRecorder recording={recording} onRecordingChange={setRecording} disabled={busy} />
 
