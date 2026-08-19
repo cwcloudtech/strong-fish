@@ -373,6 +373,9 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			r.Get("/messages/unread", h.Message.Unread)
 			r.Get("/messages/with/{userId}", h.Message.Thread)
 			r.Post("/messages/with/{userId}", h.Message.Send)
+			// Addressed by message id, not by thread: a delete names the one
+			// message, and the handler checks who may remove it.
+			r.Delete("/messages/{messageId}", h.Message.Delete)
 
 			// The block list. Blocking does not require the target to be
 			// visible - needing to block somebody you can no longer see is

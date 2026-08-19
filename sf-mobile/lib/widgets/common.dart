@@ -162,7 +162,11 @@ class SfBase64Image extends StatelessWidget {
 class AudioBubble extends StatefulWidget {
   final String url;
 
-  const AudioBubble({super.key, required this.url});
+  /// Where a framed player claims to be served from - needed only when the
+  /// recording lives somewhere that has to be embedded rather than played.
+  final String baseUrl;
+
+  const AudioBubble({super.key, required this.url, this.baseUrl = ''});
 
   @override
   State<AudioBubble> createState() => _AudioBubbleState();
@@ -180,6 +184,19 @@ class _AudioBubbleState extends State<AudioBubble> {
     // is no audio element in Flutter, and a plugin for play/pause alone would
     // be a dependency to carry forever.
     if (_open) {
+      // A voice note in Google Drive is not a file to play: the API stores
+      // Drive's /preview address, which is an HTML player page. Feeding that
+      // to an <audio src> loads a web page and plays nothing - silently, which
+      // is exactly how a recording that uploaded perfectly came out mute.
+      // Framed through Drive's own player in that case; played natively when
+      // the storage serves the file itself, as an S3 bucket does.
+      final detected = detectMedia(widget.url);
+      if (detected.kind == MediaKind.drive) {
+        return SizedBox(
+          height: 120,
+          child: MediaPlayer(url: widget.url, baseUrl: widget.baseUrl),
+        );
+      }
       return SizedBox(
         height: 56,
         child: AudioWebView(url: widget.url),

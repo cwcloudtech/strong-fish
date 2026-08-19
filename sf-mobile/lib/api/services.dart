@@ -197,13 +197,13 @@ class SfApi {
     required String content,
     List<String> pictures = const [],
     String visibility = 'public',
-    String clubId = '',
+    List<String> clubIds = const [],
   }) async {
     final response = await client.dio.post('/posts', data: {
       'content': content,
       'pictures': pictures,
       'visibility': visibility,
-      'clubId': clubId,
+      'clubIds': clubIds,
     });
     return Post.fromJson(_map(response.data));
   }
@@ -316,6 +316,13 @@ class SfApi {
     return PrivateMessage.fromJson(_map(response.data));
   }
 
+  /// Removes one private message. Its sender may take back what they wrote;
+  /// a superadmin may remove anything. The API decides, and reports it as
+  /// `deletable` on each message.
+  Future<void> deleteMessage(String messageId) async {
+    await client.dio.delete('/messages/$messageId');
+  }
+
   Future<void> blockMember(String userId) async {
     await client.dio.post('/blocks/$userId');
   }
@@ -362,12 +369,26 @@ class SfApi {
   /// The content and pictures go with it because the API rewrites the whole
   /// post: sending only the visibility would blank the text. Links are left
   /// out on purpose - the API re-derives them from the content.
-  Future<Post> updatePostVisibility(Post post, String visibility, String clubId) async {
+  /// Rewrites a post's text, keeping everything else as it is.
+  ///
+  /// The whole post is sent because the API replaces the payload rather than
+  /// patching it: leaving the pictures and the clubs out would clear them.
+  Future<Post> updatePost(Post post, String content) async {
+    final response = await client.dio.put('/posts/${post.id}', data: {
+      'content': content,
+      'pictures': post.pictures,
+      'visibility': post.visibility,
+      'clubIds': post.clubIds,
+    });
+    return Post.fromJson(_map(response.data));
+  }
+
+  Future<Post> updatePostVisibility(Post post, String visibility, List<String> clubIds) async {
     final response = await client.dio.put('/posts/${post.id}', data: {
       'content': post.content,
       'pictures': post.pictures,
       'visibility': visibility,
-      'clubId': visibility == 'club' ? clubId : '',
+      'clubIds': visibility == 'club' ? clubIds : const <String>[],
     });
     return Post.fromJson(_map(response.data));
   }

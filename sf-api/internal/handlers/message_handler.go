@@ -130,8 +130,10 @@ func (h *MessageHandler) Thread(w http.ResponseWriter, r *http.Request) {
 	// leaves the badge stale, which is not worth failing the read over.
 	_ = h.messages.MarkRead(r.Context(), conversationID, callerID, time.Now().UTC())
 
+	superadmin := h.isSuperadmin(r, callerID)
 	for i := range messages {
 		messages[i].Mine = messages[i].SenderID == callerID
+		messages[i].Deletable = messages[i].Mine || superadmin
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -208,10 +210,51 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	message.Mine = true
+	message.Deletable = true
 	writeJSON(w, http.StatusCreated, message)
 }
 
 // --- blocks ---
+
+// isSuperadmin reports whether the caller moderates everything.
+func (h *MessageHandler) isSuperadmin(r *http.Request, callerID string) bool {
+	if utils.IsBlank(callerID) {
+		return false
+	}
+	user, err := h.users.FindByID(r.Context(), callerID)
+	return err == nil && user.Role == models.GlobalRoleSuperadmin
+}
+
+// Delete removes one private message.
+//
+// Its sender may take back what they wrote, and a superadmin may remove
+// anything - the same moderation power they have over posts and comments. The
+// recipient may not: a message someone else sent is part of the record of a
+// conversation they were party to, and letting either side rewrite it would
+// make a thread evidence of nothing.
+func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := middleware.UserIDFromContext(r.Context())
+	messageID := chi.URLParam(r, "messageId")
+
+	message, err := h.messages.FindMessage(r.Context(), messageID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	if message.SenderID != callerID && !h.isSuperadmin(r, callerID) {
+		// Not found rather than forbidden: a stranger guessing ids should not
+		// learn which ones exist.
+		writeError(w, http.StatusNotFound, "Message not found", CodeNotFound)
+		return
+	}
+
+	if err := h.messages.DeleteMessage(r.Context(), messageID); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
 func (h *MessageHandler) ListBlocks(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := middleware.UserIDFromContext(r.Context())

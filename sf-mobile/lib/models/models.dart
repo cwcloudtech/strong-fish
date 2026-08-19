@@ -598,6 +598,11 @@ class PrivateMessage {
   /// Whether this side wrote it - which is all the UI needs to decide where to
   /// draw the bubble.
   final bool mine;
+
+  /// Whether this caller may remove it: its sender, or a superadmin. Reported
+  /// by the API rather than derived here, so the two clients cannot each carry
+  /// their own copy of the rule.
+  final bool deletable;
   final DateTime createdAt;
 
   const PrivateMessage({
@@ -605,6 +610,7 @@ class PrivateMessage {
     this.senderId = '',
     this.sender = const User(id: ''),
     this.content = '',
+    this.deletable = false,
     this.pictures = const [],
     this.links = const [],
     this.audio = '',
@@ -623,6 +629,7 @@ class PrivateMessage {
         links: _toStringList(json['links']),
         audio: _toString(json['audio']),
         mine: json['mine'] == true,
+        deletable: json['deletable'] == true,
         createdAt: _toDate(json['createdAt']).toLocal(),
       );
 }
@@ -758,10 +765,11 @@ class Post {
   final String authorId;
   final User author;
 
-  /// The club a club-only post belongs to, empty for a public one. Needed to
-  /// move the post between the club feed and the public one.
-  final String clubId;
-  final String clubName;
+  /// The clubs a club-only post was shared with, empty for a public one.
+  /// clubNames matches index for index, so a card can name them without a
+  /// second request.
+  final List<String> clubIds;
+  final List<String> clubNames;
   final String content;
   final List<String> pictures;
   final List<String> links;
@@ -777,8 +785,8 @@ class Post {
     required this.id,
     this.authorId = '',
     this.author = const User(id: ''),
-    this.clubId = '',
-    this.clubName = '',
+    this.clubIds = const [],
+    this.clubNames = const [],
     this.content = '',
     this.pictures = const [],
     this.links = const [],
@@ -797,8 +805,8 @@ class Post {
         author: json['author'] is Map<String, dynamic>
             ? User.fromJson(json['author'])
             : const User(id: ''),
-        clubId: _toString(json['clubId']),
-        clubName: _toString(json['clubName']),
+        clubIds: _toStringList(json['clubIds']),
+        clubNames: _toStringList(json['clubNames']),
         content: _toString(json['content']),
         pictures: _toStringList(json['pictures']),
         links: _toStringList(json['links']),
@@ -815,7 +823,8 @@ class Post {
         id: id,
         authorId: authorId,
         author: author,
-        clubName: clubName,
+        clubIds: clubIds,
+        clubNames: clubNames,
         content: content,
         pictures: pictures,
         links: links,

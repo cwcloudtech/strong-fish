@@ -169,7 +169,7 @@ class _PostCard extends ConsumerWidget {
                       Text(post.author.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
                       Text(
                         '${post.createdAt.toLocal().toString().split('.').first}'
-                        '${post.clubName.isNotEmpty ? ' · ${post.clubName}' : ''}',
+                        '${post.clubNames.isNotEmpty ? ' · ${post.clubNames.join(', ')}' : ''}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -270,8 +270,14 @@ class _PostCard extends ConsumerWidget {
                   onPressed: () => _openComments(context, ref),
                 ),
                 const Spacer(),
-                // Where the post is published, changeable by its author and by
-                // a superadmin - which is exactly what `editable` reports.
+                // Both offered on `editable`, which the API sets for the
+                // author and for a superadmin moderating.
+                if (post.editable)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: t('common.edit'),
+                    onPressed: () => _edit(context, ref),
+                  ),
                 if (post.editable)
                   IconButton(
                     icon: const Icon(Icons.visibility_outlined),
@@ -298,6 +304,49 @@ class _PostCard extends ConsumerWidget {
     );
   }
 
+  /// Rewrites the post's text.
+  ///
+  /// Text only: the pictures and where it is published each have their own
+  /// control, and a full editor in a dialog would be a worse version of the
+  /// composer.
+  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+    final t = ref.read(tProvider);
+    final controller = TextEditingController(text: post.content);
+
+    final content = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('common.edit')),
+        content: TextField(controller: controller, maxLines: 6, autofocus: true),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            child: Text(t('common.save')),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    if (content == null || content == post.content) return;
+    // A post with neither text nor a picture has nothing left in it, and the
+    // API refuses it.
+    if (content.isEmpty && post.pictures.isEmpty) return;
+
+    try {
+      onChanged(await ref.read(apiProvider).updatePost(post, content));
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    }
+  }
+
   /// Offers the public feed and the clubs this post may be moved into.
   ///
   /// The author picks from their own clubs; anybody else editing it - a
@@ -312,41 +361,101 @@ class _PostCard extends ConsumerWidget {
     var clubs = <Club>[];
     if (isAuthor) {
       clubs = await ref.read(clubsProvider.future).catchError((_) => <Club>[]);
-    } else if (post.clubId.isNotEmpty) {
-      clubs = [Club(id: post.clubId, name: post.clubName)];
+    } else {
+      for (var i = 0; i < post.clubIds.length; i++) {
+        clubs.add(Club(
+          id: post.clubIds[i],
+          name: i < post.clubNames.length ? post.clubNames[i] : t('feed.visibilityClub'),
+        ));
+      }
     }
     if (!context.mounted) return;
 
-    final choice = await showModalBottomSheet<({String visibility, String clubId})>(
+    // A sheet with its own state, because a post can go to several clubs and
+    // the checkboxes have to stay on screen while they are being ticked.
+    var visibility = post.visibility;
+    final picked = List<String>.from(post.clubIds);
+
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.public),
-              title: Text(t('feed.visibilityPublic')),
-              selected: post.visibility == 'public',
-              onTap: () => Navigator.of(sheetContext).pop((visibility: 'public', clubId: '')),
-            ),
-            for (final club in clubs)
-              ListTile(
-                leading: const Icon(Icons.groups_outlined),
-                title: Text(club.name),
-                subtitle: Text(t('feed.visibilityClub')),
-                selected: post.visibility == 'club' && post.clubId == club.id,
-                onTap: () => Navigator.of(sheetContext).pop((visibility: 'club', clubId: club.id)),
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // RadioGroup rather than a groupValue on each tile: Flutter
+              // deprecated the per-tile form after 3.32.
+              RadioGroup<String>(
+                groupValue: visibility,
+                onChanged: (value) => setSheetState(() => visibility = value ?? 'public'),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    RadioListTile<String>(
+                      value: 'public',
+                      title: Text(t('feed.visibilityPublic')),
+                      secondary: const Icon(Icons.public),
+                    ),
+                    if (clubs.isNotEmpty)
+                      RadioListTile<String>(
+                        value: 'club',
+                        title: Text(t('feed.visibilityClub')),
+                        secondary: const Icon(Icons.groups_outlined),
+                      ),
+                  ],
+                ),
               ),
-          ],
+              if (visibility == 'club')
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final club in clubs)
+                        CheckboxListTile(
+                          dense: true,
+                          title: Text(club.name),
+                          value: picked.contains(club.id),
+                          onChanged: (checked) => setSheetState(() {
+                            if (checked == true) {
+                              picked.add(club.id);
+                            } else {
+                              picked.remove(club.id);
+                            }
+                          }),
+                        ),
+                    ],
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    // A club-only post with no club picked has no audience,
+                    // and the API refuses it.
+                    onPressed: visibility == 'club' && picked.isEmpty
+                        ? null
+                        : () => Navigator.of(sheetContext).pop(true),
+                    child: Text(t('common.confirm')),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    if (choice == null) return;
-    if (choice.visibility == post.visibility && choice.clubId == post.clubId) return;
+    if (confirmed != true) return;
+
+    final unchanged = visibility == post.visibility &&
+        picked.length == post.clubIds.length &&
+        picked.every(post.clubIds.contains);
+    if (unchanged) return;
 
     try {
-      onChanged(await ref.read(apiProvider).updatePostVisibility(post, choice.visibility, choice.clubId));
+      onChanged(await ref.read(apiProvider).updatePostVisibility(post, visibility, picked));
     } catch (error) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
@@ -625,7 +734,9 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
   final List<String> _pictures = [];
 
   String _visibility = 'public';
-  String _clubId = '';
+  /// The clubs a club-only post goes to. Several, because a coach who runs two
+  /// writes the same session note for both and should not post it twice.
+  final List<String> _clubIds = [];
   bool _busy = false;
   String? _error;
 
@@ -690,7 +801,7 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
             content: _content.text.trim(),
             pictures: _pictures,
             visibility: _visibility,
-            clubId: _visibility == 'club' ? _clubId : '',
+            clubIds: _visibility == 'club' ? _clubIds : const [],
           );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -765,14 +876,25 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
           ),
           if (_visibility == 'club') ...[
             const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              initialValue: _clubId.isEmpty ? null : _clubId,
-              decoration: InputDecoration(labelText: t('feed.pickClub')),
-              items: [
-                for (final club in clubs) DropdownMenuItem(value: club.id, child: Text(club.name)),
-              ],
-              onChanged: (value) => setState(() => _clubId = value ?? ''),
-            ),
+            // Checkboxes rather than a dropdown: a post can go to several
+            // clubs, and a list this short reads better than a menu that has
+            // to be opened to see what is picked.
+            Text(t('feed.pickClubs'), style: Theme.of(context).textTheme.labelLarge),
+            for (final club in clubs)
+              CheckboxListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                title: Text(club.name),
+                value: _clubIds.contains(club.id),
+                onChanged: (checked) => setState(() {
+                  if (checked == true) {
+                    _clubIds.add(club.id);
+                  } else {
+                    _clubIds.remove(club.id);
+                  }
+                }),
+              ),
           ],
           if (_error != null) ...[
             const SizedBox(height: 12),
