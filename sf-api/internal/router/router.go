@@ -393,6 +393,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			// the GET then answers 401/405 from inside the subrouter instead
 			// of reaching its handler.
 			r.Post("/events", h.Event.Create)
+			r.Post("/events/import", h.Event.ImportCalendar)
 			r.Put("/events/{eventId}", h.Event.Update)
 			r.Delete("/events/{eventId}", h.Event.Delete)
 

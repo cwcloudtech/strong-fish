@@ -137,7 +137,7 @@ func main() {
 		Contact:  handlers.NewContactHandler(contactClient),
 		ApiKey:   handlers.NewApiKeyHandler(apiKeyStore),
 		Media:    handlers.NewMediaHandler(userStore, cfg.MaxVideoSize, cfg.MaxAudioSize),
-		Event:    handlers.NewEventHandler(eventStore, clubStore, userStore),
+		Event:    handlers.NewEventHandler(eventStore, clubStore, userStore, cfg.MaxUploadSize),
 		Calendar: handlers.NewCalendarHandler(userStore, eventStore, clubStore, cfg.APIBaseURL),
 		Search:   handlers.NewSearchHandler(userStore, clubStore, profileHandler),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,

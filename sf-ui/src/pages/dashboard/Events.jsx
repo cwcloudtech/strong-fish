@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
-import { FiCalendar, FiEdit2, FiExternalLink, FiGrid, FiList, FiMapPin, FiPlus, FiTrash2 } from "react-icons/fi";
+import {
+  FiCalendar,
+  FiEdit2,
+  FiExternalLink,
+  FiGrid,
+  FiList,
+  FiMapPin,
+  FiPlus,
+  FiTrash2,
+  FiUpload,
+} from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import Modal, { ConfirmModal } from "../../components/common/Modal";
@@ -150,11 +160,17 @@ export default function Events() {
           <h1 className="sf-title">{t("events.title")}</h1>
           <p className="sf-subtitle">{t("events.subtitle")}</p>
         </div>
-        {canCreate ? (
-          <button className="sf-button" onClick={() => setEditing({})}>
-            <FiPlus /> {t("events.add")}
-          </button>
-        ) : null}
+        <div className="sf-row" style={{ gap: "0.4rem" }}>
+          {/* Importing publishes a whole season at once, so it is offered to
+              the same people who may publish one event: a club's coaches and
+              a superadmin. The API checks it again. */}
+          {canPublish ? <CalendarImport clubs={writableClubs} canPostGlobally={user?.role === "superadmin"} onImported={load} /> : null}
+          {canCreate ? (
+            <button className="sf-button" onClick={() => setEditing({})}>
+              <FiPlus /> {t("events.add")}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <CalendarSubscription />
@@ -686,6 +702,110 @@ function EventFormModal({ event, clubs, canPostGlobally, canPublish, onClose, on
 }
 
 /** Subscribe-from-Outlook/Google panel: the feed URL, and how to revoke it. */
+/**
+ * Uploads a federation season calendar.
+ *
+ * The FFForce publishes its season as a PDF year planner. Retyping forty
+ * competitions out of it is the kind of work nobody does twice, so the file
+ * goes straight to the API, which reads the dates and the category colours off
+ * the page. Re-uploading a revised calendar adds what changed rather than a
+ * second copy of the year, which is what the "already there" count reports.
+ */
+function CalendarImport({ clubs, canPostGlobally, onImported }) {
+  const { t } = useI18n();
+  const input = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [clubId, setClubId] = useState(clubs.length === 1 && !canPostGlobally ? clubs[0].id : "");
+  const [result, setResult] = useState(null);
+
+  const upload = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const imported = await eventsApi.importCalendar(file, clubId, clubId ? "club" : "public");
+      setResult(imported);
+      toast.success(t("events.imported", { count: imported.events.length }), toastOptions);
+      await onImported();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t("errors.generic"), toastOptions);
+    } finally {
+      setBusy(false);
+      // Cleared so the same file can be picked again after a failure - a file
+      // input fires nothing when re-selecting the value it already holds.
+      if (input.current) input.current.value = "";
+    }
+  };
+
+  return (
+    <>
+      <button className="sf-button sf-button-secondary" onClick={() => setOpen(true)}>
+        <FiUpload /> {t("events.import")}
+      </button>
+
+      {open ? (
+        <Modal title={t("events.import")} onClose={() => setOpen(false)}>
+          <p className="sf-muted" style={{ marginTop: 0 }}>
+            {t("events.importHelp")}
+          </p>
+
+          {clubs.length > 0 ? (
+            <div className="sf-field">
+              <label className="sf-label" htmlFor="importClub">
+                {t("events.club")}
+              </label>
+              <select id="importClub" className="sf-select" value={clubId} onChange={(e) => setClubId(e.target.value)}>
+                {canPostGlobally ? <option value="">{t("events.noClub")}</option> : null}
+                {clubs.map((club) => (
+                  <option key={club.id} value={club.id}>
+                    {club.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
+          <input
+            ref={input}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="sf-input"
+            disabled={busy}
+            onChange={(event) => upload(event.target.files?.[0])}
+          />
+
+          {busy ? <p className="sf-muted">{t("events.importing")}</p> : null}
+
+          {result ? (
+            <div style={{ marginTop: "0.8rem" }}>
+              <p style={{ margin: 0 }}>
+                <strong>{t("events.imported", { count: result.events.length })}</strong>
+              </p>
+              {result.skipped > 0 ? (
+                <p className="sf-muted" style={{ margin: "0.2rem 0 0" }}>
+                  {t("events.importSkipped", { count: result.skipped })}
+                </p>
+              ) : null}
+              {result.warnings?.length ? (
+                <>
+                  {/* Named rather than counted: these are the entries a coach
+                      has to add by hand, and they need to know which. */}
+                  <p className="sf-muted" style={{ margin: "0.4rem 0 0.2rem" }}>{t("events.importWarnings")}</p>
+                  <ul className="sf-muted" style={{ margin: 0, paddingLeft: "1.1rem" }}>
+                    {result.warnings.map((warning, index) => (
+                      <li key={`${warning}-${index}`}>{warning}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+        </Modal>
+      ) : null}
+    </>
+  );
+}
+
 function CalendarSubscription() {
   const { t } = useI18n();
   const [status, setStatus] = useState(null);

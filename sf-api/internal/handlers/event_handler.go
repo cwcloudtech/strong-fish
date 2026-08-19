@@ -23,10 +23,14 @@ type EventHandler struct {
 	events *store.EventStore
 	clubs  *store.ClubStore
 	users  *store.UserStore
+	// maxUploadSize caps an imported federation calendar, the one thing this
+	// handler accepts a file for.
+	maxUploadSize int64
 }
 
-func NewEventHandler(events *store.EventStore, clubs *store.ClubStore, users *store.UserStore) *EventHandler {
-	return &EventHandler{events: events, clubs: clubs, users: users}
+func NewEventHandler(events *store.EventStore, clubs *store.ClubStore, users *store.UserStore,
+	maxUploadSize int64) *EventHandler {
+	return &EventHandler{events: events, clubs: clubs, users: users, maxUploadSize: maxUploadSize}
 }
 
 type eventPayload struct {

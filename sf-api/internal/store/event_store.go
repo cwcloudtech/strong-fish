@@ -191,6 +191,26 @@ func (s *EventStore) Update(ctx context.Context, id string, f EventFields) (mode
 	return s.FindByID(ctx, id)
 }
 
+// ExistsLike reports whether this author already has an event with the same
+// title starting on the same day.
+//
+// Used by the calendar import: the federation revises its season and
+// republishes it, and importing the new file should add what changed rather
+// than a second copy of the year. Matched on the day rather than the instant,
+// because a competition moved by a few hours is the same competition.
+func (s *EventStore) ExistsLike(ctx context.Context, authorID, title string, startsAt time.Time) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT exists(
+			SELECT 1 FROM events e
+			WHERE e.author_id = $1::uuid
+			  AND e.data->>'title' = $2
+			  AND left(e.data->>'startsAt', 10) = $3
+		)
+	`, authorID, title, startsAt.UTC().Format("2006-01-02")).Scan(&exists)
+	return exists, err
+}
+
 func (s *EventStore) Delete(ctx context.Context, id string) error {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM events WHERE id = $1`, id)
 	if err != nil {
