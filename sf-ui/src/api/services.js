@@ -214,6 +214,15 @@ export const events = {
   create: (payload) => body(client.post("/events", payload)),
   update: (eventId, payload) => body(client.put(`/events/${eventId}`, payload)),
   remove: (eventId) => body(client.delete(`/events/${eventId}`)),
+  // Uploads a federation season calendar, which the API reads into whole-day
+  // competitions. clubId and visibility say where they land.
+  importCalendar: (file, clubId, visibility) => {
+    const form = new FormData();
+    form.append("file", file);
+    if (clubId) form.append("clubId", clubId);
+    if (visibility) form.append("visibility", visibility);
+    return body(client.post("/events/import", form));
+  },
 };
 
 export const calendarFeed = {

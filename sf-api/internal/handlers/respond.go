@@ -82,8 +82,9 @@ const (
 	CodeInvalidStorageType    = "errors.invalidStorageType"
 	CodeInvalidServiceAccount = "errors.invalidServiceAccount"
 	// The events calendar.
-	CodeEventTitleRequired = "errors.eventTitleRequired"
-	CodeInvalidEventDate   = "errors.invalidEventDate"
+	CodeEventTitleRequired  = "errors.eventTitleRequired"
+	CodeInvalidEventDate    = "errors.invalidEventDate"
+	CodeInvalidCalendarFile = "errors.invalidCalendarFile"
 	// Profiles, search, invitations and coach requests.
 	CodeInvalidBirthdate         = "errors.invalidBirthdate"
 	CodeInvalidProfileVisibility = "errors.invalidProfileVisibility"
