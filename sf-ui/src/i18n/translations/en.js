@@ -585,6 +585,7 @@ const en = {
     previous: "Previous",
     next: "Next",
     more: "+{{count}} more",
+    dragHint: "Drag down a day to pick a start and end time, or click a half hour.",
     moreInfo: "More information",
     emptyTitle: "Nothing planned",
     emptyBody: "No event is coming up. A coach can add one for their club.",

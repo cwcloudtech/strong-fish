@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { FiChevronLeft, FiChevronRight } from "react-icons/fi";
 
+import WeekGrid from "./WeekGrid";
 import { useI18n } from "../../i18n/I18nContext";
 
 /**
@@ -65,6 +66,7 @@ export default function EventCalendar({
   onViewChange,
   onSelect,
   onAddOn,
+  onAddRange,
   canCreate,
 }) {
   const { t, locale } = useI18n();
@@ -196,6 +198,22 @@ export default function EventCalendar({
         </div>
       </div>
 
+      {view === "week" ? (
+        <WeekGrid
+          days={(weeks[0] || []).map((date, index) => ({
+            date,
+            iso: isoDay(date),
+            label: `${weekdayLabels[index]} `,
+            weekend: date.getDay() === 0 || date.getDay() === 6,
+          }))}
+          byDay={byDay}
+          todayIso={todayIso}
+          onSelectEvent={onSelect}
+          onSelectRange={onAddRange}
+          canCreate={canCreate}
+        />
+      ) : (
+      <>
       <div className="sf-calendar-weekdays">
         {weekdayLabels.map((label) => (
           <div key={label} className="sf-calendar-weekday">
@@ -259,6 +277,8 @@ export default function EventCalendar({
           </div>
         ))}
       </div>
+      </>
+      )}
     </div>
   );
 }
