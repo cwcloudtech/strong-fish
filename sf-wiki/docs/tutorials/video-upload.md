@@ -9,7 +9,7 @@ goes into **your own storage**, not ours.
 
 ## Why your own bucket
 
-strong-fish hosts no video at all. Twenty megabytes per post would wreck the
+StrongFish hosts no video at all. Twenty megabytes per post would wreck the
 database, and paying to serve other people's training footage is not what this
 app is for.
 
@@ -26,7 +26,7 @@ S3 API.
 
 1. Create a bucket, and an access key that can write to it.
 2. **Object reads must be public.** The link goes into a post and is played by a
-   plain video player in someone else's browser, with no credentials. strong-fish
+   plain video player in someone else's browser, with no credentials. StrongFish
    uploads each object with a public-read ACL; a bucket with ACLs disabled will
    reject the upload, which is the right moment to find out.
 3. In the app: **Settings → Video storage**, pick *S3-compatible bucket*.
@@ -61,7 +61,7 @@ S3 API.
    it by hand first. Leave it empty to write straight into the folder.
 7. Save.
 
-strong-fish grants each uploaded file anyone-with-the-link read access as it
+StrongFish grants each uploaded file anyone-with-the-link read access as it
 writes it, and posts the Drive preview player.
 
 ## Posting

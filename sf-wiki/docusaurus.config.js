@@ -3,15 +3,15 @@ import { themes as prismThemes } from "prism-react-renderer";
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
-  title: "strong-fish",
+  title: "StrongFish",
   tagline: "Powerlifting programs, clubs and coaching",
   favicon: "img/favicon.ico",
 
   url: "https://doc.strong-fish.com",
   baseUrl: "/",
 
-  organizationName: "StrongFish",
-  projectName: "StrongFish wiki",
+  organizationName: "cwcloud",
+  projectName: "strong-fish",
 
   // A broken link here is a page somebody clicks and lands nowhere, so it
   // fails the build rather than the reader.
@@ -70,11 +70,11 @@ const config = {
         {
           name: "description",
           content:
-            "strong-fish documentation: RPE-based programs whose loads follow each athlete's own maxes, clubs, and a training feed.",
+            "StrongFish documentation: RPE-based programs whose loads follow each athlete's own maxes, clubs, and a training feed.",
         },
         {
           name: "keywords",
-          content: "strong-fish, powerlifting, RPE, 1RM, e1RM, squat, bench, deadlift, coaching",
+          content: "StrongFish, powerlifting, RPE, 1RM, e1RM, squat, bench, deadlift, coaching",
         },
       ],
       navbar: {
@@ -106,7 +106,7 @@ const config = {
             ],
           },
           {
-            title: "strong-fish",
+            title: "StrongFish",
             items: [
               { label: "Open the app", href: "https://strong-fish.com" },
               { label: "Sources", href: "https://gitlab.cwcloud.tech/oss/strong-fish" },

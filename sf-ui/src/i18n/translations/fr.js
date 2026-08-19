@@ -1,6 +1,6 @@
 const fr = {
   app: {
-    name: "strong-fish",
+    name: "StrongFish",
     tagline: "Application de powerlifting",
   },
   common: {
@@ -63,10 +63,10 @@ const fr = {
     imACoach: "Un coach",
     imACoachHelp: "Vous écrivez des programmes et animez des clubs. Un superadmin le confirme d'abord.",
     coachRequestSent:
-      "Votre compte coach attend une confirmation. Vous pouvez déjà utiliser strong-fish en tant qu'athlète.",
+      "Votre compte coach attend une confirmation. Vous pouvez déjà utiliser StrongFish en tant qu'athlète.",
     scanQr: "Se connecter en scannant un QR code",
     scanQrHelp: "Ouvrez la page des clés d'API sur le site, créez une clé et scannez le QR code affiché.",
-    scanFailed: "Ce code ne contient pas de configuration strong-fish.",
+    scanFailed: "Ce code ne contient pas de configuration StrongFish.",
     login: "Se connecter",
     signup: "S'inscrire",
     email: "Email",
@@ -108,7 +108,7 @@ const fr = {
     visibility: "Qui peut voir mon profil",
     visibilityPublic: "Tout le monde",
     postUnavailable: "Cette publication n'est pas disponible. Elle a peut-être été supprimée, ou partagée uniquement avec un club.",
-    joinToReply: "Rejoignez strong-fish pour aimer cette publication et y répondre.",
+    joinToReply: "Rejoignez StrongFish pour aimer cette publication et y répondre.",
     likes: "{{count}} j'aime",
     comments: "{{count}} commentaires",
     visibilityClubs: "Mes clubs",
@@ -541,7 +541,7 @@ const fr = {
   about: {
     title: "À propos",
     unavailable: "Cette page n'a pas encore été rédigée.",
-    openSource: "strong-fish est un produit open source de CWCloud. Les sources sont disponibles",
+    openSource: "StrongFish est un produit open source de CWCloud. Les sources sont disponibles",
     openSourceLink: "ici",
   },
   apiKeys: {
@@ -631,7 +631,7 @@ const fr = {
   storage: {
     title: "Stockage des vidéos",
     subtitle:
-      "strong-fish n'héberge aucune vidéo : pour en publier une, utilisez votre propre stockage. Jusqu'à {{size}} Mo par vidéo.",
+      "StrongFish n'héberge aucune vidéo : pour en publier une, utilisez votre propre stockage. Jusqu'à {{size}} Mo par vidéo.",
     type: "Où les stocker",
     typeS3: "Bucket compatible S3",
     typeDrive: "Dossier Google Drive",
@@ -697,8 +697,8 @@ const fr = {
     copyFor: "{{network}} ne permet pas le partage web - copiez plutôt le lien",
     copiedFor: "Lien copié. Collez-le dans {{network}}.",
     copyLink: "Copier le lien",
-    profileText: "{{name}} sur strong-fish",
-    postText: "Vu sur strong-fish",
+    profileText: "{{name}} sur StrongFish",
+    postText: "Vu sur StrongFish",
   },
   search: {
     title: "Trouver des personnes",
@@ -741,7 +741,7 @@ const fr = {
   },
   cookieBanner: {
     title: "Avis relatif aux cookies",
-    message: "strong-fish est un produit open-source. Les cookies et le stockage local qu'il utilise sont nécessaires uniquement au fonctionnement de l'application (connexion, thème et langue) - jamais pour le suivi ou l'analyse.",
+    message: "StrongFish est un produit open-source. Les cookies et le stockage local qu'il utilise sont nécessaires uniquement au fonctionnement de l'application (connexion, thème et langue) - jamais pour le suivi ou l'analyse.",
     understand: "J'ai compris",
   },
   contact: {

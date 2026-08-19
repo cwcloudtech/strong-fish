@@ -39,6 +39,9 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
     // The coaching tab is inserted rather than always present, so an athlete's
     // app doesn't carry a tab they can't use.
     final tabs = <({String label, IconData icon, Widget screen})>[
+      // The feed leads: it is what the app is opened for most often, and the
+      // first tab is where a thumb lands.
+      (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
       (label: t('nav.training'), icon: Icons.fitness_center, screen: const TrainingScreen()),
       (label: t('nav.oneRms'), icon: Icons.emoji_events_outlined, screen: const OneRmsScreen()),
       if (isCoach)
@@ -47,7 +50,6 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
       // Its own icon, not the envelope: an invitation is somebody asking you
       // to join them, and it should not read as another inbox.
       (label: t('nav.invitations'), icon: Icons.group_add_outlined, screen: const InvitationsScreen()),
-      (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
       (label: t('nav.messages'), icon: Icons.chat_bubble_outline, screen: const MessagesScreen()),
       // Only a superadmin has anything to manage, so the tab is inserted
       // rather than always present - the same way the coaching tab is.

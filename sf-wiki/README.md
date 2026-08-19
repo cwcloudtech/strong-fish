@@ -1,6 +1,6 @@
 # sf-wiki
 
-The strong-fish documentation, as a [Docusaurus](https://docusaurus.io) site.
+The StrongFish documentation, as a [Docusaurus](https://docusaurus.io) site.
 Published at [doc.strong-fish.com](https://doc.strong-fish.com), and deployed
 from the same pipeline as the rest of the repository (see the `wiki` stage in
 the root `Dockerfile`).

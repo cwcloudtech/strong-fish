@@ -7,7 +7,7 @@ sidebar_position: 2
 We are a team of French powerlifters and engineers who volunteer their time to
 develop a powerlifting app and social network.
 
-## Terms of use of strong-fish
+## Terms of use of StrongFish
 
 When you use this application, whether as a guest or as a registered member, you
 must observe the following rules. If any of them is not respected, you risk
@@ -20,7 +20,7 @@ Throughout this document:
 * the words "you" and "user" mean any user, logged in or not;
 * the words "team", "we", "managers" and "moderators" mean members holding an
   administrator account, and the employees or owners of Comwork;
-* the words "strong-fish", "the application" and "the product" mean all of our
+* the words "StrongFish", "the application" and "the product" mean all of our
   code, compiled or interpreted executables and resources hosted by CWCloud on
   every server reachable at strong-fish.com.
 
@@ -40,7 +40,7 @@ It is strictly forbidden to:
 * upload files in a format the application does not support (an executable, for
   example).
 
-### Using a strong-fish account
+### Using a StrongFish account
 
 The following points must be strictly observed:
 

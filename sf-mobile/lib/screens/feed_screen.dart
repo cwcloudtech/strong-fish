@@ -4,11 +4,11 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/media_player.dart';
 
 /// The feed: posts from the people you follow, your own, and your clubs'.
 /// "Discover" switches to every public post, which is what a new account needs
@@ -189,13 +189,15 @@ class _PostCard extends ConsumerWidget {
               const SizedBox(height: 10),
               _Base64Image(data: picture),
             ],
-            // The web app embeds a detected video inline via its <media-player>
-            // element; there's no in-app player here, so links open in the
-            // device's browser (or the provider's own app, which handles them
-            // better than an embedded webview would).
+            // The same players the web app's <media-player> renders, so a post
+            // looks the same on a phone as it does in a browser. Nothing loads
+            // until it is tapped.
             for (final link in post.links) ...[
               const SizedBox(height: 8),
-              _LinkCard(url: link),
+              // The framed document claims to be served from this deployment's
+              // own origin: an embed with no origin to report is what YouTube
+              // refuses with a configuration error.
+              MediaPlayer(url: link, baseUrl: ref.read(apiProvider).client.apiUrl),
             ],
             const Divider(height: 20),
             Row(
@@ -330,34 +332,6 @@ class _Base64Image extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Image.memory(bytes, fit: BoxFit.cover, width: double.infinity),
-    );
-  }
-}
-
-class _LinkCard extends StatelessWidget {
-  final String url;
-
-  const _LinkCard({required this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          border: Border.all(color: Theme.of(context).dividerColor),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.play_circle_outline),
-            const SizedBox(width: 10),
-            Expanded(child: Text(url, maxLines: 2, overflow: TextOverflow.ellipsis)),
-          ],
-        ),
-      ),
     );
   }
 }

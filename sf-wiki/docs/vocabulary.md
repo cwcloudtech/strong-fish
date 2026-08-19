@@ -5,7 +5,7 @@ sidebar_position: 3
 ---
 
 Three numbers run through the whole app. They are worth ten minutes, because
-every load strong-fish shows you is derived from them.
+every load StrongFish shows you is derived from them.
 
 ## 1RM — your one-rep max
 
@@ -42,13 +42,13 @@ A percentage is a promise about a day you have not had yet. RPE is an
 instruction about the day you are actually having: if you slept badly, "3 @ RPE
 8" is a lighter bar than it was last week, and it is still the right training.
 
-### How strong-fish turns RPE into kilos
+### How StrongFish turns RPE into kilos
 
 From the **RTS/Tuchscherer chart**: a table of what fraction of your max a given
 number of reps at a given RPE represents. A single at RPE 10 is 100% by
 definition; 5 reps at RPE 8 is about 76%.
 
-The chart, not a formula. strong-fish's importer was originally written against
+The chart, not a formula. StrongFish's importer was originally written against
 Epley's equation and produced loads that disagreed with the coach's own
 spreadsheet on 12 of 15 sets - the chart is what real programs are written from,
 so it is what the app computes from.
