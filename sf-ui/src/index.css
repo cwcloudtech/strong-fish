@@ -1787,3 +1787,107 @@ button {
 
 .sf-switch-row.disabled { cursor: not-allowed; }
 .sf-switch-row > span:first-child { min-width: 0; }
+
+/* --- week grid ---
+   The week as hours rather than as boxes, so a range can be dragged out at the
+   half hour. Ported from ~/cwclock's week view. */
+
+.sf-week { display: flex; flex-direction: column; }
+
+.sf-week-head,
+.sf-week-body {
+  display: grid;
+  grid-template-columns: 56px repeat(7, 1fr);
+}
+
+.sf-week-head {
+  border-bottom: 1px solid var(--sf-border);
+  background-color: var(--sf-bg-alt);
+}
+
+.sf-week-day-head {
+  padding: 6px 4px;
+  text-align: center;
+  border-left: 1px solid var(--sf-border);
+}
+
+.sf-week-day-head.weekend { background-color: color-mix(in srgb, var(--sf-border) 25%, transparent); }
+
+.sf-week-day-name {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--sf-text-muted);
+}
+
+.sf-week-day-number { display: block; font-size: 1rem; font-weight: 600; }
+
+.sf-week-day-head.today .sf-week-day-number { color: var(--sf-primary); }
+
+/* Bounded so the grid scrolls inside itself: 24 hours at full height would
+   push the rest of the page far below the fold. */
+.sf-week-body {
+  position: relative;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.sf-week-axis { position: relative; }
+
+.sf-week-hour-label {
+  padding-right: 6px;
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--sf-text-muted);
+  text-align: right;
+  /* Sits on the line it names rather than inside the band below it. */
+  transform: translateY(-0.5em);
+}
+
+.sf-week-column {
+  position: relative;
+  border-left: 1px solid var(--sf-border);
+}
+
+.sf-week-column.weekend { background-color: color-mix(in srgb, var(--sf-bg-alt) 45%, transparent); }
+
+/* The hour line is solid, the half-hour one dotted, so a dragged range can be
+   read back off the grid. */
+.sf-week-slot { border-top: 1px solid var(--sf-border); }
+.sf-week-slot.half { border-top-style: dotted; }
+.sf-week-slot.creatable { cursor: cell; }
+.sf-week-slot.selected { background-color: var(--sf-primary-tint); }
+
+.sf-week-event {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  z-index: 1;
+  display: flex;
+  padding: 2px 5px;
+  border: 0;
+  border-left: 3px solid currentColor;
+  border-radius: 3px;
+  background-color: color-mix(in srgb, currentColor 22%, transparent);
+  font: inherit;
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.sf-week-event:hover { background-color: color-mix(in srgb, currentColor 34%, transparent); }
+
+.sf-week-event-title {
+  color: var(--sf-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sf-week-hint {
+  margin: var(--sf-spacing-xs) 0 0;
+  padding: 0 var(--sf-spacing-sm) var(--sf-spacing-xs);
+  font-size: 0.8rem;
+}

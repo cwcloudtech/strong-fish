@@ -587,6 +587,7 @@ const Map<String, dynamic> fr = {
     'previous': 'Précédent',
     'next': 'Suivant',
     'more': '+{{count}} autres',
+    'dragHint': 'Faites glisser sur une journée pour choisir un début et une fin, ou cliquez une demi-heure.',
     'moreInfo': 'Plus d\'informations',
     'emptyTitle': 'Rien de prévu',
     'emptyBody': 'Aucun événement à venir. Un coach peut en ajouter un pour son club.',

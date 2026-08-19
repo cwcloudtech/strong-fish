@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import { FiCalendar, FiEdit2, FiExternalLink, FiGrid, FiList, FiMapPin, FiPlus, FiTrash2 } from "react-icons/fi";
 
@@ -38,6 +38,10 @@ export default function Events() {
   // The grid shows a month at a time, including the part of it already gone,
   // so it always asks for the past - the list keeps its own toggle.
   const [selected, setSelected] = useState(null);
+  // Whether the grid has already been pointed at the events. Done once, on the
+  // first load: after that the month shown is wherever the reader navigated to,
+  // and moving it under them would be worse than showing an empty month.
+  const anchored = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -49,6 +53,7 @@ export default function Events() {
       ]);
       setEvents(list);
       setClubs(myClubs);
+      anchorOnEvents(list);
     } catch (err) {
       setError(err);
     }
@@ -57,6 +62,40 @@ export default function Events() {
   useEffect(() => {
     load();
   }, [load]);
+
+  /**
+   * Opens the grid where the events are.
+   *
+   * A calendar that opens on today shows an empty month to anybody whose next
+   * meet is in October, which reads as "the calendar is broken" rather than as
+   * "nothing this month". So if the current month holds nothing, it jumps to
+   * the nearest event instead - forward by preference, since a calendar is
+   * about what is coming.
+   */
+  const anchorOnEvents = (list) => {
+    if (anchored.current || !list?.length) return;
+    anchored.current = true;
+
+    const now = new Date();
+    const inThisMonth = list.some((event) => {
+      const at = new Date(event.startsAt);
+      return (
+        !Number.isNaN(at.getTime()) &&
+        at.getFullYear() === now.getFullYear() &&
+        at.getMonth() === now.getMonth()
+      );
+    });
+    if (inThisMonth) return;
+
+    const dated = list
+      .map((event) => new Date(event.startsAt))
+      .filter((at) => !Number.isNaN(at.getTime()))
+      .sort((a, b) => a - b);
+    if (!dated.length) return;
+
+    const upcoming = dated.find((at) => at >= now);
+    setAnchor(upcoming || dated[dated.length - 1]);
+  };
 
   const setLayoutAndRemember = (next) => {
     setLayout(next);
@@ -147,6 +186,11 @@ export default function Events() {
             // Starting an event from a day pre-fills that date, which is the
             // whole reason to click a day rather than the "add" button.
             onAddOn={(date) => setEditing({ startsOn: date })}
+            // From the week view: the exact range the coach dragged, in
+            // minutes past midnight.
+            onAddRange={(date, fromMinutes, toMinutes) =>
+              setEditing({ startsOn: date, fromMinutes, toMinutes })
+            }
             canCreate={canCreate}
           />
         </div>
@@ -375,8 +419,8 @@ function EventFormModal({ event, clubs, canPostGlobally, onClose, onSaved }) {
     // startsOn arrives when the form was opened by clicking a day in the grid:
     // that day at 09:00, which is a working guess somebody adjusts rather than
     // a blank field they have to fill from nothing.
-    startsAt: toInputValue(event.startsAt) || defaultStart(event.startsOn),
-    endsAt: toInputValue(event.endsAt),
+    startsAt: toInputValue(event.startsAt) || defaultStart(event.startsOn, event.fromMinutes),
+    endsAt: toInputValue(event.endsAt) || defaultStart(event.startsOn, event.toMinutes),
     visibility: event.visibility || "public",
   }));
   const [busy, setBusy] = useState(false);
@@ -619,14 +663,24 @@ function toInputValue(value) {
 }
 
 /**
- * The datetime-local value for a day picked in the grid: nine in the morning,
- * which is when most sessions and every meet start.
+ * The datetime-local value for a day picked in the grid.
+ *
+ * With minutes given - the week view's drag - it is exactly the time that was
+ * selected. Without them, the month view picked a day but no hour, so it
+ * defaults to nine in the morning: a working guess to adjust rather than an
+ * empty field to fill from nothing.
  */
-function defaultStart(day) {
+function defaultStart(day, minutes) {
   if (!day) return "";
   const at = new Date(day);
   if (Number.isNaN(at.getTime())) return "";
-  at.setHours(9, 0, 0, 0);
+  if (minutes == null) {
+    at.setHours(9, 0, 0, 0);
+  } else {
+    // A selection running to the end of the day lands on the next midnight,
+    // which is the correct instant for an event that ends at 24:00.
+    at.setHours(0, minutes, 0, 0);
+  }
   return toInputValue(at.toISOString());
 }
 
