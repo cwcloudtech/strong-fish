@@ -1,6 +1,6 @@
 ---
 id: index
-title: strong-fish
+title: StrongFish
 sidebar_position: 1
 slug: /
 ---
