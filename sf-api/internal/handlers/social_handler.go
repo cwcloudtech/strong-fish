@@ -20,6 +20,10 @@ const (
 	maxPostLength    = 5000
 	maxCommentLength = 2000
 	maxPostPictures  = 4
+	// maxPostClubs bounds how many clubs one post can be shared with. Nobody
+	// coaches twenty clubs, and without a cap the list is a free multiplier on
+	// the rows one request writes.
+	maxPostClubs = 20
 )
 
 type SocialHandler struct {
@@ -84,7 +88,41 @@ type postPayload struct {
 	// rejected.
 	Links      []string `json:"links"`
 	Visibility string   `json:"visibility"`
-	ClubID     string   `json:"clubId"`
+	// ClubIDs are the clubs to share a club-only post with. The singular
+	// clubId is still accepted so an older client keeps working; see
+	// normalizeClubs.
+	ClubIDs []string `json:"clubIds"`
+	ClubID  string   `json:"clubId"`
+}
+
+// normalizeClubs folds the two ways a client can name clubs into one list, and
+// empties it for a post that is not club-only.
+//
+// The singular field is what the mobile app sent before a post could go to
+// several clubs. Accepting it costs one line and means an un-upgraded phone
+// still posts to its club rather than silently posting to none.
+func normalizeClubs(p *postPayload) {
+	if utils.IsNotBlank(p.ClubID) {
+		p.ClubIDs = append(p.ClubIDs, p.ClubID)
+	}
+	p.ClubID = utils.EMPTY
+
+	if p.Visibility != models.VisibilityClub {
+		// A public post belongs to no club, whatever the client sent.
+		p.ClubIDs = nil
+		return
+	}
+
+	seen := map[string]bool{}
+	unique := make([]string, 0, len(p.ClubIDs))
+	for _, id := range p.ClubIDs {
+		if utils.IsBlank(id) || seen[id] {
+			continue
+		}
+		seen[id] = true
+		unique = append(unique, id)
+	}
+	p.ClubIDs = unique
 }
 
 // validate checks a composed post. A post needs something in it - text or a
@@ -125,13 +163,14 @@ func (h *SocialHandler) validate(w http.ResponseWriter, p *postPayload) bool {
 		writeError(w, http.StatusBadRequest, "Invalid visibility", CodeInvalidVisibility)
 		return false
 	}
-	if p.Visibility == models.VisibilityClub && utils.IsBlank(p.ClubID) {
+	normalizeClubs(p)
+	if p.Visibility == models.VisibilityClub && len(p.ClubIDs) == 0 {
 		writeError(w, http.StatusBadRequest, "Please pick a club for a club-only post", CodeClubRequired)
 		return false
 	}
-	if p.Visibility == models.VisibilityPublic {
-		// A public post belongs to no club, whatever the client sent.
-		p.ClubID = utils.EMPTY
+	if len(p.ClubIDs) > maxPostClubs {
+		writeError(w, http.StatusBadRequest, "This post is shared with too many clubs", CodeClubRequired)
+		return false
 	}
 	return true
 }
@@ -148,8 +187,10 @@ func (h *SocialHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	if !h.validate(w, &p) {
 		return
 	}
-	if p.Visibility == models.VisibilityClub {
-		if _, err := h.clubs.FindMembership(r.Context(), p.ClubID, callerID); err != nil {
+	// Every club is checked, not just the first: a caller who belongs to one
+	// club could otherwise name it alongside four they do not.
+	for _, clubID := range p.ClubIDs {
+		if _, err := h.clubs.FindMembership(r.Context(), clubID, callerID); err != nil {
 			writeError(w, http.StatusForbidden, "You are not a member of this club", CodeNotAClubMember)
 			return
 		}
@@ -157,13 +198,28 @@ func (h *SocialHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	post, err := h.social.CreatePost(r.Context(), callerID, store.PostFields{
 		Content: p.Content, Pictures: p.Pictures, Links: p.Links,
-		Visibility: p.Visibility, ClubID: p.ClubID,
+		Visibility: p.Visibility, ClubIDs: p.ClubIDs,
 	})
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, decoratePost(post, callerID, superadmin))
+}
+
+// added returns the club ids in want that were not already in have.
+func added(have, want []string) []string {
+	existing := make(map[string]bool, len(have))
+	for _, id := range have {
+		existing[id] = true
+	}
+	var out []string
+	for _, id := range want {
+		if !existing[id] {
+			out = append(out, id)
+		}
+	}
+	return out
 }
 
 // Feed is the newspaper: posts from the people the caller follows, their own,
@@ -269,16 +325,18 @@ func (h *SocialHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	if utils.IsBlank(p.Visibility) {
 		p.Visibility = existing.Visibility
-		p.ClubID = existing.ClubID
+		p.ClubIDs = existing.ClubIDs
 	}
 	if !h.validate(w, &p) {
 		return
 	}
-	// The club is checked against the *author*, not whoever is editing: the
-	// post stays theirs, and a superadmin moving it into a club its author
-	// does not belong to would publish them somewhere they never joined.
-	if p.Visibility == models.VisibilityClub && p.ClubID != existing.ClubID {
-		if _, err := h.clubs.FindMembership(r.Context(), p.ClubID, existing.AuthorID); err != nil {
+	// Clubs are checked against the *author*, not whoever is editing: the post
+	// stays theirs, and a superadmin moving it into a club its author does not
+	// belong to would publish them somewhere they never joined. Only the clubs
+	// being added are checked, so an author who has since left a club can still
+	// edit the wording of a post already shared there.
+	for _, clubID := range added(existing.ClubIDs, p.ClubIDs) {
+		if _, err := h.clubs.FindMembership(r.Context(), clubID, existing.AuthorID); err != nil {
 			writeError(w, http.StatusForbidden, "The author is not a member of this club", CodeNotAClubMember)
 			return
 		}
@@ -286,7 +344,7 @@ func (h *SocialHandler) UpdatePost(w http.ResponseWriter, r *http.Request) {
 
 	post, err := h.social.UpdatePost(r.Context(), existing.ID, callerID, store.PostFields{
 		Content: p.Content, Pictures: p.Pictures, Links: p.Links,
-		Visibility: p.Visibility, ClubID: p.ClubID,
+		Visibility: p.Visibility, ClubIDs: p.ClubIDs,
 	})
 	if err != nil {
 		writeStoreError(w, err)

@@ -37,6 +37,15 @@ RUN CGO_ENABLED=0 go build -o /out/sf-api .
 # Stage mobile build (android only)
 FROM ghcr.io/cirruslabs/flutter:${FLUTTER_IMAGE_TAG} AS mobile-build
 WORKDIR /app
+
+# Where the installed app looks for a newer build, and where it downloads it
+# from. Two different hosts on purpose: /v1/mobile-app is served by the API,
+# while the APK itself is published alongside the frontend. Baked in at build
+# time rather than read from the session, so a scanned QR code cannot redirect
+# which package this device installs.
+ARG SF_UPDATE_URL=https://api.strong-fish.com
+ARG SF_DOWNLOAD_URL=https://www.strong-fish.com
+
 COPY sf-mobile/ ./
 COPY VERSION ./VERSION
 
@@ -53,7 +62,9 @@ RUN --mount=type=secret,id=mobile_keystore,target=/run/secrets/mobile_keystore.j
     sed -i "s/^version: .*/version: ${VERSION}+${ANDROID_VERSION_CODE}/" pubspec.yaml && \
     flutter pub get && \
     if [ -s /run/secrets/mobile_keystore.jks ]; then export MOBILE_KEYSTORE_PATH=/run/secrets/mobile_keystore.jks; fi && \
-    flutter build apk --release && \
+    flutter build apk --release \
+      --dart-define=SF_UPDATE_URL="${SF_UPDATE_URL}" \
+      --dart-define=SF_DOWNLOAD_URL="${SF_DOWNLOAD_URL}" && \
     mv /app/build/app/outputs/flutter-apk/app-release.apk "/app/build/app/outputs/flutter-apk/strong-fish-v${VERSION}.apk"
 
 # Stage api run

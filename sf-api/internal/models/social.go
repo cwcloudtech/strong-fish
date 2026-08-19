@@ -24,9 +24,11 @@ func IsValidVisibility(visibility string) bool {
 type Post struct {
 	ID       string `json:"id"`
 	AuthorID string `json:"authorId"`
-	// ClubID is set only for a club-visibility post.
-	ClubID     string      `json:"clubId,omitempty"`
-	ClubName   string      `json:"clubName,omitempty"`
+	// ClubIDs are the clubs a club-visibility post was shared with, and empty
+	// for a public one. ClubNames matches it index for index, so a card can
+	// name the clubs without a second request.
+	ClubIDs    []string    `json:"clubIds"`
+	ClubNames  []string    `json:"clubNames"`
 	Author     UserSummary `json:"author"`
 	Content    string      `json:"content"`
 	Pictures   []string    `json:"pictures,omitempty"`

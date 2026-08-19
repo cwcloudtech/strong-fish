@@ -40,7 +40,8 @@ type commentData struct {
 // club a club-only post belongs to, the like and comment counts, and whether
 // the *caller* ($1) liked it.
 var postSelect = `
-	SELECT p.id, p.author_id, coalesce(p.club_id::text, ''), coalesce(c.data->>'name', ''),
+	SELECT p.id, p.author_id,
+	       ` + postClubIDs + `, ` + postClubNames + `,
 	       p.data, p.created_at, p.updated_at,
 	       coalesce(u.data->>'handle', ''), ` + displayName("u") + `,
 	       ` + displaySurname("u") + `, coalesce(u.data->>'role', ''),
@@ -50,13 +51,28 @@ var postSelect = `
 	       (SELECT count(*) FROM post_comments WHERE post_id = p.id),
 	       exists(SELECT 1 FROM post_likes WHERE post_id = p.id AND user_id = $1)
 	FROM posts p
-	JOIN users u ON u.id = p.author_id
-	LEFT JOIN clubs c ON c.id = p.club_id`
+	JOIN users u ON u.id = p.author_id`
+
+// The clubs a post was shared with, as arrays rather than extra rows: a join
+// would return the post once per club and make every count and every page
+// size wrong.
+//
+// Ordered by name so the ids and the names line up with each other, and so the
+// same post always lists its clubs the same way.
+const postClubIDs = `
+	coalesce((SELECT array_agg(pc.club_id::text ORDER BY coalesce(c.data->>'name', ''))
+	          FROM post_clubs pc JOIN clubs c ON c.id = pc.club_id
+	          WHERE pc.post_id = p.id), '{}')`
+
+const postClubNames = `
+	coalesce((SELECT array_agg(coalesce(c.data->>'name', '') ORDER BY coalesce(c.data->>'name', ''))
+	          FROM post_clubs pc JOIN clubs c ON c.id = pc.club_id
+	          WHERE pc.post_id = p.id), '{}')`
 
 func scanPost(row pgx.Row) (models.Post, error) {
 	var p models.Post
 	var raw []byte
-	if err := row.Scan(&p.ID, &p.AuthorID, &p.ClubID, &p.ClubName, &raw, &p.CreatedAt, &p.UpdatedAt,
+	if err := row.Scan(&p.ID, &p.AuthorID, &p.ClubIDs, &p.ClubNames, &raw, &p.CreatedAt, &p.UpdatedAt,
 		&p.Author.Handle, &p.Author.Name, &p.Author.Surname, &p.Author.Role,
 		&p.Author.Picture, &p.Author.PictureX, &p.Author.PictureY,
 		&p.Likes, &p.Comments, &p.Liked); err != nil {
@@ -96,8 +112,10 @@ type PostFields struct {
 	Pictures   []string
 	Links      []string
 	Visibility string
-	// ClubID is required for a club-visibility post and empty for a public one.
-	ClubID string
+	// ClubIDs are the clubs a club-visibility post was shared with, and empty
+	// for a public one. Several, because a coach who runs two clubs writes the
+	// same session note for both and should not have to post it twice.
+	ClubIDs []string
 }
 
 func (f PostFields) payload() ([]byte, error) {
@@ -106,13 +124,22 @@ func (f PostFields) payload() ([]byte, error) {
 	})
 }
 
-// clubIDArg turns an empty club id into a NULL, which is how a public post is
-// stored.
-func clubIDArg(clubID string) any {
-	if utils.IsBlank(clubID) {
+// clubs returns the clubs to store, which is none unless the post is club-only:
+// a public post keeps no club rows, so it cannot pick any up by accident.
+func (f PostFields) clubs() []string {
+	if f.Visibility != models.VisibilityClub {
 		return nil
 	}
-	return clubID
+	seen := map[string]bool{}
+	out := make([]string, 0, len(f.ClubIDs))
+	for _, id := range f.ClubIDs {
+		if utils.IsBlank(id) || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }
 
 func (s *SocialStore) CreatePost(ctx context.Context, authorID string, f PostFields) (models.Post, error) {
@@ -120,10 +147,26 @@ func (s *SocialStore) CreatePost(ctx context.Context, authorID string, f PostFie
 	if err != nil {
 		return models.Post{}, err
 	}
+
+	// The post and the clubs it goes to are one write. Half of it - a post with
+	// no clubs, or clubs pointing at nothing - is a post whose audience does not
+	// match what its author chose.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.Post{}, err
+	}
+	defer tx.Rollback(ctx)
+
 	var id string
-	if err := s.pool.QueryRow(ctx, `
-		INSERT INTO posts (author_id, club_id, data) VALUES ($1, $2, $3) RETURNING id
-	`, authorID, clubIDArg(f.ClubID), data).Scan(&id); err != nil {
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO posts (author_id, data) VALUES ($1, $2) RETURNING id
+	`, authorID, data).Scan(&id); err != nil {
+		return models.Post{}, err
+	}
+	if err := replacePostClubs(ctx, tx, id, f.clubs()); err != nil {
+		return models.Post{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return models.Post{}, err
 	}
 	return s.FindPost(ctx, id, authorID)
@@ -131,10 +174,10 @@ func (s *SocialStore) CreatePost(ctx context.Context, authorID string, f PostFie
 
 // UpdatePost rewrites a post, including where it is published.
 //
-// The club moves with the visibility, in the same statement: every feed query
-// reads readability off the club_id column, not off the visibility label in
-// the payload, so writing one without the other would leave a post whose label
-// and audience disagree - the worst possible outcome for a privacy control.
+// The clubs move with the visibility, in the same transaction: readability is
+// decided by the label *and* the club rows together, so writing one without the
+// other would leave a post whose label and audience disagree - the worst
+// possible outcome for a privacy control.
 func (s *SocialStore) UpdatePost(ctx context.Context, id, callerID string, f PostFields) (models.Post, error) {
 	patch, err := json.Marshal(map[string]any{
 		"content":    f.Content,
@@ -145,16 +188,49 @@ func (s *SocialStore) UpdatePost(ctx context.Context, id, callerID string, f Pos
 	if err != nil {
 		return models.Post{}, err
 	}
-	tag, err := s.pool.Exec(ctx, `
-		UPDATE posts SET data = data || $2::jsonb, club_id = $3, updated_at = now() WHERE id = $1
-	`, id, patch, clubIDArg(f.ClubID))
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.Post{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE posts SET data = data || $2::jsonb, updated_at = now() WHERE id = $1
+	`, id, patch)
 	if err != nil {
 		return models.Post{}, err
 	}
 	if tag.RowsAffected() == 0 {
 		return models.Post{}, ErrNotFound
 	}
+	if err := replacePostClubs(ctx, tx, id, f.clubs()); err != nil {
+		return models.Post{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return models.Post{}, err
+	}
 	return s.FindPost(ctx, id, callerID)
+}
+
+// replacePostClubs sets exactly which clubs a post belongs to.
+//
+// Deleted then inserted rather than diffed: the set is small, and a diff is
+// where a stale row survives an edit and keeps a club reading a post its author
+// took it out of.
+func replacePostClubs(ctx context.Context, tx pgx.Tx, postID string, clubIDs []string) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM post_clubs WHERE post_id = $1`, postID); err != nil {
+		return err
+	}
+	for _, clubID := range clubIDs {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO post_clubs (post_id, club_id) VALUES ($1, $2)
+			ON CONFLICT DO NOTHING
+		`, postID, clubID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *SocialStore) FindPost(ctx context.Context, id, callerID string) (models.Post, error) {
@@ -186,10 +262,22 @@ func (s *SocialStore) DeletePost(ctx context.Context, id string) error {
 }
 
 // visibilityClause is the rule every feed query shares: a post is readable when
-// it's public, or when it belongs to a club the caller is in, or when the caller
-// wrote it. $1 is the caller's id and $2 their club ids.
+// it's public, or when it was shared with a club the caller is in, or when the
+// caller wrote it. $1 is the caller's id and $2 their club ids.
+//
+// Readability is decided by the stored label, not by whether the post has any
+// clubs. A club-only post whose last club was deleted has none left, and a rule
+// of "no clubs means public" would publish it to everybody at the moment its
+// club disappeared.
 const visibilityClause = `
-	(p.club_id IS NULL OR p.club_id = ANY($2) OR p.author_id = $1)`
+	(` + isPublic + `
+	 OR p.author_id = $1
+	 OR EXISTS (SELECT 1 FROM post_clubs pc
+	            WHERE pc.post_id = p.id AND pc.club_id::text = ANY($2)))`
+
+// isPublic reads the visibility label, defaulting to public for a row written
+// before the label existed - which is what those rows were.
+const isPublic = `coalesce(p.data->>'visibility', 'public') <> 'club'`
 
 // notBlockedClause drops posts whose author the caller has blocked, or who has
 // blocked the caller. $1 is the caller's id.
@@ -218,7 +306,8 @@ func (s *SocialStore) ListFeed(ctx context.Context, callerID string, clubIDs []s
 		  AND ` + notBlockedClause + `
 		  AND (p.author_id = $1
 		       OR p.author_id IN (SELECT following_id FROM follows WHERE follower_id = $1)
-		       OR p.club_id = ANY($2))`
+		       OR EXISTS (SELECT 1 FROM post_clubs pc
+		                  WHERE pc.post_id = p.id AND pc.club_id::text = ANY($2)))`
 
 	var total int
 	if err := s.pool.QueryRow(ctx, `
@@ -247,7 +336,7 @@ func (s *SocialStore) ListDiscoverFeed(ctx context.Context, callerID string, pag
 		caller = anonymousUserID
 	}
 
-	const scope = ` WHERE p.club_id IS NULL AND ` + notBlockedClause
+	const scope = ` WHERE ` + isPublic + ` AND ` + notBlockedClause
 
 	var total int
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM posts p`+scope, caller).Scan(&total); err != nil {
@@ -268,7 +357,9 @@ func (s *SocialStore) ListDiscoverFeed(ctx context.Context, callerID string, pag
 func (s *SocialStore) ListClubFeed(ctx context.Context, clubID, callerID string, page, size int) ([]models.Post, int, error) {
 	limit, offset := clampPage(page, size, 100)
 
-	const scope = ` WHERE p.club_id = $2 AND ` + notBlockedClause
+	const scope = `
+		WHERE EXISTS (SELECT 1 FROM post_clubs pc WHERE pc.post_id = p.id AND pc.club_id = $2::uuid)
+		  AND ` + notBlockedClause
 
 	var total int
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM posts p`+scope, callerID, clubID).Scan(&total); err != nil {
