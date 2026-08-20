@@ -65,6 +65,31 @@ publiez dans le fil. Quand la confirmation arrive, tout ce que vous avez fait en
 tant qu'athlète est toujours là : c'est le même compte, avec plus de
 possibilités.
 
+## Les badges de votre profil
+
+Votre profil en porte deux, côte à côte sous votre nom, chacun de sa couleur.
+
+**Ce que vous êtes ici** d'abord : *athlète*, *coach* ou *superadmin*. Celui-là
+ne se choisit pas - il suit votre compte, et change tout seul le jour où une
+demande de coach est confirmée.
+
+**Ce que vous soulevez** ensuite, et celui-là vous appartient :
+
+| Badge | Pour |
+| --- | --- |
+| Spécialiste du squat | le mouvement qui vous caractérise est le squat |
+| Spécialiste du développé couché | ... le développé couché |
+| Spécialiste du soulevé de terre | ... le soulevé de terre |
+| Totaliseur équilibré | aucun mouvement ne vous porte à lui seul - c'est le total |
+
+Choisissez-le dans **Paramètres → Ma spécialité** sur le web, ou dans l'onglet
+profil de l'application. C'est facultatif, modifiable quand vous voulez, et
+*aucune spécialité* est une réponse tout à fait valable.
+
+C'est une revendication, pas un calcul. StrongFish ne le déduit jamais de vos
+maxima : quelqu'un qui n'en a saisi aucun a tout autant le droit de dire ce
+qu'il est, et un mauvais jour au squat ne doit réétiqueter personne.
+
 ## Rejoindre un club
 
 Deux entrées possibles, et ce sont deux gestes différents :

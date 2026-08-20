@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { FiSearch, FiUsers } from "react-icons/fi";
 
 import Avatar from "../../components/common/Avatar";
+import ProfileBadges from "../../components/common/ProfileBadges";
 import { search as searchApi } from "../../api/services";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
@@ -240,6 +241,9 @@ export default function Search() {
                       </span>
                     ) : null}
                   </div>
+                  {/* The same badges the profile carries: a list of names is
+                      where telling a coach from an athlete matters most. */}
+                  <ProfileBadges role={member.role} specialty={member.specialty} />
                 </div>
                 {member.handle ? (
                   <Link className="sf-button sf-button-secondary sf-button-sm" to={`/profile/${member.handle}`}>

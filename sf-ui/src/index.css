@@ -52,6 +52,16 @@
   --sf-success-tint: #dcfce7;
   --sf-warning: #d97706;
   --sf-warning-tint: #fef3c7;
+  /* Profile badges. The role somebody holds and the lift they claim as their
+     own each carry a colour, because on a profile the two sit side by side:
+     a coach who squats has to read as two different things at a glance. Only
+     the inks are tokens - each badge mixes its own background out of its ink,
+     rather than every colour needing a tint token in all four theme blocks.
+     Athlete and coach reuse the primary and success inks above. */
+  --sf-role-superadmin: #b45309;
+  --sf-lift-squat: #7c3aed;
+  --sf-lift-bench: #0e7490;
+  --sf-lift-deadlift: #be123c;
   /* Backdrop behind avatar images so transparent PNGs (often drawn for a light
      background) stay legible; a no-op in light mode. */
   --sf-avatar-bg: transparent;
@@ -100,6 +110,10 @@
     --sf-danger-light: rgba(220, 38, 38, 0.18);
     --sf-success-tint: rgba(22, 163, 74, 0.16);
     --sf-warning-tint: rgba(217, 119, 6, 0.18);
+    --sf-role-superadmin: #f0b429;
+    --sf-lift-squat: #a78bfa;
+    --sf-lift-bench: #22d3ee;
+    --sf-lift-deadlift: #fb7185;
     --sf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --sf-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
     --sf-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
@@ -124,6 +138,10 @@
   --sf-danger-light: #fee2e2;
   --sf-success-tint: #dcfce7;
   --sf-warning-tint: #fef3c7;
+  --sf-role-superadmin: #b45309;
+  --sf-lift-squat: #7c3aed;
+  --sf-lift-bench: #0e7490;
+  --sf-lift-deadlift: #be123c;
   --sf-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --sf-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   --sf-shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.12);
@@ -147,6 +165,10 @@
   --sf-danger-light: rgba(220, 38, 38, 0.18);
   --sf-success-tint: rgba(22, 163, 74, 0.16);
   --sf-warning-tint: rgba(217, 119, 6, 0.18);
+  --sf-role-superadmin: #f0b429;
+  --sf-lift-squat: #a78bfa;
+  --sf-lift-bench: #22d3ee;
+  --sf-lift-deadlift: #fb7185;
   --sf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sf-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   --sf-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
@@ -403,6 +425,42 @@ button {
 .sf-badge-competition { background-color: var(--sf-primary-tint); color: var(--sf-primary-dark); }
 .sf-badge-training { background-color: var(--sf-success-tint); color: var(--sf-success); }
 .sf-badge-other { background-color: var(--sf-bg-alt); color: var(--sf-text-muted); }
+
+/* Profile badges: what somebody is here, and what they lift.
+   Each mixes its background out of its own ink, so a badge is one colour
+   declaration rather than a pair. */
+.sf-badge-role,
+.sf-badge-lift { background-color: color-mix(in srgb, currentColor 14%, transparent); }
+
+.sf-badge-role-confirmed { color: var(--sf-primary-dark); }
+.sf-badge-role-coach { color: var(--sf-success); }
+.sf-badge-role-superadmin { color: var(--sf-role-superadmin); }
+
+.sf-badge-lift-squat { color: var(--sf-lift-squat); }
+.sf-badge-lift-bench { color: var(--sf-lift-bench); }
+.sf-badge-lift-deadlift { color: var(--sf-lift-deadlift); }
+
+/* The balanced totaler is the three lifts at once, and the badge says so in
+   the three colours rather than in a fourth hue that would mean nothing. */
+.sf-badge-lift-total {
+  color: var(--sf-text);
+  background-color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--sf-lift-squat) 24%, transparent),
+    color-mix(in srgb, var(--sf-lift-bench) 24%, transparent),
+    color-mix(in srgb, var(--sf-lift-deadlift) 24%, transparent)
+  );
+}
+
+/* The row a profile's badges sit in, under the name. */
+.sf-profile-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
 
 /* --- table --- */
 

@@ -34,14 +34,18 @@ func NewSearchHandler(users *store.UserStore, clubs *store.ClubStore, profile *P
 // absent even though it can be searched on - being able to confirm an address
 // you already know is not the same as being handed everybody's.
 type searchResult struct {
-	ID       string            `json:"id"`
-	Handle   string            `json:"handle,omitempty"`
-	Name     string            `json:"name"`
-	Surname  string            `json:"surname"`
-	Role     models.GlobalRole `json:"role"`
-	Picture  string            `json:"picture,omitempty"`
-	PictureX float64           `json:"pictureX"`
-	PictureY float64           `json:"pictureY"`
+	ID      string            `json:"id"`
+	Handle  string            `json:"handle,omitempty"`
+	Name    string            `json:"name"`
+	Surname string            `json:"surname"`
+	Role    models.GlobalRole `json:"role"`
+	// Specialty is the lift they claim as their own, absent when they claim
+	// none - the same badge the profile carries, so a result row and the page
+	// it opens say the same thing.
+	Specialty string  `json:"specialty,omitempty"`
+	Picture   string  `json:"picture,omitempty"`
+	PictureX  float64 `json:"pictureX"`
+	PictureY  float64 `json:"pictureY"`
 	// SharesClub tells the caller why this person is visible to them, which is
 	// what makes a result list of near-identical names usable.
 	SharesClub bool `json:"sharesClub"`
@@ -95,7 +99,8 @@ func (h *SearchHandler) Members(w http.ResponseWriter, r *http.Request) {
 		name, surname := user.DisplayName()
 		results[i] = searchResult{
 			ID: user.ID, Handle: user.Handle, Name: name, Surname: surname,
-			Role: user.Role, Picture: user.Picture, PictureX: user.PictureX,
+			Role: user.Role, Specialty: models.NormalizeSpecialty(user.Specialty),
+			Picture: user.Picture, PictureX: user.PictureX,
 			PictureY: user.PictureY, SharesClub: mates[user.ID], Anonymous: user.Anonymous,
 		}
 	}

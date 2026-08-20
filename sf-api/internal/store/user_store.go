@@ -51,6 +51,7 @@ type userData struct {
 	CoachRequest      *models.CoachRequest  `json:"coachRequest,omitempty"`
 	IPs               []models.ConnectionIP `json:"ips,omitempty"`
 	Bodyweight        float64               `json:"bodyweight,omitempty"`
+	Specialty         string                `json:"specialty,omitempty"`
 	MFAEnabled        bool                  `json:"mfaEnabled,omitempty"`
 	MFATOTPSecret     string                `json:"mfaTotpSecret,omitempty"`
 	// Storage is the member's own object store for video uploads, and
@@ -105,6 +106,10 @@ func scanUser(row pgx.Row) (models.User, error) {
 	}
 	u.IPs = d.IPs
 	u.Bodyweight = d.Bodyweight
+	// Normalized on the way out as well as in: a payload written by hand, or
+	// by a version of this app that knew a badge this one does not, must not
+	// reach a client that would render the raw value.
+	u.Specialty = models.NormalizeSpecialty(d.Specialty)
 	u.MFAEnabled = d.MFAEnabled
 	u.MFATOTPSecret = d.MFATOTPSecret
 	if d.Storage != nil {
@@ -461,7 +466,9 @@ type ProfileFields struct {
 	ProfileVisibility string
 	Birthdate         string
 	Bodyweight        float64
-	PasswordHash      *string
+	// Specialty is the badge the member wears; blank clears it.
+	Specialty    string
+	PasswordHash *string
 }
 
 // UpdateProfile sets the connected user's own profile fields.
@@ -486,6 +493,7 @@ func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileField
 		"profileVisibility": models.NormalizeProfileVisibility(f.ProfileVisibility),
 		"birthdate":         f.Birthdate,
 		"bodyweight":        f.Bodyweight,
+		"specialty":         models.NormalizeSpecialty(f.Specialty),
 	}
 	if utils.IsNotBlank(f.Locale) {
 		patch["locale"] = f.Locale

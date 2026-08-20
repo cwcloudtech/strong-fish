@@ -75,6 +75,9 @@ class User {
   final String profileVisibility;
   final String birthdate;
   final double bodyweight;
+  /// The lift the member claims as their own: 'squat', 'bench', 'deadlift',
+  /// 'total' - or empty, which is a first-class answer and the default.
+  final String specialty;
   final bool mfaEnabled;
   final String i18nCode;
 
@@ -93,6 +96,7 @@ class User {
     this.profileVisibility = 'private',
     this.birthdate = '',
     this.bodyweight = 0,
+    this.specialty = '',
     this.mfaEnabled = false,
     this.i18nCode = '',
   });
@@ -112,6 +116,7 @@ class User {
         profileVisibility: _toString(json['profileVisibility'], 'private'),
         birthdate: _toString(json['birthdate']),
         bodyweight: _toDouble(json['bodyweight']),
+        specialty: _toString(json['specialty']),
         mfaEnabled: json['mfaEnabled'] == true,
         i18nCode: _toString(json['i18nCode']),
       );
@@ -917,6 +922,8 @@ class PublicProfile {
   final String name;
   final String surname;
   final String role;
+  /// The badge the member picked for themselves; empty when they picked none.
+  final String specialty;
   final String bio;
   final String picture;
   final double bodyweight;
@@ -932,6 +939,7 @@ class PublicProfile {
     this.name = '',
     this.surname = '',
     this.role = '',
+    this.specialty = '',
     this.bio = '',
     this.picture = '',
     this.bodyweight = 0,
@@ -948,6 +956,7 @@ class PublicProfile {
         name: _toString(json['name']),
         surname: _toString(json['surname']),
         role: _toString(json['role']),
+        specialty: _toString(json['specialty']),
         bio: _toString(json['bio']),
         picture: _toString(json['picture']),
         bodyweight: _toDouble(json['bodyweight']),

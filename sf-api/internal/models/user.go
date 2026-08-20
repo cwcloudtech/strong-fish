@@ -84,6 +84,9 @@ type User struct {
 	// Bodyweight, in kg, shown on the public profile next to the member's
 	// bests. Zero means "not stated".
 	Bodyweight float64 `json:"bodyweight,omitempty"`
+	// Specialty is the lift the member says is theirs - or that none is (see
+	// specialty.go). Empty means they have not picked one.
+	Specialty string `json:"specialty,omitempty"`
 	// MFAEnabled is true once at least one MFA factor (TOTP or a WebAuthn
 	// credential) has been confirmed. It gates password login behind a second
 	// factor.
@@ -166,10 +169,14 @@ type UserMeResponse struct {
 	// it is still waiting, and - if it was turned down - why.
 	CoachRequest CoachRequest `json:"coachRequest,omitempty"`
 	Bodyweight   float64      `json:"bodyweight,omitempty"`
-	MFAEnabled   bool         `json:"mfaEnabled"`
-	CreatedAt    time.Time    `json:"createdAt"`
-	UpdatedAt    time.Time    `json:"updatedAt"`
-	I18nCode     string       `json:"i18nCode,omitempty"`
+	// Specialty is sent even when empty: this is the account's own view, and
+	// the form needs to be able to tell "none picked" from "not in the
+	// response at all".
+	Specialty  string    `json:"specialty"`
+	MFAEnabled bool      `json:"mfaEnabled"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+	I18nCode   string    `json:"i18nCode,omitempty"`
 }
 
 // PublicProfile is the outward-facing profile of a member or coach - never
@@ -188,6 +195,9 @@ type PublicProfile struct {
 	PictureX   float64 `json:"pictureX"`
 	PictureY   float64 `json:"pictureY"`
 	Bodyweight float64 `json:"bodyweight,omitempty"`
+	// Specialty is the badge the member picked for themselves, absent when
+	// they picked none.
+	Specialty string `json:"specialty,omitempty"`
 	// Birthdate is only ever on a profile the caller was already allowed to
 	// read, which is the same gate that decides whether they see the birthday
 	// in their calendar.
