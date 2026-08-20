@@ -116,6 +116,27 @@ class SfApi {
     return data is List ? data.length : 1;
   }
 
+  /// Renames a program, rewrites its description and sets who may read it.
+  ///
+  /// All three go together because the API's PUT replaces them together: a
+  /// payload that leaves the visibility out would republish a public program
+  /// to its club, which is not what renaming it meant.
+  Future<Program> updateProgram(
+    String clubId,
+    String programId, {
+    required String name,
+    required String description,
+    required String visibility,
+  }) async {
+    final base = clubId.isEmpty ? '/programs' : '/clubs/$clubId/programs';
+    final response = await client.dio.put('$base/$programId', data: {
+      'name': name,
+      'description': description,
+      'visibility': visibility,
+    });
+    return Program.fromJson(_map(response.data));
+  }
+
   Future<Program> createProgram(String clubId, String name, String description) async {
     final response = await client.dio
         .post('/clubs/$clubId/programs', data: {'name': name, 'description': description});

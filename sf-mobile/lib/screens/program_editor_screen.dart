@@ -136,6 +136,27 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
     return cleaned.isEmpty ? 'program' : cleaned;
   }
 
+  /// Everything about the program that is not a set: its name, the line under
+  /// it, and who may read it.
+  ///
+  /// A program's name is usually whatever the imported spreadsheet was called,
+  /// or something typed in a hurry on the first day of a block, and until now
+  /// neither could be changed anywhere.
+  Future<void> _editProgram() async {
+    final detail = _detail;
+    if (detail == null) return;
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: _ProgramDetailsSheet(clubId: widget.clubId, program: detail.program),
+      ),
+    );
+    if (saved == true) await _load();
+  }
+
   Future<void> _addSession() async {
     final t = ref.read(tProvider);
     try {
@@ -209,6 +230,11 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
       appBar: AppBar(
         title: Text(_detail?.program.name ?? t('programs.title')),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: t('programs.edit'),
+            onPressed: _detail == null ? null : _editProgram,
+          ),
           IconButton(
             icon: const Icon(Icons.group_add_outlined),
             tooltip: t('programs.assign'),
@@ -309,6 +335,154 @@ String _describeLoad(String Function(String, [Map<String, String>?]) t, ProgramS
 
 /// Writes one prescribed set. Which fields appear follows from the load mode,
 /// so an RPE set never collects a weight that would be ignored.
+/// The program's own details, in the same kind of sheet the sets are edited in.
+///
+/// Name, description and audience together, because the API replaces the three
+/// in one request: sending a new name without the visibility would republish a
+/// public program to its club as a side effect of renaming it.
+class _ProgramDetailsSheet extends ConsumerStatefulWidget {
+  final String clubId;
+  final Program program;
+
+  const _ProgramDetailsSheet({required this.clubId, required this.program});
+
+  @override
+  ConsumerState<_ProgramDetailsSheet> createState() => _ProgramDetailsSheetState();
+}
+
+class _ProgramDetailsSheetState extends ConsumerState<_ProgramDetailsSheet> {
+  late final TextEditingController _name;
+  late final TextEditingController _description;
+  late String _visibility;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.program.name);
+    _description = TextEditingController(text: widget.program.description);
+    _visibility = widget.program.visibility;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _description.dispose();
+    super.dispose();
+  }
+
+  /// The audiences on offer, which are not the same for the two kinds of
+  /// program: a club's is either the club's or the world's, while one of
+  /// somebody's own can also be theirs alone.
+  List<({String value, String label})> _audiences(String Function(String) t) {
+    if (widget.clubId.isNotEmpty) {
+      return [
+        (value: 'club', label: t('programs.private')),
+        (value: 'public', label: t('programs.public')),
+      ];
+    }
+    return [
+      (value: 'private', label: t('programs.visibilityPrivate')),
+      (value: 'club', label: t('programs.visibilityClubs')),
+      (value: 'public', label: t('programs.visibilityPublic')),
+    ];
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(apiProvider).updateProgram(
+            widget.clubId,
+            widget.program.id,
+            name: _name.text.trim(),
+            description: _description.text.trim(),
+            visibility: _visibility,
+          );
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _error = ref.read(tErrorProvider)(error);
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final audiences = _audiences(t);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(t('programs.edit'), style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _name,
+              autofocus: true,
+              decoration: InputDecoration(labelText: t('programs.name')),
+              // The name is what the sheet exists for, so a rename can be
+              // finished from the keyboard.
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _busy || _name.text.trim().isEmpty ? null : _save(),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _description,
+              maxLines: 2,
+              decoration: InputDecoration(labelText: t('programs.description')),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: audiences.any((audience) => audience.value == _visibility)
+                  ? _visibility
+                  : audiences.first.value,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: t('programs.visibility')),
+              items: [
+                for (final audience in audiences)
+                  DropdownMenuItem(value: audience.value, child: Text(audience.label)),
+              ],
+              onChanged: (value) => setState(() => _visibility = value ?? _visibility),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            ],
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _busy ? null : () => Navigator.of(context).pop(false),
+                  child: Text(t('common.cancel')),
+                ),
+                const SizedBox(width: 8),
+                // The API refuses a program with no name, so the button does
+                // too rather than letting somebody find out by pressing it.
+                FilledButton(
+                  onPressed: _busy || _name.text.trim().isEmpty ? null : _save,
+                  child: Text(t('common.save')),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SetEditorSheet extends ConsumerStatefulWidget {
   final String clubId;
   final String programId;

@@ -258,6 +258,10 @@ const en = {
     useAsMyOneRms: "Use as my 1RMs",
     warnings: "Notes about this file",
     programName: "Program name",
+    // The create form and the rename modal both label their fields with
+    // these; they were missing, so the labels rendered as their own keys.
+    name: "Name",
+    description: "Description",
     empty: "No program in this club yet.",
     weeks: "{{count}} weeks",
     sessions: "{{count}} sessions",
@@ -301,7 +305,7 @@ const en = {
     setSaved: "Set saved.",
     setDeleted: "Set deleted.",
     confirmDeleteSet: "Delete this set?",
-    edit: "Edit",
+    edit: "Edit the program",
     done: "Done editing",
     buildMode: "Edit program",
   },

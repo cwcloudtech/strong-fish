@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiCopy, FiDownload, FiEdit2, FiGlobe, FiLock, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiCopy, FiDownload, FiEdit2, FiEdit3, FiGlobe, FiLock, FiPlus, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { clubs as clubsApi, programs as programsApi } from "../../api/services";
@@ -13,7 +13,29 @@ import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import Select from "../../components/common/Select";
 import Switch from "../../components/common/Switch";
+import Tooltip from "../../components/common/Tooltip";
 import MultiSelect from "../../components/common/MultiSelect";
+
+/**
+ * Who may read a program, in the words that fit the kind of program it is.
+ *
+ * A club's program is either the club's or the world's. One of somebody's own
+ * has a third state - theirs alone - and calling that "private to this club's
+ * members" is what the page used to do, which was simply untrue.
+ */
+function audiences(t, clubId) {
+  if (clubId) {
+    return [
+      { value: "club", label: t("programs.private"), help: t("programs.privateHelp") },
+      { value: "public", label: t("programs.public"), help: t("programs.publicHelp") },
+    ];
+  }
+  return [
+    { value: "private", label: t("programs.visibilityPrivate"), help: t("programs.visibilityPrivateHelp") },
+    { value: "club", label: t("programs.visibilityClubs"), help: t("programs.visibilityClubsHelp") },
+    { value: "public", label: t("programs.visibilityPublic"), help: t("programs.visibilityPublicHelp") },
+  ];
+}
 
 /**
  * A program as its coach sees it: the sessions, and who is running it.
@@ -44,6 +66,7 @@ export default function ProgramDetail() {
   const [publishing, setPublishing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [renaming, setRenaming] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -164,12 +187,30 @@ export default function ProgramDetail() {
   if (!program) return <Spinner />;
 
   const missing = program.missingOneRms || [];
+  const audience = audiences(t, clubId).find((option) => option.value === program.visibility);
 
   return (
     <div className="sf-page">
       <div className="sf-page-header">
         <div>
-          <h1>{program.name}</h1>
+          <div className="sf-row" style={{ gap: "0.4rem", alignItems: "center" }}>
+            <h1 style={{ marginBottom: 0 }}>{program.name}</h1>
+            {/* A name written at import time is whatever the spreadsheet was
+                called, and one typed in a hurry is usually wrong by the second
+                week. The pencil sits on the title itself rather than among the
+                actions, because that is what it renames. */}
+            {canManage ? (
+              <Tooltip label={t("programs.edit")} position="right">
+                <button
+                  className="sf-button-ghost sf-button-sm"
+                  onClick={() => setRenaming(true)}
+                  aria-label={t("programs.edit")}
+                >
+                  <FiEdit3 />
+                </button>
+              </Tooltip>
+            ) : null}
+          </div>
           <p className="sf-subtitle">
             {t("programs.weeks", { count: program.weeks })} · {t("programs.sessions", { count: program.dayCount })} ·{" "}
             {t("programs.setCount", { count: program.setCount })}
@@ -210,11 +251,10 @@ export default function ProgramDetail() {
           <div className="sf-row-between" style={{ alignItems: "center", marginBottom: "0.8rem" }}>
             <div>
               <strong>
-                {program.visibility === "public" ? <FiGlobe /> : <FiLock />}{" "}
-                {program.visibility === "public" ? t("programs.public") : t("programs.private")}
+                {program.visibility === "public" ? <FiGlobe /> : <FiLock />} {audience?.label}
               </strong>
               <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
-                {program.visibility === "public" ? t("programs.publicHelp") : t("programs.privateHelp")}
+                {audience?.help}
               </div>
             </div>
             <div className="sf-row" style={{ gap: "0.4rem" }}>
@@ -373,6 +413,20 @@ export default function ProgramDetail() {
         />
       ) : null}
 
+      {renaming ? (
+        <ProgramDetailsModal
+          program={program}
+          clubId={clubId}
+          onClose={() => setRenaming(false)}
+          onSaved={async () => {
+            setRenaming(false);
+            toast.success(t("programs.saved"), toastOptions);
+            await load();
+          }}
+          save={(payload) => programsApi.update(clubId, programId, payload)}
+        />
+      ) : null}
+
       {confirmDelete ? (
         <ConfirmModal
           title={t("common.delete")}
@@ -382,6 +436,98 @@ export default function ProgramDetail() {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Everything about a program that isn't a set: its name, the line under it, and
+ * who may read it.
+ *
+ * One modal because it is one request - the API's PUT carries all three - and
+ * because a name typed in a hurry, or inherited from whatever the imported
+ * spreadsheet was called, is the thing people most often want to change and
+ * had no way to.
+ *
+ * The audience it offers depends on which kind of program this is. A club's
+ * program is either the club's or the world's; a program of somebody's own can
+ * also be theirs alone, and this is the only screen that can put it back.
+ */
+function ProgramDetailsModal({ program, clubId, onClose, onSaved, save }) {
+  const { t } = useI18n();
+  const [name, setName] = useState(program.name || "");
+  const [description, setDescription] = useState(program.description || "");
+  const [visibility, setVisibility] = useState(program.visibility || "club");
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const options = audiences(t, clubId);
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await save({ name: name.trim(), description, visibility });
+      await onSaved();
+    } catch (err) {
+      setError(err);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={t("programs.edit")}
+      onClose={onClose}
+      actions={
+        <>
+          <button className="sf-button sf-button-secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </button>
+          {/* The API refuses a blank name, so the button does too rather than
+              letting somebody find out by pressing it. */}
+          <button className="sf-button" onClick={submit} disabled={busy || !name.trim()}>
+            {t("common.save")}
+          </button>
+        </>
+      }
+    >
+      <div className="sf-field">
+        <label className="sf-label" htmlFor="programName">
+          {t("programs.name")}
+        </label>
+        <input
+          id="programName"
+          className="sf-input"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          autoFocus
+        />
+      </div>
+      <div className="sf-field">
+        <label className="sf-label" htmlFor="programDescription">
+          {t("programs.description")}
+        </label>
+        <textarea
+          id="programDescription"
+          className="sf-textarea"
+          rows={2}
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+        />
+      </div>
+      <div className="sf-field">
+        <label className="sf-label">{t("programs.visibility")}</label>
+        <Select
+          options={options.map(({ value, label }) => ({ value, label }))}
+          value={visibility}
+          onChange={setVisibility}
+        />
+        <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+          {options.find((option) => option.value === visibility)?.help}
+        </p>
+      </div>
+      <ErrorMessage error={error} />
+    </Modal>
   );
 }
 
