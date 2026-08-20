@@ -5,9 +5,9 @@ import (
 	"io"
 	"net/http"
 
+	"strong-fish-api/internal/fffcal"
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
-	"strong-fish-api/internal/pdfcal"
 	"strong-fish-api/internal/store"
 	"strong-fish-api/internal/utils"
 )
@@ -82,10 +82,10 @@ func (h *EventHandler) ImportCalendar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parsed, err := pdfcal.Calendar(data)
+	parsed, err := fffcal.Calendar(data)
 	if err != nil {
-		if errors.Is(err, pdfcal.ErrNotAPDF) {
-			writeError(w, http.StatusBadRequest, "This is not a PDF calendar", CodeInvalidCalendarFile)
+		if errors.Is(err, fffcal.ErrUnsupportedCalendar) {
+			writeError(w, http.StatusBadRequest, "This is not a season calendar", CodeInvalidCalendarFile)
 			return
 		}
 		writeError(w, http.StatusBadRequest, "This calendar could not be read", CodeInvalidCalendarFile)

@@ -1,4 +1,4 @@
-package pdfcal
+package fffcal
 
 import (
 	"os"
@@ -182,11 +182,21 @@ func TestCalendarKeepsTheCategoryColours(t *testing.T) {
 	}
 }
 
-// TestCalendarRejectsWhatIsNotAPDF covers the wrong-file case, which is what a
-// coach will actually do first.
-func TestCalendarRejectsWhatIsNotAPDF(t *testing.T) {
-	if _, err := Calendar([]byte("PK\x03\x04 this is a spreadsheet")); err != ErrNotAPDF {
-		t.Fatalf("err = %v, want ErrNotAPDF", err)
+// TestCalendarRejectsWhatIsNotACalendar covers the wrong-file case, which is
+// what a coach will actually do first.
+func TestCalendarRejectsWhatIsNotACalendar(t *testing.T) {
+	cases := map[string][]byte{
+		"a text file":              []byte("just some words"),
+		"an image":                 {0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a},
+		"a zip that is not a book": []byte("PK\x03\x04 not really a spreadsheet"),
+	}
+
+	for name, data := range cases {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Calendar(data); err == nil {
+				t.Fatal("this was accepted as a calendar")
+			}
+		})
 	}
 }
 

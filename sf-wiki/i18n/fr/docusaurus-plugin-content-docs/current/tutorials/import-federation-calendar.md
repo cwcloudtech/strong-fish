@@ -4,8 +4,9 @@ title: Importer le calendrier fédéral
 sidebar_position: 4
 ---
 
-La FFForce publie chaque saison sous forme de calendrier annuel au format PDF.
-Si vous êtes coach, vous pouvez envoyer ce fichier et StrongFish en extraira les
+La FFForce publie chaque saison sous forme de calendrier annuel au format PDF,
+et les ligues régionales publient le leur sous forme de tableur. Si vous êtes
+coach, vous pouvez envoyer l'un ou l'autre et StrongFish en extraira les
 compétitions — dates, noms, tout — au lieu de vous faire ressaisir quarante
 lignes.
 
@@ -13,9 +14,11 @@ lignes.
 
 La fédération le met en ligne sur son propre site, à la page
 [Compétitions Force Athlétique National](https://www.ffforce.fr/fr/force-athletique-ffforce/national-force-athletique/competitions-force-athletique-national/saison-2026-national-fa.html).
-Téléchargez le PDF de la saison depuis cette page — le planning de l'année
+Téléchargez le fichier de la saison depuis cette page — le planning de l'année
 entière, avec les mois en colonnes, et non le formulaire d'une compétition
-isolée.
+isolée. Le calendrier d'une ligue régionale, publié en `.xlsx` avec une
+compétition par ligne, fonctionne tout aussi bien : déposez-le sur le même
+bouton.
 
 **Qui peut le faire :** un coach, pour son club, et un superadmin, qui peut
 aussi placer une saison sur le calendrier public. C'est la même permission que
@@ -28,7 +31,8 @@ cela, en plus grand nombre.
 2. Cliquez sur **Importer un calendrier**.
 3. Choisissez le club auquel la saison appartient. Un superadmin peut laisser ce
    champ vide pour publier sur le calendrier public.
-4. Sélectionnez le PDF.
+4. Sélectionnez le fichier — le planning PDF ou le tableur. Sa nature est lue
+   dans le fichier lui-même : un téléchargement renommé fonctionne quand même.
 
 La lecture prend une seconde ou deux, et les compétitions apparaissent aussitôt
 sur votre calendrier.
@@ -44,7 +48,9 @@ n'invente un départ à 9 h.
 européenne, mondiale, meeting spécial — n'est indiquée que par la couleur dans
 laquelle la compétition est tramée. StrongFish conserve cette couleur sur
 l'événement, pour qu'un mois de dates importées reste aussi lisible à l'écran
-qu'il l'était sur le papier.
+qu'il l'était sur le papier. Un tableur dit la même chose avec des mots, dans sa
+colonne **NATURE** : chaque discipline reçoit donc sa propre couleur — une pour
+la force athlétique, une autre pour le développé couché.
 
 **Les dates viennent d'abord de ce qui est écrit.** Quand une compétition porte
 ses dates dans son libellé, ce sont celles-là qui sont retenues, sous quelque
@@ -62,6 +68,13 @@ forme qu'elles aient été saisies :
 Quand une entrée ne porte aucune date, c'est la bande de couleur à côté d'elle
 qui sert : les jours qu'elle couvre dans sa propre colonne.
 
+Un tableur a une colonne de dates et n'a besoin de rien de tout cela. Sa
+convention à lui est qu'**une ligne datée sans nom est le deuxième jour** de la
+compétition au-dessus — c'est ainsi qu'il écrit un week-end, et c'est ainsi
+qu'il est lu. Les dates sont reconnues qu'elles soient écrites `11 January
+2026`, `8 mars 2026` ou `11/01/2026`, et l'astérisque signalant une date encore
+susceptible de changer n'est pas prise pour une partie de la date.
+
 ## Réimporter un calendrier révisé
 
 La fédération révise la saison en cours d'année et la republie. Envoyez le
@@ -77,5 +90,8 @@ par leur nom à la fin de l'import, pour que vous puissiez les ajouter à la mai
 plutôt que de découvrir le trou en mars.
 
 Si le fichier entier est refusé, vérifiez que vous avez bien téléchargé le
-planning annuel et non l'image scannée d'un calendrier : l'import lit le texte
-et les formes du PDF, et une photographie de calendrier ne contient rien à lire.
+calendrier et non l'image scannée d'un calendrier : l'import lit le texte et les
+formes d'un PDF, et une photographie de calendrier ne contient rien à lire. Un
+tableur, lui, a besoin d'une ligne d'en-têtes — une colonne **DATES** et une
+colonne **COMPÉTITIONS** — c'est ce qui permet de distinguer un calendrier de
+n'importe quel autre classeur.

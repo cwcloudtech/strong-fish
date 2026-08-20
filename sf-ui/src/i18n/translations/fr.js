@@ -634,7 +634,7 @@ const fr = {
     color: "Couleur",
     allDay: "Toute la journée",
     import: "Importer un calendrier",
-    importHelp: "Envoyez le calendrier de la saison de la fédération au format PDF. Ses compétitions sont lues avec leurs dates et les couleurs dans lesquelles elles sont imprimées.",
+    importHelp: "Envoyez le calendrier de la saison de la fédération - le planning annuel en PDF ou le tableur. Ses compétitions sont lues avec leurs dates et leurs disciplines.",
     importing: "Lecture du calendrier…",
     imported: "{{count}} compétitions importées",
     importSkipped: "{{count}} étaient déjà dans votre calendrier",
