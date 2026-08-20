@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -988,5 +989,58 @@ func TestSocialsRoundTripAndClear(t *testing.T) {
 	}
 	if cleared.Socials.Bluesky != "marie.bsky.social" {
 		t.Errorf("bluesky = %q; clearing one account took another with it", cleared.Socials.Bluesky)
+	}
+}
+
+// TestExerciseLookupIgnoresCase covers the catalog lookup an upload goes
+// through before it decides to create a movement.
+//
+// It has to run against a real database because every branch of it is SQL: the
+// slug comparison, the alias array, and the labels object are three different
+// JSONB constructs, and a query that reads one of them wrongly does not fail -
+// it quietly reports "no such exercise" and the upload forks a duplicate that
+// nobody notices until two "Highbar squat" rows are sitting in the autocomplete.
+func TestExerciseLookupIgnoresCase(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	exercises := NewExerciseStore(pool)
+
+	created, err := exercises.Create(ctx, ExerciseFields{
+		Slug:     "Highbar-Squat",
+		Aliases:  []string{"HB-Squat"},
+		Labels:   map[string]string{"en": "Highbar squat", "fr": "Squat barre haute"},
+		Category: models.CategorySquat,
+		OneRMRef: models.CategorySquat,
+	})
+	if err != nil {
+		t.Fatalf("seeding the catalog: %v", err)
+	}
+	t.Cleanup(func() { _, _ = pool.Exec(context.Background(), `DELETE FROM exercises WHERE id = $1`, created.ID) })
+
+	found := []struct{ name, query string }{
+		{"the slug as stored", "Highbar-Squat"},
+		{"the slug in another case", "highbar-squat"},
+		{"an alias in another case", "hb-squat"},
+		{"the english label", "Highbar Squat"},
+		{"the french label", "SQUAT BARRE HAUTE"},
+	}
+	for _, tc := range found {
+		t.Run(tc.name, func(t *testing.T) {
+			match, err := exercises.FindByName(ctx, tc.query)
+			if err != nil {
+				t.Fatalf("FindByName(%q): %v", tc.query, err)
+			}
+			if match.ID != created.ID {
+				t.Errorf("FindByName(%q) found %q, want the seeded entry", tc.query, match.Slug)
+			}
+		})
+	}
+
+	// A different movement is still a different movement.
+	if _, err := exercises.FindByName(ctx, "Lowbar squat"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a movement that is not in the catalog was matched anyway: %v", err)
+	}
+	if _, err := exercises.FindByName(ctx, "   "); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a blank name matched something: %v", err)
 	}
 }

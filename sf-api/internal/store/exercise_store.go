@@ -201,12 +201,52 @@ func (s *ExerciseStore) FindByID(ctx context.Context, id string) (models.Exercis
 // well as the canonical slug - so a spreadsheet spelling a movement differently
 // (or with the reference file's "Dumbbel" typo) lands on the existing entry
 // instead of forking a duplicate.
+//
+// The comparison is case-insensitive on both sides. Slugs written by this app
+// are lowercase already, but the catalog is shared and long-lived: an entry
+// seeded by hand, or written by an earlier version, must not cause a second
+// "Highbar Squat" to appear beside the first the next time somebody uploads a
+// program.
 func (s *ExerciseStore) FindBySlug(ctx context.Context, slug string) (models.Exercise, error) {
 	return scanExercise(s.pool.QueryRow(ctx, `
 		SELECT id, data, created_at, updated_at FROM exercises
-		WHERE data->>'slug' = $1 OR data->'aliases' ? $1
+		WHERE lower(data->>'slug') = lower($1)
+		   OR EXISTS (
+		        SELECT 1 FROM jsonb_array_elements_text(coalesce(data->'aliases', '[]'::jsonb)) alias
+		        WHERE lower(alias) = lower($1)
+		      )
 		LIMIT 1
 	`, slug))
+}
+
+// FindByName resolves an exercise the way a person would name it: by its slug
+// or an alias as FindBySlug does, and failing that by what it is *called* in
+// either language, compared case-insensitively.
+//
+// The label pass is what an upload needs. A workbook writes "Highbar Squat",
+// which slugs to "highbar-squat"; a catalog entry created from a French program
+// may carry that same movement under a slug nobody would guess but a label that
+// reads the same. Matching the label as well is the difference between
+// resolving onto it and forking a near-duplicate.
+func (s *ExerciseStore) FindByName(ctx context.Context, name string) (models.Exercise, error) {
+	slug := utils.Slugify(name)
+	if utils.IsBlank(slug) {
+		return models.Exercise{}, ErrNotFound
+	}
+
+	exercise, err := s.FindBySlug(ctx, slug)
+	if err == nil || !errors.Is(err, ErrNotFound) {
+		return exercise, err
+	}
+
+	return scanExercise(s.pool.QueryRow(ctx, `
+		SELECT id, data, created_at, updated_at FROM exercises
+		WHERE EXISTS (
+		        SELECT 1 FROM jsonb_each_text(coalesce(data->'labels', '{}'::jsonb)) label
+		        WHERE lower(label.value) = lower($1)
+		      )
+		LIMIT 1
+	`, strings.TrimSpace(name)))
 }
 
 // List returns the whole catalog, optionally filtered by a search query that

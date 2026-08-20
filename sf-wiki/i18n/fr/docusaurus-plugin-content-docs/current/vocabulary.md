@@ -84,3 +84,24 @@ mouvements de compétition. Une variante - un développé Larsen, un squat tempo
 un pin bench - est programmée à partir du maximum du mouvement de compétition
 plutôt que du sien : vous n'avez pas à tester un maximum sur chaque accessoire
 que vous avez pratiqué.
+
+### Comment une variante trouve son mouvement
+
+Trois pistes, dans cet ordre :
+
+1. **Un maximum que vous avez enregistré pour ce mouvement précis.** Si vous
+   avez testé votre soulevé de terre avec pause, il est chargé à partir de là.
+2. **Le mouvement auquel il est rattaché** dans le catalogue d'exercices, qu'un
+   coach peut définir ou corriger à tout moment.
+3. **Son nom.** « Squat barre haute », « Squat tempo 3:3:0 », « Soulevé de terre
+   avec pause », « RDL », « Développé haltères » : chacun dit à quel mouvement
+   il appartient, et StrongFish le lit, quelle que soit la casse et dans les
+   deux langues.
+
+Quelques mouvements portent le nom d'un mouvement de compétition sans devoir en
+être chargés - un goblet squat, une fente bulgare, un rowing sur banc - et sont
+volontairement laissés de côté : ils restent sans charge tant que vous n'avez
+pas enregistré un maximum pour eux.
+
+Si aucune des trois pistes n'aboutit, la charge s'affiche **?** et le mouvement
+est signalé comme nécessitant un maximum.
