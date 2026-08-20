@@ -177,11 +177,16 @@ func Parse(data []byte) (*ParsedProgram, error) {
 		// name or the file name - a coach renames sheets, and both formats are
 		// uploaded through the same button.
 		var days []ParsedDay
-		if isBlockSheet(rows) {
+		switch {
+		case isBlockSheet(rows):
 			var added int
 			days, added = parseBlockSheet(sheet, rows, weekOffset, len(program.Days), program)
 			weekOffset += added
-		} else {
+		case isProseSheet(rows):
+			// A program written out as sentences rather than as a table, with
+			// the weeks down the first column and the sessions across.
+			days = parseProseSheet(sheet, rows, len(program.Days), program)
+		default:
 			days = parseSheet(sheet, rows, len(program.Days), program)
 		}
 
