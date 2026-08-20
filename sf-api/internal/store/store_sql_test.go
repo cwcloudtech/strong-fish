@@ -863,3 +863,67 @@ func TestPostReachesEveryClubItWasSharedWith(t *testing.T) {
 		t.Error("a club-only post became public when one of its clubs was deleted")
 	}
 }
+
+// TestSpecialtyRoundTripsAndClears covers the badge a member picks for
+// themselves, both directions.
+//
+// The second half is the one worth having: every profile field is written into
+// one JSONB payload with a shallow merge, so a field the update omits keeps its
+// old value rather than being cleared. A member who picked "squat specialist"
+// and later changed their mind would have gone on wearing the badge, with the
+// picker showing nothing and the profile showing the old answer.
+func TestSpecialtyRoundTripsAndClears(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	users := NewUserStore(pool)
+	id := seedUser(t, pool, "specialty@example.com")
+
+	fields := ProfileFields{
+		Name: "Marie", Surname: "Dubois",
+		ProfileVisibility: models.ProfileVisibilityPublic,
+		Specialty:         models.SpecialtyDeadlift,
+	}
+	saved, err := users.UpdateProfile(ctx, id, fields)
+	if err != nil {
+		t.Fatalf("saving a specialty: %v", err)
+	}
+	if saved.Specialty != models.SpecialtyDeadlift {
+		t.Fatalf("the update returned %q, want the deadlift badge", saved.Specialty)
+	}
+
+	// Read back rather than trusting what the update returned: the point is
+	// what landed in the payload.
+	reread, err := users.FindByID(ctx, id)
+	if err != nil {
+		t.Fatalf("re-reading: %v", err)
+	}
+	if reread.Specialty != models.SpecialtyDeadlift {
+		t.Fatalf("stored specialty = %q, want the deadlift badge", reread.Specialty)
+	}
+
+	fields.Specialty = ""
+	if _, err := users.UpdateProfile(ctx, id, fields); err != nil {
+		t.Fatalf("clearing the specialty: %v", err)
+	}
+	cleared, err := users.FindByID(ctx, id)
+	if err != nil {
+		t.Fatalf("re-reading after clearing: %v", err)
+	}
+	if cleared.Specialty != "" {
+		t.Errorf("specialty = %q after being cleared; the merge kept the old value", cleared.Specialty)
+	}
+
+	// A badge this app does not know must not reach the profile: the clients
+	// look the value up in a translation table and would render the key.
+	fields.Specialty = "clean-and-jerk"
+	if _, err := users.UpdateProfile(ctx, id, fields); err != nil {
+		t.Fatalf("saving an unknown specialty: %v", err)
+	}
+	unknown, err := users.FindByID(ctx, id)
+	if err != nil {
+		t.Fatalf("re-reading after an unknown specialty: %v", err)
+	}
+	if unknown.Specialty != "" {
+		t.Errorf("specialty = %q, want an unknown badge normalized away", unknown.Specialty)
+	}
+}

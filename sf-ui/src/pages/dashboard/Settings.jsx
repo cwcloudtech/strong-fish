@@ -9,11 +9,20 @@ import toastOptions from "../../utils/toastOptions";
 import { auth, media as mediaApi, mfa as mfaApi } from "../../api/services";
 import Avatar from "../../components/common/Avatar";
 import Modal from "../../components/common/Modal";
+import Select from "../../components/common/Select";
+import ProfileBadges from "../../components/common/ProfileBadges";
 import { ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 import { readImageAsDataUrl } from "../../utils/image";
 import { createCredential, isWebAuthnSupported } from "../../utils/webauthn";
+
+/**
+ * The badges a member may pick, in the order the API offers them (see the
+ * API's models/specialty.go). The three lifts in competition order, then the
+ * totaler as the "no single lift is mine" answer.
+ */
+const SPECIALTIES = ["squat", "bench", "deadlift", "total"];
 
 /** The connected user's own settings: profile, avatar, and MFA enrollment. */
 /**
@@ -47,6 +56,7 @@ export default function Settings() {
       anonymous: Boolean(user.anonymous),
       bio: user.bio || "",
       bodyweight: user.bodyweight || "",
+      specialty: user.specialty || "",
       profileVisibility: user.profileVisibility || "private",
       birthdate: user.birthdate || "",
       password: "",
@@ -179,10 +189,44 @@ export default function Settings() {
           </div>
           <div className="sf-field" style={{ flex: 1, minWidth: 160 }}>
             <label className="sf-label">{t("common.language")}</label>
-            <select className="sf-select" value={locale} onChange={(event) => setLocale(event.target.value)}>
-              <option value="en">English</option>
-              <option value="fr">Français</option>
-            </select>
+            <Select
+              options={[
+                { value: "en", label: "English" },
+                { value: "fr", label: "Français" },
+              ]}
+              value={locale}
+              onChange={setLocale}
+            />
+          </div>
+        </div>
+
+        {/* What the member calls themselves as a lifter. It is a claim, not a
+            computation: nobody's badge should change because they had a bad
+            squat day, and somebody who has entered no maxes at all is still
+            entitled to say what they are. Clearing it is a first-class choice,
+            so the field is clearable rather than carrying a "none" option. */}
+        <div className="sf-row" style={{ gap: "0.6rem", alignItems: "flex-start" }}>
+          <div className="sf-field" style={{ flex: 1, minWidth: 220 }}>
+            <label className="sf-label" htmlFor="specialty">
+              {t("profile.specialty")} <span className="sf-muted">({t("common.optional")})</span>
+            </label>
+            <Select
+              id="specialty"
+              options={SPECIALTIES.map((value) => ({ value, label: t(`profile.specialties.${value}`) }))}
+              value={form.specialty}
+              onChange={(value) => setForm((current) => ({ ...current, specialty: value }))}
+              placeholder={t("profile.specialtyNone")}
+              clearable
+            />
+            <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+              {t("profile.specialtyHelp")}
+            </p>
+          </div>
+          <div className="sf-field" style={{ flex: 1, minWidth: 220 }}>
+            <label className="sf-label">{t("profile.badgesPreview")}</label>
+            {/* The badges as somebody else will see them, so the picker is not
+                a guess at what the profile ends up looking like. */}
+            <ProfileBadges role={user.role} specialty={form.specialty} />
           </div>
         </div>
 
@@ -191,16 +235,16 @@ export default function Settings() {
             <label className="sf-label" htmlFor="profileVisibility">
               {t("profile.visibility")}
             </label>
-            <select
+            <Select
               id="profileVisibility"
-              className="sf-select"
+              options={[
+                { value: "public", label: t("profile.visibilityPublic") },
+                { value: "clubs", label: t("profile.visibilityClubs") },
+                { value: "private", label: t("profile.visibilityPrivate") },
+              ]}
               value={form.profileVisibility}
-              onChange={set("profileVisibility")}
-            >
-              <option value="public">{t("profile.visibilityPublic")}</option>
-              <option value="clubs">{t("profile.visibilityClubs")}</option>
-              <option value="private">{t("profile.visibilityPrivate")}</option>
-            </select>
+              onChange={(value) => setForm((current) => ({ ...current, profileVisibility: value }))}
+            />
             <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
               {t(`profile.visibilityHelp.${form.profileVisibility}`)}
             </p>

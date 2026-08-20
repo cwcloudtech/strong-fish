@@ -6,11 +6,10 @@ import { profiles } from "../api/services";
 import Avatar from "../components/common/Avatar";
 import PostCard from "../components/feed/PostCard";
 import ShareButtons from "../components/common/ShareButtons";
+import ProfileBadges from "../components/common/ProfileBadges";
 import { EmptyState, ErrorMessage, Spinner } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
-
-const ROLE_LABELS = { coach: "profile.coach", superadmin: "profile.superadmin", confirmed: "profile.athlete" };
 
 /**
  * A member's or coach's public profile. It works logged out - that's the point
@@ -74,9 +73,13 @@ export default function Profile() {
                   {profile.name} {profile.surname}
                 </h1>
                 <div className="sf-muted">
-                  @{profile.handle} · {t(ROLE_LABELS[profile.role] || "profile.athlete")}
+                  @{profile.handle}
                   {profile.bodyweight ? ` · ${profile.bodyweight} ${t("common.kg")}` : ""}
                 </div>
+                {/* Standing and specialty, each in its own colour: this is the
+                    line somebody reads first, and "Coach" in grey text next to
+                    the handle was not read at all. */}
+                <ProfileBadges role={profile.role} specialty={profile.specialty} />
               </div>
               {user && !isSelf ? (
                 <div className="sf-row" style={{ gap: "0.4rem" }}>

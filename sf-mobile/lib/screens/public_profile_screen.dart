@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/profile_badges.dart';
 import '../widgets/social_share.dart';
 
 /// Somebody else's profile, opened from a message, a post, or a search result.
@@ -100,6 +101,15 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                                   if (profile.handle.isNotEmpty)
                                     Text('@${profile.handle}',
                                         style: TextStyle(color: colors.textMuted)),
+                                  const SizedBox(height: 6),
+                                  // Standing and specialty, each in its own
+                                  // colour: this is the line somebody reads
+                                  // first about a stranger.
+                                  ProfileBadges(
+                                    role: profile.role,
+                                    specialty: profile.specialty,
+                                    alignment: MainAxisAlignment.start,
+                                  ),
                                 ],
                               ),
                             ),

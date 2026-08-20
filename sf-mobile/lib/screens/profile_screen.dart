@@ -9,6 +9,9 @@ import '../models/models.dart';
 import '../providers/app_update_provider.dart';
 import '../providers/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/profile_badges.dart';
+import '../widgets/social_share.dart';
+import 'public_profile_screen.dart';
 
 /// The connected user's own profile and settings: their bests, their public
 /// profile, and the app's language and theme.
@@ -74,6 +77,73 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  /// Saves the profile with [changes] applied over what the account already
+  /// has.
+  ///
+  /// Every field goes with every save: the API writes the whole profile, so a
+  /// payload that leaves one out clears it. Three separate copies of this map
+  /// used to be spelled out in this screen, and the specialty added later was
+  /// exactly the kind of field the fourth copy would have forgotten - changing
+  /// the app's language would have quietly wiped somebody's badge.
+  Future<void> _patchProfile(User user, Map<String, dynamic> changes) async {
+    await ref.read(apiProvider).updateProfile({
+      'name': user.name,
+      'surname': user.surname,
+      'username': user.username,
+      'anonymous': user.anonymous,
+      'bio': user.bio,
+      'locale': user.locale,
+      'profileVisibility': user.profileVisibility,
+      'birthdate': user.birthdate,
+      'bodyweight': user.bodyweight,
+      'specialty': user.specialty,
+      ...changes,
+    });
+    await ref.read(sessionProvider.notifier).refresh();
+  }
+
+  /// Offers the badges as badges: the point of the field is the colour it
+  /// puts on the profile, so picking it from a list of plain rows would be
+  /// picking blind.
+  Future<void> _pickSpecialty(User user) async {
+    final t = ref.read(tProvider);
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(t('profile.specialty'), style: Theme.of(sheetContext).textTheme.titleMedium),
+              subtitle: Text(t('profile.specialtyHelp')),
+            ),
+            const Divider(height: 1),
+            for (final specialty in specialties)
+              ListTile(
+                title: SpecialtyBadge(specialty: specialty),
+                trailing: user.specialty == specialty ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.of(sheetContext).pop(specialty),
+              ),
+            // Picking none is a real answer, so it is on the list rather than
+            // something to be reached by some other gesture.
+            ListTile(
+              title: Text(t('profile.specialtyNone')),
+              trailing: user.specialty.isEmpty ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.of(sheetContext).pop(''),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || picked == user.specialty) return;
+
+    try {
+      await _patchProfile(user, {'specialty': picked});
+    } catch (error) {
+      _toast(ref.read(tErrorProvider)(error));
+    }
+  }
+
   void _toast(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -120,14 +190,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(height: 10),
                 Text(user.fullName, style: Theme.of(context).textTheme.titleLarge),
-                Text(
-                  '@${user.handle} · ${t(switch (user.role) {
-                    'coach' => 'profile.coach',
-                    'superadmin' => 'profile.superadmin',
-                    _ => 'profile.athlete',
-                  })}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                Text('@${user.handle}', style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 6),
+                // Standing and specialty, each in its own colour - the same
+                // two badges the web profile carries.
+                ProfileBadges(role: user.role, specialty: user.specialty),
                 if (user.bio.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(user.bio, textAlign: TextAlign.center),
@@ -136,6 +203,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
         ),
+
+        // Your own profile as everybody else reaches it. It is on this screen
+        // because there was nowhere else to share it from: the share row lives
+        // on somebody *else's* profile, which is no help when the profile you
+        // want to hand out is your own. A private profile is left out - the
+        // link would land on a 404 for whoever received it.
+        if (user.handle.isNotEmpty && user.profileVisibility != 'private')
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(t('profile.myProfile'), style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 4),
+                  Text(t('profile.myProfileHelp'), style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => PublicProfileScreen(handle: user.handle),
+                        )),
+                        icon: const Icon(Icons.open_in_new, size: 18),
+                        label: Text(t('profile.viewProfile')),
+                      ),
+                      const SizedBox(width: 8),
+                      SocialShareRow(
+                        url: '${ref.read(apiProvider).client.frontendUrl}/profile/${user.handle}',
+                        text: t('share.profileText', {'name': user.fullName}),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
 
         if (bests.isNotEmpty)
           Card(
@@ -178,18 +282,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     // Keep the account's language in step, so transactional
                     // emails arrive in the one they're reading the app in.
                     try {
-                      await ref.read(apiProvider).updateProfile({
-                        'name': user.name,
-                        'surname': user.surname,
-                        'username': user.username,
-                        'anonymous': user.anonymous,
-                        'bio': user.bio,
-                        'locale': value,
-                        'profileVisibility': user.profileVisibility,
-                        'birthdate': user.birthdate,
-                        'bodyweight': user.bodyweight,
-                      });
-                      await ref.read(sessionProvider.notifier).refresh();
+                      await _patchProfile(user, {'locale': value});
                     } catch (_) {
                       // The app's own language already changed; failing to
                       // mirror it server-side isn't worth an error dialog.
@@ -231,18 +324,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       ? null
                       : (value) async {
                           try {
-                            await ref.read(apiProvider).updateProfile({
-                              'name': user.name,
-                              'surname': user.surname,
-                              'username': user.username,
-                              'anonymous': value,
-                              'bio': user.bio,
-                              'locale': user.locale,
-                              'profileVisibility': user.profileVisibility,
-                              'birthdate': user.birthdate,
-                              'bodyweight': user.bodyweight,
-                            });
-                            await ref.read(sessionProvider.notifier).refresh();
+                            await _patchProfile(user, {'anonymous': value});
                           } catch (error) {
                             _toast(ref.read(tErrorProvider)(error));
                           }
@@ -267,23 +349,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   onChanged: (value) async {
                     if (value == null) return;
                     try {
-                      await ref.read(apiProvider).updateProfile({
-                        'name': user.name,
-                        'surname': user.surname,
-                        'username': user.username,
-                        'anonymous': user.anonymous,
-                        'bio': user.bio,
-                        'locale': user.locale,
-                        'profileVisibility': value,
-                        'birthdate': user.birthdate,
-                        'bodyweight': user.bodyweight,
-                      });
-                      await ref.read(sessionProvider.notifier).refresh();
+                      await _patchProfile(user, {'profileVisibility': value});
                     } catch (error) {
                       _toast(ref.read(tErrorProvider)(error));
                     }
                   },
                 ),
+              ),
+              // What the member calls themselves as a lifter. Picked, never
+              // computed: a badge worked out from the three bests would leave
+              // somebody who has entered no maxes with nothing to wear, and
+              // would relabel somebody the week their squat dips.
+              //
+              // A sheet rather than a dropdown, unlike the tiles above it: the
+              // labels are long ("Spécialiste du développé couché"), and the
+              // options are worth showing as the coloured badges they will
+              // become rather than as four lines of text.
+              ListTile(
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: Text(t('profile.specialty')),
+                subtitle: Text(t('profile.specialtyHelp')),
+                trailing: user.specialty.isEmpty
+                    ? Text(t('profile.specialtyNone'), style: Theme.of(context).textTheme.bodySmall)
+                    : SpecialtyBadge(specialty: user.specialty),
+                onTap: () => _pickSpecialty(user),
               ),
               // MFA enrollment needs a QR scan or a WebAuthn ceremony, neither
               // of which belongs in this screen - the web app owns it, and the

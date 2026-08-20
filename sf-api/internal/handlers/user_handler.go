@@ -240,8 +240,11 @@ type updateProfilePayload struct {
 	ProfileVisibility string  `json:"profileVisibility"`
 	Birthdate         string  `json:"birthdate"`
 	Bodyweight        float64 `json:"bodyweight"`
-	Password          string  `json:"password"`
-	ConfirmPassword   string  `json:"confirmPassword"`
+	// Specialty is the lift the member claims as theirs. Anything unknown is
+	// normalized away rather than refused: a badge is not worth a 400.
+	Specialty       string `json:"specialty"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirmPassword"`
 }
 
 // UpdateProfile lets the connected user edit their own profile and, optionally,
@@ -319,7 +322,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		Name: p.Name, Surname: p.Surname, Username: username, Anonymous: p.Anonymous,
 		Bio: p.Bio, Locale: p.Locale,
 		ProfileVisibility: p.ProfileVisibility, Birthdate: birthdate,
-		Bodyweight: p.Bodyweight, PasswordHash: passwordHash,
+		Bodyweight: p.Bodyweight, Specialty: p.Specialty, PasswordHash: passwordHash,
 	})
 	if err != nil {
 		writeStoreError(w, err)

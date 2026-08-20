@@ -58,6 +58,32 @@ Nothing is blocked. Log your maxes, join a club you were invited to, post to the
 feed. When the confirmation lands, everything you did as an athlete is still
 there - it is the same account with more it can do.
 
+## The badges on your profile
+
+Your profile carries two of them, side by side under your name, each in its own
+colour.
+
+**What you are here** is the first: *athlete*, *coach* or *superadmin*. You do
+not pick this one - it follows your account, and it changes by itself the day a
+coach request is confirmed.
+
+**What you lift** is the second, and that one is yours to choose:
+
+| Badge | For |
+| --- | --- |
+| Squat specialist | the lift you are known for is the squat |
+| Bench specialist | ... the bench press |
+| Deadlift specialist | ... the deadlift |
+| Balanced totaler | no single lift carries you - the total does |
+
+Pick it under **Settings → My specialty** on the web, or on the profile tab in
+the app. It is optional, you can change it whenever you like, and *no specialty*
+is a perfectly good answer.
+
+It is a claim, not a calculation. StrongFish never works it out from your maxes:
+somebody who has entered none is still entitled to say what they are, and a bad
+squat day should not relabel anybody.
+
 ## Joining a club
 
 Two ways in, and they are different acts:
