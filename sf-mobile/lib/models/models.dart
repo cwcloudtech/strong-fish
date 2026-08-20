@@ -383,11 +383,28 @@ class ProgramSet {
 }
 
 /// A program as its coach sees it in the club's list.
+/// The audiences a program can have, widest last, as the API names them.
+const programVisibilities = ['private', 'club', 'public'];
+
+/// Maps whatever the payload carries onto one of them.
+///
+/// Club-only is the fallback for the same reason it is on the API: an
+/// unrecognized value must never widen an audience. A blank string counts as
+/// unrecognized, which a plain null-fallback would have let through.
+String programVisibility(dynamic value) {
+  final text = value?.toString() ?? '';
+  return programVisibilities.contains(text) ? text : 'club';
+}
+
 class Program {
   final String id;
   final String clubId;
   final String name;
   final String description;
+  /// Who may read it: 'private', 'club' or 'public'. Anything else - including
+  /// nothing at all, on a program written before sharing existed - reads as
+  /// club-only, matching the API's own normalization.
+  final String visibility;
   final String authorName;
   final int weeks;
   final int dayCount;
@@ -398,6 +415,7 @@ class Program {
     this.clubId = '',
     this.name = '',
     this.description = '',
+    this.visibility = 'club',
     this.authorName = '',
     this.weeks = 0,
     this.dayCount = 0,
@@ -409,6 +427,7 @@ class Program {
         clubId: _toString(json['clubId']),
         name: _toString(json['name']),
         description: _toString(json['description']),
+        visibility: programVisibility(json['visibility']),
         authorName: _toString(json['authorName']),
         weeks: _toInt(json['weeks']),
         dayCount: _toInt(json['dayCount']),

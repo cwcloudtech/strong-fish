@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { FiDownload, FiSmartphone } from "react-icons/fi";
+import { FiSmartphone } from "react-icons/fi";
+// The auth footer names the platform rather than the act: "download" could be
+// anything, and what is on offer is specifically the Android build.
+import { FaAndroid } from "react-icons/fa";
 
 import Modal from "./Modal";
 import Tooltip from "./Tooltip";
@@ -112,7 +115,7 @@ export function DownloadAppIcon() {
       <Tooltip label={t("nav.downloadApp")} position="top">
         {isAndroidDevice() ? (
           <a className="sf-auth-footer-icon" href={app.url} aria-label={t("nav.downloadApp")}>
-            <FiDownload />
+            <FaAndroid />
           </a>
         ) : (
           <button
@@ -121,7 +124,7 @@ export function DownloadAppIcon() {
             onClick={() => setShowQr(true)}
             aria-label={t("nav.downloadApp")}
           >
-            <FiDownload />
+            <FaAndroid />
           </button>
         )}
       </Tooltip>
