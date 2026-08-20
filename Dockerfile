@@ -99,6 +99,25 @@ RUN chmod +x /docker-entrypoint.sh && \
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
 
-# Stage ui-and-mobile run: serves the web app plus the downloadable APK.
+# Stage ui-and-mobile run: serves the web app plus the downloadable builds.
 FROM ui AS ui-and-mobile
 COPY --from=mobile-build /app/build/app/outputs/flutter-apk/*.apk /usr/share/nginx/html/
+
+# The iOS build, when there is one. It is not built here: Xcode and codesign
+# are macOS-only, so ci/app/deliver-ios.sh produces the .ipa by hand on a Mac
+# and commits it, and this stage only has to serve it.
+#
+# The whole directory is copied rather than the file, because COPY fails on a
+# glob that matches nothing - and "the .ipa if there is one" has to keep
+# working in the far more common case where nobody built one for this commit.
+# The committed .gitkeep is what keeps the directory there for the copy to
+# find.
+#
+# It lands in a staging directory and only the .ipa is moved out of it, so the
+# web root holds the two downloads and nothing else: the .gitkeep is not worth
+# serving, and a directory committed from a Mac collects .DS_Store sooner or
+# later. The .apk above arrives through its own glob and is already clean.
+COPY sf-mobile/dist/ /tmp/ios-build/
+RUN mv /tmp/ios-build/*.ipa /usr/share/nginx/html/ 2>/dev/null || true; \
+    rm -rf /tmp/ios-build; \
+    chmod -R a+r /usr/share/nginx/html

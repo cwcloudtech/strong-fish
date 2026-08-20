@@ -621,6 +621,7 @@ const Map<String, dynamic> fr = {
     'feedWarning': 'Toute personne disposant de cette adresse peut lire votre calendrier : c\'est le seul justificatif qui existe. Générez-en une nouvelle si elle a fuité.',
   },
   'update': {
+    'storeManaged': 'Les mises à jour arrivent via l\'App Store',
     'upToDate': 'Vous êtes à jour',
     'available': 'La version {{version}} est disponible',
     'help': 'Télécharge la nouvelle version et la confie à Android pour l\'installer. Vous restez connecté.',

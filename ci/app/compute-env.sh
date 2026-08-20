@@ -29,6 +29,7 @@ if [[ -n "${MOBILE_KEYSTORE_BASE64:-}" ]]; then
   export MOBILE_KEYSTORE_FILE="$(pwd)/mobile-release.keystore"
   echo "${MOBILE_KEYSTORE_BASE64}" | base64 -d > "${MOBILE_KEYSTORE_FILE}"
 fi
+
 # docker-compose-build.yml sources these three straight from the
 # environment (no `:-default` fallback available for compose secrets), so
 # they must always be at least an empty string for local/fork bake runs

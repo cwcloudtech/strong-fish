@@ -621,6 +621,7 @@ const Map<String, dynamic> en = {
     'feedWarning': 'Anybody holding this address can read your calendar - it is the only credential there is. Generate a new one if it gets out.',
   },
   'update': {
+    'storeManaged': 'Updates arrive through the App Store',
     'upToDate': 'You are on the latest version',
     'available': 'Version {{version}} is available',
     'help': 'Downloads the new build and hands it to Android to install. You stay signed in.',

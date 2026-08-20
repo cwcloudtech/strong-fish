@@ -1,0 +1,10 @@
+The iOS build lands here.
+
+ci/app/deliver-ios.sh writes strong-fish-v<VERSION>.ipa into this directory on a
+Mac, and it is committed - the Linux pipeline cannot build one but does have to
+serve it, so the file crosses between them through git.
+
+This placeholder keeps the directory in the repository, which is what lets the
+Dockerfile copy the directory unconditionally: COPY fails on a glob that
+matches nothing, so "the .ipa if there is one" has to be spelled as "this
+directory, whatever is in it".
