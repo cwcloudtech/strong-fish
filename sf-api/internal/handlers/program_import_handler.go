@@ -114,7 +114,11 @@ func (h *ProgramHandler) resolveExercises(ctx context.Context, parsed *xlsximpor
 	created := []models.Exercise{}
 
 	for _, parsedExercise := range parsed.Exercises {
-		existing, err := h.exercises.FindBySlug(ctx, parsedExercise.Slug)
+		// By slug, by alias, or by what it is called in either language, all
+		// compared case-insensitively: "Highbar Squat" in this week's workbook
+		// is the "highbar squat" already in the catalog, not a second entry.
+		existing, err := h.exercises.FindByName(ctx, utils.If(
+			utils.IsNotBlank(parsedExercise.Name), parsedExercise.Name, parsedExercise.Slug))
 		if err == nil {
 			catalog[parsedExercise.Slug] = existing
 			continue
@@ -123,13 +127,14 @@ func (h *ProgramHandler) resolveExercises(ctx context.Context, parsed *xlsximpor
 			return nil, nil, err
 		}
 
+		ref := referenceFor(parsedExercise)
 		exercise, err := h.exercises.Create(ctx, store.ExerciseFields{
 			Slug: parsedExercise.Slug,
 			// The workbook only has the one spelling, so both locales start
 			// from it; a coach can translate it afterwards in the catalog.
 			Labels:     map[string]string{"en": parsedExercise.Name, "fr": parsedExercise.Name},
-			Category:   categoryFor(parsedExercise),
-			OneRMRef:   parsedExercise.OneRMRef,
+			Category:   categoryFor(ref),
+			OneRMRef:   ref,
 			Bodyweight: parsedExercise.Bodyweight,
 			CreatedBy:  authorID,
 		})
@@ -142,12 +147,29 @@ func (h *ProgramHandler) resolveExercises(ctx context.Context, parsed *xlsximpor
 	return catalog, created, nil
 }
 
+// referenceFor decides which competition lift a newly imported movement is
+// loaded off.
+//
+// The workbook's own numbers come first: when a percentage and the weight it
+// produced are both there, the lift they imply is a fact about that file (see
+// xlsximport.referenceFromLoad). Only when they are not - which is most files -
+// is the name read instead, against the decision table in models.LiftRules.
+//
+// Doing it here rather than only at load time means the catalog entry itself
+// carries the answer, where a coach can see it and correct it.
+func referenceFor(exercise xlsximport.ParsedExercise) string {
+	if models.IsValidOneRMRef(exercise.OneRMRef) && utils.IsNotBlank(exercise.OneRMRef) {
+		return exercise.OneRMRef
+	}
+	return models.MatchOneRMRef(exercise.Name, exercise.Slug)
+}
+
 // categoryFor classifies a newly imported movement: one programmed off a
 // competition lift's max belongs to that lift's family, anything else is an
 // accessory.
-func categoryFor(exercise xlsximport.ParsedExercise) string {
-	if models.IsValidOneRMRef(exercise.OneRMRef) && utils.IsNotBlank(exercise.OneRMRef) {
-		return exercise.OneRMRef
+func categoryFor(ref string) string {
+	if models.IsValidOneRMRef(ref) && utils.IsNotBlank(ref) {
+		return ref
 	}
 	return models.CategoryAccessory
 }

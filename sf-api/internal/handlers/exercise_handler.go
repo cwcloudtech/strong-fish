@@ -106,9 +106,11 @@ func (h *ExerciseHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// An existing slug or alias means the movement is already in the catalog;
-	// report it rather than creating a near-duplicate.
-	if _, err := h.exercises.FindBySlug(r.Context(), slug); err == nil {
+	// An existing slug, alias or name means the movement is already in the
+	// catalog; report it rather than creating a near-duplicate. Matched
+	// case-insensitively, so "Highbar Squat" and "highbar squat" are one
+	// movement (see ExerciseStore.FindByName).
+	if _, err := h.exercises.FindByName(r.Context(), name); err == nil {
 		writeError(w, http.StatusBadRequest, "An exercise with this name already exists", CodeDuplicateExercise)
 		return
 	} else if !errors.Is(err, store.ErrNotFound) {

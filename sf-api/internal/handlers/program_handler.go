@@ -162,6 +162,10 @@ func (h *ProgramHandler) resolveSets(ctx context.Context, sets []models.ProgramS
 	if err != nil {
 		return nil, nil, err
 	}
+	mainLiftsByID := make(map[string]models.Exercise, len(mainLifts))
+	for _, lift := range mainLifts {
+		mainLiftsByID[lift.ID] = lift
+	}
 
 	missingIDs := map[string]bool{}
 	resolved := make([]models.ProgramSet, len(sets))
@@ -172,6 +176,17 @@ func (h *ProgramHandler) resolveSets(ctx context.Context, sets []models.ProgramS
 	for i, set := range sets {
 		session.enter(set.DayID)
 		oneRM, sourceID := memberOneRM(set, maxes, mainLifts)
+		// Projected, never stored: when the load came off a lift matched from
+		// the name, the set has to say so, or the screen credits the max to
+		// the movement itself.
+		if utils.IsBlank(set.ExerciseOneRMRef) && sourceID != set.ExerciseID {
+			if lift, ok := mainLiftsByID[sourceID]; ok {
+				// The category, not the slug: a reference names the lift's
+				// family, which is what FindMainLifts keys on and what a
+				// catalog entry stores.
+				set.ExerciseOneRMRef = lift.Category
+			}
+		}
 		if shown, ok := session.forLift(sourceID); ok {
 			oneRM = &shown
 			set.Autoregulated = true
@@ -239,8 +254,18 @@ func memberOneRM(set models.ProgramSet, maxes map[string]float64, mainLifts map[
 		return &value, set.ExerciseID
 	}
 
-	if utils.IsNotBlank(set.ExerciseOneRMRef) {
-		if lift, ok := mainLifts[set.ExerciseOneRMRef]; ok {
+	ref := set.ExerciseOneRMRef
+	if utils.IsBlank(ref) {
+		// Nothing on the catalog entry says which lift this is a variation of,
+		// so read it out of the name: a highbar squat is loaded off the squat,
+		// a paused deadlift off the deadlift (see models.LiftRules). This is
+		// the last resort - a max recorded for the movement itself and a
+		// reference a coach set both win over it, above.
+		ref = models.MatchOneRMRef(set.ExerciseSlug, set.ExerciseLabels["en"], set.ExerciseLabels["fr"])
+	}
+
+	if utils.IsNotBlank(ref) {
+		if lift, ok := mainLifts[ref]; ok {
 			if value, recorded := maxes[lift.ID]; recorded && value > 0 {
 				return &value, lift.ID
 			}

@@ -77,3 +77,22 @@ Squat, bench press and deadlift are flagged as competition movements. A
 variation - a Larsen press, a tempo squat, a pin bench - is programmed off the
 competition lift's max rather than off its own, so you do not have to test a
 one-rep max on every accessory you have ever done.
+
+### How a variation finds its lift
+
+Three things are tried, in this order:
+
+1. **A max you recorded for that exact movement.** If you have tested your
+   paused deadlift, your paused deadlift is loaded off that.
+2. **The lift the movement is filed under** in the exercise catalog, which a
+   coach can set or correct at any time.
+3. **Its name.** "Highbar squat", "Tempo squat 3:3:0", "Paused deadlift", "RDL",
+   "Dumbbell bench" - each says which lift it belongs to, and StrongFish reads
+   it, whatever the capitalisation and in either language.
+
+A few movements carry a lift's name without being loaded off it - a goblet
+squat, a Bulgarian split squat, a bench pull - and those are deliberately left
+alone: they stay unloaded until you record a max for them.
+
+If none of the three answers, the load shows as **?** and the movement is
+listed as needing a max.
