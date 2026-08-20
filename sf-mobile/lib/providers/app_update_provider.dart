@@ -129,7 +129,19 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
   @override
   AppUpdateState build() => const AppUpdateState();
 
+  /// Whether this build may update itself.
+  ///
+  /// Android only. Apple does not allow an app to download and install its own
+  /// code - App Review rejects it outright, and there is no sideloading for a
+  /// user to fall back on. On iOS a new version arrives through TestFlight or
+  /// the App Store, so the check is not merely useless here, it is a
+  /// submission risk: a button that fetches and opens a package is exactly
+  /// what the guideline names.
+  static bool get selfUpdateAllowed => Platform.isAndroid;
+
   Future<void> checkForUpdate() async {
+    if (!selfUpdateAllowed) return;
+
     try {
       // The API reports both the published version and the URL it is published
       // at, built from the same settings the web app's download link uses. That
@@ -170,6 +182,8 @@ class AppUpdateNotifier extends Notifier<AppUpdateState> {
   }
 
   Future<void> downloadAndInstall() async {
+    if (!selfUpdateAllowed) return;
+
     final version = state.availableVersion;
     final url = state.downloadUrl;
     if (version == null || url == null || state.downloading) return;

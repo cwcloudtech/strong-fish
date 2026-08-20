@@ -326,6 +326,17 @@ class _UpdateTile extends ConsumerWidget {
     final t = ref.watch(tProvider);
     final update = ref.watch(appUpdateProvider);
 
+    // iOS gets no upgrade control at all: an app there cannot install its own
+    // code, so the version is all there is to say. Offering a button that
+    // downloads and opens a package is what App Review rejects.
+    if (!AppUpdateNotifier.selfUpdateAllowed) {
+      return ListTile(
+        leading: const Icon(Icons.info_outline),
+        title: Text(t('update.storeManaged')),
+        subtitle: appVersion.isEmpty ? null : Text('v$appVersion'),
+      );
+    }
+
     if (update.downloading) {
       return ListTile(
         leading: const Icon(Icons.system_update),

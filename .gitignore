@@ -1,5 +1,13 @@
 .DS_Store
 .env
+# The iOS signing certificate and the App Store Connect key live here; the
+# .example beside it is what is tracked.
+.env.ios
+# The signing identity ci/app/deliver-ios.sh exports from the keychain, and the
+# App Store Connect key Apple only lets you download once. Both are private
+# keys: they belong on the Mac that has them and nowhere else.
+*.p12
+AuthKey_*.p8
 *.log
 mobile.keystore
 
@@ -22,3 +30,9 @@ sf-mobile/android/app/debug/
 sf-mobile/android/app/release/
 *.keystore
 !mobile-release.keystore
+# Deliberately *not* ignored: the .ipa is built by hand on a Mac
+# (ci/app/deliver-ios.sh) and committed, because the Linux pipeline cannot produce
+# one and still has to ship it. sf-mobile/build/ above already excludes the
+# working copy Xcode leaves behind.
+!sf-mobile/dist/
+!sf-mobile/dist/*.ipa
