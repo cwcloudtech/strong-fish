@@ -114,6 +114,11 @@ class _DayCard extends ConsumerWidget {
   }
 }
 
+/// The perceived-RPE values on offer, as the chart is written: half points
+/// from 6 up, and nothing below - "it moved" is not an RPE, and the chart has
+/// no row for one.
+const _perceivedRpe = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
+
 class _SetTile extends ConsumerWidget {
   final ProgramSet set;
   final String assignmentId;
@@ -148,10 +153,19 @@ class _SetTile extends ConsumerWidget {
             Text('“${set.log!.comment}”', style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
-      trailing: IconButton(
-        icon: Icon(logged ? Icons.check_circle : Icons.edit_note, color: logged ? scheme.primary : null),
-        tooltip: t('session.log'),
-        onPressed: () => _openLogSheet(context, ref),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // The whole log in one control: pick how the set actually felt and
+          // it saves there and then, and the rest of the session is
+          // re-resolved against the max that effort demonstrates.
+          _PerceivedRpe(set: set, assignmentId: assignmentId),
+          IconButton(
+            icon: Icon(logged ? Icons.check_circle : Icons.edit_note, color: logged ? scheme.primary : null),
+            tooltip: t('session.log'),
+            onPressed: () => _openLogSheet(context, ref),
+          ),
+        ],
       ),
     );
   }
@@ -195,9 +209,97 @@ class _LoadLabel extends ConsumerWidget {
             style: TextStyle(color: scheme.error, fontWeight: FontWeight.bold, fontSize: 16)),
       );
     }
-    return Text(
+    final load = Text(
       '${_fmt(set.load)} ${t('common.kg')}',
       style: TextStyle(color: scheme.primary, fontWeight: FontWeight.bold, fontSize: 16),
+    );
+    if (!set.autoregulated) return load;
+
+    // A load that moved because of what was just lifted has to say so, or the
+    // weight looks like it changed on its own.
+    return Tooltip(
+      message: t('session.fromTodaysE1rm', {'value': _fmt(set.oneRm)}),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.autorenew, size: 14, color: scheme.primary),
+          const SizedBox(width: 3),
+          load,
+        ],
+      ),
+    );
+  }
+}
+
+/// The perceived RPE, saved the moment it is picked.
+///
+/// The API replaces a set's log wholesale, so this carries whatever else was
+/// already logged with it - otherwise choosing "8" would quietly delete the
+/// note the member left and the weight they typed.
+class _PerceivedRpe extends ConsumerStatefulWidget {
+  final ProgramSet set;
+  final String assignmentId;
+
+  const _PerceivedRpe({required this.set, required this.assignmentId});
+
+  @override
+  ConsumerState<_PerceivedRpe> createState() => _PerceivedRpeState();
+}
+
+class _PerceivedRpeState extends ConsumerState<_PerceivedRpe> {
+  bool _busy = false;
+
+  Future<void> _pick(double? value) async {
+    final log = widget.set.log;
+    setState(() => _busy = true);
+    try {
+      if (value == null) {
+        await ref.read(apiProvider).clearLog(widget.assignmentId, widget.set.id);
+      } else {
+        await ref.read(apiProvider).logSet(
+              widget.assignmentId,
+              widget.set.id,
+              actualReps: log?.actualReps,
+              actualRpe: value,
+              actualLoad: log?.actualLoad,
+              comment: log?.comment ?? '',
+            );
+      }
+      ref.invalidate(assignmentProvider(widget.assignmentId));
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final current = widget.set.log?.actualRpe;
+
+    if (_busy) {
+      return const SizedBox(width: 42, height: 18, child: Center(
+        child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+      ));
+    }
+
+    return DropdownButton<double?>(
+      value: _perceivedRpe.contains(current) ? current : null,
+      hint: Text(t('session.rpePlaceholder'), style: const TextStyle(fontSize: 12)),
+      underline: const SizedBox.shrink(),
+      isDense: true,
+      items: [
+        // Clearing is a real answer - a set logged by mistake has to be
+        // undoable without opening the form.
+        DropdownMenuItem(value: null, child: Text(t('session.rpePlaceholder'), style: const TextStyle(fontSize: 12))),
+        for (final value in _perceivedRpe)
+          DropdownMenuItem(value: value, child: Text(_fmt(value), style: const TextStyle(fontSize: 13))),
+      ],
+      onChanged: _pick,
     );
   }
 }

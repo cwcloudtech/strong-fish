@@ -166,8 +166,16 @@ func (h *ProgramHandler) resolveSets(ctx context.Context, sets []models.ProgramS
 	missingIDs := map[string]bool{}
 	resolved := make([]models.ProgramSet, len(sets))
 
+	// What this session has shown each lift to be worth (see autoregulate.go).
+	session := newSessionMaxes()
+
 	for i, set := range sets {
+		session.enter(set.DayID)
 		oneRM, sourceID := memberOneRM(set, maxes, mainLifts)
+		if shown, ok := session.forLift(sourceID); ok {
+			oneRM = &shown
+			set.Autoregulated = true
+		}
 
 		result := loadcalc.Load(loadcalc.Prescription{
 			Mode: set.LoadMode, Reps: set.Reps, RPE: set.RPE,
@@ -189,14 +197,21 @@ func (h *ProgramHandler) resolveSets(ctx context.Context, sets []models.ProgramS
 		}
 
 		if log, ok := logs[set.ID]; ok {
+			// What they lifted, falling back to what they were told to lift:
+			// a member who only picks the RPE the set felt like has said
+			// enough for an estimate, and asking them to retype the weight
+			// already on screen would be asking twice.
+			load := set.Load
 			if log.ActualLoad != nil {
-				reps := set.Reps
-				if log.ActualReps != nil {
-					reps = *log.ActualReps
-				}
-				log.E1RM = loadcalc.E1RM(*log.ActualLoad, reps, log.ActualRPE)
+				load = *log.ActualLoad
 			}
+			reps := set.Reps
+			if log.ActualReps != nil {
+				reps = *log.ActualReps
+			}
+			log.E1RM = loadcalc.E1RM(load, reps, log.ActualRPE)
 			set.Log = &log
+			session.record(sourceID, log)
 		}
 		resolved[i] = set
 	}

@@ -87,6 +87,9 @@ type User struct {
 	// Specialty is the lift the member says is theirs - or that none is (see
 	// specialty.go). Empty means they have not picked one.
 	Specialty string `json:"specialty,omitempty"`
+	// Socials are the accounts the member chose to show, stored as names on
+	// their service rather than as URLs (see socials.go).
+	Socials Socials `json:"socials,omitempty"`
 	// MFAEnabled is true once at least one MFA factor (TOTP or a WebAuthn
 	// credential) has been confirmed. It gates password login behind a second
 	// factor.
@@ -172,7 +175,9 @@ type UserMeResponse struct {
 	// Specialty is sent even when empty: this is the account's own view, and
 	// the form needs to be able to tell "none picked" from "not in the
 	// response at all".
-	Specialty  string    `json:"specialty"`
+	Specialty string `json:"specialty"`
+	// Socials, likewise, is the form's own view of what it will edit.
+	Socials    Socials   `json:"socials"`
 	MFAEnabled bool      `json:"mfaEnabled"`
 	CreatedAt  time.Time `json:"createdAt"`
 	UpdatedAt  time.Time `json:"updatedAt"`
@@ -198,6 +203,9 @@ type PublicProfile struct {
 	// Specialty is the badge the member picked for themselves, absent when
 	// they picked none.
 	Specialty string `json:"specialty,omitempty"`
+	// Socials are the accounts to link to from the profile; absent when the
+	// member filled none in.
+	Socials Socials `json:"socials,omitempty"`
 	// Birthdate is only ever on a profile the caller was already allowed to
 	// read, which is the same gate that decides whether they see the birthday
 	// in their calendar.

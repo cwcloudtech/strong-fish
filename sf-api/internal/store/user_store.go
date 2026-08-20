@@ -52,6 +52,7 @@ type userData struct {
 	IPs               []models.ConnectionIP `json:"ips,omitempty"`
 	Bodyweight        float64               `json:"bodyweight,omitempty"`
 	Specialty         string                `json:"specialty,omitempty"`
+	Socials           *models.Socials       `json:"socials,omitempty"`
 	MFAEnabled        bool                  `json:"mfaEnabled,omitempty"`
 	MFATOTPSecret     string                `json:"mfaTotpSecret,omitempty"`
 	// Storage is the member's own object store for video uploads, and
@@ -110,6 +111,9 @@ func scanUser(row pgx.Row) (models.User, error) {
 	// by a version of this app that knew a badge this one does not, must not
 	// reach a client that would render the raw value.
 	u.Specialty = models.NormalizeSpecialty(d.Specialty)
+	if d.Socials != nil {
+		u.Socials = models.NormalizeSocials(*d.Socials)
+	}
 	u.MFAEnabled = d.MFAEnabled
 	u.MFATOTPSecret = d.MFATOTPSecret
 	if d.Storage != nil {
@@ -467,7 +471,10 @@ type ProfileFields struct {
 	Birthdate         string
 	Bodyweight        float64
 	// Specialty is the badge the member wears; blank clears it.
-	Specialty    string
+	Specialty string
+	// Socials replaces the stored accounts wholesale, so a form that sends a
+	// field blank clears it.
+	Socials      models.Socials
 	PasswordHash *string
 }
 
@@ -494,6 +501,10 @@ func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileField
 		"birthdate":         f.Birthdate,
 		"bodyweight":        f.Bodyweight,
 		"specialty":         models.NormalizeSpecialty(f.Specialty),
+		// Written as a whole object rather than field by field: the payload
+		// merge is shallow, so this key replaces what was there, which is what
+		// makes clearing one account work.
+		"socials": models.NormalizeSocials(f.Socials),
 	}
 	if utils.IsNotBlank(f.Locale) {
 		patch["locale"] = f.Locale

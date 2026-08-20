@@ -133,6 +133,11 @@ type ProgramSet struct {
 	// as prescribed - equal to OneRM by construction for an RPE set, which is
 	// the self-consistency the source spreadsheet lacked.
 	TargetE1RM float64 `json:"targetE1rm,omitempty"`
+	// Autoregulated says this set's load came from an e1RM the member
+	// demonstrated earlier in the same session rather than from the 1RM on
+	// file, so the screen can say where the number came from instead of the
+	// weight appearing to change on its own.
+	Autoregulated bool `json:"autoregulated,omitempty"`
 	// Log is this member's feedback on the set, when they've logged it.
 	Log *SetLog `json:"log,omitempty"`
 

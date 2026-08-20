@@ -462,6 +462,73 @@ button {
   margin-top: 4px;
 }
 
+/* --- social accounts ---
+   The row of links on a profile, and the fields that fill it. Both are
+   generated from one table (utils/socialProfiles.js), so the styling is per
+   kind rather than per network - nothing here names Instagram. */
+
+.sf-profile-socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.sf-social-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--sf-border);
+  border-radius: 999px;
+  background-color: var(--sf-surface);
+  color: var(--sf-text);
+  font-size: 0.82rem;
+  text-decoration: none;
+  transition: border-color var(--sf-transition), color var(--sf-transition);
+}
+
+.sf-social-link:hover {
+  border-color: var(--sf-primary);
+  color: var(--sf-primary-dark);
+  text-decoration: none;
+}
+
+.sf-socials-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sf-social-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The icon is the field's label: with five rows one after another, a written
+   label above each would be five words for what the mark already says. */
+.sf-social-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  flex: 0 0 30px;
+  color: var(--sf-text-muted);
+  font-size: 1.05rem;
+}
+
+.sf-social-field .sf-input { flex: 1; min-width: 0; }
+.sf-social-field .sf-social-rank { flex: 0 1 34%; }
+
+/* The perceived-RPE picker in a session's table: narrow enough to sit in a
+   numeric column beside the loads it changes. */
+.sf-rpe-select { min-width: 92px; }
+.sf-rpe-select .sf-select-trigger { padding-top: 4px; padding-bottom: 4px; }
+
+/* The mark on a load that was recalculated from what the member just lifted. */
+.sf-autoregulated { color: var(--sf-primary-dark); font-weight: 600; }
+
 /* --- table --- */
 
 .sf-table-wrapper { overflow-x: auto; }

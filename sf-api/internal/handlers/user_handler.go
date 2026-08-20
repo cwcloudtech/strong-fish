@@ -242,9 +242,13 @@ type updateProfilePayload struct {
 	Bodyweight        float64 `json:"bodyweight"`
 	// Specialty is the lift the member claims as theirs. Anything unknown is
 	// normalized away rather than refused: a badge is not worth a 400.
-	Specialty       string `json:"specialty"`
-	Password        string `json:"password"`
-	ConfirmPassword string `json:"confirmPassword"`
+	Specialty string `json:"specialty"`
+	// Socials are the accounts to show on the profile, normalized rather than
+	// validated: somebody pasting their profile URL should get a working link,
+	// not an error (see models.NormalizeSocialAccount).
+	Socials         models.Socials `json:"socials"`
+	Password        string         `json:"password"`
+	ConfirmPassword string         `json:"confirmPassword"`
 }
 
 // UpdateProfile lets the connected user edit their own profile and, optionally,
@@ -322,7 +326,8 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		Name: p.Name, Surname: p.Surname, Username: username, Anonymous: p.Anonymous,
 		Bio: p.Bio, Locale: p.Locale,
 		ProfileVisibility: p.ProfileVisibility, Birthdate: birthdate,
-		Bodyweight: p.Bodyweight, Specialty: p.Specialty, PasswordHash: passwordHash,
+		Bodyweight: p.Bodyweight, Specialty: p.Specialty, Socials: p.Socials,
+		PasswordHash: passwordHash,
 	})
 	if err != nil {
 		writeStoreError(w, err)
