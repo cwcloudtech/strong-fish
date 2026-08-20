@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/profile_badges.dart';
 import '../widgets/social_share.dart';
+import '../widgets/socials.dart';
 
 /// Somebody else's profile, opened from a message, a post, or a search result.
 ///
@@ -118,6 +119,10 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                         if (profile.bio.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           Text(profile.bio),
+                        ],
+                        if (profile.socials.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          SocialLinks(socials: profile.socials, alignment: WrapAlignment.start),
                         ],
                         const SizedBox(height: 16),
                         Row(

@@ -927,3 +927,66 @@ func TestSpecialtyRoundTripsAndClears(t *testing.T) {
 		t.Errorf("specialty = %q, want an unknown badge normalized away", unknown.Specialty)
 	}
 }
+
+// TestSocialsRoundTripAndClear covers the accounts a member shows on their
+// profile, and above all clearing one.
+//
+// The profile payload is written with a shallow merge, so the whole socials
+// object is replaced on every save. That is what makes deleting one account
+// work - and it is also what would silently wipe the other four if the update
+// ever stopped sending them, so both directions are pinned here.
+func TestSocialsRoundTripAndClear(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	users := NewUserStore(pool)
+	id := seedUser(t, pool, "socials@example.com")
+
+	fields := ProfileFields{
+		Name: "Marie", Surname: "Dubois",
+		ProfileVisibility: models.ProfileVisibilityPublic,
+		Socials: models.Socials{
+			// As somebody would actually fill it in: two names typed, one
+			// address pasted, and a rank read off a page.
+			Instagram:            "@marie.lifts",
+			Bluesky:              "marie.bsky.social",
+			OpenPowerlifting:     "https://www.openpowerlifting.org/u/mariedubois",
+			OpenPowerliftingRank: "12th FR -84kg",
+		},
+	}
+	if _, err := users.UpdateProfile(ctx, id, fields); err != nil {
+		t.Fatalf("saving: %v", err)
+	}
+
+	saved, err := users.FindByID(ctx, id)
+	if err != nil {
+		t.Fatalf("re-reading: %v", err)
+	}
+	if saved.Socials.Instagram != "marie.lifts" {
+		t.Errorf("instagram = %q, want the at stripped", saved.Socials.Instagram)
+	}
+	if saved.Socials.OpenPowerlifting != "mariedubois" {
+		t.Errorf("openpowerlifting = %q, want the account out of the pasted URL", saved.Socials.OpenPowerlifting)
+	}
+	if saved.Socials.OpenPowerliftingRank != "12th FR -84kg" {
+		t.Errorf("rank = %q", saved.Socials.OpenPowerliftingRank)
+	}
+	if saved.Socials.TikTok != "" || saved.Socials.X != "" {
+		t.Errorf("networks nobody filled in came back as %q / %q", saved.Socials.TikTok, saved.Socials.X)
+	}
+
+	// Deleting one account leaves the others alone.
+	fields.Socials.Instagram = ""
+	if _, err := users.UpdateProfile(ctx, id, fields); err != nil {
+		t.Fatalf("clearing one account: %v", err)
+	}
+	cleared, err := users.FindByID(ctx, id)
+	if err != nil {
+		t.Fatalf("re-reading after clearing: %v", err)
+	}
+	if cleared.Socials.Instagram != "" {
+		t.Errorf("instagram = %q after being cleared; the merge kept the old value", cleared.Socials.Instagram)
+	}
+	if cleared.Socials.Bluesky != "marie.bsky.social" {
+		t.Errorf("bluesky = %q; clearing one account took another with it", cleared.Socials.Bluesky)
+	}
+}

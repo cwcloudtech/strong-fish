@@ -78,6 +78,9 @@ class User {
   /// The lift the member claims as their own: 'squat', 'bench', 'deadlift',
   /// 'total' - or empty, which is a first-class answer and the default.
   final String specialty;
+  /// The accounts the member chose to show, keyed as the API names them (see
+  /// socials.dart). Values are names on the service, never whole URLs.
+  final Map<String, String> socials;
   final bool mfaEnabled;
   final String i18nCode;
 
@@ -97,6 +100,7 @@ class User {
     this.birthdate = '',
     this.bodyweight = 0,
     this.specialty = '',
+    this.socials = const {},
     this.mfaEnabled = false,
     this.i18nCode = '',
   });
@@ -117,6 +121,7 @@ class User {
         birthdate: _toString(json['birthdate']),
         bodyweight: _toDouble(json['bodyweight']),
         specialty: _toString(json['specialty']),
+        socials: _toLabels(json['socials']),
         mfaEnabled: json['mfaEnabled'] == true,
         i18nCode: _toString(json['i18nCode']),
       );
@@ -330,6 +335,11 @@ class ProgramSet {
   final double computedPercentage;
   final bool loadKnown;
   final double oneRm;
+  /// True when [load] came from a max the member demonstrated earlier in this
+  /// same session rather than from the 1RM on file - so the screen can say
+  /// where the number came from instead of the weight seeming to move by
+  /// itself.
+  final bool autoregulated;
   final String notes;
   final SetLog? log;
 
@@ -350,6 +360,7 @@ class ProgramSet {
     this.computedPercentage = 0,
     this.loadKnown = false,
     this.oneRm = 0,
+    this.autoregulated = false,
     this.notes = '',
     this.log,
   });
@@ -371,6 +382,7 @@ class ProgramSet {
         computedPercentage: _toDouble(json['computedPercentage']),
         loadKnown: json['loadKnown'] == true,
         oneRm: _toDouble(json['oneRm']),
+        autoregulated: json['autoregulated'] == true,
         notes: _toString(json['notes']),
         log: json['log'] is Map<String, dynamic> ? SetLog.fromJson(json['log']) : null,
       );
@@ -943,6 +955,8 @@ class PublicProfile {
   final String role;
   /// The badge the member picked for themselves; empty when they picked none.
   final String specialty;
+  /// Where else to find them, keyed as the API names them.
+  final Map<String, String> socials;
   final String bio;
   final String picture;
   final double bodyweight;
@@ -959,6 +973,7 @@ class PublicProfile {
     this.surname = '',
     this.role = '',
     this.specialty = '',
+    this.socials = const {},
     this.bio = '',
     this.picture = '',
     this.bodyweight = 0,
@@ -976,6 +991,7 @@ class PublicProfile {
         surname: _toString(json['surname']),
         role: _toString(json['role']),
         specialty: _toString(json['specialty']),
+        socials: _toLabels(json['socials']),
         bio: _toString(json['bio']),
         picture: _toString(json['picture']),
         bodyweight: _toDouble(json['bodyweight']),

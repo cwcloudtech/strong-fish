@@ -11,6 +11,7 @@ import '../providers/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/profile_badges.dart';
 import '../widgets/social_share.dart';
+import '../widgets/socials.dart';
 import 'public_profile_screen.dart';
 
 /// The connected user's own profile and settings: their bests, their public
@@ -97,6 +98,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'birthdate': user.birthdate,
       'bodyweight': user.bodyweight,
       'specialty': user.specialty,
+      'socials': user.socials,
       ...changes,
     });
     await ref.read(sessionProvider.notifier).refresh();
@@ -195,6 +197,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 // Standing and specialty, each in its own colour - the same
                 // two badges the web profile carries.
                 ProfileBadges(role: user.role, specialty: user.specialty),
+                if (user.socials.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  SocialLinks(socials: user.socials),
+                ],
                 if (user.bio.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(user.bio, textAlign: TextAlign.center),
@@ -240,6 +246,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
           ),
+
+        // Where else to find this lifter. The fields are generated from the
+        // same table as the links, so a network added there appears in both.
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t('profile.socials'), style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(t('profile.socialsHelp'), style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 8),
+                _SocialsForm(user: user, onSave: (socials) => _patchProfile(user, {'socials': socials})),
+              ],
+            ),
+          ),
+        ),
 
         if (bests.isNotEmpty)
           Card(
@@ -398,6 +422,121 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ],
       ),
+    );
+  }
+}
+
+/// The social accounts, one field per entry in the table.
+///
+/// Saved on a button rather than on every keystroke: these are typed, not
+/// picked, and a request per character would be both wasteful and impossible
+/// to correct halfway through.
+class _SocialsForm extends ConsumerStatefulWidget {
+  final User user;
+  final Future<void> Function(Map<String, String>) onSave;
+
+  const _SocialsForm({required this.user, required this.onSave});
+
+  @override
+  ConsumerState<_SocialsForm> createState() => _SocialsFormState();
+}
+
+class _SocialsFormState extends ConsumerState<_SocialsForm> {
+  late final Map<String, TextEditingController> _fields;
+  bool _busy = false;
+  bool _dirty = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fields = {
+      for (final network in socialProfiles) ...{
+        network.key: TextEditingController(text: widget.user.socials[network.key] ?? ''),
+        if (network.rankKey != null)
+          network.rankKey!: TextEditingController(text: widget.user.socials[network.rankKey!] ?? ''),
+      },
+    };
+    for (final field in _fields.values) {
+      field.addListener(() {
+        if (!_dirty && mounted) setState(() => _dirty = true);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final field in _fields.values) {
+      field.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final t = ref.read(tProvider);
+    setState(() => _busy = true);
+    try {
+      await widget.onSave({
+        for (final entry in _fields.entries) entry.key: entry.value.text.trim(),
+      });
+      if (mounted) {
+        setState(() => _dirty = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('profile.saved'))));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final network in socialProfiles) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                flex: network.rankKey == null ? 1 : 2,
+                child: TextField(
+                  controller: _fields[network.key],
+                  decoration: InputDecoration(
+                    // The icon is the label: five written labels one after
+                    // another say what five marks already do.
+                    icon: Icon(network.icon),
+                    labelText: network.label,
+                    hintText: network.placeholder,
+                  ),
+                ),
+              ),
+              if (network.rankKey != null) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _fields[network.rankKey!],
+                    decoration: InputDecoration(labelText: t('profile.rank')),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton(
+            onPressed: _busy || !_dirty ? null : _save,
+            child: Text(t('common.save')),
+          ),
+        ),
+      ],
     );
   }
 }

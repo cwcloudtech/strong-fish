@@ -200,6 +200,7 @@ func meResponse(user models.User, activationMode string) models.UserMeResponse {
 		ProfileVisibility: user.ProfileVisibility, Birthdate: user.Birthdate,
 		CoachRequest: user.CoachRequest, Bodyweight: user.Bodyweight,
 		Specialty:  models.NormalizeSpecialty(user.Specialty),
+		Socials:    models.NormalizeSocials(user.Socials),
 		MFAEnabled: user.MFAEnabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
 		I18nCode: models.I18nCodeForRole(user.Role, activationMode),
 	}

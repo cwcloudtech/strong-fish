@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"strong-fish-api/internal/loadcalc"
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/store"
@@ -194,12 +193,14 @@ func (h *TrainingHandler) LogSet(w http.ResponseWriter, r *http.Request) {
 
 	// Echo the estimated max the performance demonstrates, so the member sees
 	// straight away whether the set beat the 1RM it was prescribed from.
-	if log.ActualLoad != nil {
-		reps := prescribed.Reps
-		if log.ActualReps != nil {
-			reps = *log.ActualReps
-		}
-		log.E1RM = loadcalc.E1RM(*log.ActualLoad, reps, log.ActualRPE)
+	//
+	// Resolved through the same code the session screen uses rather than
+	// computed here: the load a member who logged only an RPE is credited with
+	// is the one they were prescribed, and working that out twice is how the
+	// two answers come to differ.
+	if resolved, _, err := h.sets.resolveSets(r.Context(), []models.ProgramSet{prescribed},
+		assignment.UserID, map[string]models.SetLog{setID: log}); err == nil && resolved[0].Log != nil {
+		log = *resolved[0].Log
 	}
 	writeJSON(w, http.StatusOK, log)
 }

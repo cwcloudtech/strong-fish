@@ -7,6 +7,7 @@ import Avatar from "../components/common/Avatar";
 import PostCard from "../components/feed/PostCard";
 import ShareButtons from "../components/common/ShareButtons";
 import ProfileBadges from "../components/common/ProfileBadges";
+import { filledSocials } from "../utils/socialProfiles";
 import { EmptyState, ErrorMessage, Spinner } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
@@ -60,6 +61,7 @@ export default function Profile() {
   if (!profile) return <Spinner />;
 
   const isSelf = user?.id === profile.id;
+  const socials = filledSocials(profile.socials);
 
   return (
     <div className="sf-page" style={{ maxWidth: 720 }}>
@@ -102,6 +104,28 @@ export default function Profile() {
             </div>
 
             {profile.bio ? <p>{profile.bio}</p> : null}
+
+            {/* Where else to find this lifter. Same table as the settings form,
+                so a link here and the field that filled it cannot disagree.
+                They open in a new tab: somebody leaving to look at an
+                Instagram should come back to the profile they were reading. */}
+            {socials.length ? (
+              <div className="sf-profile-socials">
+                {socials.map(({ key, label, Icon, account, href, rank }) => (
+                  <a
+                    key={key}
+                    className="sf-social-link"
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    title={rank ? `${label} · ${account} · ${t("profile.rank")} ${rank}` : `${label} · ${account}`}
+                  >
+                    <Icon aria-hidden="true" />
+                    <span>{rank || label}</span>
+                  </a>
+                ))}
+              </div>
+            ) : null}
 
             {/* Only a profile somebody else can actually open is worth
                 sharing: a link to a members-only profile would land a

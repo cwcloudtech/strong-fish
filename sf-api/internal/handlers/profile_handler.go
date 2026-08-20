@@ -103,6 +103,7 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 		Role:      target.Role, Bio: target.Bio, Picture: target.Picture,
 		PictureX: target.PictureX, PictureY: target.PictureY, Bodyweight: target.Bodyweight,
 		Specialty: models.NormalizeSpecialty(target.Specialty),
+		Socials:   models.NormalizeSocials(target.Socials),
 		Birthdate: target.Birthdate,
 		Bests:     bests, Total: total, Followers: followers, Following: following,
 		Followed: followed, Clubs: clubs, CreatedAt: target.CreatedAt,

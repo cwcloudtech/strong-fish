@@ -10,6 +10,7 @@ import { auth, media as mediaApi, mfa as mfaApi } from "../../api/services";
 import Avatar from "../../components/common/Avatar";
 import Modal from "../../components/common/Modal";
 import Select from "../../components/common/Select";
+import SOCIAL_PROFILES from "../../utils/socialProfiles";
 import ProfileBadges from "../../components/common/ProfileBadges";
 import { ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useAuth } from "../../context/AuthContext";
@@ -57,6 +58,15 @@ export default function Settings() {
       bio: user.bio || "",
       bodyweight: user.bodyweight || "",
       specialty: user.specialty || "",
+      // One key per entry in the table, plus the rank the one entry that has
+      // it carries. Built from the table so a network added there needs
+      // nothing here.
+      socials: Object.fromEntries(
+        SOCIAL_PROFILES.flatMap((network) => [
+          [network.key, user.socials?.[network.key] || ""],
+          ...(network.rankKey ? [[network.rankKey, user.socials?.[network.rankKey] || ""]] : []),
+        ])
+      ),
       profileVisibility: user.profileVisibility || "private",
       birthdate: user.birthdate || "",
       password: "",
@@ -71,6 +81,9 @@ export default function Settings() {
       ...current,
       [field]: event.target.type === "checkbox" ? event.target.checked : event.target.value,
     }));
+
+  const setSocial = (field) => (event) =>
+    setForm((current) => ({ ...current, socials: { ...current.socials, [field]: event.target.value } }));
 
   const save = async (event) => {
     event.preventDefault();
@@ -227,6 +240,41 @@ export default function Settings() {
             {/* The badges as somebody else will see them, so the picker is not
                 a guess at what the profile ends up looking like. */}
             <ProfileBadges role={user.role} specialty={form.specialty} />
+          </div>
+        </div>
+
+        {/* Generated from the table in utils/socialProfiles.js: the label, the
+            icon and the address an account lives at all come from the entry,
+            so this block does not grow when a network is added. */}
+        <div className="sf-field">
+          <label className="sf-label">{t("profile.socials")}</label>
+          <p className="sf-muted" style={{ fontSize: "0.82rem", marginTop: 0 }}>
+            {t("profile.socialsHelp")}
+          </p>
+          <div className="sf-socials-form">
+            {SOCIAL_PROFILES.map(({ key, label, Icon, placeholder, rankKey }) => (
+              <div className="sf-social-field" key={key}>
+                <span className="sf-social-icon" aria-hidden="true">
+                  <Icon />
+                </span>
+                <input
+                  className="sf-input"
+                  aria-label={label}
+                  placeholder={`${label} · ${placeholder}`}
+                  value={form.socials[key]}
+                  onChange={setSocial(key)}
+                />
+                {rankKey ? (
+                  <input
+                    className="sf-input sf-social-rank"
+                    aria-label={`${label} · ${t("profile.rank")}`}
+                    placeholder={t("profile.rank")}
+                    value={form.socials[rankKey]}
+                    onChange={setSocial(rankKey)}
+                  />
+                ) : null}
+              </div>
+            ))}
           </div>
         </div>
 
