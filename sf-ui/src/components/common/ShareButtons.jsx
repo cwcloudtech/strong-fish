@@ -10,28 +10,17 @@ import { useI18n } from "../../i18n/I18nContext";
  * A row of share buttons, driven entirely by SOCIAL_NETWORKS - this component
  * has no knowledge of which networks exist.
  *
- * Networks with no web share intent (Instagram, TikTok) copy the link and say
- * so. A button that opened a composer which cannot be prefilled would look like
- * it worked and quietly drop the link.
+ * Every network in that list opens a real composer. The ones that cannot take
+ * a link from a web page are not listed at all: a button for those could only
+ * copy the link, which the copy button on the end of this row already does.
  */
 export default function ShareButtons({ url, text, label }) {
   const { t } = useI18n();
 
-  const copy = (network) =>
-    navigator.clipboard
-      ?.writeText(url)
-      .then(() => toast.info(t("share.copiedFor", { network: network.label }), toastOptions))
-      .catch(() => toast.error(t("errors.copyFailed"), toastOptions));
-
   const open = (network) => {
-    const target = network.share?.(url, text);
-    if (!target) {
-      copy(network);
-      return;
-    }
     // noopener matters here: the share window is somebody else's origin, and
     // without it that page can navigate this one through window.opener.
-    window.open(target, "_blank", "noopener,noreferrer,width=600,height=520");
+    window.open(network.share(url, text), "_blank", "noopener,noreferrer,width=600,height=520");
   };
 
   return (
@@ -39,10 +28,7 @@ export default function ShareButtons({ url, text, label }) {
       {label ? <span className="sf-share-label">{label}</span> : null}
 
       {SOCIAL_NETWORKS.map((network) => (
-        <Tooltip
-          key={network.id}
-          label={network.share ? t("share.on", { network: network.label }) : t("share.copyFor", { network: network.label })}
-        >
+        <Tooltip key={network.id} label={t("share.on", { network: network.label })}>
           <button
             type="button"
             className="sf-share-button"

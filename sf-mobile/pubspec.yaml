@@ -30,6 +30,7 @@ dependencies:
   # Records a voice message. Android needs RECORD_AUDIO, declared in the
   # manifest; the package asks for it at the moment the mic button is pressed.
   record: ^7.1.1
+  share_plus: ^13.3.0
 
 dev_dependencies:
   flutter_test:
