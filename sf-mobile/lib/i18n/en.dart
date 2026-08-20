@@ -697,10 +697,7 @@ const Map<String, dynamic> en = {
   },
   'share': {
     'label': 'Share',
-    'on': 'Share on {{network}}',
-    'copyFor': '{{network}} has no web sharing - copy the link instead',
-    'copiedFor': 'Link copied. Paste it into {{network}}.',
-    'copyLink': 'Copy the link',
+    'share': 'Share',
     'profileText': '{{name}} on StrongFish',
     'postText': 'Seen on StrongFish',
   },
