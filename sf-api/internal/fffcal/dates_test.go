@@ -1,4 +1,4 @@
-package pdfcal
+package fffcal
 
 import (
 	"testing"

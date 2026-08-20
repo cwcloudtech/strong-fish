@@ -1,19 +1,24 @@
-// Package pdfcal reads the FFForce season calendar and turns it into events.
+// Package fffcal reads the FFForce season calendar and turns it into events.
 //
-// The federation publishes its season as a PDF year planner - months across
-// the page, days down it, competitions written into the grid and shaded by
-// category. A coach who wants those dates in this app would otherwise retype
-// forty of them, so this package reads the file instead.
+// The federation publishes its season in more than one shape, and a coach who
+// wants those dates in this app would otherwise retype forty of them. Two are
+// read here, told apart by the file itself (see Calendar):
 //
-// This file is the reader: enough PDF to get the page's *positioned* text and
-// its *filled rectangles*, which is all the layout information the calendar
-// carries. Nothing here understands calendars - see calendar.go for that.
+//   - a PDF year planner - months across the page, days down it, competitions
+//     written into the grid and shaded by category (pdf.go, calendar.go);
+//   - a spreadsheet - one row per competition, with its date, its discipline
+//     and its organiser in columns (xlsx.go).
+//
+// This file is the PDF reader: enough of the format to get a page's
+// *positioned* text and its *filled rectangles*, which is all the layout
+// information that calendar carries. Nothing here understands calendars - see
+// calendar.go for that.
 //
 // It is written against the standard library rather than a PDF dependency,
 // because what it needs is a narrow slice of the format: FlateDecode streams,
 // ToUnicode CMaps, and the handful of content-stream operators that place text
 // and fill paths. A general PDF library would bring a great deal more.
-package pdfcal
+package fffcal
 
 import (
 	"bytes"
@@ -27,9 +32,10 @@ import (
 	"strings"
 )
 
-// ErrNotAPDF is returned for a file that isn't one, so the handler can tell a
-// coach they attached the wrong thing rather than reporting a parse failure.
-var ErrNotAPDF = errors.New("pdfcal: not a PDF file")
+// ErrUnsupportedCalendar is returned for a file that is neither of the shapes
+// the federation publishes, so the handler can tell a coach they attached the
+// wrong thing rather than reporting a parse failure.
+var ErrUnsupportedCalendar = errors.New("fffcal: not a season calendar")
 
 // maxPages bounds the work a single upload can cause. The federation's season
 // is two pages; a file claiming thousands is not this calendar, whatever else
@@ -163,7 +169,7 @@ var runElements = regexp.MustCompile(`<([0-9A-Fa-f]*)>|([-\d.]+)`)
 // grid from the dates written into it, and neither half means anything alone.
 func Parse(data []byte) ([]Page, error) {
 	if !bytes.HasPrefix(data, []byte("%PDF-")) {
-		return nil, ErrNotAPDF
+		return nil, ErrUnsupportedCalendar
 	}
 
 	objects := indexObjects(data)
@@ -195,7 +201,7 @@ func Parse(data []byte) ([]Page, error) {
 	}
 
 	if len(pages) == 0 {
-		return nil, errors.New("pdfcal: no page content found")
+		return nil, errors.New("fffcal: no page content found")
 	}
 	return pages, nil
 }

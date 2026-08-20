@@ -1,6 +1,7 @@
-package pdfcal
+package fffcal
 
 import (
+	"bytes"
 	"math"
 	"regexp"
 	"sort"
@@ -65,14 +66,31 @@ var (
 	}
 )
 
-// Calendar reads an uploaded FFForce season planner.
+// Calendar reads an uploaded FFForce season calendar, in whichever shape the
+// federation published it.
 //
-// The layout is a year on two pages: six month columns per page, the days of
+// Told apart by the file's own first bytes rather than by its name or by what
+// the browser called its content type: an upload is whatever it is, and a coach
+// renaming a download should not decide how it is read.
+func Calendar(data []byte) (Result, error) {
+	switch {
+	case bytes.HasPrefix(data, []byte("%PDF-")):
+		return parsePlanner(data)
+	case bytes.HasPrefix(data, []byte("PK\x03\x04")):
+		// A zip, which every .xlsx is. Whether it is one of these calendars is
+		// a question about its headings, and parseWorkbook answers it by
+		// finding nothing.
+		return parseWorkbook(data)
+	}
+	return Result{}, ErrUnsupportedCalendar
+}
+
+// parsePlanner reads the year planner: six month columns per page, the days of
 // each month down its column, and competitions written into the cells and
 // shaded by category. Everything here is inferred from where things sit on the
 // page, because that is the only structure the file has - a PDF records ink,
 // not tables.
-func Calendar(data []byte) (Result, error) {
+func parsePlanner(data []byte) (Result, error) {
 	pages, err := Parse(data)
 	if err != nil {
 		return Result{}, err

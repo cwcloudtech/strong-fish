@@ -768,7 +768,9 @@ function CalendarImport({ clubs, canPostGlobally, onImported }) {
           <input
             ref={input}
             type="file"
-            accept="application/pdf,.pdf"
+            // Both shapes the federation publishes: the year planner as a PDF,
+            // and the season as a spreadsheet.
+            accept="application/pdf,.pdf,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             className="sf-input"
             disabled={busy}
             onChange={(event) => upload(event.target.files?.[0])}

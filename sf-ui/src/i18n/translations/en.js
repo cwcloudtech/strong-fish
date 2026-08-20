@@ -619,7 +619,7 @@ const en = {
     color: "Colour",
     allDay: "All day",
     import: "Import a calendar",
-    importHelp: "Upload the federation's season calendar as a PDF. Its competitions are read out with their dates and the colours they are printed in.",
+    importHelp: "Upload the federation's season calendar - the PDF year planner or the spreadsheet. Its competitions are read out with their dates and their disciplines.",
     importing: "Reading the calendar…",
     imported: "{{count}} competitions imported",
     importSkipped: "{{count}} were already in your calendar",
