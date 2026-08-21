@@ -138,7 +138,9 @@ export const training = {
   get: (assignmentId) => body(client.get(`/training/${assignmentId}`)),
   setStatus: (assignmentId, status) => body(client.put(`/training/${assignmentId}/status`, { status })),
   logSet: (assignmentId, setId, payload) => body(client.put(`/training/${assignmentId}/sets/${setId}/log`, payload)),
-  clearLog: (assignmentId, setId) => body(client.delete(`/training/${assignmentId}/sets/${setId}/log`)),
+  // A whole session ticked off at once, keeping whatever each set already
+  // carried (see the API's ProgramStore.SetDayDone).
+  setDayDone: (assignmentId, dayId, done) => body(client.put(`/training/${assignmentId}/days/${dayId}/log`, { done })),
 };
 
 // --- social ---

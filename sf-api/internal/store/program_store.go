@@ -746,6 +746,37 @@ func (s *ProgramStore) LogSet(ctx context.Context, assignmentID, setID, userID s
 	return scanSetLog(s.pool.QueryRow(ctx, setLogSelect+` WHERE id = $1`, id))
 }
 
+// SetDayDone marks every set of one session done, or not done.
+//
+// It writes the flag and nothing else: an RPE the member already picked, the
+// weight they typed and the note they left all survive, because ticking off a
+// session is a statement about having done it, not about forgetting how it
+// went. A set with no log yet gets one carrying just the flag.
+//
+// One statement rather than a request per set: a session is a dozen sets, and
+// a member tapping "done" on a day should not be waiting on twelve round
+// trips - nor end up half-marked if one of them fails.
+func (s *ProgramStore) SetDayDone(ctx context.Context, assignmentID, dayID, userID string, done bool) (int, error) {
+	var completedAt any
+	if done {
+		completedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+
+	tag, err := s.pool.Exec(ctx, `
+		INSERT INTO set_logs (assignment_id, set_id, user_id, data)
+		SELECT $1, ps.id, $3, jsonb_build_object('done', $4::boolean, 'completedAt', $5::text)
+		FROM program_sets ps
+		WHERE ps.day_id = $2
+		ON CONFLICT (assignment_id, set_id) DO UPDATE
+		SET data = set_logs.data || jsonb_build_object('done', $4::boolean, 'completedAt', $5::text),
+		    updated_at = now()
+	`, assignmentID, dayID, userID, done, completedAt)
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 // DeleteSetLog clears a member's feedback on a set.
 func (s *ProgramStore) DeleteSetLog(ctx context.Context, assignmentID, setID string) error {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM set_logs WHERE assignment_id = $1 AND set_id = $2`, assignmentID, setID)

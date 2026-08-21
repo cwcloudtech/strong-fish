@@ -1,5 +1,5 @@
 import { Fragment, useState } from "react";
-import { FiChevronDown, FiChevronRight, FiEdit2 } from "react-icons/fi";
+import { FiCheck, FiChevronDown, FiChevronRight, FiEdit2, FiX } from "react-icons/fi";
 
 import SetLogForm from "./SetLogForm";
 import Select from "../common/Select";
@@ -12,6 +12,29 @@ import { useI18n } from "../../i18n/I18nContext";
  * chart has no row for one.
  */
 const PERCEIVED_RPE = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+
+/**
+ * Done, or not done.
+ *
+ * Green when the set (or the session) is finished, red when it is not, and it
+ * flips on click - the two states a member is ever in while running a program.
+ * There is no third state to clear back to: a set they have not done yet is
+ * simply not done.
+ */
+function DoneButton({ done, label, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`sf-done-toggle ${done ? "is-done" : "is-todo"}`}
+      onClick={onClick}
+      aria-pressed={done}
+      aria-label={label}
+      title={label}
+    >
+      {done ? <FiCheck /> : <FiX />}
+    </button>
+  );
+}
 
 /** The exercise's name in the reader's language, falling back to English. */
 export function exerciseLabel(set, locale) {
@@ -26,27 +49,32 @@ export function exerciseLabel(set, locale) {
  * the member's own current 1RM, so it changes the moment they update a max. A
  * "?" means they haven't recorded the max it would come from yet.
  */
-export default function SessionDay({ day, locale, defaultOpen = false, editable = false, onLog, onClearLog }) {
+export default function SessionDay({ day, locale, defaultOpen = false, editable = false, onLog, onDayDone }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
   const [logging, setLogging] = useState(null);
 
-  // The API replaces a set's log wholesale, so picking an RPE has to carry
-  // whatever else was already logged with it - otherwise choosing "8" would
-  // quietly delete the note the member left and the weight they typed.
-  const onPerceivedRpe = (set, value) => {
-    if (!value) return onClearLog(set);
-    return onLog(set, {
+  // The API replaces a set's log wholesale, so each of these has to carry
+  // whatever else was already logged with it - otherwise picking an RPE would
+  // quietly delete the note the member left, and ticking a set off would
+  // delete the RPE.
+  const logWith = (set, changes) =>
+    onLog(set, {
       actualReps: set.log?.actualReps ?? null,
       actualLoad: set.log?.actualLoad ?? null,
-      actualRpe: Number(value),
+      actualRpe: set.log?.actualRpe ?? null,
       comment: set.log?.comment || "",
-      done: true,
+      done: set.log?.done ?? false,
+      ...changes,
     });
-  };
+
+  // Picking how a set felt is also saying you did it: nobody rates a set they
+  // have not run.
+  const onPerceivedRpe = (set, value) => logWith(set, { actualRpe: Number(value), done: true });
 
   const sets = day.sets || [];
   const done = sets.filter((set) => set.log?.done).length;
+  const allDone = sets.length > 0 && done === sets.length;
 
   return (
     <div className="sf-card sf-session-day">
@@ -59,9 +87,22 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
           <span className="sf-badge sf-badge-muted">{t("programs.setCount", { count: sets.length })}</span>
         </div>
         {editable ? (
-          <span className={`sf-badge ${done === sets.length && sets.length > 0 ? "sf-badge-success" : "sf-badge-muted"}`}>
-            {t("session.progress", { done, total: sets.length })}
-          </span>
+          <div className="sf-row" style={{ gap: "0.5rem" }}>
+            <span className={`sf-badge ${allDone ? "sf-badge-success" : "sf-badge-muted"}`}>
+              {t("session.progress", { done, total: sets.length })}
+            </span>
+            {/* The whole session in one tap. It sits in the header rather than
+                among the sets because it is about the session, and it stops
+                the click from opening the panel underneath it. */}
+            <DoneButton
+              done={allDone}
+              label={allDone ? t("session.markDayUndone") : t("session.markDayDone")}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDayDone(day, !allDone);
+              }}
+            />
+          </div>
         ) : null}
       </div>
 
@@ -145,24 +186,33 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
                             value={set.log?.actualRpe != null ? String(set.log.actualRpe) : ""}
                             onChange={(value) => onPerceivedRpe(set, value)}
                             placeholder={t("session.rpePlaceholder")}
-                            clearable={set.log?.actualRpe != null}
                           />
                         </td>
                       ) : null}
                       {editable ? (
                         <td className="sf-table-num">
-                          {/* Everything the dropdown does not carry: the reps
-                              and the weight when they differed from the
-                              prescription, and a note for the coach. */}
-                          <button
-                            type="button"
-                            className="sf-button sf-button-ghost sf-button-sm"
-                            onClick={() => setLogging(isLogging ? null : set.id)}
-                            aria-label={t("session.log")}
-                            title={t("session.log")}
-                          >
-                            <FiEdit2 />
-                          </button>
+                          <div className="sf-row" style={{ gap: "0.3rem", justifyContent: "flex-end" }}>
+                            {/* Done or not done, and nothing else: the two
+                                states a set is in while a session is being
+                                run. */}
+                            <DoneButton
+                              done={Boolean(set.log?.done)}
+                              label={set.log?.done ? t("session.markUndone") : t("session.markDone")}
+                              onClick={() => logWith(set, { done: !set.log?.done })}
+                            />
+                            {/* Everything the two controls above do not carry:
+                                the reps and the weight when they differed from
+                                the prescription, and a note for the coach. */}
+                            <button
+                              type="button"
+                              className="sf-button sf-button-ghost sf-button-sm"
+                              onClick={() => setLogging(isLogging ? null : set.id)}
+                              aria-label={t("session.log")}
+                              title={t("session.log")}
+                            >
+                              <FiEdit2 />
+                            </button>
+                          </div>
                         </td>
                       ) : null}
                     </tr>
@@ -187,14 +237,6 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
                               await onLog(set, payload);
                               setLogging(null);
                             }}
-                            onClear={
-                              set.log
-                                ? async () => {
-                                    await onClearLog(set);
-                                    setLogging(null);
-                                  }
-                                : null
-                            }
                             onCancel={() => setLogging(null)}
                           />
                         </td>

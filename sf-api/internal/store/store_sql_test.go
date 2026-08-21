@@ -1044,3 +1044,107 @@ func TestExerciseLookupIgnoresCase(t *testing.T) {
 		t.Errorf("a blank name matched something: %v", err)
 	}
 }
+
+// TestSetDayDoneKeepsWhatWasLogged covers ticking off a whole session.
+//
+// The write is a single INSERT ... ON CONFLICT that merges a flag into
+// whatever log each set already had, which is exactly the kind of statement
+// that looks right and is not: a merge written the other way round replaces the
+// payload, and the member's perceived RPEs vanish the moment they tap "done" on
+// the day. That is invisible to the compiler and to every test that does not
+// run the SQL.
+func TestSetDayDoneKeepsWhatWasLogged(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	programs := NewProgramStore(pool)
+	exercises := NewExerciseStore(pool)
+	member := seedUser(t, pool, "day-done@example.com")
+
+	squat, err := exercises.FindBySlug(ctx, "squat")
+	if err != nil {
+		t.Fatalf("the seeded catalog has no squat: %v", err)
+	}
+
+	rpe := 8.0
+	program, err := programs.Create(ctx, NewProgram{
+		AuthorID: member, Name: "Day done", Visibility: models.ProgramVisibilityPrivate,
+		Days: []NewDay{{Week: 1, Day: 1, Sets: []NewSet{
+			{ExerciseID: squat.ID, Position: 0, Reps: 5, RPE: &rpe, LoadMode: "rpe"},
+			{ExerciseID: squat.ID, Position: 1, Reps: 5, RPE: &rpe, LoadMode: "rpe"},
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("creating the program: %v", err)
+	}
+	t.Cleanup(func() { _ = programs.Delete(context.Background(), program.ID) })
+
+	days, err := programs.ListDays(ctx, program.ID)
+	if err != nil || len(days) != 1 {
+		t.Fatalf("listing days: %v (%d days)", err, len(days))
+	}
+	sets, err := programs.ListSetsForDay(ctx, days[0].ID)
+	if err != nil || len(sets) != 2 {
+		t.Fatalf("listing sets: %v (%d sets)", err, len(sets))
+	}
+
+	assignment, err := programs.Assign(ctx, program.ID, member, "", "")
+	if err != nil {
+		t.Fatalf("assigning: %v", err)
+	}
+
+	// The member logged the first set the usual way before ticking off the day.
+	felt := 9.0
+	if _, err := programs.LogSet(ctx, assignment.ID, sets[0].ID, member, SetLogFields{
+		ActualRPE: &felt, Comment: "heavier than it looked", Done: true,
+	}); err != nil {
+		t.Fatalf("logging a set: %v", err)
+	}
+
+	count, err := programs.SetDayDone(ctx, assignment.ID, days[0].ID, member, true)
+	if err != nil {
+		t.Fatalf("marking the day done: %v", err)
+	}
+	if count != len(sets) {
+		t.Errorf("marked %d sets, want %d", count, len(sets))
+	}
+
+	logs, err := programs.ListLogsForAssignment(ctx, assignment.ID)
+	if err != nil {
+		t.Fatalf("re-reading the logs: %v", err)
+	}
+	for _, set := range sets {
+		log, ok := logs[set.ID]
+		if !ok {
+			t.Fatalf("set %s has no log after the day was marked done", set.ID)
+		}
+		if !log.Done {
+			t.Errorf("set %s is not marked done", set.ID)
+		}
+		if log.CompletedAt == nil {
+			t.Errorf("set %s was marked done with no completion time", set.ID)
+		}
+	}
+	if first := logs[sets[0].ID]; first.ActualRPE == nil || *first.ActualRPE != felt {
+		t.Errorf("the perceived RPE was lost: %+v", first.ActualRPE)
+	} else if first.Comment != "heavier than it looked" {
+		t.Errorf("the comment was lost: %q", first.Comment)
+	}
+
+	// And back again: undone clears the flag and the completion time, and
+	// still keeps what was logged.
+	if _, err := programs.SetDayDone(ctx, assignment.ID, days[0].ID, member, false); err != nil {
+		t.Fatalf("marking the day undone: %v", err)
+	}
+	logs, err = programs.ListLogsForAssignment(ctx, assignment.ID)
+	if err != nil {
+		t.Fatalf("re-reading the logs: %v", err)
+	}
+	for _, set := range sets {
+		if log := logs[set.ID]; log.Done || log.CompletedAt != nil {
+			t.Errorf("set %s is still done after being put back", set.ID)
+		}
+	}
+	if first := logs[sets[0].ID]; first.ActualRPE == nil || *first.ActualRPE != felt {
+		t.Error("undoing the day threw the perceived RPE away")
+	}
+}

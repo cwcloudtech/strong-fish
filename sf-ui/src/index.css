@@ -529,6 +529,39 @@ button {
 /* The mark on a load that was recalculated from what the member just lifted. */
 .sf-autoregulated { color: var(--sf-primary-dark); font-weight: 600; }
 
+/* --- done / not done ---
+   The only two states a set is in while a session is being run. Green for
+   done, red for not: the colour is the answer, and the icon repeats it for
+   anybody who cannot read the colour. */
+.sf-done-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: background-color var(--sf-transition), color var(--sf-transition), border-color var(--sf-transition);
+}
+
+.sf-done-toggle.is-done {
+  background-color: var(--sf-success-tint);
+  border-color: var(--sf-success);
+  color: var(--sf-success);
+}
+
+.sf-done-toggle.is-todo {
+  background-color: var(--sf-danger-light);
+  border-color: var(--sf-danger);
+  color: var(--sf-danger);
+}
+
+.sf-done-toggle:hover { filter: brightness(0.95); }
+
 /* --- table --- */
 
 .sf-table-wrapper { overflow-x: auto; }

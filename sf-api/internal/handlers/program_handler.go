@@ -212,19 +212,27 @@ func (h *ProgramHandler) resolveSets(ctx context.Context, sets []models.ProgramS
 		}
 
 		if log, ok := logs[set.ID]; ok {
-			// What they lifted, falling back to what they were told to lift:
-			// a member who only picks the RPE the set felt like has said
-			// enough for an estimate, and asking them to retype the weight
-			// already on screen would be asking twice.
-			load := set.Load
-			if log.ActualLoad != nil {
-				load = *log.ActualLoad
+			// An estimate needs the member to have said something about how
+			// the set went: the RPE it came out at, or the weight they
+			// actually used. Ticking a set off says neither, and an e1RM
+			// computed from the prescription alone would be quoting a max
+			// nobody demonstrated - E1RM reads a missing RPE as an all-out
+			// effort.
+			if log.ActualRPE != nil || log.ActualLoad != nil {
+				// The weight they lifted, falling back to the weight they were
+				// told to lift: somebody who only picks the RPE has said
+				// enough, and asking them to retype the number already on
+				// screen would be asking twice.
+				load := set.Load
+				if log.ActualLoad != nil {
+					load = *log.ActualLoad
+				}
+				reps := set.Reps
+				if log.ActualReps != nil {
+					reps = *log.ActualReps
+				}
+				log.E1RM = loadcalc.E1RM(load, reps, log.ActualRPE)
 			}
-			reps := set.Reps
-			if log.ActualReps != nil {
-				reps = *log.ActualReps
-			}
-			log.E1RM = loadcalc.E1RM(load, reps, log.ActualRPE)
 			set.Log = &log
 			session.record(sourceID, log)
 		}

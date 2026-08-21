@@ -329,6 +329,10 @@ const fr = {
     from1rm: "d'après votre 1RM {{lift}} de {{value}}kg",
     fromTodaysE1rm: "d'après les {{value}}kg que vous venez de montrer sur ce mouvement, pas de votre 1RM enregistré",
     perceivedRpe: "Ressenti",
+    markDone: "Marquer comme faite",
+    markUndone: "Marquer comme non faite",
+    markDayDone: "Marquer toute la séance comme faite",
+    markDayUndone: "Marquer toute la séance comme non faite",
     rpePlaceholder: "RPE",
     autoregulated: "Recalculé d'après ce que vous venez de soulever",
     bodyweight: "Poids de corps",
@@ -608,6 +612,7 @@ const fr = {
   },
   apiKeys: {
     title: "Clés d'API",
+    openApi: "Référence de l'API",
     intro:
       "Une clé d'API authentifie un script - ou cette application sur votre téléphone - avec un en-tête X-Api-Key plutôt qu'un mot de passe. Elle porte exactement vos droits : traitez-la comme votre mot de passe.",
     create: "Créer une clé",

@@ -205,6 +205,54 @@ func (h *TrainingHandler) LogSet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, log)
 }
 
+type dayDonePayload struct {
+	Done bool `json:"done"`
+}
+
+// SetDayDone ticks off a whole session, or puts it back.
+//
+// The same thing the per-set button does, for every set at once: what a member
+// actually does in the gym is finish a session, and tapping twelve buttons to
+// say so is how a log stops being kept at all.
+func (h *TrainingHandler) SetDayDone(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := middleware.UserIDFromContext(r.Context())
+	dayID := chi.URLParam(r, "dayId")
+
+	assignment, err := h.programs.FindAssignment(r.Context(), chi.URLParam(r, "assignmentId"))
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if assignment.UserID != callerID {
+		writeError(w, http.StatusForbidden, "You can only log your own sets", CodeForbidden)
+		return
+	}
+
+	var p dayDonePayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+
+	// The session has to belong to the program this assignment is for -
+	// otherwise a member could tick off somebody else's block.
+	day, err := h.programs.FindDay(r.Context(), dayID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if day.ProgramID != assignment.ProgramID {
+		writeError(w, http.StatusBadRequest, "This session is not part of the assigned program", CodeInvalidSet)
+		return
+	}
+
+	count, err := h.programs.SetDayDone(r.Context(), assignment.ID, dayID, callerID, p.Done)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"dayId": dayID, "done": p.Done, "sets": count})
+}
+
 // DeleteLog clears the member's feedback on a set.
 func (h *TrainingHandler) DeleteLog(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := middleware.UserIDFromContext(r.Context())

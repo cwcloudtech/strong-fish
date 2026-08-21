@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import { FiCopy, FiDownload, FiEye, FiEyeOff, FiTrash2 } from "react-icons/fi";
+import { FiCopy, FiDownload, FiExternalLink, FiEye, FiEyeOff, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
+import { apiUrl } from "../../utils/apiUrl";
 import Tooltip from "../../components/common/Tooltip";
 import Modal, { ConfirmModal } from "../../components/common/Modal";
 import { apiKeys as apiKeysApi } from "../../api/services";
@@ -124,8 +125,28 @@ export default function ApiKeys() {
 
   return (
     <div className="sf-page" style={{ maxWidth: 820 }}>
-      <h1 className="sf-title">{t("apiKeys.title")}</h1>
-      <p className="sf-muted">{t("apiKeys.intro")}</p>
+      <div className="sf-row-between" style={{ alignItems: "flex-start", gap: "0.6rem" }}>
+        {/* The prose takes what is left: the row wraps, and without this the
+            paragraph claims the full width and pushes the button under it. */}
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <h1 className="sf-title">{t("apiKeys.title")}</h1>
+          <p className="sf-muted">{t("apiKeys.intro")}</p>
+        </div>
+        {/* The endpoints these keys open, listed by the API itself: its root
+            serves a Swagger page generated from the router that is actually
+            running, so it cannot describe a version that is not deployed.
+            A new tab - somebody reading the reference is still in the middle
+            of creating a key here. */}
+        <a
+          className="sf-button sf-button-secondary"
+          href={apiUrl()}
+          target="_blank"
+          rel="noreferrer noopener"
+          style={{ whiteSpace: "nowrap" }}
+        >
+          <FiExternalLink /> {t("apiKeys.openApi")}
+        </a>
+      </div>
 
       <div className="sf-card">
         <h3 style={{ marginTop: 0 }}>{t("apiKeys.create")}</h3>

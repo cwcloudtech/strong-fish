@@ -324,6 +324,10 @@ const en = {
     from1rm: "from your {{lift}} 1RM of {{value}}kg",
     fromTodaysE1rm: "from the {{value}}kg you just showed on this lift, not from your recorded 1RM",
     perceivedRpe: "Felt like",
+    markDone: "Mark as done",
+    markUndone: "Mark as not done",
+    markDayDone: "Mark the whole session done",
+    markDayUndone: "Mark the whole session not done",
     rpePlaceholder: "RPE",
     autoregulated: "Recalculated from what you just lifted",
     bodyweight: "Bodyweight",
@@ -597,6 +601,7 @@ const en = {
   },
   apiKeys: {
     title: "API keys",
+    openApi: "API reference",
     intro:
       "An API key authenticates a script - or this app on your phone - with an X-Api-Key header instead of a password. It carries exactly your own permissions, so treat it like one.",
     create: "Create a key",

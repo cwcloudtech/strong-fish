@@ -11,7 +11,7 @@ import { useI18n } from "../../i18n/I18nContext";
  * the common case is "did exactly what was asked" - the member should only have
  * to change what differed.
  */
-export default function SetLogForm({ set, onSubmit, onClear, onCancel }) {
+export default function SetLogForm({ set, onSubmit, onCancel }) {
   const { t } = useI18n();
   const log = set.log;
 
@@ -38,6 +38,8 @@ export default function SetLogForm({ set, onSubmit, onClear, onCancel }) {
         actualRpe: form.actualRpe === "" ? null : Number(form.actualRpe),
         actualLoad: form.actualLoad === "" ? null : Number(form.actualLoad),
         comment: form.comment,
+        // Filling this in is saying you did the set; the button in the row
+        // says the same thing, and the two must not disagree.
         done: true,
       });
     } catch (err) {
@@ -86,11 +88,6 @@ export default function SetLogForm({ set, onSubmit, onClear, onCancel }) {
           <button className="sf-button sf-button-sm" type="submit" disabled={busy}>
             {t("session.done")}
           </button>
-          {onClear ? (
-            <button type="button" className="sf-button sf-button-secondary sf-button-sm" onClick={onClear} disabled={busy}>
-              {t("session.clearLog")}
-            </button>
-          ) : null}
           <button type="button" className="sf-button sf-button-ghost sf-button-sm" onClick={onCancel} disabled={busy}>
             {t("common.cancel")}
           </button>

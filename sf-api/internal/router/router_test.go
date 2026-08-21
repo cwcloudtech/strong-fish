@@ -176,6 +176,7 @@ var routes = []struct{ method, path string }{
 	{"PUT", "/v1/training/as-1/status"},
 	{"PUT", "/v1/training/as-1/sets/set-1/log"},
 	{"DELETE", "/v1/training/as-1/sets/set-1/log"},
+	{"PUT", "/v1/training/as-1/days/day-1/log"},
 
 	{"GET", "/v1/posts"},
 	{"GET", "/v1/posts/discover"},
