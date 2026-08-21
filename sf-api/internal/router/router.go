@@ -382,6 +382,8 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Put("/status", h.Training.SetStatus)
 					r.Put("/sets/{setId}/log", h.Training.LogSet)
 					r.Delete("/sets/{setId}/log", h.Training.DeleteLog)
+					// A whole session ticked off in one go.
+					r.Put("/days/{dayId}/log", h.Training.SetDayDone)
 				})
 			})
 

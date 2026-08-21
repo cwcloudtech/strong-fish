@@ -3,6 +3,9 @@
 # The iOS signing certificate and the App Store Connect key live here; the
 # .example beside it is what is tracked.
 .env.ios
+
+.env.local
+
 # The signing identity ci/app/deliver-ios.sh exports from the keychain, and the
 # App Store Connect key Apple only lets you download once. Both are private
 # keys: they belong on the Mac that has them and nowhere else.

@@ -248,8 +248,12 @@ class SfApi {
     return SetLog.fromJson(_map(response.data));
   }
 
-  Future<void> clearLog(String assignmentId, String setId) =>
-      client.dio.delete('/training/$assignmentId/sets/$setId/log');
+  /// Ticks a whole session off, or puts it back.
+  ///
+  /// One request rather than one per set: the API writes the flag onto every
+  /// set of the day, keeping whatever each one already carried.
+  Future<void> setDayDone(String assignmentId, String dayId, bool done) =>
+      client.dio.put('/training/$assignmentId/days/$dayId/log', data: {'done': done});
 
   Future<Assignment> setAssignmentStatus(String assignmentId, String status) async => Assignment.fromJson(
       _map((await client.dio.put('/training/$assignmentId/status', data: {'status': status})).data));

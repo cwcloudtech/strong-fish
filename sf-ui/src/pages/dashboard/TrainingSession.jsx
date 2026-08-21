@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { toast } from "react-toastify";
 
-import toastOptions from "../../utils/toastOptions";
 import { training } from "../../api/services";
 import { ErrorMessage, Spinner } from "../../components/common/Feedback";
 import SessionDay, { exerciseLabel } from "../../components/training/SessionDay";
@@ -30,12 +28,13 @@ export default function TrainingSession() {
 
   const logSet = async (set, payload) => {
     await training.logSet(assignmentId, set.id, payload);
-    toast.success(t("session.logged"), toastOptions);
     load();
   };
 
-  const clearLog = async (set) => {
-    await training.clearLog(assignmentId, set.id);
+  // A whole session at once, in one request: the API writes the flag onto
+  // every set of the day, keeping whatever each one already carried.
+  const setDayDone = async (day, done) => {
+    await training.setDayDone(assignmentId, day.id, done);
     load();
   };
 
@@ -98,7 +97,7 @@ export default function TrainingSession() {
           defaultOpen={index === 0}
           editable={isOwner}
           onLog={logSet}
-          onClearLog={clearLog}
+          onDayDone={setDayDone}
         />
       ))}
     </div>

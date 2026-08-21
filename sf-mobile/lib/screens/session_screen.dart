@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../theme.dart';
 import '../widgets/common.dart';
 
 /// One assigned program, session by session - the screen a member actually uses
@@ -95,14 +96,30 @@ class _DayCard extends ConsumerWidget {
     final t = ref.watch(tProvider);
     final locale = ref.watch(localeProvider);
     final done = day.doneCount;
+    final allDone = day.sets.isNotEmpty && done == day.sets.length;
 
     return Card(
       child: ExpansionTile(
         initiallyExpanded: initiallyExpanded,
         shape: const Border(),
-        title: Text(
-          '${t('programs.week', {'week': '${day.week}'})} · ${t('programs.day', {'day': '${day.day}'})}',
-          style: Theme.of(context).textTheme.titleMedium,
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${t('programs.week', {'week': '${day.week}'})} · ${t('programs.day', {'day': '${day.day}'})}',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            // The whole session in one tap, on the right of the panel. It sits
+            // in the title rather than in `trailing`, which the expand arrow
+            // already owns.
+            _DoneToggle(
+              done: allDone,
+              tooltip: allDone ? t('session.markDayUndone') : t('session.markDayDone'),
+              onPressed: () => _setDayDone(context, ref, !allDone),
+            ),
+            const SizedBox(width: 4),
+          ],
         ),
         subtitle: Text(t('session.progress', {'done': '$done', 'total': '${day.sets.length}'})),
         children: [
@@ -110,6 +127,45 @@ class _DayCard extends ConsumerWidget {
             _SetTile(set: set, assignmentId: assignmentId, locale: locale),
         ],
       ),
+    );
+  }
+
+  Future<void> _setDayDone(BuildContext context, WidgetRef ref, bool done) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(apiProvider).setDayDone(assignmentId, day.id, done);
+      ref.invalidate(assignmentProvider(assignmentId));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+    }
+  }
+}
+
+/// Done, or not done.
+///
+/// Green when the set (or the session) is finished, red when it is not, and it
+/// flips on tap - the two states a member is ever in while running a program.
+/// There is no third state to clear back to: a set they have not done yet is
+/// simply not done.
+class _DoneToggle extends StatelessWidget {
+  final bool done;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  const _DoneToggle({required this.done, required this.tooltip, this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    final ink = done ? colors.success : colors.danger;
+
+    return IconButton(
+      icon: Icon(done ? Icons.check_circle : Icons.cancel_outlined),
+      color: ink,
+      iconSize: 22,
+      visualDensity: VisualDensity.compact,
+      tooltip: tooltip,
+      onPressed: onPressed,
     );
   }
 }
@@ -156,18 +212,52 @@ class _SetTile extends ConsumerWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // The whole log in one control: pick how the set actually felt and
-          // it saves there and then, and the rest of the session is
-          // re-resolved against the max that effort demonstrates.
+          // Pick how the set actually felt and it saves there and then, and
+          // the rest of the session is re-resolved against the max that effort
+          // demonstrates.
           _PerceivedRpe(set: set, assignmentId: assignmentId),
+          // Done or not done, and nothing else: the two states a set is in
+          // while a session is being run.
+          _DoneToggle(
+            done: logged,
+            tooltip: logged ? t('session.markUndone') : t('session.markDone'),
+            onPressed: () => _setDone(context, ref, !logged),
+          ),
+          // Everything the two controls above do not carry: the reps and the
+          // weight when they differed from the prescription, and a note.
           IconButton(
-            icon: Icon(logged ? Icons.check_circle : Icons.edit_note, color: logged ? scheme.primary : null),
+            icon: const Icon(Icons.edit_note),
             tooltip: t('session.log'),
+            visualDensity: VisualDensity.compact,
             onPressed: () => _openLogSheet(context, ref),
           ),
         ],
       ),
     );
+  }
+
+  /// Ticks this set off, or puts it back.
+  ///
+  /// The API replaces a set's log wholesale, so the flag has to travel with
+  /// whatever else was already logged: ticking a set off must not delete the
+  /// RPE the member picked for it.
+  Future<void> _setDone(BuildContext context, WidgetRef ref, bool done) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final log = set.log;
+    try {
+      await ref.read(apiProvider).logSet(
+            assignmentId,
+            set.id,
+            actualReps: log?.actualReps,
+            actualRpe: log?.actualRpe,
+            actualLoad: log?.actualLoad,
+            comment: log?.comment ?? '',
+            done: done,
+          );
+      ref.invalidate(assignmentProvider(assignmentId));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+    }
   }
 
   Future<void> _openLogSheet(BuildContext context, WidgetRef ref) async {
@@ -249,22 +339,21 @@ class _PerceivedRpe extends ConsumerStatefulWidget {
 class _PerceivedRpeState extends ConsumerState<_PerceivedRpe> {
   bool _busy = false;
 
-  Future<void> _pick(double? value) async {
+  Future<void> _pick(double value) async {
     final log = widget.set.log;
     setState(() => _busy = true);
     try {
-      if (value == null) {
-        await ref.read(apiProvider).clearLog(widget.assignmentId, widget.set.id);
-      } else {
-        await ref.read(apiProvider).logSet(
-              widget.assignmentId,
-              widget.set.id,
-              actualReps: log?.actualReps,
-              actualRpe: value,
-              actualLoad: log?.actualLoad,
-              comment: log?.comment ?? '',
-            );
-      }
+      await ref.read(apiProvider).logSet(
+            widget.assignmentId,
+            widget.set.id,
+            actualReps: log?.actualReps,
+            actualRpe: value,
+            actualLoad: log?.actualLoad,
+            comment: log?.comment ?? '',
+            // Saying how a set felt is also saying you did it: nobody rates a
+            // set they have not run.
+            done: true,
+          );
       ref.invalidate(assignmentProvider(widget.assignmentId));
     } catch (error) {
       if (mounted) {
@@ -287,19 +376,16 @@ class _PerceivedRpeState extends ConsumerState<_PerceivedRpe> {
       ));
     }
 
-    return DropdownButton<double?>(
+    return DropdownButton<double>(
       value: _perceivedRpe.contains(current) ? current : null,
       hint: Text(t('session.rpePlaceholder'), style: const TextStyle(fontSize: 12)),
       underline: const SizedBox.shrink(),
       isDense: true,
       items: [
-        // Clearing is a real answer - a set logged by mistake has to be
-        // undoable without opening the form.
-        DropdownMenuItem(value: null, child: Text(t('session.rpePlaceholder'), style: const TextStyle(fontSize: 12))),
         for (final value in _perceivedRpe)
           DropdownMenuItem(value: value, child: Text(_fmt(value), style: const TextStyle(fontSize: 13))),
       ],
-      onChanged: _pick,
+      onChanged: (value) => value == null ? null : _pick(value),
     );
   }
 }
@@ -362,21 +448,6 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
             actualLoad: double.tryParse(_load.text.trim().replaceAll(',', '.')),
             comment: _comment.text.trim(),
           );
-      if (mounted) Navigator.of(context).pop(true);
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _error = ref.read(tErrorProvider)(error);
-          _busy = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _clear() async {
-    setState(() => _busy = true);
-    try {
-      await ref.read(apiProvider).clearLog(widget.assignmentId, widget.set.id);
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) {
@@ -461,8 +532,6 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
           const SizedBox(height: 16),
           Row(
             children: [
-              if (log != null)
-                TextButton(onPressed: _busy ? null : _clear, child: Text(t('session.clearLog'))),
               const Spacer(),
               TextButton(
                 onPressed: _busy ? null : () => Navigator.of(context).pop(false),
