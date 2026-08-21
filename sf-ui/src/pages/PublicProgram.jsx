@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { FiDownload } from "react-icons/fi";
 
 import Logo from "../components/common/Logo";
 import LanguageDropdown from "../components/common/LanguageDropdown";
@@ -25,6 +26,7 @@ export default function PublicProgram() {
   const { programId } = useParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +40,28 @@ export default function PublicProgram() {
   }, [programId]);
 
   const program = data?.program;
+
+  // The same download the dashboard does: fetched rather than linked, so a
+  // failure surfaces on this page instead of replacing it with the API's
+  // error, and so the filename is the program's name.
+  const exportPdf = async () => {
+    setExporting(true);
+    try {
+      const blob = await publicPrograms.exportPdf(programId, { locale });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${program?.name || "program"}.pdf`;
+      link.click();
+      // Revoked once the click has been handled, or the blob is held for the
+      // life of the tab.
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="sf-page" style={{ maxWidth: 900 }}>
@@ -69,11 +93,24 @@ export default function PublicProgram() {
               {[program.clubName, program.authorName?.trim()].filter(Boolean).join(" · ")}
             </p>
             {program.description ? <p>{program.description}</p> : null}
-            <p className="sf-muted" style={{ marginBottom: 0 }}>
-              {t("programs.weeks", { count: program.weeks })} ·{" "}
-              {t("programs.sessions", { count: program.dayCount })} ·{" "}
-              {t("programs.setCount", { count: program.setCount })}
-            </p>
+            <div className="sf-row-between" style={{ alignItems: "center" }}>
+              <p className="sf-muted" style={{ marginBottom: 0 }}>
+                {t("programs.weeks", { count: program.weeks })} ·{" "}
+                {t("programs.sessions", { count: program.dayCount })} ·{" "}
+                {t("programs.setCount", { count: program.setCount })}
+              </p>
+              {/* Printable without an account: what is on the sheet is the
+                  prescription, which is exactly what this page already
+                  shows. */}
+              <button
+                className="sf-button sf-button-secondary"
+                onClick={exportPdf}
+                disabled={exporting}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                <FiDownload /> {exporting ? t("programs.exporting") : t("programs.exportPdf")}
+              </button>
+            </div>
           </div>
 
           <div className="sf-notice">{t("publicProgram.loadsNotice")}</div>

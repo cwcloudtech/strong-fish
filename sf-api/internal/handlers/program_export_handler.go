@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/programpdf"
@@ -62,11 +64,62 @@ func (h *ProgramHandler) ExportPDF(w http.ResponseWriter, r *http.Request) {
 		days[i].Sets = byDay[days[i].ID]
 	}
 
-	pdf, err := programpdf.Render(program, days, programpdf.Options{
+	writeProgramPDF(w, r, program, days, programpdf.Options{
 		MemberName: h.memberName(r, memberID),
 		Locale:     sheetLocale(r),
 		Footer:     fmt.Sprintf("%s - %s", program.Name, h.uiBaseURL),
 	})
+}
+
+// ExportPublicPDF renders a published program for anybody holding its link.
+//
+// The same sheet, without the weights. A load is a property of the reader's own
+// maxes, and a reader outside the club has none here - so this prints what was
+// prescribed, exactly as the public page shows it, rather than inventing
+// numbers or refusing to print at all. The sets go to the renderer unresolved,
+// which is what leaves the load column empty.
+func (h *ProgramHandler) ExportPublicPDF(w http.ResponseWriter, r *http.Request) {
+	programID := chi.URLParam(r, "programId")
+
+	program, err := h.programs.FindPublicByID(r.Context(), programID)
+	if err != nil {
+		// A private program reads as missing rather than forbidden, the same
+		// as GetPublic: the difference would confirm the id to somebody
+		// guessing.
+		writeError(w, http.StatusNotFound, "Program not found", CodeNotFound)
+		return
+	}
+
+	days, err := h.programs.ListDays(r.Context(), programID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	sets, err := h.programs.ListSetsForProgram(r.Context(), programID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	byDay := map[string][]models.ProgramSet{}
+	for _, set := range sets {
+		byDay[set.DayID] = append(byDay[set.DayID], set)
+	}
+	for i := range days {
+		days[i].Sets = byDay[days[i].ID]
+	}
+
+	writeProgramPDF(w, r, program, days, programpdf.Options{
+		Locale: sheetLocale(r),
+		Footer: fmt.Sprintf("%s - %s", program.Name, h.uiBaseURL),
+	})
+}
+
+// writeProgramPDF renders and sends a sheet, for the two routes that produce
+// one - a member's own and a published program's.
+func writeProgramPDF(w http.ResponseWriter, r *http.Request, program models.Program,
+	days []models.ProgramDay, options programpdf.Options) {
+	pdf, err := programpdf.Render(program, days, options)
 	if err != nil {
 		writeStoreError(w, err)
 		return
