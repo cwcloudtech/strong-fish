@@ -294,6 +294,16 @@ export const publicPosts = {
 
 export const publicPrograms = {
   get: (programId) => body(client.get(`/public/programs/${programId}`)),
+  // The prescription as a printable sheet, without the weights: a reader
+  // outside the club has no maxes to resolve them against (see the API's
+  // ExportPublicPDF).
+  exportPdf: (programId, { locale } = {}) =>
+    client
+      .get(`/public/programs/${programId}/export.pdf`, {
+        params: { ...(locale ? { locale } : {}) },
+        responseType: "blob",
+      })
+      .then((response) => response.data),
 };
 
 // --- contact ---

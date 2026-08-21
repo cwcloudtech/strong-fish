@@ -112,6 +112,9 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		// point is a link that works for anybody - and it is the store's
 		// visibility predicate, not this route, that decides what may be read.
 		r.Get("/public/programs/{programId}", h.Program.GetPublic)
+		// The same sheet the member's own export produces, without the weights:
+		// a reader outside the club has no maxes to resolve them against.
+		r.Get("/public/programs/{programId}/export.pdf", h.Program.ExportPublicPDF)
 
 		// A post its author published to everybody. Unauthenticated by design:
 		// a link shared to Instagram is opened by people with no account.
