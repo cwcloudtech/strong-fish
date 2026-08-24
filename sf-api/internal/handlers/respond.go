@@ -77,9 +77,11 @@ const (
 	// Video uploads, and the member's own storage bucket they go to.
 	CodeStorageNotConfigured  = "errors.storageNotConfigured"
 	CodeStorageUploadFailed   = "errors.storageUploadFailed"
+	CodeStorageDownloadFailed = "errors.storageDownloadFailed"
 	CodeVideoTooLarge         = "errors.videoTooLarge"
 	CodeUnsupportedVideo      = "errors.unsupportedVideo"
 	CodeInvalidStorageType    = "errors.invalidStorageType"
+	CodeInvalidStorageRole    = "errors.invalidStorageRole"
 	CodeInvalidServiceAccount = "errors.invalidServiceAccount"
 	// The events calendar.
 	CodeEventTitleRequired  = "errors.eventTitleRequired"

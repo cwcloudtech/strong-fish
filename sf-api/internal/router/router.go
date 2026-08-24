@@ -29,6 +29,7 @@ type Handlers struct {
 	Contact    *handlers.ContactHandler
 	ApiKey     *handlers.ApiKeyHandler
 	Media      *handlers.MediaHandler
+	Storage    *handlers.StorageHandler
 	Event      *handlers.EventHandler
 	Calendar   *handlers.CalendarHandler
 	Search     *handlers.SearchHandler
@@ -118,6 +119,19 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		r.Get("/public/programs/{programId}/export.pdf", h.Program.ExportPublicPDF)
 		r.Get("/public/programs/{programId}/export.xlsx", h.Program.ExportPublicPDF)
 
+		// A private bucket's object, served by this API with the owner's own
+		// credentials.
+		//
+		// Outside the authenticated group on purpose: a <video> tag cannot
+		// send an Authorization header, so a player carries a signed link
+		// instead and the handler resolves the reader from it. OptionalAuth is
+		// what still identifies a caller who *can* send one - a script, the
+		// phone fetching a file itself - and a request with neither a
+		// signature nor a session is refused by the handler. "Unauthenticated
+		// route" is about which middleware runs, not about who may read.
+		r.With(middleware.OptionalAuth(o.JWTSecret, o.ApiKeys)).
+			Get("/media/{storageId}/{object}", h.Media.ServeMedia)
+
 		// A post its author published to everybody. Unauthenticated by design:
 		// a link shared to Instagram is opened by people with no account.
 		r.Get("/public/posts/{postId}", h.Social.GetPublicPost)
@@ -186,9 +200,15 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 				// live credentials, so it has its own endpoint rather than
 				// riding along on the profile.
 				r.Route("/me/storage", func(r chi.Router) {
-					r.Get("/", h.Media.StorageGet)
-					r.Put("/", h.Media.StorageSet)
-					r.Delete("/", h.Media.StorageDelete)
+					r.Get("/", h.Storage.Get)
+					r.Put("/", h.Storage.Set)
+					r.Delete("/", h.Storage.Delete)
+					// Who else may use it. Reading and writing the list is the
+					// owner's alone - a writer handing out further access would
+					// widen a bucket somebody else is paying for.
+					r.Get("/shares", h.Storage.ListGrants)
+					r.Post("/shares", h.Storage.Share)
+					r.Delete("/shares/{userId}", h.Storage.Unshare)
 				})
 
 				r.Route("/me/calendar-feed", func(r chi.Router) {
@@ -443,6 +463,14 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			// reading the calendar doesn't.
 			r.Post("/media/videos", h.Media.UploadVideo)
 			r.Post("/media/audio", h.Media.UploadAudio)
+
+			// A playback link for an object in a private bucket: checked here,
+			// where there is a session to check, and good for a few hours.
+			r.Get("/media/{storageId}/{object}/link", h.Media.SignMedia)
+
+			// Every storage the caller may upload to: their own, and the ones
+			// shared with them.
+			r.Get("/storages", h.Storage.List)
 
 			// Registered as leaves, not as an r.Route subrouter: the calendar
 			// is readable logged out, so "/events" already carries a GET in

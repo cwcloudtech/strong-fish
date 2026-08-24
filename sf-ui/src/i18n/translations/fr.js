@@ -713,6 +713,24 @@ const fr = {
     failed: "La mise à jour n'a pas pu être téléchargée ou installée. Veuillez réessayer plus tard.",
   },
   storage: {
+    private: "Ce bucket n'est pas public",
+    privateHelp:
+      "Activez ceci si votre bucket ou votre dossier refuse les fichiers publics. StrongFish les sert alors lui-même, avec vos identifiants, aux personnes qui voient votre profil - et à celles avec qui vous partagez ce stockage ci-dessous.",
+    shares: "Qui peut l'utiliser",
+    sharesHelp:
+      "Prêtez votre stockage à d'autres membres : un lecteur peut lire ce qui s'y trouve, un rédacteur peut aussi y déposer des fichiers. Vos propres envois vont toujours d'abord dans votre stockage.",
+    noShares: "Personne d'autre n'utilise ce stockage.",
+    shareWith: "Membres",
+    pickMembers: "Choisir des membres",
+    roleLabel: "Ils peuvent",
+    role: {
+      owner: "Propriétaire",
+      writer: "Déposer et lire",
+      reader: "Lire",
+    },
+    shareAction: "Partager",
+    shared: "Stockage partagé.",
+    unshare: "Ne plus partager",
     title: "Stockage des vidéos",
     subtitle:
       "StrongFish n'héberge aucune vidéo : pour en publier une, utilisez votre propre stockage. Jusqu'à {{size}} Mo par vidéo.",

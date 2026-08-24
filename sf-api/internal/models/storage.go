@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 // Storage connection types. The shape is cwclock's external connections, cut
 // down to the two destinations a member would actually keep their own videos
 // in - there is no git target here, because a repository is a bad place for
@@ -35,6 +37,73 @@ type StorageConnection struct {
 	// bucket served through a CDN or a custom domain. Empty means the object
 	// is addressed at the endpoint it was written to.
 	PublicBaseURL string `json:"publicBaseUrl,omitempty"`
+	// Private says the bucket or folder is not readable without credentials.
+	//
+	// It changes both ends of an upload: nothing is granted public access as
+	// it is written, and what goes into the post is an address on this API
+	// rather than on the bucket - the API then fetches the object with the
+	// stored credentials for a reader it has checked (see the media handler).
+	// A member whose bucket policy forbids public objects could not post a
+	// video at all before this.
+	Private bool `json:"private,omitempty"`
+}
+
+// What one member may do with one storage.
+//
+// Three roles rather than a boolean because the two questions are different:
+// somebody lending their bucket to their coach wants them to *upload* to it,
+// while somebody in a private club wants their club-mates to be able to *play*
+// what is in it. Owner is both, plus the right to share and delete it.
+const (
+	StorageRoleOwner  = "owner"
+	StorageRoleWriter = "writer"
+	StorageRoleReader = "reader"
+)
+
+// IsValidStorageRole reports whether role is one that may be granted.
+//
+// Owner is excluded: it is set when the storage is created and belongs to
+// exactly one account. Handing it out would leave two people able to delete
+// the same bucket's connection, and no way to say which of them it is.
+func IsValidStorageRole(role string) bool {
+	return role == StorageRoleWriter || role == StorageRoleReader
+}
+
+// CanWriteStorage reports whether role may upload to the storage.
+func CanWriteStorage(role string) bool {
+	return role == StorageRoleOwner || role == StorageRoleWriter
+}
+
+// CanReadStorage reports whether role may read objects out of it. Every role
+// can: a grant of any kind is somebody saying "you may see what is in here".
+func CanReadStorage(role string) bool {
+	return role == StorageRoleOwner || role == StorageRoleWriter || role == StorageRoleReader
+}
+
+// Storage is one connection as it is stored: the credentials, who owns it, and
+// - when it was read for somebody in particular - what that person may do with
+// it.
+type Storage struct {
+	ID      string            `json:"id"`
+	OwnerID string            `json:"ownerId"`
+	Name    string            `json:"name,omitempty"`
+	Conn    StorageConnection `json:"connection"`
+	// Role is the caller's own role, filled in by the queries that read a
+	// storage for somebody. Empty when it was read without a caller in mind.
+	Role      string    `json:"role,omitempty"`
+	OwnerName string    `json:"ownerName,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// StorageGrant is one line of a storage's access list, as its owner reads it.
+type StorageGrant struct {
+	UserID    string    `json:"userId"`
+	Name      string    `json:"name"`
+	Handle    string    `json:"handle,omitempty"`
+	Picture   string    `json:"picture,omitempty"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // Configured reports whether this connection has enough to attempt an upload.

@@ -14,6 +14,7 @@ import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedb
 import { useI18n } from "../../i18n/I18nContext";
 import LinkifiedText from "../../components/common/LinkifiedText";
 import { isFramedMedia } from "../../webcomponents/MediaPlayer";
+import MediaLink from "../../components/common/MediaLink";
 
 /**
  * Private messages: the list of conversations on the left, the open thread on
@@ -309,7 +310,7 @@ function Thread({ userId, onSent }) {
                   // case, and played natively when the storage serves the file
                   // itself - which is what an S3 bucket does.
                   isFramedMedia(message.audio) ? (
-                    <media-player url={message.audio} />
+                    <MediaLink url={message.audio} />
                   ) : (
                     <audio className="sf-bubble-audio" src={message.audio} controls preload="metadata" />
                   )
@@ -318,7 +319,7 @@ function Thread({ userId, onSent }) {
                 {/* The same detection the feed uses, so a video shared in a
                     thread renders as a player rather than as a bare URL. */}
                 {(message.links || []).map((link) => (
-                  <media-player key={link} url={link} />
+                  <MediaLink key={link} url={link} />
                 ))}
 
                 <span className="sf-bubble-time">

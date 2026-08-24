@@ -276,6 +276,19 @@ class SfApi {
     return SetLog.fromJson(_map(response.data));
   }
 
+  /// Exchanges the address of an object in a private bucket for one a player
+  /// can actually open.
+  ///
+  /// The API serves those files itself and will not do so without knowing who
+  /// is asking - which a video element cannot tell it. So the address in the
+  /// post is exchanged here, with the session, for one carrying a short-lived
+  /// signature.
+  Future<String> mediaLink(String url) async {
+    final path = url.replaceFirst(RegExp(r'^.*/v1'), '');
+    final response = await client.dio.get('$path/link');
+    return (_map(response.data)['url'] ?? '').toString();
+  }
+
   /// Ticks a whole session off, or puts it back.
   ///
   /// One request rather than one per set: the API writes the flag onto every

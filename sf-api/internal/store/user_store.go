@@ -55,12 +55,12 @@ type userData struct {
 	Socials           *models.Socials       `json:"socials,omitempty"`
 	MFAEnabled        bool                  `json:"mfaEnabled,omitempty"`
 	MFATOTPSecret     string                `json:"mfaTotpSecret,omitempty"`
-	// Storage is the member's own object store for video uploads, and
-	// CalendarFeed* back the ICS subscription. Both live in the payload like
-	// everything else here; neither is ever sent out with the user.
-	Storage             *models.StorageConnection `json:"storage,omitempty"`
-	CalendarFeedEnabled bool                      `json:"calendarFeedEnabled,omitempty"`
-	CalendarFeedToken   string                    `json:"calendarFeedToken,omitempty"`
+	// CalendarFeed* back the ICS subscription: they live in the payload like
+	// everything else here, and are never sent out with the user. (The
+	// storage connection used to sit beside them; V12 moved it to its own
+	// table, where it can be shared.)
+	CalendarFeedEnabled bool   `json:"calendarFeedEnabled,omitempty"`
+	CalendarFeedToken   string `json:"calendarFeedToken,omitempty"`
 }
 
 const userColumns = `id, email, data, created_at, updated_at`
@@ -116,9 +116,6 @@ func scanUser(row pgx.Row) (models.User, error) {
 	}
 	u.MFAEnabled = d.MFAEnabled
 	u.MFATOTPSecret = d.MFATOTPSecret
-	if d.Storage != nil {
-		u.Storage = *d.Storage
-	}
 	u.CalendarFeedEnabled = d.CalendarFeedEnabled
 	u.CalendarFeedToken = d.CalendarFeedToken
 	return u, nil
@@ -763,19 +760,6 @@ func isUUID(s string) bool {
 }
 
 // --- storage connection and calendar feed ---
-
-// SetStorage replaces the member's own object-store configuration.
-func (s *UserStore) SetStorage(ctx context.Context, id string, conn models.StorageConnection) (models.User, error) {
-	return s.merge(ctx, id, map[string]any{"storage": conn})
-}
-
-// ClearStorage removes it. The key is set to JSON null rather than deleted,
-// because the shallow `data || patch` merge every other write here uses can
-// only add or replace - and a null unmarshals back to the zero connection,
-// which reads as "not configured".
-func (s *UserStore) ClearStorage(ctx context.Context, id string) (models.User, error) {
-	return s.merge(ctx, id, map[string]any{"storage": nil})
-}
 
 // SetCalendarFeedEnabled turns the ICS subscription on or off, minting a token
 // the first time it's enabled. Disabling deliberately keeps the token, so

@@ -1148,3 +1148,130 @@ func TestSetDayDoneKeepsWhatWasLogged(t *testing.T) {
 		t.Error("undoing the day threw the perceived RPE away")
 	}
 }
+
+// TestStorageSharing covers the access list a shared bucket hangs off.
+//
+// Every question this feature asks is a query - who may upload here, who may
+// play what is in it, what does the owner see in their sharing list - and each
+// is a different JOIN over two tables that did not exist before V12. A wrong
+// one does not fail: it quietly answers "no access" and somebody's coach
+// cannot upload, or worse, answers "reader" to somebody who was never granted
+// anything.
+func TestStorageSharing(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	storages := NewStorageStore(pool)
+
+	owner := seedUser(t, pool, "storage-owner@example.com")
+	athlete := seedUser(t, pool, "storage-athlete@example.com")
+	stranger := seedUser(t, pool, "storage-stranger@example.com")
+
+	// The shared list says whose bucket it is, so the owner needs a name to
+	// say - seedUser makes an account with none.
+	if _, err := pool.Exec(ctx, `UPDATE users SET data = data || '{"name":"Camille","surname":"Roux"}'::jsonb WHERE id = $1`, owner); err != nil {
+		t.Fatalf("naming the owner: %v", err)
+	}
+
+	conn := models.StorageConnection{
+		Type: models.StorageTypeS3, Endpoint: "https://s3.example.com",
+		BucketName: "videos", AccessKey: "AK", SecretKey: "SK", Private: true,
+	}
+	stored, err := storages.Upsert(ctx, owner, conn)
+	if err != nil {
+		t.Fatalf("creating the storage: %v", err)
+	}
+	if !stored.Conn.Private || stored.Conn.BucketName != "videos" {
+		t.Fatalf("the connection did not round-trip: %+v", stored.Conn)
+	}
+
+	// Creating one grants its owner, or the person who just configured it
+	// would not be able to use it.
+	if role, err := storages.RoleFor(ctx, stored.ID, owner); err != nil || role != models.StorageRoleOwner {
+		t.Fatalf("the owner's role is %q (%v), want owner", role, err)
+	}
+	if role, err := storages.RoleFor(ctx, stored.ID, stranger); err != nil || role != "" {
+		t.Errorf("a stranger's role is %q, want none at all", role)
+	}
+
+	// Saving again edits rather than forking a second storage.
+	conn.BucketName = "clips"
+	again, err := storages.Upsert(ctx, owner, conn)
+	if err != nil {
+		t.Fatalf("editing: %v", err)
+	}
+	if again.ID != stored.ID {
+		t.Errorf("saving again created a second storage (%s then %s)", stored.ID, again.ID)
+	}
+
+	// Lending it to an athlete as a writer.
+	if err := storages.Grant(ctx, stored.ID, athlete, models.StorageRoleWriter); err != nil {
+		t.Fatalf("granting: %v", err)
+	}
+	role, err := storages.RoleFor(ctx, stored.ID, athlete)
+	if err != nil || role != models.StorageRoleWriter {
+		t.Fatalf("the athlete's role is %q (%v), want writer", role, err)
+	}
+	if !models.CanWriteStorage(role) || !models.CanReadStorage(role) {
+		t.Error("a writer may not write or read")
+	}
+
+	// It shows up as somewhere they may upload to, with the owner's name on
+	// it, and after their own storage - which they do not have here.
+	available, err := storages.ListFor(ctx, athlete)
+	if err != nil {
+		t.Fatalf("listing for the athlete: %v", err)
+	}
+	if len(available) != 1 || available[0].ID != stored.ID || available[0].Role != models.StorageRoleWriter {
+		t.Fatalf("the athlete sees %+v, want the shared storage as a writer", available)
+	}
+	if available[0].OwnerName == "" {
+		t.Error("the shared storage does not say whose it is")
+	}
+	if listed, err := storages.ListFor(ctx, stranger); err != nil || len(listed) != 0 {
+		t.Errorf("a stranger sees %d storages, want none", len(listed))
+	}
+
+	// Changing the role is a change, not a second grant.
+	if err := storages.Grant(ctx, stored.ID, athlete, models.StorageRoleReader); err != nil {
+		t.Fatalf("changing the role: %v", err)
+	}
+	grants, err := storages.ListGrants(ctx, stored.ID)
+	if err != nil {
+		t.Fatalf("listing the grants: %v", err)
+	}
+	if len(grants) != 2 {
+		t.Fatalf("%d grants, want the owner and the athlete", len(grants))
+	}
+	if grants[0].Role != models.StorageRoleOwner {
+		t.Errorf("the list starts with %q, want the owner", grants[0].Role)
+	}
+	if grants[1].Role != models.StorageRoleReader {
+		t.Errorf("the athlete is %q, want the role they were changed to", grants[1].Role)
+	}
+	if models.CanWriteStorage(grants[1].Role) {
+		t.Error("a reader may write")
+	}
+
+	// Taking it back, and the one grant that may not be taken.
+	if err := storages.Revoke(ctx, stored.ID, athlete); err != nil {
+		t.Fatalf("revoking: %v", err)
+	}
+	if role, _ := storages.RoleFor(ctx, stored.ID, athlete); role != "" {
+		t.Errorf("the athlete still has %q after being revoked", role)
+	}
+	if err := storages.Revoke(ctx, stored.ID, owner); !errors.Is(err, ErrNotFound) {
+		t.Errorf("revoking the owner's own grant returned %v, want a refusal", err)
+	}
+
+	// Deleting takes the access list with it.
+	if err := storages.Delete(ctx, stored.ID); err != nil {
+		t.Fatalf("deleting: %v", err)
+	}
+	var remaining int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM storage_acl WHERE storage_id = $1`, stored.ID).Scan(&remaining); err != nil {
+		t.Fatalf("counting the grants: %v", err)
+	}
+	if remaining != 0 {
+		t.Errorf("%d grants survive a deleted storage", remaining)
+	}
+}
