@@ -23,8 +23,7 @@ hand out.
 
 1. Sign in on the web app.
 2. Go to **API keys** in the sidebar.
-3. Describe what it is for - "my phone", "my export script". You will thank
-   yourself when you have three of them.
+3. Describe what it is for - "my phone", "my export script". You will thank yourself when you have three of them.
 4. Optionally set an expiry date. A key with no expiry works until you revoke it.
 5. Choose **Create**.
 
@@ -40,8 +39,7 @@ A dialog opens with the key. **It will not come back.** From here you can:
 
 ## Signing the app in
 
-1. Install the Android app - the download link and its own QR code are in the
-   sidebar under **Get the Android app**.
+1. Install the Android app - the download link and its own QR code are in the sidebar under **Get the Android app**.
 2. Open it. On the login screen, choose **Sign in by scanning a QR code**.
 3. Allow the camera when asked.
 4. Point it at the QR code on your computer.
