@@ -63,6 +63,31 @@ String _initials(String name) {
 }
 
 /// The "nothing here" state, with an optional call to action.
+/// Makes a non-scrolling body pullable inside a RefreshIndicator.
+///
+/// A RefreshIndicator only sees the gesture when its child actually scrolls,
+/// so an empty state - a centred icon and two lines - swallows the pull: the
+/// one screen somebody most wants to refresh is the one that says there is
+/// nothing yet. This gives it a scrollable of viewport height to overscroll.
+class SfRefreshableBody extends StatelessWidget {
+  final Widget child;
+
+  const SfRefreshableBody({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class SfEmptyState extends StatelessWidget {
   final IconData icon;
   final String title;

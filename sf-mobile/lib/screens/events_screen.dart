@@ -33,13 +33,16 @@ class EventsScreen extends ConsumerWidget {
         ),
         data: (list) {
           if (list.isEmpty) {
-            return SfEmptyState(
-              icon: Icons.event_outlined,
-              title: t('events.emptyTitle'),
-              message: t('events.emptyBody'),
+            return SfRefreshableBody(
+              child: SfEmptyState(
+                icon: Icons.event_outlined,
+                title: t('events.emptyTitle'),
+                message: t('events.emptyBody'),
+              ),
             );
           }
           return ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             itemCount: list.length,
             itemBuilder: (context, index) => _EventCard(event: list[index]),

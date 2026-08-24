@@ -109,6 +109,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
                   onRefresh: () => _load(reset: true),
                   child: ListView.builder(
                     controller: _scroll,
+                    physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
                     itemCount: _posts.length + 1,
                     itemBuilder: (context, index) {

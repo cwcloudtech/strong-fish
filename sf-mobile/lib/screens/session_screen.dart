@@ -52,6 +52,7 @@ class SessionScreen extends ConsumerWidget {
           return RefreshIndicator(
             onRefresh: () async => ref.invalidate(assignmentProvider(assignmentId)),
             child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               children: [
                 if (data.assignment.note.isNotEmpty)

@@ -253,6 +253,7 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
                   onRefresh: _load,
                   child: _detail!.days.isEmpty
                       ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
                           children: [
                             const SizedBox(height: 80),
                             SfEmptyState(icon: Icons.event_note, title: t('programs.noSessions')),
