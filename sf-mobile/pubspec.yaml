@@ -14,6 +14,9 @@ dependencies:
   flutter_riverpod: ^2.6.1
   go_router: ^17.3.0
   dio: ^5.11.0
+  # For the MediaType on an upload's multipart part - dio's own
+  # dependency, declared because this app imports it directly.
+  http_parser: ^4.1.2
   flutter_secure_storage: ^10.3.1
   shared_preferences: ^2.5.5
   image_picker: ^1.1.2

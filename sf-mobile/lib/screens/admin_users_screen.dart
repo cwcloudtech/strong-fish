@@ -212,6 +212,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           Row(

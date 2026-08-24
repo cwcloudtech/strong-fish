@@ -69,13 +69,16 @@ class _InvitationsScreenState extends ConsumerState<InvitationsScreen> {
         ),
         data: (list) {
           if (list.isEmpty) {
-            return SfEmptyState(
-              icon: Icons.mail_outline,
-              title: t('invitations.emptyTitle'),
-              message: t('invitations.emptyBody'),
+            return SfRefreshableBody(
+              child: SfEmptyState(
+                icon: Icons.mail_outline,
+                title: t('invitations.emptyTitle'),
+                message: t('invitations.emptyBody'),
+              ),
             );
           }
           return ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             itemCount: list.length,
             itemBuilder: (context, index) {

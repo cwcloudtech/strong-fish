@@ -39,13 +39,16 @@ class MessagesScreen extends ConsumerWidget {
         ),
         data: (list) {
           if (list.isEmpty) {
-            return SfEmptyState(
-              icon: Icons.chat_bubble_outline,
-              title: t('messages.emptyTitle'),
-              message: t('messages.emptyBody'),
+            return SfRefreshableBody(
+              child: SfEmptyState(
+                icon: Icons.chat_bubble_outline,
+                title: t('messages.emptyTitle'),
+                message: t('messages.emptyBody'),
+              ),
             );
           }
           return ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
             itemCount: list.length,
             separatorBuilder: (context, index) => const Divider(height: 1),
             itemBuilder: (context, index) {

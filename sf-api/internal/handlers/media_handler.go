@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"path"
 	"strings"
@@ -120,8 +121,7 @@ func (h *MediaHandler) upload(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	contentType := strings.ToLower(strings.TrimSpace(strings.Split(header.Header.Get("Content-Type"), ";")[0]))
-	extension, ok := accepted[contentType]
+	contentType, extension, ok := resolveMediaType(header, accepted)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "This file is not something a browser can play", CodeUnsupportedVideo)
 		return
@@ -160,6 +160,40 @@ func (h *MediaHandler) upload(w http.ResponseWriter, r *http.Request,
 		url = h.mediaURL(destination.ID, key, extension)
 	}
 	writeJSON(w, http.StatusCreated, map[string]string{"url": url})
+}
+
+// resolveMediaType works out what was uploaded, and refuses anything that is
+// not on the list.
+//
+// The declared type comes first: a browser fills it in from the file it read,
+// and it is the better answer. But not every client does - a phone's picker
+// hands the HTTP library a path, and the library sends
+// application/octet-stream unless it is told otherwise, which is how a
+// perfectly ordinary .mp4 came to be refused as "not something a browser can
+// play". So a generic or missing type falls back to the filename's extension.
+//
+// The fallback is a lookup in the same allow-list, not a relaxation of it: an
+// extension nobody accepts is still refused, and the type stored with the
+// object is this app's own for that extension rather than whatever the client
+// claimed.
+func resolveMediaType(header *multipart.FileHeader, accepted map[string]string) (string, string, bool) {
+	declared := strings.ToLower(strings.TrimSpace(strings.Split(header.Header.Get("Content-Type"), ";")[0]))
+	if extension, ok := accepted[declared]; ok {
+		return declared, extension, true
+	}
+	if declared != "" && declared != "application/octet-stream" {
+		// A client that named a type this app does not serve is answered on
+		// what it said, rather than being let in through the filename.
+		return utils.EMPTY, utils.EMPTY, false
+	}
+
+	suffix := strings.ToLower(path.Ext(header.Filename))
+	for mediaType, extension := range accepted {
+		if extension == suffix {
+			return mediaType, extension, true
+		}
+	}
+	return utils.EMPTY, utils.EMPTY, false
 }
 
 // mediaKeyPrefix is the folder every upload goes under, and the marker that

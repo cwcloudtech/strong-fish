@@ -33,6 +33,7 @@ class TrainingScreen extends ConsumerWidget {
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(assignmentsProvider),
           child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             itemCount: list.length,
             itemBuilder: (context, index) {

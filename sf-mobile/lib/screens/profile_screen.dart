@@ -171,6 +171,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       children: [
         Card(

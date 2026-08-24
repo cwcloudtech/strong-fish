@@ -39,6 +39,7 @@ class CoachScreen extends ConsumerWidget {
         return RefreshIndicator(
           onRefresh: () async => ref.invalidate(clubsProvider),
           child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             children: [
               for (final club in managed) _ClubPrograms(club: club),

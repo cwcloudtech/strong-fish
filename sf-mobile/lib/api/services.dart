@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:http_parser/http_parser.dart';
 
 import 'api_client.dart';
 import '../models/models.dart';
@@ -388,7 +389,13 @@ class SfApi {
   }
 
   Future<String> _uploadMedia(String endpoint, String path, {void Function(double)? onProgress}) async {
-    final form = FormData.fromMap({'file': await MultipartFile.fromFile(path)});
+    // The type has to be declared: the picker hands over a path, and dio sends
+    // a part as application/octet-stream unless told otherwise - which the API
+    // refused as "not something a browser can play", so every upload from the
+    // phone failed while the same file uploaded fine from the web.
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(path, contentType: _mediaTypeOf(path)),
+    });
     final response = await client.dio.post(
       endpoint,
       data: form,
@@ -398,6 +405,30 @@ class SfApi {
     );
     final url = _map(response.data)['url'];
     return url is String ? url : '';
+  }
+
+  /// The content type for a file, read off its extension.
+  ///
+  /// The list is the one the API accepts (its videoContentTypes and
+  /// audioContentTypes); anything else is sent unlabelled and refused there,
+  /// which is the right place for that answer to come from.
+  MediaType? _mediaTypeOf(String path) {
+    const types = {
+      '.mp4': ['video', 'mp4'],
+      '.webm': ['video', 'webm'],
+      '.ogv': ['video', 'ogg'],
+      '.mov': ['video', 'quicktime'],
+      '.m4a': ['audio', 'mp4'],
+      '.mp3': ['audio', 'mpeg'],
+      '.aac': ['audio', 'aac'],
+      '.wav': ['audio', 'wav'],
+      '.ogg': ['audio', 'ogg'],
+    };
+
+    final dot = path.lastIndexOf('.');
+    if (dot < 0) return null;
+    final parts = types[path.substring(dot).toLowerCase()];
+    return parts == null ? null : MediaType(parts[0], parts[1]);
   }
 
   // --- private messages ---

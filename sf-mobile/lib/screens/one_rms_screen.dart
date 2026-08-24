@@ -47,6 +47,7 @@ class OneRmsScreen extends ConsumerWidget {
         ref.invalidate(exercisesProvider);
       },
       child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           Text(t('oneRms.subtitle'), style: Theme.of(context).textTheme.bodySmall),
