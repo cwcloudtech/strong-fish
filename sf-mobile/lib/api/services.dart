@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:http_parser/http_parser.dart';
 
 import 'api_client.dart';
+import 'api_exception.dart';
 import '../models/models.dart';
 
 /// The API surface, grouped by domain. Mirrors sf-ui's api/services.js so both
@@ -287,7 +288,24 @@ class SfApi {
   Future<String> mediaLink(String url) async {
     final path = url.replaceFirst(RegExp(r'^.*/v1'), '');
     final response = await client.dio.get('$path/link');
-    return (_map(response.data)['url'] ?? '').toString();
+    return _rerootOnApi((_map(response.data)['url'] ?? '').toString());
+  }
+
+  /// Re-roots a signed playback link on the address this phone actually
+  /// reaches.
+  ///
+  /// The API builds the link from its own `SF_API_URL` - whatever the server
+  /// was told to call itself, which is not necessarily a name that resolves on
+  /// the phone's network, and not necessarily how the member typed the address
+  /// into the app. The signature covers the object, the viewer and the expiry
+  /// and never the host, so moving the link onto the address the app is
+  /// already talking to is safe, and is the difference between a video that
+  /// plays and a blank frame.
+  String _rerootOnApi(String signed) {
+    final base = client.apiUrl;
+    if (signed.isEmpty || base.isEmpty) return signed;
+    final index = signed.indexOf('/v1/');
+    return index < 0 ? signed : '$base${signed.substring(index)}';
   }
 
   /// Ticks a whole session off, or puts it back.
@@ -404,7 +422,16 @@ class SfApi {
       },
     );
     final url = _map(response.data)['url'];
-    return url is String ? url : '';
+    if (url is! String || url.isEmpty) {
+      // Returning an empty string here made a failed upload look like nothing
+      // happened at all: the composer's guard dropped it silently, so the
+      // member saw no link appear and no reason why.
+      throw ApiException(
+        i18nCode: 'errors.storageUploadFailed',
+        statusCode: response.statusCode,
+      );
+    }
+    return url;
   }
 
   /// The content type for a file, read off its extension.

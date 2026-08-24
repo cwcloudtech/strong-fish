@@ -777,7 +777,7 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
               if (mounted) setState(() => _uploading = value);
             },
           );
-      if (!mounted || url.isEmpty) return;
+      if (!mounted) return;
       final text = _content.text.trim();
       _content.text = text.isEmpty ? url : '$text\n$url';
     } catch (error) {
