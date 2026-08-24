@@ -64,6 +64,6 @@ Trois pistes, dans cet ordre :
 2. **Le mouvement auquel il est rattaché** dans le catalogue d'exercices, qu'un coach peut définir ou corriger à tout moment.
 3. **Son nom.** « Squat barre haute », « Squat tempo 3:3:0 », « Soulevé de terre avec pause », « RDL », « Développé haltères » : chacun dit à quel mouvement il appartient, et StrongFish le lit, quelle que soit la casse et dans les deux langues.
 
-Quelques mouvements portent le nom d'un mouvement de compétition sans devoir en être chargés - un _goblet squat_ et sont volontairement laissés de côté : ils restent sans charge tant que vous n'avez pas enregistré un 1RM (maximum) pour eux.
+Quelques mouvements portent le nom d'un mouvement de compétition sans devoir en être chargés - un *goblet squat* et sont volontairement laissés de côté : ils restent sans charge tant que vous n'avez pas enregistré un 1RM (maximum) pour eux.
 
 Si aucune des trois pistes n'aboutit, la charge s'affiche **?** et le mouvement est signalé comme nécessitant un 1RM.

@@ -1,0 +1,62 @@
+/* The slider's own styling.
+ *
+ * cwcloud-website leaves this to the browser's defaults; here it is written
+ * against Docusaurus' infima variables so a screenshot sits in the page like
+ * the rest of the documentation does, in both themes. */
+
+.slider {
+  margin: 1.5rem 0;
+}
+
+.slide {
+  text-align: center;
+}
+
+.image {
+  max-width: 100%;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: var(--ifm-global-radius);
+  box-shadow: var(--ifm-global-shadow-lw);
+}
+
+.label {
+  margin: 0.6rem 0 0;
+  font-style: italic;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 0.6rem;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  background-color: var(--ifm-background-surface-color);
+  color: var(--ifm-color-primary);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.button:hover {
+  border-color: var(--ifm-color-primary);
+  background-color: var(--ifm-color-emphasis-100);
+}
+
+/* Which of how many: without it a reader clicking through six screenshots has
+   no idea whether they have come back round to the first. */
+.counter {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,43 @@
+---
+id: index
+title: StrongFish
+sidebar_position: 1
+slug: /
+---
+
+import ImgSlider from '@site/src/components/ImgSlider';
+
+# StrongFish
+
+A powerlifting app: **RPE-based programs whose loads are computed from each athlete's own current 1RM**, clubs to coach them in, and a training feed.
+
+export const images = [
+    {
+        filename: "screen-1.png",
+        label: "screen-1"
+    },
+    {
+        filename: "screen-2.png",
+        label: "screen-2"
+    },
+    {
+        filename: "screen-3.png",
+        label: "screen-3"
+    }
+]
+
+<ImgSlider items={images} path="/img/screenshots" />
+
+Nothing derived is ever stored. Every set's weight is worked out from the member's current max at the moment they read it, which is what makes *"update your 1RM and the whole program recalculates"* true rather than a feature that has to be maintained.
+
+## Start here
+
+| If you are... | Read |
+| --- | --- |
+| New, and not sure which account to open | [Signing up](./tutorials/signup.md) |
+| Unsure what RPE 8 actually means | [RPE, 1RM and e1RM](./vocabulary.md) |
+| Signing in on your phone | [Signing in with an API key](./tutorials/api-key-login.md) |
+| Trying to post a video | [Posting a video](./tutorials/video-upload.md) |
+
+The app itself is at [strong-fish.com](https://strong-fish.com), and the sources
+are on [Github](https://github.com/cwcloudtech/strong-fish) or the CWCloud's [GitLab](https://gitlab.cwcloud.tech/oss/strong-fish) (opensource, MIT licence).
