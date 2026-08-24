@@ -529,6 +529,72 @@ button {
 /* The mark on a load that was recalculated from what the member just lifted. */
 .sf-autoregulated { color: var(--sf-primary-dark); font-weight: 600; }
 
+/* --- action menu ---
+   A trigger and a small list of commands, ported from ~/cwclock's Dropdown
+   (the reports' "Export" menu). Distinct from .sf-dropdown, which picks a
+   value and shows which one is current. */
+
+.sf-menu {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sf-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 210px;
+  max-width: calc(100vw - 32px);
+  background-color: var(--sf-surface);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  box-shadow: var(--sf-shadow);
+  padding: 6px;
+  /* Above the app's cards and sticky headers, below modals and tooltips -
+     the same band the select panel sits in. */
+  z-index: 1200;
+}
+
+.sf-menu-list.align-end {
+  left: auto;
+  right: 0;
+}
+
+.sf-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: 0;
+  border-radius: var(--sf-radius-sm);
+  color: var(--sf-text);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sf-menu-item:hover:not(:disabled) { background-color: var(--sf-bg-alt); }
+.sf-menu-item:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.sf-menu-text {
+  padding: 8px 10px 4px;
+  color: var(--sf-text-muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.sf-menu-divider {
+  height: 1px;
+  background-color: var(--sf-border);
+  margin: 6px 4px;
+}
+
 /* --- done / not done ---
    The only two states a set is in while a session is being run. Green for
    done, red for not: the colour is the answer, and the icon repeats it for

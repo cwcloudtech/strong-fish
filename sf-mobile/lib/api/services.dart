@@ -149,27 +149,55 @@ class SfApi {
   Future<void> deleteProgram(String clubId, String programId) =>
       client.dio.delete('/clubs/$clubId/programs/$programId');
 
-  /// Downloads the program's printable sheet - a page per week - and returns
-  /// where it was saved.
+  /// Downloads the program as a document - a page or a sheet per week - and
+  /// returns where it was saved.
   ///
   /// Rendered by the API rather than here: the loads on it are the ones the
   /// server computed, and a second implementation of the RPE chart on the
-  /// phone could disagree with the screen it was printed from.
-  Future<String> downloadProgramPdf(
+  /// phone could disagree with the screen it was exported from.
+  ///
+  /// [format] is 'pdf' or 'xlsx', and is the route's own extension - the file
+  /// that arrives is named the way its contents are.
+  Future<String> downloadProgram(
     String clubId,
     String programId, {
     required String directory,
     required String fileName,
+    String format = 'pdf',
     String memberId = '',
     String locale = 'en',
   }) async {
     final base = clubId.isEmpty ? '/programs' : '/clubs/$clubId/programs';
     final path = '$directory/$fileName';
     await client.dio.download(
-      '$base/$programId/export.pdf',
+      '$base/$programId/export.$format',
       path,
       queryParameters: {
         if (memberId.isNotEmpty) 'memberId': memberId,
+        'locale': locale,
+      },
+    );
+    return path;
+  }
+
+  /// Downloads an assigned block with the member's feedback on it - the sheet
+  /// a lifter sends their coach, and the one a coach reads away from the app.
+  ///
+  /// [week] limits it to that week; 0 is the whole block.
+  Future<String> downloadAssignment(
+    String assignmentId, {
+    required String directory,
+    required String fileName,
+    String format = 'pdf',
+    int week = 0,
+    String locale = 'en',
+  }) async {
+    final path = '$directory/$fileName';
+    await client.dio.download(
+      '/training/$assignmentId/export.$format',
+      path,
+      queryParameters: {
+        if (week > 0) 'week': week,
         'locale': locale,
       },
     );

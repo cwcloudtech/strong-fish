@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/export_menu.dart';
 
 /// One assigned program, session by session - the screen a member actually uses
 /// in the gym.
@@ -27,6 +29,17 @@ class SessionScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(detail.valueOrNull?.assignment.programName ?? t('nav.training')),
+        actions: [
+          // The block with this member's feedback on it. Offered to whoever
+          // may open the screen: the member sends it to their coach, and the
+          // coach exports their athlete's block to read away from the app.
+          if (detail.valueOrNull != null)
+            _AssignmentExport(
+              assignmentId: assignmentId,
+              programName: detail.valueOrNull!.assignment.programName,
+              tooltip: t('session.exportBlock'),
+            ),
+        ],
       ),
       body: detail.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -69,12 +82,36 @@ class SessionScreen extends ConsumerWidget {
                     ),
                   ),
 
-                for (final day in data.days)
-                  _DayCard(
-                    day: day,
-                    assignmentId: assignmentId,
-                    initiallyExpanded: day == data.days.first,
+                // Grouped by week, because that is the unit a week's work is
+                // discussed in: one export per week, and its sessions under
+                // it. The same grouping the exports use server-side.
+                for (final week in _weeksOf(data.days)) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 16, 4, 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            t('programs.week', {'week': '${week.number}'}),
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        _AssignmentExport(
+                          assignmentId: assignmentId,
+                          programName: data.assignment.programName,
+                          week: week.number,
+                          tooltip: t('session.exportWeek'),
+                        ),
+                      ],
+                    ),
                   ),
+                  for (final day in week.days)
+                    _DayCard(
+                      day: day,
+                      assignmentId: assignmentId,
+                      initiallyExpanded: week == _weeksOf(data.days).first && day == week.days.first,
+                    ),
+                ],
               ],
             ),
           );
@@ -82,6 +119,82 @@ class SessionScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The sessions grouped by week, in order.
+///
+/// The same grouping the API's exports use (programsheet.Weeks): a week number
+/// can be skipped by an imported spreadsheet, so the weeks are read off the
+/// sessions rather than assumed contiguous.
+List<({int number, List<ProgramDay> days})> _weeksOf(List<ProgramDay> days) {
+  final byNumber = <int, List<ProgramDay>>{};
+  for (final day in days) {
+    byNumber.putIfAbsent(day.week, () => []).add(day);
+  }
+  final numbers = byNumber.keys.toList()..sort();
+  return [for (final number in numbers) (number: number, days: byNumber[number]!)];
+}
+
+/// Exports an assigned block - or one week of it - with the member's feedback.
+class _AssignmentExport extends ConsumerStatefulWidget {
+  final String assignmentId;
+  final String programName;
+  final int week;
+  final String tooltip;
+
+  const _AssignmentExport({
+    required this.assignmentId,
+    required this.programName,
+    required this.tooltip,
+    this.week = 0,
+  });
+
+  @override
+  ConsumerState<_AssignmentExport> createState() => _AssignmentExportState();
+}
+
+class _AssignmentExportState extends ConsumerState<_AssignmentExport> {
+  bool _busy = false;
+
+  Future<void> _export(ExportFormat format) async {
+    setState(() => _busy = true);
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final name = [
+        _safeFileName(widget.programName),
+        if (widget.week > 0) 'w${widget.week}',
+      ].join('-');
+
+      final path = await ref.read(apiProvider).downloadAssignment(
+            widget.assignmentId,
+            directory: directory.path,
+            fileName: '$name.${format.extension}',
+            format: format.extension,
+            week: widget.week,
+            locale: ref.read(localeProvider),
+          );
+      if (mounted) await openExported(context, ref, path);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SfExportButton(busy: _busy, onExport: _export, tooltip: widget.tooltip);
+  }
+}
+
+/// Keeps a program's name usable as a filename, since it is whatever somebody
+/// typed.
+String _safeFileName(String name) {
+  final cleaned = name.replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '').trim().replaceAll(' ', '-');
+  return cleaned.isEmpty ? 'program' : cleaned;
 }
 
 class _DayCard extends ConsumerWidget {

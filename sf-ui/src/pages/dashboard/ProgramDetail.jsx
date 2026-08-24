@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiCopy, FiDownload, FiEdit2, FiEdit3, FiGlobe, FiLock, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiCopy, FiEdit2, FiEdit3, FiGlobe, FiLock, FiPlus, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { clubs as clubsApi, programs as programsApi } from "../../api/services";
@@ -14,6 +14,8 @@ import { useI18n } from "../../i18n/I18nContext";
 import Select from "../../components/common/Select";
 import Switch from "../../components/common/Switch";
 import Tooltip from "../../components/common/Tooltip";
+import ExportMenu from "../../components/programs/ExportMenu";
+import downloadBlob from "../../utils/downloadBlob";
 import MultiSelect from "../../components/common/MultiSelect";
 
 /**
@@ -110,21 +112,15 @@ export default function ProgramDetail() {
    * the request needs the session's Authorization header, which a plain
    * <a href> would not send - the download would arrive as a 401.
    */
-  const exportPdf = async () => {
+  const exportAs = async (format) => {
     setExporting(true);
     try {
-      const blob = await programsApi.exportPdf(clubId, programId, {
+      const blob = await programsApi.export(clubId, programId, {
+        format,
         memberId: viewAs || undefined,
         locale,
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${program?.name || "program"}.pdf`;
-      link.click();
-      // Revoked once the click has been handled, or the blob is held for the
-      // life of the tab.
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, `${program?.name || "program"}.${format}`);
     } catch (err) {
       setError(err);
     } finally {
@@ -220,9 +216,7 @@ export default function ProgramDetail() {
         <div className="sf-row">
           {/* Offered to anybody who can open the program: an athlete printing
               the block they were given is not a coaching action. */}
-          <button className="sf-button sf-button-secondary" onClick={exportPdf} disabled={exporting}>
-            <FiDownload /> {exporting ? t("programs.exporting") : t("programs.exportPdf")}
-          </button>
+          <ExportMenu onExport={exportAs} busy={exporting} />
           <button className="sf-button sf-button-secondary" onClick={() => setCopying(true)}>
             <FiCopy /> {t("programs.copy")}
           </button>

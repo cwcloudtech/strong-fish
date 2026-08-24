@@ -107,50 +107,45 @@ func TestRenderAcceptsAccents(t *testing.T) {
 	}
 }
 
-// TestFormatLoad covers what actually goes on the bar.
-func TestFormatLoad(t *testing.T) {
-	absolute := 22.5
-	cases := []struct {
-		name string
-		set  models.ProgramSet
-		want string
-	}{
-		{"a resolved load is rounded to what a lifter can load",
-			models.ProgramSet{RoundedLoad: 102.5, LoadKnown: true}, "102.5 kg"},
-		{"a whole number loses its decimal",
-			models.ProgramSet{RoundedLoad: 100, LoadKnown: true}, "100 kg"},
-		{"an accessory's absolute load wins over any derived one",
-			models.ProgramSet{AbsoluteLoad: &absolute, RoundedLoad: 999, LoadKnown: true}, "22.5 kg"},
-		{"no recorded 1RM prints nothing rather than zero",
-			models.ProgramSet{RoundedLoad: 0, LoadKnown: false}, ""},
+// TestRenderWithFeedbackTurnsThePage covers the sheet a lifter sends their
+// coach. Eleven columns do not fit an A4 portrait page: fpdf does not complain
+// about that, it simply draws the exercise names two characters wide, so the
+// orientation is what has to be pinned.
+func TestRenderWithFeedbackTurnsThePage(t *testing.T) {
+	program, days := sample()
+	days[0].Sets[0].Log = &models.SetLog{Done: true, ActualRPE: rpe(9), E1RM: 187.9, Comment: "Tough"}
+
+	portrait, err := Render(program, days, Options{Locale: "en"})
+	if err != nil {
+		t.Fatalf("rendering the prescription: %v", err)
+	}
+	landscape, err := Render(program, days, Options{Locale: "en", Feedback: true})
+	if err != nil {
+		t.Fatalf("rendering the feedback sheet: %v", err)
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := formatLoad(tc.set); got != tc.want {
-				t.Errorf("formatLoad() = %q, want %q", got, tc.want)
-			}
-		})
+	tall, wide := mediaBox(t, portrait), mediaBox(t, landscape)
+	if tall.width >= tall.height {
+		t.Errorf("the prescription is %v x %v, want portrait", tall.width, tall.height)
+	}
+	if wide.width <= wide.height {
+		t.Errorf("the feedback sheet is %v x %v, want landscape", wide.width, wide.height)
+	}
+	if pageCount(t, landscape) != pageCount(t, portrait) {
+		t.Error("the two documents disagree about how many weeks the block has")
 	}
 }
 
-// TestPageOrderFollowsTheWeeks covers a program whose sessions arrive out of
-// order, which an imported spreadsheet's do.
-func TestWeeksAreOrdered(t *testing.T) {
-	weeks := weeksOf([]models.ProgramDay{
-		{Week: 3, Day: 1}, {Week: 1, Day: 2}, {Week: 1, Day: 1}, {Week: 2, Day: 1},
-	})
+type box struct{ width, height float64 }
 
-	if len(weeks) != 3 {
-		t.Fatalf("grouped into %d weeks, want 3", len(weeks))
+// mediaBox reads the page size the document declares.
+func mediaBox(t *testing.T, pdf []byte) box {
+	t.Helper()
+	match := regexp.MustCompile(`/MediaBox\s*\[\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)`).FindSubmatch(pdf)
+	if match == nil {
+		t.Fatal("the document declares no page size")
 	}
-	for i, want := range []int{1, 2, 3} {
-		if weeks[i].number != want {
-			t.Errorf("week %d of the document is week %d, want %d", i, weeks[i].number, want)
-		}
-	}
-	// And the sessions within a week keep their own order.
-	if weeks[0].days[0].Day != 1 || weeks[0].days[1].Day != 2 {
-		t.Error("sessions inside a week are out of order")
-	}
+	width, _ := strconv.ParseFloat(string(match[1]), 64)
+	height, _ := strconv.ParseFloat(string(match[2]), 64)
+	return box{width: width, height: height}
 }

@@ -15,13 +15,11 @@ package programpdf
 
 import (
 	"bytes"
-	"fmt"
-	"sort"
-	"strings"
 
 	"github.com/go-pdf/fpdf"
 
 	"strong-fish-api/internal/models"
+	"strong-fish-api/internal/programsheet"
 )
 
 const (
@@ -33,15 +31,9 @@ const (
 )
 
 // Options is everything the renderer needs that is not the program itself.
-type Options struct {
-	// MemberName is who the sheet was printed for, when it was printed against
-	// somebody's own maxes. Blank prints the program as authored.
-	MemberName string
-	// Locale picks the language of the column headings.
-	Locale string
-	// Footer is the attribution line at the bottom of every page.
-	Footer string
-}
+// Shared with the XLSX renderer, so the two documents cannot disagree about
+// what a sheet contains (see programsheet).
+type Options = programsheet.Options
 
 // Render lays the program out as a PDF and returns the bytes.
 //
@@ -49,7 +41,14 @@ type Options struct {
 // still gets its heading, because an empty session in the middle of a block is
 // information - it is a rest day the coach wrote down.
 func Render(program models.Program, days []models.ProgramDay, options Options) ([]byte, error) {
-	pdf := fpdf.New("P", "pt", "A4", "")
+	// Landscape for a feedback sheet: eleven columns on a portrait page leaves
+	// the exercise names two characters wide, and the whole point of the
+	// document is reading the prescription against what was done.
+	orientation := "P"
+	if options.Feedback {
+		orientation = "L"
+	}
+	pdf := fpdf.New(orientation, "pt", "A4", "")
 	pdf.SetMargins(36, 40, 36)
 	pdf.SetAutoPageBreak(true, 40)
 
@@ -68,12 +67,12 @@ func Render(program models.Program, days []models.ProgramDay, options Options) (
 		})
 	}
 
-	for _, week := range weeksOf(days) {
+	for _, week := range programsheet.Weeks(days) {
 		pdf.AddPage()
-		drawWeekHeader(pdf, translate, program, week.number, options)
+		drawWeekHeader(pdf, translate, program, week.Number, options)
 
-		for _, day := range week.days {
-			drawDay(pdf, translate, day, options.Locale)
+		for _, day := range week.Days {
+			drawDay(pdf, translate, day, options)
 		}
 	}
 
@@ -92,42 +91,6 @@ func Render(program models.Program, days []models.ProgramDay, options Options) (
 	return buf.Bytes(), nil
 }
 
-type week struct {
-	number int
-	days   []models.ProgramDay
-}
-
-// weeksOf groups the sessions into weeks, in order.
-//
-// Grouped rather than assumed contiguous: an imported spreadsheet can skip a
-// week number, and a page headed "week 3" with week 4's sessions on it would be
-// worse than a missing page.
-func weeksOf(days []models.ProgramDay) []week {
-	byNumber := map[int][]models.ProgramDay{}
-	for _, day := range days {
-		byNumber[day.Week] = append(byNumber[day.Week], day)
-	}
-
-	numbers := make([]int, 0, len(byNumber))
-	for number := range byNumber {
-		numbers = append(numbers, number)
-	}
-	sort.Ints(numbers)
-
-	weeks := make([]week, 0, len(numbers))
-	for _, number := range numbers {
-		sessions := byNumber[number]
-		sort.SliceStable(sessions, func(a, b int) bool {
-			if sessions[a].Day != sessions[b].Day {
-				return sessions[a].Day < sessions[b].Day
-			}
-			return sessions[a].Position < sessions[b].Position
-		})
-		weeks = append(weeks, week{number: number, days: sessions})
-	}
-	return weeks
-}
-
 func drawWeekHeader(pdf *fpdf.Fpdf, translate func(string) string, program models.Program,
 	number int, options Options) {
 	pdf.SetFont("Helvetica", "B", titleSizePt)
@@ -136,31 +99,21 @@ func drawWeekHeader(pdf *fpdf.Fpdf, translate func(string) string, program model
 	// The subtitle carries what the sheet is *for*: whose maxes the loads came
 	// from, and which club's program it is. On paper there is nothing else to
 	// tell two printouts apart.
-	subtitle := []string{}
-	if options.MemberName != "" {
-		subtitle = append(subtitle, options.MemberName)
-	}
-	if program.ClubName != "" {
-		subtitle = append(subtitle, program.ClubName)
-	}
-	if len(subtitle) > 0 {
+	if subtitle := programsheet.Subtitle(program, options.MemberName); subtitle != "" {
 		pdf.SetFont("Helvetica", "", fontSizePt)
 		pdf.SetTextColor(110, 110, 110)
-		pdf.CellFormat(0, 12, translate(strings.Join(subtitle, "  -  ")), "", 1, "L", false, 0, "")
+		pdf.CellFormat(0, 12, translate(subtitle), "", 1, "L", false, 0, "")
 		pdf.SetTextColor(0, 0, 0)
 	}
 
 	pdf.Ln(6)
 	pdf.SetFont("Helvetica", "B", weekSizePt)
-	pdf.CellFormat(0, 16, translate(weekLabel(options.Locale, number)), "", 1, "L", false, 0, "")
+	pdf.CellFormat(0, 16, translate(programsheet.WeekLabel(options.Locale, number)), "", 1, "L", false, 0, "")
 	pdf.Ln(2)
 }
 
-func drawDay(pdf *fpdf.Fpdf, translate func(string) string, day models.ProgramDay, locale string) {
-	title := strings.TrimSpace(day.Title)
-	if title == "" {
-		title = dayLabel(locale, day.Day)
-	}
+func drawDay(pdf *fpdf.Fpdf, translate func(string) string, day models.ProgramDay, options Options) {
+	title := programsheet.DayTitle(day, options.Locale)
 
 	// Kept with its table: a session heading stranded at the foot of a page,
 	// with its sets overleaf, is the one layout failure that actually matters
@@ -178,84 +131,16 @@ func drawDay(pdf *fpdf.Fpdf, translate func(string) string, day models.ProgramDa
 	if len(day.Sets) == 0 {
 		pdf.SetFont("Helvetica", "I", fontSizePt)
 		pdf.SetTextColor(110, 110, 110)
-		pdf.CellFormat(0, 12, translate(restLabel(locale)), "", 1, "L", false, 0, "")
+		pdf.CellFormat(0, 12, translate(programsheet.RestLabel(options.Locale)), "", 1, "L", false, 0, "")
 		pdf.SetTextColor(0, 0, 0)
 		return
 	}
 
-	sets := append([]models.ProgramSet(nil), day.Sets...)
-	sort.SliceStable(sets, func(a, b int) bool { return sets[a].Position < sets[b].Position })
-
+	sets := programsheet.SortedSets(day)
 	rows := make([][]string, 0, len(sets))
 	for _, set := range sets {
-		rows = append(rows, []string{
-			exerciseName(set),
-			formatReps(set.Reps),
-			formatIntensity(set),
-			formatLoad(set),
-			set.Notes,
-		})
+		rows = append(rows, programsheet.Row(set, options.Feedback))
 	}
 
-	drawTable(pdf, translate, columnsFor(locale), rows)
-}
-
-// exerciseName is what to call the movement on paper: its label in the sheet's
-// language, falling back to the slug, which is at least unambiguous.
-func exerciseName(set models.ProgramSet) string {
-	for _, key := range []string{"en", "fr"} {
-		if label := strings.TrimSpace(set.ExerciseLabels[key]); label != "" {
-			return label
-		}
-	}
-	for _, label := range set.ExerciseLabels {
-		if trimmed := strings.TrimSpace(label); trimmed != "" {
-			return trimmed
-		}
-	}
-	return set.ExerciseSlug
-}
-
-func formatReps(reps int) string {
-	if reps <= 0 {
-		return ""
-	}
-	return fmt.Sprintf("%d", reps)
-}
-
-// formatIntensity prints what the coach prescribed, not what was derived: an
-// RPE set says RPE, a percentage set says the percentage. Both when both were
-// written, because a coach who wrote both meant both.
-func formatIntensity(set models.ProgramSet) string {
-	parts := []string{}
-	if set.RPE != nil {
-		parts = append(parts, fmt.Sprintf("RPE %s", trimFloat(*set.RPE)))
-	}
-	if set.Percentage != nil {
-		parts = append(parts, fmt.Sprintf("%s%%", trimFloat(*set.Percentage)))
-	}
-	return strings.Join(parts, " / ")
-}
-
-// formatLoad prints the weight to put on the bar.
-//
-// The rounded load is what a lifter loads, so that is what is printed; the
-// exact figure is a computation, not an instruction. A set whose load could not
-// be worked out - no 1RM recorded - prints blank rather than zero, which would
-// read as an empty bar.
-func formatLoad(set models.ProgramSet) string {
-	if set.AbsoluteLoad != nil && *set.AbsoluteLoad > 0 {
-		return fmt.Sprintf("%s kg", trimFloat(*set.AbsoluteLoad))
-	}
-	if !set.LoadKnown || set.RoundedLoad <= 0 {
-		return ""
-	}
-	return fmt.Sprintf("%s kg", trimFloat(set.RoundedLoad))
-}
-
-// trimFloat prints a number the way a coach writes it: 7.5 stays 7.5, and 100.0
-// becomes 100.
-func trimFloat(value float64) string {
-	text := fmt.Sprintf("%.1f", value)
-	return strings.TrimSuffix(text, ".0")
+	drawTable(pdf, translate, programsheet.Columns(options.Locale, options.Feedback), rows)
 }

@@ -60,6 +60,7 @@ var routes = []struct{ method, path string }{
 	{"GET", "/v1/metrics"},
 	{"GET", "/v1/public/programs/prog-1"},
 	{"GET", "/v1/public/programs/prog-1/export.pdf"},
+	{"GET", "/v1/public/programs/prog-1/export.xlsx"},
 	{"GET", "/v1/public/posts/post-1"},
 	{"GET", "/v1/calendar/tok-1.ics"},
 
@@ -145,6 +146,7 @@ var routes = []struct{ method, path string }{
 	{"PUT", "/v1/programs/prog-1"},
 	{"DELETE", "/v1/programs/prog-1"},
 	{"GET", "/v1/programs/prog-1/export.pdf"},
+	{"GET", "/v1/programs/prog-1/export.xlsx"},
 	{"POST", "/v1/programs/prog-1/copy"},
 	{"POST", "/v1/programs/prog-1/days"},
 	{"PUT", "/v1/programs/prog-1/days/day-1"},
@@ -156,6 +158,7 @@ var routes = []struct{ method, path string }{
 	{"POST", "/v1/programs/prog-1/assignments"},
 	{"DELETE", "/v1/programs/prog-1/assignments/a-1"},
 	{"GET", "/v1/clubs/club-1/programs/prog-1/export.pdf"},
+	{"GET", "/v1/clubs/club-1/programs/prog-1/export.xlsx"},
 	{"POST", "/v1/clubs/club-1/programs/prog-1/copy"},
 	{"POST", "/v1/clubs/club-1/programs"},
 	{"POST", "/v1/clubs/club-1/programs/import"},
@@ -178,6 +181,8 @@ var routes = []struct{ method, path string }{
 	{"PUT", "/v1/training/as-1/sets/set-1/log"},
 	{"DELETE", "/v1/training/as-1/sets/set-1/log"},
 	{"PUT", "/v1/training/as-1/days/day-1/log"},
+	{"GET", "/v1/training/as-1/export.pdf"},
+	{"GET", "/v1/training/as-1/export.xlsx"},
 
 	{"GET", "/v1/posts"},
 	{"GET", "/v1/posts/discover"},

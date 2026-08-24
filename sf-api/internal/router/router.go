@@ -114,7 +114,9 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		r.Get("/public/programs/{programId}", h.Program.GetPublic)
 		// The same sheet the member's own export produces, without the weights:
 		// a reader outside the club has no maxes to resolve them against.
+		// Both formats, chosen by the extension.
 		r.Get("/public/programs/{programId}/export.pdf", h.Program.ExportPublicPDF)
+		r.Get("/public/programs/{programId}/export.xlsx", h.Program.ExportPublicPDF)
 
 		// A post its author published to everybody. Unauthenticated by design:
 		// a link shared to Instagram is opened by people with no account.
@@ -334,6 +336,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 							// an athlete printing the block they were given
 							// is not a coaching action.
 							r.Get("/export.pdf", h.Program.ExportPDF)
+							r.Get("/export.xlsx", h.Program.ExportPDF)
 							// Not manager-gated: any member of this club may
 							// copy a program they can read into their own
 							// library. Copying it into *another club* is a
@@ -363,6 +366,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Put("/", h.Program.Update)
 					r.Delete("/", h.Program.Delete)
 					r.Get("/export.pdf", h.Program.ExportPDF)
+					r.Get("/export.xlsx", h.Program.ExportPDF)
 					r.Post("/copy", h.Program.CopyToClub)
 					r.Post("/days", h.Program.AddDay)
 					r.Put("/days/{dayId}", h.Program.UpdateDay)
@@ -387,6 +391,11 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Delete("/sets/{setId}/log", h.Training.DeleteLog)
 					// A whole session ticked off in one go.
 					r.Put("/days/{dayId}/log", h.Training.SetDayDone)
+					// The block with the member's feedback on it, whole or one
+					// week (?week=N), for them to send their coach - and for
+					// their coach to read away from the app.
+					r.Get("/export.pdf", h.Training.ExportAssignment)
+					r.Get("/export.xlsx", h.Training.ExportAssignment)
 				})
 			})
 
