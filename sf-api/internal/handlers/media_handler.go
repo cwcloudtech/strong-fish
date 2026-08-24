@@ -92,10 +92,10 @@ func (h *MediaHandler) upload(w http.ResponseWriter, r *http.Request,
 	accepted map[string]string, maxSize int64, kind string) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
-	// Their own storage, or one somebody shared with them as a writer: a
-	// member with no bucket of their own can still post a video if their coach
-	// lent them theirs.
-	destination, ok := h.writableStorage(w, r, userID)
+	// Everywhere this member may write, in priority order: their own targets
+	// first, then any lent to them - a member with no bucket of their own can
+	// still post a video if their coach shared one.
+	destinations, ok := h.writableStorages(w, r, userID)
 	if !ok {
 		return
 	}
@@ -137,29 +137,48 @@ func (h *MediaHandler) upload(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	target, err := storage.New(destination.Conn)
-	if err != nil {
-		writeError(w, http.StatusMethodNotAllowed, err.Error(), CodeStorageNotConfigured)
-		return
-	}
-
+	// The same key in every target, so a copy can be found by hand in any of
+	// them.
 	key := mediaKey(userID, kind, header.Filename, extension)
-	url, err := target.Upload(r.Context(), key, data, contentType)
-	if err != nil {
-		// The member's own bucket rejected this, so the message is theirs to
-		// act on - a wrong key, a missing bucket, ACLs disabled - and saying
-		// "internal error" would send them looking in the wrong place.
-		writeError(w, http.StatusBadGateway, err.Error(), CodeStorageUploadFailed)
-		return
+
+	var (
+		posted   string
+		failures []string
+	)
+	for _, destination := range destinations {
+		target, err := storage.New(destination.Conn)
+		if err != nil {
+			failures = append(failures, err.Error())
+			continue
+		}
+
+		uploaded, err := target.Upload(r.Context(), key, data, contentType)
+		if err != nil {
+			// The member's own bucket rejected this, so the message is theirs
+			// to act on - a wrong key, a missing bucket, ACLs disabled - and
+			// saying "internal error" would send them looking in the wrong
+			// place.
+			failures = append(failures, err.Error())
+			continue
+		}
+		// The first target that took the file is the one the post points at.
+		// The rest are copies: a second home for the video, not a second link.
+		if posted == "" {
+			posted = h.postedURL(destination, key, uploaded, extension)
+		}
 	}
 
-	// A private bucket's object has no address a reader could use: what goes
-	// into the post is this API's, and the API fetches the object with the
-	// stored credentials for a reader it has checked.
-	if destination.Conn.Private {
-		url = h.mediaURL(destination.ID, key, extension)
+	if posted == "" {
+		writeError(w, http.StatusBadGateway, strings.Join(failures, "; "), CodeStorageUploadFailed)
+		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"url": url})
+	// A target that failed while another took the file is not worth failing
+	// the post over - the video is stored and playable - but it is worth
+	// saying, or a bucket quietly stops receiving copies and nobody notices.
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"url":      posted,
+		"warnings": warningsOrEmpty(failures),
+	})
 }
 
 // resolveMediaType works out what was uploaded, and refuses anything that is

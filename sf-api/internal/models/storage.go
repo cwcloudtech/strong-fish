@@ -37,14 +37,17 @@ type StorageConnection struct {
 	// bucket served through a CDN or a custom domain. Empty means the object
 	// is addressed at the endpoint it was written to.
 	PublicBaseURL string `json:"publicBaseUrl,omitempty"`
-	// Private says the bucket or folder is not readable without credentials.
+	// Private says a bucket does not allow public objects.
 	//
-	// It changes both ends of an upload: nothing is granted public access as
-	// it is written, and what goes into the post is an address on this API
-	// rather than on the bucket - the API then fetches the object with the
-	// stored credentials for a reader it has checked (see the media handler).
-	// A member whose bucket policy forbids public objects could not post a
-	// video at all before this.
+	// It stops the upload asking for a public-read ACL, which such a bucket
+	// refuses outright - that refusal is what used to make posting a video
+	// impossible on a corporate bucket. It does not change how the object is
+	// read: an S3 object is always served through this API, with the stored
+	// credentials, to a reader it has checked (see the media handler).
+	//
+	// It means nothing for a Google Drive target. A Drive file is posted as a
+	// Drive link, which requires the file to be shared with anyone holding it;
+	// somebody who needs media that is not reachable that way wants a bucket.
 	Private bool `json:"private,omitempty"`
 }
 
@@ -88,6 +91,10 @@ type Storage struct {
 	OwnerID string            `json:"ownerId"`
 	Name    string            `json:"name,omitempty"`
 	Conn    StorageConnection `json:"connection"`
+	// Position is where this target sits in its owner's priority order: an
+	// upload goes to every one of them, and the link in the post comes from
+	// the first.
+	Position int `json:"position"`
 	// Role is the caller's own role, filled in by the queries that read a
 	// storage for somebody. Empty when it was read without a caller in mind.
 	Role      string    `json:"role,omitempty"`

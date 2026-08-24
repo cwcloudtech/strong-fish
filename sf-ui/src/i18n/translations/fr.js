@@ -715,9 +715,15 @@ const fr = {
     failed: "La mise à jour n'a pas pu être téléchargée ou installée. Veuillez réessayer plus tard.",
   },
   storage: {
+    noTargets: "Aucun stockage configuré.",
+    addTarget: "Ajouter un stockage",
+    orderHelp: "Un envoi est déposé dans chaque destination. Le lien de la publication vient de la première.",
+    first: "le lien vient d'ici",
+    moveUp: "Monter",
+    moveDown: "Descendre",
     private: "Ce bucket n'est pas public",
     privateHelp:
-      "Activez ceci si votre bucket ou votre dossier refuse les fichiers publics. StrongFish les sert alors lui-même, avec vos identifiants, aux personnes qui voient votre profil - et à celles avec qui vous partagez ce stockage ci-dessous.",
+      "Activez ceci si votre bucket refuse les fichiers publics : rien n\u2019est rendu public à l\u2019écriture. Dans tous les cas, les fichiers d\u2019un bucket sont toujours servis par StrongFish lui-même, avec vos identifiants, aux personnes qui voient votre profil - et à celles avec qui vous partagez le stockage. Un dossier Google Drive fonctionne autrement : ses fichiers sont publiés sous forme de liens Drive, accessibles à quiconque les possède.",
     shares: "Qui peut l'utiliser",
     sharesHelp:
       "Prêtez votre stockage à d'autres membres : un lecteur peut lire ce qui s'y trouve, un rédacteur peut aussi y déposer des fichiers. Vos propres envois vont toujours d'abord dans votre stockage.",

@@ -702,9 +702,15 @@ const en = {
     failed: "The update could not be downloaded or installed. Please try again later.",
   },
   storage: {
+    noTargets: "No storage configured yet.",
+    addTarget: "Add a storage",
+    orderHelp: "An upload goes to every target. The link in the post comes from the first one.",
+    first: "the link comes from here",
+    moveUp: "Move up",
+    moveDown: "Move down",
     private: "This bucket is not public",
     privateHelp:
-      "Turn this on when your bucket or folder refuses public files. StrongFish then serves them itself, with your credentials, to the people your profile is visible to - and to anybody you share this storage with below.",
+      "Turn this on when your bucket refuses public files: nothing is made public as it is written. Either way, files in a bucket are always served by StrongFish itself, with your credentials, to the people your profile is visible to - and to anybody you share the storage with. A Google Drive target is different: its files are posted as Drive links, reachable by anyone holding them.",
     shares: "Who else can use it",
     sharesHelp:
       "Lend your storage to other members: a reader can play what is in it, a writer can upload to it as well. Your own uploads always go to your own storage first.",

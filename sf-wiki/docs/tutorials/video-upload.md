@@ -30,7 +30,7 @@ Works with AWS S3, MinIO, Scaleway, DigitalOcean Spaces - anything speaking the
 S3 API.
 
 1. Create a bucket, and an access key that can write to it.
-2. **Object reads must be public - unless you say the bucket is private.** By default the link goes into a post and is played by a plain video player in someone else's browser, with no credentials, so StrongFish uploads each object with a public-read ACL; a bucket with ACLs disabled will reject the upload. If your bucket refuses public files, turn on **This bucket is not public** and read the next section instead.
+2. **The bucket does not have to be public.** StrongFish serves a bucket's files itself, with your credentials, so nothing has to be readable without them. By default it still asks for a public-read ACL as it writes (handy if you also serve the bucket through a CDN); if your bucket forbids that - and many do - turn on **This bucket is not public** and the upload stops asking.
 3. In the app: **Settings → Video storage**, pick *S3-compatible bucket*.
 4. Fill in:
 
@@ -61,42 +61,70 @@ S3 API.
 
 StrongFish grants each uploaded file anyone-with-the-link read access as it writes it, and posts the Drive preview player.
 
-## A bucket that is not public
+## Where files are read from
 
-Some buckets are not allowed to hold public files at all - a company account, a
-policy that blocks public ACLs, a Drive folder that must stay closed. Turn on
-**This bucket is not public** under Settings → Video storage and nothing is
-made public at any point:
+The two kinds of storage are read differently, and it is worth knowing which
+you have:
 
-* the upload grants no public access as it writes;
-* what goes into the post is an address on StrongFish, not on your bucket;
-* StrongFish fetches the file with *your* credentials when somebody opens it,
-  and streams it to them.
+* **A bucket is always served by StrongFish itself.** The link in the post is
+  an address on the app, not on your bucket; StrongFish fetches the object with
+  *your* credentials and streams it to the reader. That works whether the
+  bucket is public or not, which is the point - a bucket that forbids public
+  files is the normal corporate setting, and a link that only works on public
+  buckets works by luck.
+* **A Drive file is read from Drive.** The upload shares it with anyone holding
+  the link and the post carries Drive's own `/preview` address, which the
+  player embeds. So a Drive file is reachable by anyone who has the link, and
+  StrongFish cannot narrow that. If you need media only your club can see, use
+  a bucket.
 
-**Who can watch it** is then your profile's own rule - the same one that decides
-whether your posts are readable at all: public, your clubs, or your coaches
-(see [signing up](./signup.md)). Anybody you shared the storage with can watch
-it too. Everyone else gets nothing, exactly as if the post had no video.
+**Who can watch a bucket's file** is your profile's own rule - the same one that
+decides whether your posts are readable at all: public, your clubs, or your
+coaches (see [signing up](./signup.md)). Anybody you shared the storage with
+can watch it too. Everyone else gets nothing, exactly as if the post had no
+video.
 
-Nothing else changes: a public bucket, a Drive `/preview` link, a YouTube URL
-in a post - all still play the way they always did, in the app and on the phone.
+**This bucket is not public** under Settings → Video storage only controls one
+thing: whether the upload asks for public access as it writes. Turn it on when
+your bucket refuses public files. It does not change who can watch - that is
+the rule above, always.
+
+## Several storages at once
+
+You can configure more than one, and the order matters:
+
+* **an upload is written to every one of them** - the same file, the same name,
+  in each;
+* **the link in the post comes from the first**.
+
+That is how a club keeps a second copy of its athletes' videos: bucket at the
+gym first, an off-site bucket second. If a target refuses the upload, the post
+still goes out through the ones that took it and the failure is reported back
+to you - so a bucket that has quietly stopped accepting files does not fail
+your post, but it does not stay a secret either.
+
+Use the arrows in **Settings → Video storage** to change which one is first.
+Adding a storage puts it last: promoting it is a decision you make, not a side
+effect of configuring it.
 
 ## Sharing your storage
 
 A bucket costs money and a club usually has one. Under **Settings → Video
-storage → Who else can use it**, pick members and give them a role:
+storage**, open the people icon on a storage, pick members and give them a
+role:
 
 | Role | What they can do |
 | --- | --- |
-| Play | Watch what is in your storage, even when your profile would not otherwise let them |
+| Play | Watch what is in that storage, even when your profile would not otherwise let them |
 | Upload and play | The above, plus upload their own videos into it |
 
 Only you can share your own storage, and only you can stop sharing it - someone
 you gave write access to cannot pass it on.
 
-**Where your own uploads go:** your own storage first, always. Somebody with no
-storage of their own uploads into the first one shared with them, so an athlete
-whose coach lent them a bucket can post a video without owning one.
+**Where your own uploads go:** your own storages first, in your order, then any
+shared with you. Somebody with none of their own uploads into the first one
+shared with them, so an athlete whose coach lent them a bucket can post a video
+without owning one.
 
 ## Posting a video
 

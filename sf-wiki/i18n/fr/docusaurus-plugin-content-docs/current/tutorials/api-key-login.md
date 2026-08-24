@@ -10,13 +10,10 @@ configure aussi un script ou une future CLI.
 
 ## Ce qu'est une clé d'API
 
-Un justificatif qui authentifie une requête avec un en-tête `X-Api-Key` plutôt
-qu'avec une session. Elle porte **exactement vos droits** — ni plus, ni moins :
-traitez-la comme votre mot de passe.
+Un jeton qui authentifie une requête avec un en-tête `X-Api-Key` plutôt
+qu'avec une session. Elle porte **exactement vos droits** — ni plus, ni moins : traitez-la comme votre mot de passe.
 
-L'API n'en stocke que l'empreinte. La clé elle-même n'existe qu'une fois, dans
-l'écran qui la crée, et ne peut plus être affichée ensuite. C'est délibéré : un
-justificatif qu'un serveur peut relire est un justificatif qu'un serveur
+L'API n'en stocke que l'empreinte. La clé elle-même n'existe qu'une fois, dans l'écran qui la crée, et ne peut plus être affichée ensuite. C'est délibéré : un jeton qu'un serveur peut relire est un jeton qu'un serveur
 compromis peut distribuer.
 
 ## En créer une
@@ -47,8 +44,7 @@ Une fenêtre s'ouvre avec la clé. **Elle ne reviendra pas.** Vous pouvez :
 3. Autorisez la caméra quand elle est demandée.
 4. Pointez-la vers le QR code affiché sur votre ordinateur.
 
-L'application lit l'adresse du serveur et la clé dans le code, les vérifie auprès de ce serveur, et n'enregistre la clé qu'une fois qu'il l'a acceptée. Un code qui se scanne correctement mais désigne un serveur qui le refuse laisse
-l'application exactement dans l'état où elle était.
+L'application lit l'adresse du serveur et la clé dans le code, les vérifie auprès de ce serveur, et n'enregistre la clé qu'une fois qu'il l'a acceptée. Un code qui se scanne correctement mais désigne un serveur qui le refuse laisse l'application exactement dans l'état où elle était.
 
 ## Ce que contient réellement le code
 
@@ -62,7 +58,7 @@ api_key = <votre clé>
 Le fichier de configuration téléchargeable a le même contenu : c'est pourquoi une seule clé configure à la fois le téléphone et une CLI.
 
 :::warning Quiconque le scanne devient vous
-Le QR code est un justificatif affiché à l'écran. Ne le projetez pas, ne l'envoyez pas en capture d'écran dans une conversation de groupe, et ne le laissez pas ouvert sur une machine partagée. Si l'un d'eux fuite, révoquez cette clé — **Clés d'API → Révoquer** — et elle cesse de fonctionner partout immédiatement.
+Le QR code est un jeton affiché à l'écran. Ne le projetez pas, ne l'envoyez pas en capture d'écran dans une conversation de groupe, et ne le laissez pas ouvert sur une machine partagée. Si l'un d'eux fuite, révoquez cette clé — **Clés d'API → Révoquer** — et elle cesse de fonctionner partout immédiatement.
 :::
 
 ## Révoquer

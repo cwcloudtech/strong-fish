@@ -251,16 +251,22 @@ export const media = {
     const { url: signed } = await body(client.get(`${url.replace(/^.*\/v1/, "")}/link`));
     return signed;
   },
-  storage: () => body(client.get("/users/me/storage")),
-  setStorage: (payload) => body(client.put("/users/me/storage", payload)),
-  clearStorage: () => body(client.delete("/users/me/storage")),
+  // The member's own targets, in priority order: an upload goes to every one
+  // of them, and the link in the post comes from the first.
+  storages: () => body(client.get("/users/me/storages")),
+  addStorage: (payload) => body(client.post("/users/me/storages", payload)),
+  setStorage: (storageId, payload) => body(client.put(`/users/me/storages/${storageId}`, payload)),
+  clearStorage: (storageId) => body(client.delete(`/users/me/storages/${storageId}`)),
+  reorderStorages: (storageIds) => body(client.put("/users/me/storages/order", { storageIds })),
   // Everywhere this member may upload: their own bucket, and the ones others
   // shared with them.
-  storages: () => body(client.get("/storages")),
-  // Who may use my storage, and what they may do with it.
-  shares: () => body(client.get("/users/me/storage/shares")),
-  share: (userId, role) => body(client.post("/users/me/storage/shares", { userId, role })),
-  unshare: (userId) => body(client.delete(`/users/me/storage/shares/${userId}`)),
+  usableStorages: () => body(client.get("/storages")),
+  // Who may use one of my targets, and what they may do with it.
+  shares: (storageId) => body(client.get(`/users/me/storages/${storageId}/shares`)),
+  share: (storageId, userId, role) =>
+    body(client.post(`/users/me/storages/${storageId}/shares`, { userId, role })),
+  unshare: (storageId, userId) =>
+    body(client.delete(`/users/me/storages/${storageId}/shares/${userId}`)),
 };
 
 export const events = {

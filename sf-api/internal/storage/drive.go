@@ -90,7 +90,6 @@ type driveTarget struct {
 	privateKey *rsa.PrivateKey
 	folderID   string
 	basePath   string
-	private    bool
 	httpClient *http.Client
 }
 
@@ -104,7 +103,6 @@ func newDriveTarget(conn models.StorageConnection) (*driveTarget, error) {
 		privateKey: privateKey,
 		folderID:   conn.FolderID,
 		basePath:   cleanBasePath(conn.Path),
-		private:    conn.Private,
 		httpClient: &http.Client{Timeout: 120 * time.Second},
 	}, nil
 }
@@ -135,13 +133,6 @@ func (d *driveTarget) Upload(ctx context.Context, key string, data []byte, conte
 	if err != nil {
 		return utils.EMPTY, err
 	}
-	// On a private folder nothing is granted: the file stays visible to the
-	// service account alone, and the API reads it back through Download for
-	// readers it has checked. The id is what identifies it from then on.
-	if d.private {
-		return fileID, nil
-	}
-
 	// A file in a service account's own folder is invisible to everybody else,
 	// including the person about to read the post. Granting anyone-with-the-
 	// link reader access is what makes the returned URL work at all.
@@ -152,6 +143,14 @@ func (d *driveTarget) Upload(ctx context.Context, key string, data []byte, conte
 	// Drive's /preview endpoint is an embeddable player; its direct-download
 	// URL serves an interstitial for files this size, which a <video> tag
 	// cannot get past. media-player recognises this shape and frames it.
+	//
+	// This is the address that goes into the post, for a private folder as
+	// much as a public one. A Drive file is not served through this API the
+	// way a bucket's object is: /preview is already a player, framing it costs
+	// this app nothing, and proxying every frame of every video to hand back
+	// something no better would be a strange way to spend a server. What the
+	// member gives up in exchange is stated plainly in the settings: a Drive
+	// target's files are reachable by anyone holding the link.
 	return "https://drive.google.com/file/d/" + fileID + "/preview", nil
 }
 

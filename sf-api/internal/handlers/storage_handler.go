@@ -29,71 +29,18 @@ func NewStorageHandler(storages *store.StorageStore, users *store.UserStore, max
 	return &StorageHandler{storages: storages, users: users, maxVideoSize: maxVideoSize}
 }
 
-// response is the shape the settings screen reads, whatever changed it.
-func (h *StorageHandler) response(stored models.Storage, found bool) map[string]any {
-	return map[string]any{
-		"id":         stored.ID,
-		"connection": stored.Conn.Redacted(),
-		"configured": found && stored.Conn.Configured(),
-		"maxSize":    h.maxVideoSize,
-	}
-}
-
-// Get returns the caller's own connection, with the credentials redacted: the
-// UI needs to show what is set up, never the keys themselves.
-func (h *StorageHandler) Get(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
-
-	stored, err := h.storages.FindOwn(r.Context(), userID)
-	if errors.Is(err, store.ErrNotFound) {
-		writeJSON(w, http.StatusOK, h.response(models.Storage{}, false))
-		return
-	}
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, h.response(stored, true))
-}
-
-// List is every storage the caller may upload to: their own, and the ones
-// shared with them. The connections are redacted - somebody granted write
-// access may use a bucket, not read its keys out.
-func (h *StorageHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
-
-	available, err := h.storages.ListFor(r.Context(), userID)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	for i := range available {
-		available[i].Conn = available[i].Conn.Redacted()
-	}
-	writeJSON(w, http.StatusOK, available)
-}
-
-func (h *StorageHandler) Set(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
-
-	var conn models.StorageConnection
-	if !decodeJSON(w, r, &conn) {
-		return
-	}
-
-	current, err := h.storages.FindOwn(r.Context(), userID)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		writeStoreError(w, err)
-		return
-	}
+// normalize validates and cleans a connection a form sent, or writes the
+// refusal and answers false.
+func (h *StorageHandler) normalize(w http.ResponseWriter, conn models.StorageConnection,
+	current models.StorageConnection) (models.StorageConnection, bool) {
 	// A client echoing back the redaction marker means "keep the stored
 	// secret", which is what lets somebody change their bucket name without
 	// retyping a key they can no longer read.
 	if conn.SecretKey == models.SecretSet {
-		conn.SecretKey = current.Conn.SecretKey
+		conn.SecretKey = current.SecretKey
 	}
 	if conn.ServiceAccountBase64 == models.SecretSet {
-		conn.ServiceAccountBase64 = current.Conn.ServiceAccountBase64
+		conn.ServiceAccountBase64 = current.ServiceAccountBase64
 	}
 
 	switch conn.Type {
@@ -106,60 +53,150 @@ func (h *StorageHandler) Set(w http.ResponseWriter, r *http.Request) {
 		// weeks later on the first upload.
 		if _, err := storage.DecodeServiceAccount(conn.ServiceAccountBase64); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error(), CodeInvalidServiceAccount)
-			return
+			return conn, false
 		}
 	default:
 		writeError(w, http.StatusBadRequest, "Unknown storage type", CodeInvalidStorageType)
-		return
+		return conn, false
 	}
 
 	if !conn.Configured() {
 		writeError(w, http.StatusBadRequest, "Please fill in every field for this storage type", CodeAllFieldsRequired)
-		return
+		return conn, false
 	}
-
-	stored, err := h.storages.Upsert(r.Context(), userID, conn)
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, h.response(stored, true))
+	return conn, true
 }
 
-// Delete removes the connection, and with it every grant on it: sharing a
-// bucket that no longer exists would leave rows pointing at nothing.
-func (h *StorageHandler) Delete(w http.ResponseWriter, r *http.Request) {
+// redact is a list as the settings screen reads it: everything needed to see
+// what is set up, with the credentials replaced by a marker.
+func redact(storages []models.Storage) []models.Storage {
+	for i := range storages {
+		storages[i].Conn = storages[i].Conn.Redacted()
+	}
+	return storages
+}
+
+// List is the caller's own targets, in their priority order.
+func (h *StorageHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
-	stored, err := h.storages.FindOwn(r.Context(), userID)
-	if errors.Is(err, store.ErrNotFound) {
-		writeJSON(w, http.StatusOK, h.response(models.Storage{}, false))
-		return
-	}
+	storages, err := h.storages.ListOwn(r.Context(), userID)
 	if err != nil {
 		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"storages": redact(storages),
+		"maxSize":  h.maxVideoSize,
+	})
+}
+
+// ListUsable is every target the caller may upload to: their own, and the ones
+// shared with them. The connections are redacted - somebody granted write
+// access may use a bucket, not read its keys out.
+func (h *StorageHandler) ListUsable(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	available, err := h.storages.ListFor(r.Context(), userID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, redact(available))
+}
+
+// Create adds a target at the end of the caller's list.
+func (h *StorageHandler) Create(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	var conn models.StorageConnection
+	if !decodeJSON(w, r, &conn) {
+		return
+	}
+	conn, ok := h.normalize(w, conn, models.StorageConnection{})
+	if !ok {
+		return
+	}
+
+	if _, err := h.storages.Create(r.Context(), userID, conn); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	h.List(w, r)
+}
+
+// Update rewrites one of the caller's own targets.
+func (h *StorageHandler) Update(w http.ResponseWriter, r *http.Request) {
+	stored, ok := h.ownStorage(w, r)
+	if !ok {
+		return
+	}
+
+	var conn models.StorageConnection
+	if !decodeJSON(w, r, &conn) {
+		return
+	}
+	conn, ok = h.normalize(w, conn, stored.Conn)
+	if !ok {
+		return
+	}
+
+	if _, err := h.storages.Update(r.Context(), stored.ID, conn); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	h.List(w, r)
+}
+
+// Delete removes one target, and with it every grant on it: sharing a bucket
+// that is no longer configured would leave rows pointing at nothing.
+func (h *StorageHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	stored, ok := h.ownStorage(w, r)
+	if !ok {
 		return
 	}
 	if err := h.storages.Delete(r.Context(), stored.ID); err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, h.response(models.Storage{}, false))
+	h.List(w, r)
+}
+
+type storageOrderPayload struct {
+	StorageIDs []string `json:"storageIds"`
+}
+
+// Reorder sets which target is first - which is the one whose link goes into a
+// post, so it is a real setting rather than a display preference.
+func (h *StorageHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	var p storageOrderPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	if err := h.storages.Reorder(r.Context(), userID, p.StorageIDs); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	h.List(w, r)
 }
 
 // --- sharing ---
 
-// ownStorage loads the caller's own storage for a sharing action, or refuses.
+// ownStorage loads the target named by the route, refusing anything that is
+// not the caller's own.
 //
-// Sharing is the owner's alone: a writer who could hand out further access
-// would be able to widen a bucket its owner is paying for.
+// Editing and sharing are the owner's alone: a writer who could hand out
+// further access would be able to widen a bucket its owner is paying for. A
+// target belonging to somebody else reads as missing rather than forbidden -
+// which storage ids exist is not a caller's business.
 func (h *StorageHandler) ownStorage(w http.ResponseWriter, r *http.Request) (models.Storage, bool) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
-	stored, err := h.storages.FindOwn(r.Context(), userID)
-	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusMethodNotAllowed,
-			"Configure your own storage before sharing it", CodeStorageNotConfigured)
+	stored, err := h.storages.FindByID(r.Context(), chi.URLParam(r, "storageId"))
+	if errors.Is(err, store.ErrNotFound) || (err == nil && stored.OwnerID != userID) {
+		writeError(w, http.StatusNotFound, "This storage is not available", CodeNotFound)
 		return models.Storage{}, false
 	}
 	if err != nil {

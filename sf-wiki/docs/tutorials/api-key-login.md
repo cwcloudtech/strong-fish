@@ -10,14 +10,9 @@ or a future CLI.
 
 ## What an API key is
 
-A credential that authenticates a request with an `X-Api-Key` header rather than
-a session. It carries **exactly your own permissions** - no more, no less - so
-treat it the way you treat your password.
+A credential that authenticates a request with an `X-Api-Key` header rather than a session. It carries **exactly your own permissions** - no more, no less - so treat it the way you treat your password.
 
-The API stores only a fingerprint of it. The key itself exists once, in the
-screen that creates it, and cannot be shown again afterwards. That is deliberate:
-a credential a server can read back is a credential a compromised server can
-hand out.
+The API stores only a fingerprint of it. The key itself exists once, in the screen that creates it, and cannot be shown again afterwards. That is deliberate: a credential a server can read back is a credential a compromised server can hand out.
 
 ## Creating one
 
@@ -45,9 +40,7 @@ A dialog opens with the key. **It will not come back.** From here you can:
 4. Point it at the QR code on your computer.
 
 The app reads the server address and the key out of the code, checks them
-against that server, and only stores the key once the server has accepted it. A
-code that scans cleanly but names a server that rejects it leaves the app
-exactly as it was.
+against that server, and only stores the key once the server has accepted it. A code that scans cleanly but names a server that rejects it leaves the app exactly as it was.
 
 ## What the code actually contains
 
@@ -62,13 +55,9 @@ The downloadable config file has the same contents, which is why one key
 configures both the phone and a CLI.
 
 :::warning Anybody who scans it is you
-The QR code is a credential on screen. Do not project it, screenshot it into a
-group chat, or leave it open on a shared machine. If one gets out, revoke that
-key - **API keys → Revoke** - and it stops working everywhere immediately.
+The QR code is a credential on screen. Do not project it, screenshot it into a group chat, or leave it open on a shared machine. If one gets out, revoke that key - **API keys → Revoke** - and it stops working everywhere immediately.
 :::
 
 ## Revoking
 
-**API keys** lists what you have, when each expires, and a revoke button. A
-revoked key stops working at once, wherever it is used. Signing in with a
-password on a device that was enrolled by QR code also replaces its key.
+**API keys** lists what you have, when each expires, and a revoke button. A revoked key stops working at once, wherever it is used. Signing in with a password on a device that was enrolled by QR code also replaces its key.

@@ -199,16 +199,28 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 				// The member's own object store for video uploads. It holds
 				// live credentials, so it has its own endpoint rather than
 				// riding along on the profile.
-				r.Route("/me/storage", func(r chi.Router) {
-					r.Get("/", h.Storage.Get)
-					r.Put("/", h.Storage.Set)
-					r.Delete("/", h.Storage.Delete)
-					// Who else may use it. Reading and writing the list is the
-					// owner's alone - a writer handing out further access would
-					// widen a bucket somebody else is paying for.
-					r.Get("/shares", h.Storage.ListGrants)
-					r.Post("/shares", h.Storage.Share)
-					r.Delete("/shares/{userId}", h.Storage.Unshare)
+				// The member's own storage targets, in priority order: an
+				// upload is written to every one of them, and the link in the
+				// post comes from the first.
+				r.Route("/me/storages", func(r chi.Router) {
+					r.Get("/", h.Storage.List)
+					r.Post("/", h.Storage.Create)
+					// Which one is first is a real setting - it decides where
+					// a posted link points - so it has its own endpoint rather
+					// than riding on an edit.
+					r.Put("/order", h.Storage.Reorder)
+
+					r.Route("/{storageId}", func(r chi.Router) {
+						r.Put("/", h.Storage.Update)
+						r.Delete("/", h.Storage.Delete)
+						// Who else may use it. Reading and writing the list is
+						// the owner's alone - a writer handing out further
+						// access would widen a bucket somebody else is paying
+						// for.
+						r.Get("/shares", h.Storage.ListGrants)
+						r.Post("/shares", h.Storage.Share)
+						r.Delete("/shares/{userId}", h.Storage.Unshare)
+					})
 				})
 
 				r.Route("/me/calendar-feed", func(r chi.Router) {
@@ -470,7 +482,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 
 			// Every storage the caller may upload to: their own, and the ones
 			// shared with them.
-			r.Get("/storages", h.Storage.List)
+			r.Get("/storages", h.Storage.ListUsable)
 
 			// Registered as leaves, not as an r.Route subrouter: the calendar
 			// is readable logged out, so "/events" already carries a GET in
