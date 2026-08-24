@@ -700,6 +700,24 @@ const en = {
     failed: "The update could not be downloaded or installed. Please try again later.",
   },
   storage: {
+    private: "This bucket is not public",
+    privateHelp:
+      "Turn this on when your bucket or folder refuses public files. StrongFish then serves them itself, with your credentials, to the people your profile is visible to - and to anybody you share this storage with below.",
+    shares: "Who else can use it",
+    sharesHelp:
+      "Lend your storage to other members: a reader can play what is in it, a writer can upload to it as well. Your own uploads always go to your own storage first.",
+    noShares: "Nobody else uses this storage.",
+    shareWith: "Members",
+    pickMembers: "Pick members",
+    roleLabel: "They may",
+    role: {
+      owner: "Owner",
+      writer: "Upload and play",
+      reader: "Play",
+    },
+    shareAction: "Share",
+    shared: "Storage shared.",
+    unshare: "Stop sharing",
     title: "Video storage",
     subtitle:
       "StrongFish keeps no video of its own, so posting one means using your own storage. Up to {{size}} MB per video.",

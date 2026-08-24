@@ -33,6 +33,7 @@ type s3Target struct {
 	secretKey     string
 	basePath      string
 	publicBaseURL string
+	private       bool
 	httpClient    *http.Client
 }
 
@@ -51,6 +52,7 @@ func newS3Target(conn models.StorageConnection) *s3Target {
 		secretKey:     conn.SecretKey,
 		basePath:      cleanBasePath(conn.Path),
 		publicBaseURL: strings.TrimSuffix(conn.PublicBaseURL, "/"),
+		private:       conn.Private,
 		httpClient:    &http.Client{Timeout: 60 * time.Second},
 	}
 }
@@ -73,11 +75,18 @@ func (s *s3Target) Upload(ctx context.Context, key string, data []byte, contentT
 	}
 	req.Header.Set("Content-Type", contentType)
 	req.ContentLength = int64(len(data))
-	// The object has to be fetchable by a browser with no credentials: the URL
-	// goes into a post, and the player is a plain <video> tag. A bucket with
-	// ACLs disabled rejects this header, which is the right moment to find out
-	// - better a failed upload than a post pointing at an unreadable object.
-	req.Header.Set("X-Amz-Acl", "public-read")
+	// On a public bucket the object has to be fetchable by a browser with no
+	// credentials: the URL goes into a post, and the player is a plain <video>
+	// tag. A bucket with ACLs disabled rejects this header, which is the right
+	// moment to find out - better a failed upload than a post pointing at an
+	// unreadable object.
+	//
+	// On a private one the header is not merely unnecessary but wrong: a
+	// bucket whose policy forbids public objects would refuse the write, which
+	// is exactly the case this connection exists for.
+	if !s.private {
+		req.Header.Set("X-Amz-Acl", "public-read")
+	}
 	s.sign(req, parsed, data)
 
 	resp, err := s.httpClient.Do(req)
@@ -95,6 +104,53 @@ func (s *s3Target) Upload(ctx context.Context, key string, data []byte, contentT
 		return s.publicBaseURL + "/" + objectKey, nil
 	}
 	return s.endpoint + "/" + s.bucket + "/" + objectKey, nil
+}
+
+// Download reads an object back with the connection's own credentials, for a
+// bucket nobody else can read.
+//
+// The reader's Range header goes through untouched and so does the answer:
+// seeking in a video is a partial request, and buffering a 20MB file in this
+// app to serve two seconds of it would be both slow and pointless.
+func (s *s3Target) Download(ctx context.Context, key, rangeHeader string) (*Object, error) {
+	objectKey := key
+	if utils.IsNotBlank(s.basePath) {
+		objectKey = s.basePath + "/" + key
+	}
+
+	requestURL := s.endpoint + "/" + uriEncodePath(s.bucket) + "/" + uriEncodePath(objectKey)
+	parsed, err := url.Parse(requestURL)
+	if err != nil {
+		return nil, fmt.Errorf("storage s3: invalid endpoint: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if utils.IsNotBlank(rangeHeader) {
+		req.Header.Set("Range", rangeHeader)
+	}
+	s.sign(req, parsed, nil)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("storage s3: download failed: %w", err)
+	}
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		resp.Body.Close()
+		return nil, fmt.Errorf("storage s3: download returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	return &Object{
+		Body:          resp.Body,
+		ContentType:   resp.Header.Get("Content-Type"),
+		ContentLength: resp.ContentLength,
+		ContentRange:  resp.Header.Get("Content-Range"),
+		AcceptRanges:  resp.Header.Get("Accept-Ranges"),
+		StatusCode:    resp.StatusCode,
+	}, nil
 }
 
 // sign applies AWS Signature Version 4 to req. Every x-amz-* header set on the

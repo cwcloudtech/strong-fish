@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../providers/providers.dart';
 import '../theme.dart';
 
 /// The provider a post's link resolves to.
@@ -141,7 +143,19 @@ String _frameHtml(String embedUrl) =>
 ///
 /// Nothing loads until it is tapped. A feed is a list, and spinning up a WebView
 /// per post would cost memory and battery for players nobody asked to watch.
-class MediaPlayer extends StatefulWidget {
+/// Whether this URL is an object the API serves itself.
+///
+/// Matched against the configured API address rather than by path alone: a
+/// post can carry any link, and asking this API to sign somebody else's URL
+/// would be useless at best. Everything else - a public bucket's object, a
+/// Drive /preview page, a YouTube video - goes to the player untouched, which
+/// is what has always happened.
+bool isPrivateMedia(String url, String apiUrl) {
+  final base = apiUrl.replaceFirst(RegExp(r'/+$'), '');
+  return base.isNotEmpty && url.startsWith('$base/v1/media/');
+}
+
+class MediaPlayer extends ConsumerStatefulWidget {
   final String url;
 
   /// Where the framed document claims to be served from - the app's own
@@ -151,11 +165,47 @@ class MediaPlayer extends StatefulWidget {
   const MediaPlayer({super.key, required this.url, required this.baseUrl});
 
   @override
-  State<MediaPlayer> createState() => _MediaPlayerState();
+  ConsumerState<MediaPlayer> createState() => _MediaPlayerState();
 }
 
-class _MediaPlayerState extends State<MediaPlayer> {
+class _MediaPlayerState extends ConsumerState<MediaPlayer> {
   WebViewController? _controller;
+
+  /// The address to hand the player: the post's own, or - for an object in a
+  /// private bucket - the signed one the API gives back. Null while that
+  /// exchange is in flight, empty when it was refused.
+  String? _resolved;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(MediaPlayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) _resolve();
+  }
+
+  Future<void> _resolve() async {
+    final api = ref.read(apiProvider);
+    if (!isPrivateMedia(widget.url, api.client.apiUrl)) {
+      setState(() => _resolved = widget.url);
+      return;
+    }
+
+    setState(() => _resolved = null);
+    try {
+      final signed = await api.mediaLink(widget.url);
+      if (mounted) setState(() => _resolved = signed);
+    } catch (_) {
+      // A file this member may not read is not an error to shout about: the
+      // post shows nothing where the video would be, which is what somebody
+      // else's private video should look like.
+      if (mounted) setState(() => _resolved = '');
+    }
+  }
 
   void _play(String embedUrl) {
     setState(() {
@@ -168,7 +218,16 @@ class _MediaPlayerState extends State<MediaPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final media = detectMedia(widget.url);
+    final url = _resolved;
+    if (url == null) {
+      return const AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (url.isEmpty) return const SizedBox.shrink();
+
+    final media = detectMedia(url);
 
     if (_framedKinds.contains(media.kind)) {
       return ClipRRect(
@@ -208,7 +267,7 @@ class _MediaPlayerState extends State<MediaPlayer> {
       );
     }
 
-    return _LinkCard(url: widget.url);
+    return _LinkCard(url: url);
   }
 
   void _playFile(String url) {

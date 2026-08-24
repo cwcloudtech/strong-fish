@@ -10,6 +10,8 @@ import { auth, media as mediaApi, mfa as mfaApi } from "../../api/services";
 import Avatar from "../../components/common/Avatar";
 import Modal from "../../components/common/Modal";
 import Select from "../../components/common/Select";
+import { search as searchApi } from "../../api/services";
+import MultiSelect from "../../components/common/MultiSelect";
 import SOCIAL_PROFILES from "../../utils/socialProfiles";
 import ProfileBadges from "../../components/common/ProfileBadges";
 import { ErrorMessage, Spinner } from "../../components/common/Feedback";
@@ -377,6 +379,7 @@ function StorageSettings() {
         folderId: result.connection?.folderId || "",
         path: result.connection?.path || "",
         publicBaseUrl: result.connection?.publicBaseUrl || "",
+        private: Boolean(result.connection?.private),
       });
     } catch {
       setState({ configured: false });
@@ -568,6 +571,22 @@ function StorageSettings() {
         </p>
       </div>
 
+      {/* A bucket that refuses public objects used to make posting a video
+          impossible: the upload granted public access as it wrote, and the
+          post carried the bucket's own address. With this on, neither happens
+          - StrongFish serves the file itself, to readers it has checked
+          against your profile's visibility. */}
+      <div className="sf-field">
+        <Switch
+          checked={form.private}
+          onChange={(checked) => setForm((current) => ({ ...current, private: checked }))}
+          label={t("storage.private")}
+        />
+        <p className="sf-muted" style={{ fontSize: "0.82rem", margin: "0.3rem 0 0" }}>
+          {t("storage.privateHelp")}
+        </p>
+      </div>
+
       <div className="sf-row" style={{ gap: "0.4rem" }}>
         <button className="sf-button" type="submit" disabled={busy}>
           <FiSave /> {t("common.save")}
@@ -578,7 +597,147 @@ function StorageSettings() {
           </button>
         ) : null}
       </div>
+
+      {/* Who else may use this bucket. Only shown once there is one to share:
+          an access list for a storage that does not exist is a form nobody can
+          submit. */}
+      {state.configured ? <StorageShares /> : null}
     </form>
+  );
+}
+
+/**
+ * Lending your own bucket to other members.
+ *
+ * A coach pays for one bucket and their athletes upload their form videos to
+ * it; an athlete opens theirs to the coach so the coach can post demonstrations
+ * from it. Two roles, because those are two different requests: a *writer* may
+ * upload, a *reader* may play what is already there even when your profile
+ * would not otherwise let them.
+ *
+ * Sharing is the owner's alone - a writer who could hand out further access
+ * would be widening a bucket somebody else is paying for.
+ */
+function StorageShares() {
+  const { t } = useI18n();
+  const [grants, setGrants] = useState(null);
+  const [role, setRole] = useState("reader");
+  const [userIds, setUserIds] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    mediaApi.shares().then(setGrants).catch(setError);
+    // The people this member can already see: the same list every other
+    // "pick somebody" control in this app is built from.
+    searchApi
+      .members({ size: 100 })
+      .then((page) => setMembers(page?.results || []))
+      .catch(() => setMembers([]));
+  }, []);
+
+  const share = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      let latest = grants;
+      // One request per person rather than a batch endpoint: granting is rare,
+      // and a partial failure then names who it failed for.
+      for (const userId of userIds) {
+        latest = await mediaApi.share(userId, role);
+      }
+      setGrants(latest);
+      setUserIds([]);
+      toast.success(t("storage.shared"), toastOptions);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revoke = async (userId) => {
+    setBusy(true);
+    try {
+      setGrants(await mediaApi.unshare(userId));
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const shared = (grants || []).filter((grant) => grant.role !== "owner");
+  const available = members.filter((member) => !(grants || []).some((grant) => grant.userId === member.id));
+
+  return (
+    <div className="sf-card" style={{ marginTop: "1rem" }}>
+      <h3 style={{ marginTop: 0 }}>{t("storage.shares")}</h3>
+      <p className="sf-muted" style={{ marginTop: 0 }}>{t("storage.sharesHelp")}</p>
+
+      {shared.length === 0 ? (
+        <p className="sf-muted">{t("storage.noShares")}</p>
+      ) : (
+        <ul className="sf-list">
+          {shared.map((grant) => (
+            <li className="sf-list-item" key={grant.userId}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong>{grant.name}</strong>
+                {grant.handle ? <div className="sf-muted">@{grant.handle}</div> : null}
+              </div>
+              <span className="sf-badge sf-badge-muted">{t(`storage.role.${grant.role}`)}</span>
+              <button
+                type="button"
+                className="sf-button-ghost sf-button-sm"
+                onClick={() => revoke(grant.userId)}
+                disabled={busy}
+                aria-label={t("storage.unshare")}
+                title={t("storage.unshare")}
+              >
+                <FiTrash2 />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="sf-row" style={{ gap: "0.5rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+        <div className="sf-field" style={{ flex: 2, minWidth: 220, margin: 0 }}>
+          <label className="sf-label">{t("storage.shareWith")}</label>
+          <MultiSelect
+            options={available.map((member) => ({
+              value: member.id,
+              label: `${member.name} ${member.surname}`.trim() || member.handle,
+            }))}
+            selected={userIds}
+            onChange={setUserIds}
+            placeholder={t("storage.pickMembers")}
+          />
+        </div>
+        <div className="sf-field" style={{ flex: 1, minWidth: 150, margin: 0 }}>
+          <label className="sf-label">{t("storage.roleLabel")}</label>
+          <Select
+            options={[
+              { value: "reader", label: t("storage.role.reader") },
+              { value: "writer", label: t("storage.role.writer") },
+            ]}
+            value={role}
+            onChange={setRole}
+          />
+        </div>
+        <button
+          type="button"
+          className="sf-button"
+          onClick={share}
+          disabled={busy || userIds.length === 0}
+        >
+          {t("storage.shareAction")}
+        </button>
+      </div>
+
+      <ErrorMessage error={error} />
+    </div>
   );
 }
 

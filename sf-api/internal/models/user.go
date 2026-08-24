@@ -104,10 +104,6 @@ type User struct {
 	// CoachRequest is set when the account asked to be a coach at signup. The
 	// role is not granted by asking: it waits on a superadmin's decision.
 	CoachRequest CoachRequest `json:"-"`
-	// Storage is where this member's uploaded videos go. It holds live
-	// credentials, so it is never serialized with the user - the account
-	// screen reads it back through its own endpoint, redacted.
-	Storage StorageConnection `json:"-"`
 	// CalendarFeedEnabled and CalendarFeedToken back the ICS subscription.
 	// The token is the whole credential for an unauthenticated poll by Outlook
 	// or Google Calendar, so it is never serialized either.

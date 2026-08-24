@@ -78,6 +78,7 @@ func main() {
 	apiKeyStore := store.NewApiKeyStore(pool)
 	eventStore := store.NewEventStore(pool)
 	invitationStore := store.NewInvitationStore(pool)
+	storageStore := store.NewStorageStore(pool)
 	messageStore := store.NewMessageStore(pool)
 
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
@@ -134,9 +135,14 @@ func main() {
 		Config: handlers.NewConfigHandler(oidc.Names(providers), cfg.ActivationMode,
 			cfg.PlateIncrement, cfg.MaxImageSize, cfg.Version, contactClient.Configured(),
 			cfg.APIBaseURL, cfg.UIBaseURL, cfg.MobileURLPattern, cfg.AboutURL, cfg.DocURL),
-		Contact:  handlers.NewContactHandler(contactClient),
-		ApiKey:   handlers.NewApiKeyHandler(apiKeyStore),
-		Media:    handlers.NewMediaHandler(userStore, cfg.MaxVideoSize, cfg.MaxAudioSize),
+		Contact: handlers.NewContactHandler(contactClient),
+		ApiKey:  handlers.NewApiKeyHandler(apiKeyStore),
+		// The JWT secret signs the playback links too: both say "this app
+		// issued this, and it is still valid", and a deployment that has one
+		// has the other.
+		Media: handlers.NewMediaHandler(userStore, storageStore, profileHandler,
+			cfg.MaxVideoSize, cfg.MaxAudioSize, cfg.APIBaseURL, cfg.JWTSecret),
+		Storage:  handlers.NewStorageHandler(storageStore, userStore, cfg.MaxVideoSize),
 		Event:    handlers.NewEventHandler(eventStore, clubStore, userStore, cfg.MaxUploadSize),
 		Calendar: handlers.NewCalendarHandler(userStore, eventStore, clubStore, cfg.APIBaseURL),
 		Search:   handlers.NewSearchHandler(userStore, clubStore, profileHandler),

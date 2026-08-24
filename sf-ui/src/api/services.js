@@ -241,9 +241,26 @@ export const media = {
     form.append("file", blob, filename);
     return body(client.post("/media/audio", form));
   },
+  // A playback link for an object in a private bucket.
+  //
+  // The API serves those itself, and will not do so without knowing who is
+  // asking - which a <video> tag cannot tell it. So the address in the post is
+  // exchanged here, with the session, for one carrying a short-lived
+  // signature, and that is what the player is given.
+  link: async (url) => {
+    const { url: signed } = await body(client.get(`${url.replace(/^.*\/v1/, "")}/link`));
+    return signed;
+  },
   storage: () => body(client.get("/users/me/storage")),
   setStorage: (payload) => body(client.put("/users/me/storage", payload)),
   clearStorage: () => body(client.delete("/users/me/storage")),
+  // Everywhere this member may upload: their own bucket, and the ones others
+  // shared with them.
+  storages: () => body(client.get("/storages")),
+  // Who may use my storage, and what they may do with it.
+  shares: () => body(client.get("/users/me/storage/shares")),
+  share: (userId, role) => body(client.post("/users/me/storage/shares", { userId, role })),
+  unshare: (userId) => body(client.delete(`/users/me/storage/shares/${userId}`)),
 };
 
 export const events = {

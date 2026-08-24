@@ -15,6 +15,7 @@ import { useI18n } from "../../i18n/I18nContext";
 import LinkifiedText from "../common/LinkifiedText";
 import Select from "../common/Select";
 import MultiSelect from "../common/MultiSelect";
+import MediaLink from "../common/MediaLink";
 
 /**
  * One post in the feed. Links are rendered through the <media-player> custom
@@ -250,7 +251,7 @@ export default function PostCard({ post, onChanged, onDeleted }) {
             <img key={index} className="sf-post-picture" src={picture} alt="" />
           ))}
           {(post.links || []).map((link) => (
-            <media-player key={link} url={link} />
+            <MediaLink key={link} url={link} />
           ))}
         </div>
       ) : null}

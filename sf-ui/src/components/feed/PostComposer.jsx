@@ -12,6 +12,7 @@ import { readImageAsDataUrl } from "../../utils/image";
 import { firstUrl } from "../../utils/links";
 import Select from "../common/Select";
 import MultiSelect from "../common/MultiSelect";
+import MediaLink from "../common/MediaLink";
 
 const MAX_PICTURES = 4;
 
@@ -144,7 +145,7 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
 
       {link ? (
         <div style={{ marginTop: "0.5rem" }}>
-          <media-player url={link} />
+          <MediaLink url={link} />
         </div>
       ) : null}
 

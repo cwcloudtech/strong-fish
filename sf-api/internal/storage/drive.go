@@ -90,6 +90,7 @@ type driveTarget struct {
 	privateKey *rsa.PrivateKey
 	folderID   string
 	basePath   string
+	private    bool
 	httpClient *http.Client
 }
 
@@ -103,6 +104,7 @@ func newDriveTarget(conn models.StorageConnection) (*driveTarget, error) {
 		privateKey: privateKey,
 		folderID:   conn.FolderID,
 		basePath:   cleanBasePath(conn.Path),
+		private:    conn.Private,
 		httpClient: &http.Client{Timeout: 120 * time.Second},
 	}, nil
 }
@@ -133,6 +135,13 @@ func (d *driveTarget) Upload(ctx context.Context, key string, data []byte, conte
 	if err != nil {
 		return utils.EMPTY, err
 	}
+	// On a private folder nothing is granted: the file stays visible to the
+	// service account alone, and the API reads it back through Download for
+	// readers it has checked. The id is what identifies it from then on.
+	if d.private {
+		return fileID, nil
+	}
+
 	// A file in a service account's own folder is invisible to everybody else,
 	// including the person about to read the post. Granting anyone-with-the-
 	// link reader access is what makes the returned URL work at all.
@@ -144,6 +153,49 @@ func (d *driveTarget) Upload(ctx context.Context, key string, data []byte, conte
 	// URL serves an interstitial for files this size, which a <video> tag
 	// cannot get past. media-player recognises this shape and frames it.
 	return "https://drive.google.com/file/d/" + fileID + "/preview", nil
+}
+
+// Download reads a file back with the service account's own credentials, for a
+// folder nobody else can see into.
+//
+// key is the file id here rather than a path: Drive has no keys, and it is the
+// id that Upload returned and that the media URL carries. alt=media is what
+// asks for the bytes rather than the metadata.
+func (d *driveTarget) Download(ctx context.Context, key, rangeHeader string) (*Object, error) {
+	token, err := d.accessToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		driveAPIBase+"/"+url.PathEscape(key)+"?alt=media&supportsAllDrives=true", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	if utils.IsNotBlank(rangeHeader) {
+		req.Header.Set("Range", rangeHeader)
+	}
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("storage google_drive: download failed: %w", err)
+	}
+	if resp.StatusCode >= 300 {
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		resp.Body.Close()
+		return nil, fmt.Errorf("storage google_drive: download returned %d: %s",
+			resp.StatusCode, strings.TrimSpace(string(message)))
+	}
+
+	return &Object{
+		Body:          resp.Body,
+		ContentType:   resp.Header.Get("Content-Type"),
+		ContentLength: resp.ContentLength,
+		ContentRange:  resp.Header.Get("Content-Range"),
+		AcceptRanges:  resp.Header.Get("Accept-Ranges"),
+		StatusCode:    resp.StatusCode,
+	}, nil
 }
 
 func (d *driveTarget) accessToken(ctx context.Context) (string, error) {

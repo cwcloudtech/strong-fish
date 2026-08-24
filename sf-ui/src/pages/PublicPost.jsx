@@ -10,6 +10,7 @@ import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
 import { postShareUrl, shareTextFor } from "../utils/shareText";
 import LinkifiedText from "../components/common/LinkifiedText";
+import MediaLink from "../components/common/MediaLink";
 
 /**
  * One post, opened from a shared link.
@@ -80,7 +81,7 @@ export default function PublicPost() {
             ))}
 
             {(post.links || []).map((link) => (
-              <media-player key={link} url={link} />
+              <MediaLink key={link} url={link} />
             ))}
 
             <div className="sf-row" style={{ gap: "0.6rem", marginTop: "0.8rem" }}>

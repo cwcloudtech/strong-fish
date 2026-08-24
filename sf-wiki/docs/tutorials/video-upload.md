@@ -30,7 +30,7 @@ Works with AWS S3, MinIO, Scaleway, DigitalOcean Spaces - anything speaking the
 S3 API.
 
 1. Create a bucket, and an access key that can write to it.
-2. **Object reads must be public.** The link goes into a post and is played by a plain video player in someone else's browser, with no credentials. StrongFish uploads each object with a public-read ACL; a bucket with ACLs disabled will reject the upload, which is the right moment to find out.
+2. **Object reads must be public - unless you say the bucket is private.** By default the link goes into a post and is played by a plain video player in someone else's browser, with no credentials, so StrongFish uploads each object with a public-read ACL; a bucket with ACLs disabled will reject the upload. If your bucket refuses public files, turn on **This bucket is not public** and read the next section instead.
 3. In the app: **Settings → Video storage**, pick *S3-compatible bucket*.
 4. Fill in:
 
@@ -60,6 +60,43 @@ S3 API.
 ![drive-sa](../../static/img/screenshots/drive-sa.png)
 
 StrongFish grants each uploaded file anyone-with-the-link read access as it writes it, and posts the Drive preview player.
+
+## A bucket that is not public
+
+Some buckets are not allowed to hold public files at all - a company account, a
+policy that blocks public ACLs, a Drive folder that must stay closed. Turn on
+**This bucket is not public** under Settings → Video storage and nothing is
+made public at any point:
+
+* the upload grants no public access as it writes;
+* what goes into the post is an address on StrongFish, not on your bucket;
+* StrongFish fetches the file with *your* credentials when somebody opens it,
+  and streams it to them.
+
+**Who can watch it** is then your profile's own rule - the same one that decides
+whether your posts are readable at all: public, your clubs, or your coaches
+(see [signing up](./signup.md)). Anybody you shared the storage with can watch
+it too. Everyone else gets nothing, exactly as if the post had no video.
+
+Nothing else changes: a public bucket, a Drive `/preview` link, a YouTube URL
+in a post - all still play the way they always did, in the app and on the phone.
+
+## Sharing your storage
+
+A bucket costs money and a club usually has one. Under **Settings → Video
+storage → Who else can use it**, pick members and give them a role:
+
+| Role | What they can do |
+| --- | --- |
+| Play | Watch what is in your storage, even when your profile would not otherwise let them |
+| Upload and play | The above, plus upload their own videos into it |
+
+Only you can share your own storage, and only you can stop sharing it - someone
+you gave write access to cannot pass it on.
+
+**Where your own uploads go:** your own storage first, always. Somebody with no
+storage of their own uploads into the first one shared with them, so an athlete
+whose coach lent them a bucket can post a video without owning one.
 
 ## Posting a video
 
