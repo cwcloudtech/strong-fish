@@ -1,15 +1,30 @@
+import 'ar.dart';
 import 'en.dart';
 import 'fr.dart';
 
 /// Minimal i18n: one nested dictionary per locale, plus a lookup with
 /// `{{var}}` interpolation and an English fallback for missing keys. It mirrors
 /// sf-ui's i18n/translate.js, so a key written once works in both clients.
-const Map<String, Map<String, dynamic>> dictionaries = {'en': en, 'fr': fr};
+const Map<String, Map<String, dynamic>> dictionaries = {'en': en, 'fr': fr, 'ar': ar};
 
 const List<AppLocale> supportedLocales = [
   AppLocale('en', 'English'),
   AppLocale('fr', 'Français'),
+  AppLocale('ar', 'العربية'),
 ];
+
+/// Locales written right to left.
+///
+/// This app carries its own dictionaries rather than Flutter's generated
+/// localizations, so nothing wires the text direction up for it: Arabic *text*
+/// renders right-to-left on its own, but the layout - which side a back arrow
+/// sits on, which way a list tile's leading and trailing run, where a drawer
+/// comes from - stays left-to-right until the whole tree is told otherwise.
+/// main.dart wraps the app in a Directionality for these, the same way
+/// ~/uprodit's mobile app does.
+const Set<String> rtlLocales = {'ar'};
+
+bool isRtlLocale(String locale) => rtlLocales.contains(locale);
 
 class AppLocale {
   final String code;
