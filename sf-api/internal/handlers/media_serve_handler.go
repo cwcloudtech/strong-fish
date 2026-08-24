@@ -221,9 +221,10 @@ func (h *MediaHandler) authorizeMedia(w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusNotFound, "This file is not available", CodeNotFound)
 		return nil, false
 	}
-	if !stored.Conn.Private {
-		// A public bucket's objects are addressed at the bucket. Serving them
-		// here as well would be a second, unlogged way to reach the same file.
+	if stored.Conn.Type != models.StorageTypeS3 {
+		// Only buckets are served here. A Drive file is read from Drive, where
+		// the upload shared it - so a media address pointing at a Drive target
+		// is not something this app ever wrote.
 		writeError(w, http.StatusNotFound, "This file is not available", CodeNotFound)
 		return nil, false
 	}
@@ -292,30 +293,61 @@ func uploaderFromKey(key string) string {
 	return segments[1]
 }
 
-// writableStorage picks where an upload goes: the caller's own storage, or one
-// shared with them as a writer.
+// writableStorages is everywhere an upload goes, in the order the link is
+// chosen from: the caller's own targets first, in their own priority order,
+// then the ones shared with them as a writer.
 //
-// ?storageId picks between several; without it the caller's own wins, because
-// that is what somebody who has one means. A member with neither is told to
-// configure one, which is the same refusal as before this could be shared.
-func (h *MediaHandler) writableStorage(w http.ResponseWriter, r *http.Request, userID string) (models.Storage, bool) {
+// Every one of them receives the file - that is what having several targets is
+// for, a second copy somewhere else - and the *first* is the one whose address
+// goes into the post.
+//
+// ?storageId narrows it to one, for a caller that means a particular bucket.
+// A member with none is told to configure one, which is the same refusal as
+// before any of this could be shared.
+func (h *MediaHandler) writableStorages(w http.ResponseWriter, r *http.Request, userID string) ([]models.Storage, bool) {
 	available, err := h.storages.ListFor(r.Context(), userID)
 	if err != nil {
 		writeStoreError(w, err)
-		return models.Storage{}, false
+		return nil, false
 	}
 
 	wanted := strings.TrimSpace(r.URL.Query().Get("storageId"))
+	targets := make([]models.Storage, 0, len(available))
 	for _, candidate := range available {
 		if utils.IsNotBlank(wanted) && candidate.ID != wanted {
 			continue
 		}
 		if models.CanWriteStorage(candidate.Role) && candidate.Conn.Configured() {
-			return candidate, true
+			targets = append(targets, candidate)
 		}
 	}
+	if len(targets) == 0 {
+		writeError(w, http.StatusMethodNotAllowed,
+			"Configure your own storage bucket before uploading a video", CodeStorageNotConfigured)
+		return nil, false
+	}
+	return targets, true
+}
 
-	writeError(w, http.StatusMethodNotAllowed,
-		"Configure your own storage bucket before uploading a video", CodeStorageNotConfigured)
-	return models.Storage{}, false
+// postedURL is the address that goes into the post for an object just written
+// to one target.
+//
+// The two kinds answer differently, and deliberately:
+//
+//   - An S3 object is addressed on this API, always. The bucket may be private
+//   - increasingly it is, since a bucket that forbids public objects is the
+//     normal corporate setting - and a link that only works for public buckets
+//     is a link that works by luck. Serving it here also means one rule decides
+//     who may watch it, whatever the bucket's own policy says.
+//   - A Drive file is addressed on Drive, as it always was: its /preview page
+//     is an embeddable player the media component already frames, and the
+//     upload shares it with anyone holding the link. Proxying it would gain
+//     nothing a reader can see and would put every frame of every video
+//     through this API.
+func (h *MediaHandler) postedURL(target models.Storage, key, uploaded, extension string) string {
+	if target.Conn.Type == models.StorageTypeS3 {
+		return h.mediaURL(target.ID, key, extension)
+	}
+	// Whatever the target returned - for Drive, the /preview URL.
+	return uploaded
 }

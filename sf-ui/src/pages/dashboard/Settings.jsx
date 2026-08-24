@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiSave, FiTrash2 } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiEdit2, FiPlus, FiSave, FiTrash2, FiUsers } from "react-icons/fi";
 
 import Switch from "../../components/common/Switch";
 
@@ -347,42 +347,30 @@ export default function Settings() {
 }
 
 /**
- * Where this member's uploaded videos go.
+ * The member's storage targets, in the order that decides where a posted link
+ * points.
  *
- * strong-fish hosts no video of its own, so posting one means bringing a
- * bucket - S3-compatible or a Google Drive folder. The credentials are
- * write-only: the API sends back a marker rather than the key, and echoing
- * that marker back on save is what lets somebody change their bucket name
- * without retyping a secret they can no longer read.
+ * StrongFish keeps no video of its own, so posting one means bringing your own
+ * storage. More than one is allowed and useful: an upload is written to *every*
+ * target, which is how a club keeps a second copy of its athletes' videos, and
+ * the link in the post comes from the FIRST - so the order is a setting, not a
+ * display preference.
  */
 function StorageSettings() {
   const { t } = useI18n();
   const [state, setState] = useState(null);
-  const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
-  // The name of the key file that was picked, purely so the field can say
-  // which one is loaded - the key itself is write-only and never comes back.
-  const [serviceAccountFile, setServiceAccountFile] = useState("");
+  // Which target's form is open: a storage id, "new" while adding one, or
+  // null. One at a time - two open credential forms is two ways to lose track
+  // of which bucket you are editing.
+  const [editing, setEditing] = useState(null);
+  const [sharing, setSharing] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const result = await mediaApi.storage();
-      setState(result);
-      setForm({
-        type: result.connection?.type || "s3",
-        endpoint: result.connection?.endpoint || "",
-        bucketName: result.connection?.bucketName || "",
-        region: result.connection?.region || "",
-        accessKey: result.connection?.accessKey || "",
-        secretKey: result.connection?.secretKey || "",
-        serviceAccountBase64: result.connection?.serviceAccountBase64 || "",
-        folderId: result.connection?.folderId || "",
-        path: result.connection?.path || "",
-        publicBaseUrl: result.connection?.publicBaseUrl || "",
-        private: Boolean(result.connection?.private),
-      });
+      setState(await mediaApi.storages());
     } catch {
-      setState({ configured: false });
+      setState({ storages: [] });
     }
   }, []);
 
@@ -390,7 +378,184 @@ function StorageSettings() {
     load();
   }, [load]);
 
-  if (!state || !form) return null;
+  if (!state) return null;
+
+  const storages = state.storages || [];
+  const megabytes = state.maxSize ? Math.round(state.maxSize / (1024 * 1024)) : 20;
+
+  const act = async (run, message) => {
+    setBusy(true);
+    try {
+      setState(await run());
+      if (message) toast.success(message, toastOptions);
+      setEditing(null);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t("errors.generic"), toastOptions);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Moving a target is a swap with its neighbour, sent as the whole order:
+  // the API takes a list, so there is one way for the order to be wrong rather
+  // than two.
+  const move = (storageId, by) => {
+    const ids = storages.map((storage) => storage.id);
+    const from = ids.indexOf(storageId);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    act(() => mediaApi.reorderStorages(ids));
+  };
+
+  return (
+    <div className="sf-card">
+      <h2>{t("storage.title")}</h2>
+      <p className="sf-subtitle">{t("storage.subtitle", { size: megabytes })}</p>
+
+      {storages.length === 0 ? (
+        <p className="sf-muted">{t("storage.noTargets")}</p>
+      ) : (
+        <>
+          <p className="sf-muted" style={{ fontSize: "0.85rem" }}>{t("storage.orderHelp")}</p>
+          <ul className="sf-list">
+            {storages.map((storage, index) => (
+              <li className="sf-list-item" key={storage.id} style={{ flexWrap: "wrap" }}>
+                <span className="sf-badge">{index + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <strong>
+                    {storage.connection?.type === "google_drive" ? t("storage.typeDrive") : t("storage.typeS3")}
+                  </strong>
+                  <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
+                    {storageSummary(storage.connection)}
+                    {index === 0 ? ` · ${t("storage.first")}` : ""}
+                  </div>
+                </div>
+
+                <div className="sf-row" style={{ gap: "0.25rem" }}>
+                  <button
+                    type="button"
+                    className="sf-button-ghost sf-button-sm"
+                    onClick={() => move(storage.id, -1)}
+                    disabled={busy || index === 0}
+                    aria-label={t("storage.moveUp")}
+                    title={t("storage.moveUp")}
+                  >
+                    <FiArrowUp />
+                  </button>
+                  <button
+                    type="button"
+                    className="sf-button-ghost sf-button-sm"
+                    onClick={() => move(storage.id, 1)}
+                    disabled={busy || index === storages.length - 1}
+                    aria-label={t("storage.moveDown")}
+                    title={t("storage.moveDown")}
+                  >
+                    <FiArrowDown />
+                  </button>
+                  <button
+                    type="button"
+                    className="sf-button-ghost sf-button-sm"
+                    onClick={() => setSharing(sharing === storage.id ? null : storage.id)}
+                    aria-label={t("storage.shares")}
+                    title={t("storage.shares")}
+                  >
+                    <FiUsers />
+                  </button>
+                  <button
+                    type="button"
+                    className="sf-button-ghost sf-button-sm"
+                    onClick={() => setEditing(editing === storage.id ? null : storage.id)}
+                    aria-label={t("common.edit")}
+                    title={t("common.edit")}
+                  >
+                    <FiEdit2 />
+                  </button>
+                  <button
+                    type="button"
+                    className="sf-button-ghost sf-button-sm"
+                    onClick={() => act(() => mediaApi.clearStorage(storage.id), t("storage.cleared"))}
+                    disabled={busy}
+                    aria-label={t("storage.clear")}
+                    title={t("storage.clear")}
+                  >
+                    <FiTrash2 />
+                  </button>
+                </div>
+
+                {editing === storage.id ? (
+                  <div style={{ flexBasis: "100%" }}>
+                    <StorageForm
+                      connection={storage.connection}
+                      busy={busy}
+                      onCancel={() => setEditing(null)}
+                      onSubmit={(payload) =>
+                        act(() => mediaApi.setStorage(storage.id, payload), t("storage.saved"))
+                      }
+                    />
+                  </div>
+                ) : null}
+
+                {sharing === storage.id ? (
+                  <div style={{ flexBasis: "100%" }}>
+                    <StorageShares storageId={storage.id} />
+                  </div>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {editing === "new" ? (
+        <StorageForm
+          connection={null}
+          busy={busy}
+          onCancel={() => setEditing(null)}
+          onSubmit={(payload) => act(() => mediaApi.addStorage(payload), t("storage.saved"))}
+        />
+      ) : (
+        <button type="button" className="sf-button" onClick={() => setEditing("new")}>
+          <FiPlus /> {t("storage.addTarget")}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** One target in a line: enough to tell two buckets apart. */
+function storageSummary(connection) {
+  if (!connection) return "";
+  if (connection.type === "google_drive") {
+    return [connection.folderId, connection.path].filter(Boolean).join(" · ");
+  }
+  return [connection.bucketName, connection.endpoint, connection.path].filter(Boolean).join(" · ");
+}
+
+/**
+ * The connection form, for a new target or one being edited.
+ *
+ * The same fields either way: what differs between adding and editing is only
+ * which request the submit makes, and that belongs to the caller.
+ */
+function StorageForm({ connection, busy, onSubmit, onCancel }) {
+  const { t } = useI18n();
+  const [form, setForm] = useState(() => ({
+    type: connection?.type || "s3",
+    endpoint: connection?.endpoint || "",
+    bucketName: connection?.bucketName || "",
+    region: connection?.region || "",
+    accessKey: connection?.accessKey || "",
+    secretKey: connection?.secretKey || "",
+    serviceAccountBase64: connection?.serviceAccountBase64 || "",
+    folderId: connection?.folderId || "",
+    path: connection?.path || "",
+    publicBaseUrl: connection?.publicBaseUrl || "",
+    private: Boolean(connection?.private),
+  }));
+  // The name of the key file that was picked, purely so the field can say
+  // which one is loaded - the key itself is write-only and never comes back.
+  const [serviceAccountFile, setServiceAccountFile] = useState("");
 
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
 
@@ -423,39 +588,14 @@ function StorageSettings() {
     reader.readAsDataURL(file);
   };
 
-  const save = async (event) => {
-    event.preventDefault();
-    setBusy(true);
-    try {
-      setState(await mediaApi.setStorage(form));
-      toast.success(t("storage.saved"), toastOptions);
-      await load();
-    } catch (err) {
-      toast.error(err?.response?.data?.message || t("errors.generic"), toastOptions);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const clear = async () => {
-    setBusy(true);
-    try {
-      setState(await mediaApi.clearStorage());
-      toast.success(t("storage.cleared"), toastOptions);
-      await load();
-    } catch {
-      toast.error(t("errors.generic"), toastOptions);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const megabytes = state.maxSize ? Math.round(state.maxSize / (1024 * 1024)) : 20;
-
   return (
-    <form className="sf-card" onSubmit={save}>
-      <h2>{t("storage.title")}</h2>
-      <p className="sf-subtitle">{t("storage.subtitle", { size: megabytes })}</p>
+    <form
+      style={{ marginTop: "0.8rem" }}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit(form);
+      }}
+    >
 
       <div className="sf-field">
         <label className="sf-label" htmlFor="storageType">
@@ -586,28 +726,20 @@ function StorageSettings() {
           {t("storage.privateHelp")}
         </p>
       </div>
-
       <div className="sf-row" style={{ gap: "0.4rem" }}>
         <button className="sf-button" type="submit" disabled={busy}>
           <FiSave /> {t("common.save")}
         </button>
-        {state.configured ? (
-          <button type="button" className="sf-button sf-button-secondary" onClick={clear} disabled={busy}>
-            <FiTrash2 /> {t("storage.clear")}
-          </button>
-        ) : null}
+        <button type="button" className="sf-button sf-button-secondary" onClick={onCancel} disabled={busy}>
+          {t("common.cancel")}
+        </button>
       </div>
-
-      {/* Who else may use this bucket. Only shown once there is one to share:
-          an access list for a storage that does not exist is a form nobody can
-          submit. */}
-      {state.configured ? <StorageShares /> : null}
     </form>
   );
 }
 
 /**
- * Lending your own bucket to other members.
+ * Lending one of your targets to other members.
  *
  * A coach pays for one bucket and their athletes upload their form videos to
  * it; an athlete opens theirs to the coach so the coach can post demonstrations
@@ -618,7 +750,7 @@ function StorageSettings() {
  * Sharing is the owner's alone - a writer who could hand out further access
  * would be widening a bucket somebody else is paying for.
  */
-function StorageShares() {
+function StorageShares({ storageId }) {
   const { t } = useI18n();
   const [grants, setGrants] = useState(null);
   const [role, setRole] = useState("reader");
@@ -628,14 +760,14 @@ function StorageShares() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    mediaApi.shares().then(setGrants).catch(setError);
+    mediaApi.shares(storageId).then(setGrants).catch(setError);
     // The people this member can already see: the same list every other
     // "pick somebody" control in this app is built from.
     searchApi
       .members({ size: 100 })
       .then((page) => setMembers(page?.results || []))
       .catch(() => setMembers([]));
-  }, []);
+  }, [storageId]);
 
   const share = async () => {
     setBusy(true);
@@ -645,7 +777,7 @@ function StorageShares() {
       // One request per person rather than a batch endpoint: granting is rare,
       // and a partial failure then names who it failed for.
       for (const userId of userIds) {
-        latest = await mediaApi.share(userId, role);
+        latest = await mediaApi.share(storageId, userId, role);
       }
       setGrants(latest);
       setUserIds([]);
@@ -660,7 +792,7 @@ function StorageShares() {
   const revoke = async (userId) => {
     setBusy(true);
     try {
-      setGrants(await mediaApi.unshare(userId));
+      setGrants(await mediaApi.unshare(storageId, userId));
     } catch (err) {
       setError(err);
     } finally {
@@ -672,7 +804,7 @@ function StorageShares() {
   const available = members.filter((member) => !(grants || []).some((grant) => grant.userId === member.id));
 
   return (
-    <div className="sf-card" style={{ marginTop: "1rem" }}>
+    <div className="sf-card" style={{ marginTop: "0.8rem" }}>
       <h3 style={{ marginTop: 0 }}>{t("storage.shares")}</h3>
       <p className="sf-muted" style={{ marginTop: 0 }}>{t("storage.sharesHelp")}</p>
 

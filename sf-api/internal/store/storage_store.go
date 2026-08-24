@@ -27,12 +27,12 @@ func NewStorageStore(pool *pgxpool.Pool) *StorageStore {
 	return &StorageStore{pool: pool}
 }
 
-const storageSelect = `SELECT s.id, s.owner_id, s.data, s.created_at, s.updated_at FROM storages s`
+const storageSelect = `SELECT s.id, s.owner_id, s.data, s.position, s.created_at, s.updated_at FROM storages s`
 
 func scanStorage(row pgx.Row) (models.Storage, error) {
 	var storage models.Storage
 	var raw []byte
-	if err := row.Scan(&storage.ID, &storage.OwnerID, &raw, &storage.CreatedAt, &storage.UpdatedAt); err != nil {
+	if err := row.Scan(&storage.ID, &storage.OwnerID, &raw, &storage.Position, &storage.CreatedAt, &storage.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Storage{}, ErrNotFound
 		}
@@ -50,27 +50,47 @@ func (s *StorageStore) FindByID(ctx context.Context, id string) (models.Storage,
 	return scanStorage(s.pool.QueryRow(ctx, storageSelect+` WHERE s.id = $1`, id))
 }
 
-// FindOwn returns the storage an account owns, or ErrNotFound.
+// ListOwn returns the targets an account owns, in the order that account put
+// them in.
 //
-// One per owner is a rule this app keeps rather than one the schema enforces:
-// the settings screen edits "my storage", and a second one would have nowhere
-// to be shown. The schema stays open because a club-owned storage is the
-// obvious next thing, and a unique index would have to be dropped to get there.
-func (s *StorageStore) FindOwn(ctx context.Context, ownerID string) (models.Storage, error) {
-	return scanStorage(s.pool.QueryRow(ctx,
-		storageSelect+` WHERE s.owner_id = $1 ORDER BY s.created_at LIMIT 1`, ownerID))
+// The order is the whole point: an upload is written to every one of them, and
+// the link that goes into the post comes from the first. So this is never
+// sorted by creation date - that is the order somebody happened to configure
+// things in, not the order they chose.
+func (s *StorageStore) ListOwn(ctx context.Context, ownerID string) ([]models.Storage, error) {
+	rows, err := s.pool.Query(ctx,
+		storageSelect+` WHERE s.owner_id = $1 ORDER BY s.position, s.created_at`, ownerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	storages := []models.Storage{}
+	for rows.Next() {
+		storage, err := scanStorageRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		storages = append(storages, storage)
+	}
+	return storages, rows.Err()
+}
+
+// scanStorageRow reads one row of storageSelect.
+func scanStorageRow(row pgx.Row) (models.Storage, error) {
+	return scanStorage(row)
 }
 
 // ListFor returns every storage the caller may use - their own first, then the
 // ones shared with them - each carrying their role and the owner's name.
 func (s *StorageStore) ListFor(ctx context.Context, userID string) ([]models.Storage, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT s.id, s.owner_id, s.data, s.created_at, s.updated_at,
+		SELECT s.id, s.owner_id, s.data, s.position, s.created_at, s.updated_at,
 		       acl.role, `+displayFullName("u")+`
 		FROM storages s
 		JOIN storage_acl acl ON acl.storage_id = s.id AND acl.user_id = $1
 		JOIN users u ON u.id = s.owner_id
-		ORDER BY (s.owner_id = $1) DESC, s.created_at
+		ORDER BY (s.owner_id = $1) DESC, s.position, s.created_at
 	`, userID)
 	if err != nil {
 		return nil, err
@@ -81,8 +101,8 @@ func (s *StorageStore) ListFor(ctx context.Context, userID string) ([]models.Sto
 	for rows.Next() {
 		var storage models.Storage
 		var raw []byte
-		if err := rows.Scan(&storage.ID, &storage.OwnerID, &raw, &storage.CreatedAt,
-			&storage.UpdatedAt, &storage.Role, &storage.OwnerName); err != nil {
+		if err := rows.Scan(&storage.ID, &storage.OwnerID, &raw, &storage.Position,
+			&storage.CreatedAt, &storage.UpdatedAt, &storage.Role, &storage.OwnerName); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(raw, &storage.Conn); err != nil {
@@ -117,9 +137,9 @@ func (s *StorageStore) RoleFor(ctx context.Context, storageID, userID string) (s
 	return role, nil
 }
 
-// Upsert writes the caller's own connection, creating the storage the first
-// time and its owner grant with it.
-func (s *StorageStore) Upsert(ctx context.Context, ownerID string, conn models.StorageConnection) (models.Storage, error) {
+// Create adds a target at the end of the owner's list, with their own grant on
+// it.
+func (s *StorageStore) Create(ctx context.Context, ownerID string, conn models.StorageConnection) (models.Storage, error) {
 	data, err := json.Marshal(conn)
 	if err != nil {
 		return models.Storage{}, err
@@ -132,37 +152,92 @@ func (s *StorageStore) Upsert(ctx context.Context, ownerID string, conn models.S
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	var id string
-	err = tx.QueryRow(ctx, `SELECT id FROM storages WHERE owner_id = $1 ORDER BY created_at LIMIT 1`, ownerID).Scan(&id)
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		if err := tx.QueryRow(ctx, `
-			INSERT INTO storages (owner_id, data) VALUES ($1, $2) RETURNING id
-		`, ownerID, data).Scan(&id); err != nil {
-			return models.Storage{}, err
-		}
-		// The owner's own grant, written with the storage: every other query
-		// asks the access list, so a storage without one would be invisible to
-		// the person who just configured it.
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO storage_acl (storage_id, user_id, role) VALUES ($1, $2, $3)
-			ON CONFLICT (storage_id, user_id) DO UPDATE SET role = $3, updated_at = now()
-		`, id, ownerID, models.StorageRoleOwner); err != nil {
-			return models.Storage{}, err
-		}
-	case err != nil:
+	// Appended, never inserted: a new target is a fallback for the ones
+	// already there, and promoting it is a decision its owner makes by
+	// reordering.
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO storages (owner_id, data, position)
+		VALUES ($1, $2, coalesce((SELECT max(position) + 1 FROM storages WHERE owner_id = $1), 0))
+		RETURNING id
+	`, ownerID, data).Scan(&id); err != nil {
 		return models.Storage{}, err
-	default:
-		if _, err := tx.Exec(ctx, `
-			UPDATE storages SET data = $2, updated_at = now() WHERE id = $1
-		`, id, data); err != nil {
-			return models.Storage{}, err
-		}
+	}
+	// The owner's own grant, written with the storage: every other query asks
+	// the access list, so a storage without one would be invisible to the
+	// person who just configured it.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO storage_acl (storage_id, user_id, role) VALUES ($1, $2, $3)
+		ON CONFLICT (storage_id, user_id) DO UPDATE SET role = $3, updated_at = now()
+	`, id, ownerID, models.StorageRoleOwner); err != nil {
+		return models.Storage{}, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return models.Storage{}, err
 	}
 	return s.FindByID(ctx, id)
+}
+
+// Update rewrites one target's connection, leaving its place in the order
+// alone.
+func (s *StorageStore) Update(ctx context.Context, id string, conn models.StorageConnection) (models.Storage, error) {
+	data, err := json.Marshal(conn)
+	if err != nil {
+		return models.Storage{}, err
+	}
+
+	tag, err := s.pool.Exec(ctx, `UPDATE storages SET data = $2, updated_at = now() WHERE id = $1`, id, data)
+	if err != nil {
+		return models.Storage{}, err
+	}
+	if tag.RowsAffected() == 0 {
+		return models.Storage{}, ErrNotFound
+	}
+	return s.FindByID(ctx, id)
+}
+
+// Reorder writes the owner's priority order, as the ids arrive.
+//
+// Ids that are not theirs are ignored rather than refused: the list comes from
+// a screen that may have been open while something changed, and the safe
+// reading of "put these in this order" is to order the ones that still exist.
+// Anything they own that the list leaves out keeps its relative place, after
+// the ones named.
+func (s *StorageStore) Reorder(ctx context.Context, ownerID string, ids []string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	position := 0
+	for _, id := range ids {
+		tag, err := tx.Exec(ctx, `
+			UPDATE storages SET position = $3, updated_at = now()
+			WHERE id = $1 AND owner_id = $2
+		`, id, ownerID, position)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() > 0 {
+			position++
+		}
+	}
+
+	// Whatever was not named goes after, keeping its own order.
+	if _, err := tx.Exec(ctx, `
+		WITH rest AS (
+			SELECT id, row_number() OVER (ORDER BY position, created_at) - 1 AS offset
+			FROM storages
+			WHERE owner_id = $1 AND NOT (id = ANY($2::uuid[]))
+		)
+		UPDATE storages s SET position = $3 + rest.offset
+		FROM rest WHERE rest.id = s.id
+	`, ownerID, ids, position); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 // Delete removes a storage and, by cascade, every grant on it.

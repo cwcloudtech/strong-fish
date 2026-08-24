@@ -1176,7 +1176,7 @@ func TestStorageSharing(t *testing.T) {
 		Type: models.StorageTypeS3, Endpoint: "https://s3.example.com",
 		BucketName: "videos", AccessKey: "AK", SecretKey: "SK", Private: true,
 	}
-	stored, err := storages.Upsert(ctx, owner, conn)
+	stored, err := storages.Create(ctx, owner, conn)
 	if err != nil {
 		t.Fatalf("creating the storage: %v", err)
 	}
@@ -1193,14 +1193,14 @@ func TestStorageSharing(t *testing.T) {
 		t.Errorf("a stranger's role is %q, want none at all", role)
 	}
 
-	// Saving again edits rather than forking a second storage.
+	// Editing one changes it rather than forking a second.
 	conn.BucketName = "clips"
-	again, err := storages.Upsert(ctx, owner, conn)
+	again, err := storages.Update(ctx, stored.ID, conn)
 	if err != nil {
 		t.Fatalf("editing: %v", err)
 	}
-	if again.ID != stored.ID {
-		t.Errorf("saving again created a second storage (%s then %s)", stored.ID, again.ID)
+	if again.ID != stored.ID || again.Conn.BucketName != "clips" {
+		t.Errorf("editing produced %+v", again)
 	}
 
 	// Lending it to an athlete as a writer.
@@ -1274,4 +1274,105 @@ func TestStorageSharing(t *testing.T) {
 	if remaining != 0 {
 		t.Errorf("%d grants survive a deleted storage", remaining)
 	}
+}
+
+// TestStorageTargetsKeepTheirOrder covers the priority order several targets
+// hang off: an upload goes to every one of them and the link in the post comes
+// from the first, so "which is first" is a stored decision rather than
+// whichever row was created first.
+func TestStorageTargetsKeepTheirOrder(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	storages := NewStorageStore(pool)
+	owner := seedUser(t, pool, "storage-order@example.com")
+
+	bucket := func(name string) models.StorageConnection {
+		return models.StorageConnection{
+			Type: models.StorageTypeS3, Endpoint: "https://s3.example.com",
+			BucketName: name, AccessKey: "AK", SecretKey: "SK",
+		}
+	}
+
+	first, err := storages.Create(ctx, owner, bucket("one"))
+	if err != nil {
+		t.Fatalf("creating the first: %v", err)
+	}
+	second, err := storages.Create(ctx, owner, bucket("two"))
+	if err != nil {
+		t.Fatalf("creating the second: %v", err)
+	}
+	third, err := storages.Create(ctx, owner, bucket("three"))
+	if err != nil {
+		t.Fatalf("creating the third: %v", err)
+	}
+	t.Cleanup(func() {
+		for _, id := range []string{first.ID, second.ID, third.ID} {
+			_ = storages.Delete(context.Background(), id)
+		}
+	})
+
+	// Appended, not inserted: a new target is a fallback for the ones already
+	// there, never a silent promotion over them.
+	names := func() []string {
+		listed, err := storages.ListOwn(ctx, owner)
+		if err != nil {
+			t.Fatalf("listing: %v", err)
+		}
+		out := make([]string, 0, len(listed))
+		for _, storage := range listed {
+			out = append(out, storage.Conn.BucketName)
+		}
+		return out
+	}
+	if got := names(); !equalStrings(got, []string{"one", "two", "three"}) {
+		t.Fatalf("order is %v, want them in the order they were added", got)
+	}
+
+	// Promoting the third one.
+	if err := storages.Reorder(ctx, owner, []string{third.ID, first.ID, second.ID}); err != nil {
+		t.Fatalf("reordering: %v", err)
+	}
+	if got := names(); !equalStrings(got, []string{"three", "one", "two"}) {
+		t.Errorf("order is %v, want the reordered one", got)
+	}
+
+	// A partial list is a promotion, not a truncation: what it names goes
+	// first, and everything else keeps its own order behind.
+	if err := storages.Reorder(ctx, owner, []string{second.ID}); err != nil {
+		t.Fatalf("partial reorder: %v", err)
+	}
+	if got := names(); !equalStrings(got, []string{"two", "three", "one"}) {
+		t.Errorf("order is %v, want the named one first and the rest behind", got)
+	}
+
+	// Somebody else's storage in the list is ignored rather than moved.
+	stranger := seedUser(t, pool, "storage-order-stranger@example.com")
+	theirs, err := storages.Create(ctx, stranger, bucket("not-yours"))
+	if err != nil {
+		t.Fatalf("creating a stranger's: %v", err)
+	}
+	t.Cleanup(func() { _ = storages.Delete(context.Background(), theirs.ID) })
+
+	if err := storages.Reorder(ctx, owner, []string{theirs.ID, first.ID}); err != nil {
+		t.Fatalf("reorder naming a stranger's storage: %v", err)
+	}
+	if got := names(); !equalStrings(got, []string{"one", "two", "three"}) {
+		t.Errorf("order is %v, want only the caller's own to have moved", got)
+	}
+	if listed, err := storages.ListOwn(ctx, stranger); err != nil || len(listed) != 1 ||
+		listed[0].Conn.BucketName != "not-yours" {
+		t.Errorf("the stranger's own list came back as %+v (%v)", listed, err)
+	}
+}
+
+func equalStrings(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
 }
