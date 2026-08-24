@@ -42,16 +42,12 @@ Une fenêtre s'ouvre avec la clé. **Elle ne reviendra pas.** Vous pouvez :
 
 ## Connecter l'application
 
-1. Installez l'application Android : le lien de téléchargement et son propre QR
-   code sont dans le menu, sous **Télécharger l'app Android**.
-2. Ouvrez-la. Sur l'écran de connexion, choisissez **Se connecter en scannant un
-   QR code**.
+1. Installez l'application Android : le lien de téléchargement et son propre QR code sont dans le menu, sous **Télécharger l'app Android**.
+2. Ouvrez-la. Sur l'écran de connexion, choisissez **Se connecter en scannant un QR code**.
 3. Autorisez la caméra quand elle est demandée.
 4. Pointez-la vers le QR code affiché sur votre ordinateur.
 
-L'application lit l'adresse du serveur et la clé dans le code, les vérifie
-auprès de ce serveur, et n'enregistre la clé qu'une fois qu'il l'a acceptée. Un
-code qui se scanne correctement mais désigne un serveur qui le refuse laisse
+L'application lit l'adresse du serveur et la clé dans le code, les vérifie auprès de ce serveur, et n'enregistre la clé qu'une fois qu'il l'a acceptée. Un code qui se scanne correctement mais désigne un serveur qui le refuse laisse
 l'application exactement dans l'état où elle était.
 
 ## Ce que contient réellement le code
@@ -63,20 +59,12 @@ api_url = https://api.strong-fish.com
 api_key = <votre clé>
 ```
 
-Le fichier de configuration téléchargeable a le même contenu : c'est pourquoi
-une seule clé configure à la fois le téléphone et une CLI.
+Le fichier de configuration téléchargeable a le même contenu : c'est pourquoi une seule clé configure à la fois le téléphone et une CLI.
 
 :::warning Quiconque le scanne devient vous
-Le QR code est un justificatif affiché à l'écran. Ne le projetez pas, ne
-l'envoyez pas en capture d'écran dans une conversation de groupe, et ne le
-laissez pas ouvert sur une machine partagée. Si l'un d'eux fuite, révoquez cette
-clé — **Clés d'API → Révoquer** — et elle cesse de fonctionner partout
-immédiatement.
+Le QR code est un justificatif affiché à l'écran. Ne le projetez pas, ne l'envoyez pas en capture d'écran dans une conversation de groupe, et ne le laissez pas ouvert sur une machine partagée. Si l'un d'eux fuite, révoquez cette clé — **Clés d'API → Révoquer** — et elle cesse de fonctionner partout immédiatement.
 :::
 
 ## Révoquer
 
-**Clés d'API** liste celles que vous avez, leur date d'expiration et un bouton
-de révocation. Une clé révoquée cesse de fonctionner aussitôt, partout où elle
-est utilisée. Se connecter avec un mot de passe sur un appareil enrôlé par QR
-code remplace également sa clé.
+**Clés d'API** liste celles que vous avez, leur date d'expiration et un bouton de révocation. Une clé révoquée cesse de fonctionner aussitôt, partout où elle est utilisée. Se connecter avec un mot de passe sur un appareil enrôlé par QR code remplace également sa clé.
