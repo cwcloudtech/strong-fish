@@ -2,10 +2,30 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { training } from "../../api/services";
+import ExportMenu from "../../components/programs/ExportMenu";
+import downloadBlob from "../../utils/downloadBlob";
 import { ErrorMessage, Spinner } from "../../components/common/Feedback";
 import SessionDay, { exerciseLabel } from "../../components/training/SessionDay";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
+
+/**
+ * The sessions grouped by week, in order.
+ *
+ * The same grouping the exports use server-side (programsheet.Weeks): a week
+ * number can be skipped by an imported spreadsheet, so the weeks are read off
+ * the sessions rather than assumed contiguous.
+ */
+function weeksOf(days) {
+  const byNumber = new Map();
+  for (const day of days) {
+    if (!byNumber.has(day.week)) byNumber.set(day.week, []);
+    byNumber.get(day.week).push(day);
+  }
+  return [...byNumber.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([number, weekDays]) => ({ number, days: weekDays }));
+}
 
 /**
  * One assigned program, session by session. Every load on screen was computed
@@ -19,6 +39,7 @@ export default function TrainingSession() {
   const { assignmentId } = useParams();
   const [assignment, setAssignment] = useState(null);
   const [error, setError] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(() => {
     training.get(assignmentId).then(setAssignment).catch(setError);
@@ -36,6 +57,24 @@ export default function TrainingSession() {
   const setDayDone = async (day, done) => {
     await training.setDayDone(assignmentId, day.id, done);
     load();
+  };
+
+  // The block, or one week of it, with the member's feedback on it. week is
+  // undefined for the whole thing - which is what the API's ?week does too, so
+  // there is one rule rather than two.
+  const exportAs = async (format, week) => {
+    setExporting(true);
+    try {
+      const blob = await training.export(assignmentId, { format, week, locale });
+      const name = [assignment?.program?.name || "program", week ? `w${week}` : null]
+        .filter(Boolean)
+        .join("-");
+      downloadBlob(blob, `${name}.${format}`);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const changeStatus = async (status) => {
@@ -61,13 +100,19 @@ export default function TrainingSession() {
             {isOwner ? "" : ` · ${assignment.memberName}`}
           </p>
         </div>
-        {isOwner ? (
-          <select className="sf-select" style={{ width: "auto" }} value={assignment.status || "active"} onChange={(event) => changeStatus(event.target.value)}>
-            <option value="active">{t("session.statusActive")}</option>
-            <option value="done">{t("session.statusDone")}</option>
-            <option value="archived">{t("session.statusArchived")}</option>
-          </select>
-        ) : null}
+        <div className="sf-row" style={{ gap: "0.5rem" }}>
+          {/* Offered to whoever may open the block: the member sends it to
+              their coach, and the coach exports their athlete's block to read
+              it away from the app. */}
+          <ExportMenu onExport={(format) => exportAs(format)} busy={exporting} label={t("session.exportBlock")} />
+          {isOwner ? (
+            <select className="sf-select" style={{ width: "auto" }} value={assignment.status || "active"} onChange={(event) => changeStatus(event.target.value)}>
+              <option value="active">{t("session.statusActive")}</option>
+              <option value="done">{t("session.statusDone")}</option>
+              <option value="archived">{t("session.statusArchived")}</option>
+            </select>
+          ) : null}
+        </div>
       </div>
 
       {assignment.note ? <div className="sf-notice">{assignment.note}</div> : null}
@@ -89,16 +134,31 @@ export default function TrainingSession() {
         </div>
       ) : null}
 
-      {(assignment.days || []).map((day, index) => (
-        <SessionDay
-          key={day.id}
-          day={day}
-          locale={locale}
-          defaultOpen={index === 0}
-          editable={isOwner}
-          onLog={logSet}
-          onDayDone={setDayDone}
-        />
+      {/* Grouped by week, because that is the unit a week's work is discussed
+          in: one export per week, and the sessions of that week under it. */}
+      {weeksOf(assignment.days || []).map((week, weekIndex) => (
+        <section key={week.number}>
+          <div className="sf-row-between" style={{ alignItems: "center", margin: "1.2rem 0 0.4rem" }}>
+            <h2 style={{ margin: 0 }}>{t("programs.week", { week: week.number })}</h2>
+            <ExportMenu
+              onExport={(format) => exportAs(format, week.number)}
+              busy={exporting}
+              label={t("session.exportWeek")}
+              size="sf-button-sm"
+            />
+          </div>
+          {week.days.map((day, index) => (
+            <SessionDay
+              key={day.id}
+              day={day}
+              locale={locale}
+              defaultOpen={weekIndex === 0 && index === 0}
+              editable={isOwner}
+              onLog={logSet}
+              onDayDone={setDayDone}
+            />
+          ))}
+        </section>
       ))}
     </div>
   );

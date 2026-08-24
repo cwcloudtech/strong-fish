@@ -2,26 +2,9 @@ package programpdf
 
 import (
 	"github.com/go-pdf/fpdf"
+
+	"strong-fish-api/internal/programsheet"
 )
-
-// column is one column of the sheet: its heading, and its share of the width
-// relative to the others.
-type column struct {
-	header string
-	weight float64
-}
-
-// columnsFor is the sheet's layout. The exercise gets the space, because it is
-// the only cell whose text is a name rather than a number.
-func columnsFor(locale string) []column {
-	return []column{
-		{header: heading(locale, "exercise"), weight: 3.4},
-		{header: heading(locale, "reps"), weight: 0.8},
-		{header: heading(locale, "intensity"), weight: 1.3},
-		{header: heading(locale, "load"), weight: 1.1},
-		{header: heading(locale, "notes"), weight: 2.4},
-	}
-}
 
 // drawTable renders a bordered table directly with fpdf, ported from
 // ~/cwclock's report tables.
@@ -33,18 +16,18 @@ func columnsFor(locale string) []column {
 // SplitLines (so the measurement matches how the text will really break), every
 // cell in a row is given the tallest one's height, and each line is drawn at an
 // explicit (x, y) rather than wherever the previous cell left the cursor.
-func drawTable(pdf *fpdf.Fpdf, translate func(string) string, columns []column, rows [][]string) {
+func drawTable(pdf *fpdf.Fpdf, translate func(string) string, columns []programsheet.Column, rows [][]string) {
 	left, _, right, bottom := pdf.GetMargins()
 	pageWidth, pageHeight := pdf.GetPageSize()
 	usable := pageWidth - left - right
 
 	total := 0.0
 	for _, c := range columns {
-		total += c.weight
+		total += c.Weight
 	}
 	widths := make([]float64, len(columns))
 	for i, c := range columns {
-		widths[i] = usable * c.weight / total
+		widths[i] = usable * c.Weight / total
 	}
 
 	drawHeader := func() {
@@ -55,7 +38,7 @@ func drawTable(pdf *fpdf.Fpdf, translate func(string) string, columns []column, 
 		x := left
 		for i, c := range columns {
 			pdf.SetXY(x, y)
-			pdf.CellFormat(widths[i], lineHeightPt, translate(c.header), "1", 0, "C", true, 0, "")
+			pdf.CellFormat(widths[i], lineHeightPt, translate(c.Header), "1", 0, "C", true, 0, "")
 			x += widths[i]
 		}
 		pdf.SetXY(left, y+lineHeightPt)

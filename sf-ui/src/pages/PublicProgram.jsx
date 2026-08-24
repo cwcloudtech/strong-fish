@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { FiDownload } from "react-icons/fi";
 
 import Logo from "../components/common/Logo";
+import ExportMenu from "../components/programs/ExportMenu";
+import downloadBlob from "../utils/downloadBlob";
 import LanguageDropdown from "../components/common/LanguageDropdown";
 import { EmptyState, ErrorMessage, Spinner } from "../components/common/Feedback";
 import { exerciseLabel } from "../components/training/SessionDay";
@@ -41,21 +42,11 @@ export default function PublicProgram() {
 
   const program = data?.program;
 
-  // The same download the dashboard does: fetched rather than linked, so a
-  // failure surfaces on this page instead of replacing it with the API's
-  // error, and so the filename is the program's name.
-  const exportPdf = async () => {
+  const exportAs = async (format) => {
     setExporting(true);
     try {
-      const blob = await publicPrograms.exportPdf(programId, { locale });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${program?.name || "program"}.pdf`;
-      link.click();
-      // Revoked once the click has been handled, or the blob is held for the
-      // life of the tab.
-      URL.revokeObjectURL(url);
+      const blob = await publicPrograms.export(programId, { format, locale });
+      downloadBlob(blob, `${program?.name || "program"}.${format}`);
     } catch (err) {
       setError(err);
     } finally {
@@ -99,17 +90,10 @@ export default function PublicProgram() {
                 {t("programs.sessions", { count: program.dayCount })} ·{" "}
                 {t("programs.setCount", { count: program.setCount })}
               </p>
-              {/* Printable without an account: what is on the sheet is the
-                  prescription, which is exactly what this page already
+              {/* Exportable without an account: what is in the document is
+                  the prescription, which is exactly what this page already
                   shows. */}
-              <button
-                className="sf-button sf-button-secondary"
-                onClick={exportPdf}
-                disabled={exporting}
-                style={{ whiteSpace: "nowrap" }}
-              >
-                <FiDownload /> {exporting ? t("programs.exporting") : t("programs.exportPdf")}
-              </button>
+              <ExportMenu onExport={exportAs} busy={exporting} />
             </div>
           </div>
 

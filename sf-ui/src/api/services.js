@@ -107,9 +107,11 @@ export const programs = {
   // The printable sheet, a page per week. Fetched as a blob rather than
   // linked, because the request carries the session's Authorization header -
   // a plain <a href> would arrive logged out.
-  exportPdf: (clubId, programId, { memberId, locale } = {}) =>
+  // format is "pdf" or "xlsx": the route's own extension, so the file that
+  // arrives is named the way its contents are.
+  export: (clubId, programId, { format = "pdf", memberId, locale } = {}) =>
     client
-      .get(`${programsBase(clubId)}/${programId}/export.pdf`, {
+      .get(`${programsBase(clubId)}/${programId}/export.${format}`, {
         params: { ...(memberId ? { memberId } : {}), ...(locale ? { locale } : {}) },
         responseType: "blob",
       })
@@ -141,6 +143,15 @@ export const training = {
   // A whole session ticked off at once, keeping whatever each set already
   // carried (see the API's ProgramStore.SetDayDone).
   setDayDone: (assignmentId, dayId, done) => body(client.put(`/training/${assignmentId}/days/${dayId}/log`, { done })),
+  // The block with this member's feedback on it, whole or one week - the sheet
+  // a lifter sends their coach, and the one a coach reads away from the app.
+  export: (assignmentId, { format = "pdf", week, locale } = {}) =>
+    client
+      .get(`/training/${assignmentId}/export.${format}`, {
+        params: { ...(week ? { week } : {}), ...(locale ? { locale } : {}) },
+        responseType: "blob",
+      })
+      .then((response) => response.data),
 };
 
 // --- social ---
@@ -294,12 +305,12 @@ export const publicPosts = {
 
 export const publicPrograms = {
   get: (programId) => body(client.get(`/public/programs/${programId}`)),
-  // The prescription as a printable sheet, without the weights: a reader
-  // outside the club has no maxes to resolve them against (see the API's
+  // The prescription as a document, without the weights: a reader outside the
+  // club has no maxes to resolve them against (see the API's
   // ExportPublicPDF).
-  exportPdf: (programId, { locale } = {}) =>
+  export: (programId, { format = "pdf", locale } = {}) =>
     client
-      .get(`/public/programs/${programId}/export.pdf`, {
+      .get(`/public/programs/${programId}/export.${format}`, {
         params: { ...(locale ? { locale } : {}) },
         responseType: "blob",
       })

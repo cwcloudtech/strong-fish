@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -10,6 +11,8 @@ import (
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/programpdf"
+	"strong-fish-api/internal/programsheet"
+	"strong-fish-api/internal/programxlsx"
 	"strong-fish-api/internal/utils"
 )
 
@@ -64,7 +67,7 @@ func (h *ProgramHandler) ExportPDF(w http.ResponseWriter, r *http.Request) {
 		days[i].Sets = byDay[days[i].ID]
 	}
 
-	writeProgramPDF(w, r, program, days, programpdf.Options{
+	writeProgramSheet(w, exportFormat(r), program, days, programsheet.Options{
 		MemberName: h.memberName(r, memberID),
 		Locale:     sheetLocale(r),
 		Footer:     fmt.Sprintf("%s - %s", program.Name, h.uiBaseURL),
@@ -109,29 +112,67 @@ func (h *ProgramHandler) ExportPublicPDF(w http.ResponseWriter, r *http.Request)
 		days[i].Sets = byDay[days[i].ID]
 	}
 
-	writeProgramPDF(w, r, program, days, programpdf.Options{
+	writeProgramSheet(w, exportFormat(r), program, days, programsheet.Options{
 		Locale: sheetLocale(r),
 		Footer: fmt.Sprintf("%s - %s", program.Name, h.uiBaseURL),
 	})
 }
 
-// writeProgramPDF renders and sends a sheet, for the two routes that produce
-// one - a member's own and a published program's.
-func writeProgramPDF(w http.ResponseWriter, r *http.Request, program models.Program,
-	days []models.ProgramDay, options programpdf.Options) {
-	pdf, err := programpdf.Render(program, days, options)
+// The two formats a program is exported in. Which one is asked for is the
+// route's own extension - export.pdf or export.xlsx - so a browser, a phone
+// and curl all get a file named the way its contents are.
+const (
+	formatPDF  = "pdf"
+	formatXLSX = "xlsx"
+)
+
+const (
+	mediaPDF  = "application/pdf"
+	mediaXLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+// writeProgramSheet renders and sends a document, for every route that
+// produces one: a club's program, a member's own, a published one, and a
+// member's assignment with their feedback on it.
+//
+// The two renderers are laid out from the same tables (see programsheet), so
+// this only has to pick which one and label the response.
+func writeProgramSheet(w http.ResponseWriter, format string, program models.Program,
+	days []models.ProgramDay, options programsheet.Options) {
+	var (
+		body  []byte
+		media string
+		err   error
+	)
+	if format == formatXLSX {
+		body, err = programxlsx.Render(program, days, options)
+		media = mediaXLSX
+	} else {
+		body, err = programpdf.Render(program, days, options)
+		media = mediaPDF
+	}
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/pdf")
-	// attachment, not inline: this is a document to keep and print, and a
-	// filename is what makes a folder of them legible later.
+	w.Header().Set("Content-Type", media)
+	// attachment, not inline: this is a document to keep, print or fill in,
+	// and a filename is what makes a folder of them legible later.
 	w.Header().Set("Content-Disposition",
-		fmt.Sprintf("attachment; filename=%q", pdfFileName(program.Name)))
+		fmt.Sprintf("attachment; filename=%q", sheetFileName(program.Name, format)))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(pdf)
+	_, _ = w.Write(body)
+}
+
+// exportFormat reads which document was asked for off the route's extension.
+// Anything else is a PDF: the routes only register the two, and a format that
+// somehow arrives unrecognized should still hand back a readable sheet.
+func exportFormat(r *http.Request) string {
+	if strings.HasSuffix(r.URL.Path, ".xlsx") {
+		return formatXLSX
+	}
+	return formatPDF
 }
 
 // memberName is who the sheet was printed for, or blank when that cannot be
@@ -158,9 +199,9 @@ func sheetLocale(r *http.Request) string {
 	return "en"
 }
 
-// pdfFileName turns a program's name into something a filesystem will accept,
-// since it arrives as whatever a coach typed.
-func pdfFileName(name string) string {
+// sheetFileName turns a program's name into something a filesystem will
+// accept, since it arrives as whatever a coach typed.
+func sheetFileName(name, format string) string {
 	cleaned := strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
@@ -177,5 +218,92 @@ func pdfFileName(name string) string {
 	if cleaned == "" {
 		cleaned = "program"
 	}
-	return cleaned + ".pdf"
+	return cleaned + "." + format
+}
+
+// ExportAssignment renders a member's assigned block with their feedback on
+// it: what was prescribed, and beside it what they actually did.
+//
+// This is the document a lifter sends their coach at the end of a week, and
+// the one a coach exports to read an athlete's block away from the app - which
+// is why it is authorized exactly like the assignment itself: the member, a
+// manager of the club the program belongs to, or a superadmin.
+//
+// ?week=N limits it to one week. A block is a dozen pages and a week is one,
+// and what gets discussed on a Sunday evening is the week just finished.
+func (h *TrainingHandler) ExportAssignment(w http.ResponseWriter, r *http.Request) {
+	assignment, ok := h.authorizeAssignment(w, r)
+	if !ok {
+		return
+	}
+
+	program, err := h.programs.FindByID(r.Context(), assignment.ProgramID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	days, err := h.programs.ListDays(r.Context(), assignment.ProgramID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	sets, err := h.programs.ListSetsForProgram(r.Context(), assignment.ProgramID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	logs, err := h.programs.ListLogsForAssignment(r.Context(), assignment.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	// Resolved against the member the block was assigned to, not whoever is
+	// asking: a coach exporting their athlete's week wants the athlete's
+	// loads, which is the whole point of sending it.
+	resolved, _, err := h.sets.resolveSets(r.Context(), sets, assignment.UserID, logs)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	byDay := map[string][]models.ProgramSet{}
+	for _, set := range resolved {
+		byDay[set.DayID] = append(byDay[set.DayID], set)
+	}
+	for i := range days {
+		days[i].Sets = byDay[days[i].ID]
+	}
+	days = daysOfWeek(days, r.URL.Query().Get("week"))
+
+	writeProgramSheet(w, exportFormat(r), program, days, programsheet.Options{
+		MemberName: h.sets.memberName(r, assignment.UserID),
+		Locale:     sheetLocale(r),
+		Feedback:   true,
+		Footer:     fmt.Sprintf("%s - %s", program.Name, h.sets.uiBaseURL),
+	})
+}
+
+// daysOfWeek narrows a block to one week, or leaves it whole when no week was
+// asked for.
+//
+// A week that has no sessions comes back empty rather than falling back to the
+// whole block: somebody who asked for week 7 of a six-week block should get a
+// sheet saying there is nothing there, not twelve pages they did not ask for.
+func daysOfWeek(days []models.ProgramDay, week string) []models.ProgramDay {
+	if utils.IsBlank(week) {
+		return days
+	}
+	number, err := strconv.Atoi(strings.TrimSpace(week))
+	if err != nil {
+		return days
+	}
+
+	filtered := make([]models.ProgramDay, 0, len(days))
+	for _, day := range days {
+		if day.Week == number {
+			filtered = append(filtered, day)
+		}
+	}
+	return filtered
 }

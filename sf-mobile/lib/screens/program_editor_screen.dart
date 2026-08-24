@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/export_menu.dart';
 import '../widgets/multi_select.dart';
 
 /// Authoring a program on the phone: sessions, and the sets in them.
@@ -99,26 +99,19 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
   /// Saved to the app's own documents directory rather than a shared one: it
   /// needs no permission, and the file is a copy of something the server can
   /// render again at any time.
-  Future<void> _exportPdf() async {
-    final t = ref.read(tProvider);
+  Future<void> _export(ExportFormat format) async {
     setState(() => _exporting = true);
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final path = await ref.read(apiProvider).downloadProgramPdf(
+      final path = await ref.read(apiProvider).downloadProgram(
             widget.clubId,
             widget.programId,
             directory: directory.path,
-            fileName: '${_safeFileName(_detail?.program.name ?? 'program')}.pdf',
+            fileName: '${_safeFileName(_detail?.program.name ?? 'program')}.${format.extension}',
+            format: format.extension,
             locale: ref.read(localeProvider),
           );
-
-      final result = await OpenFilex.open(path);
-      if (result.type != ResultType.done && mounted) {
-        // A phone with no PDF viewer is a real case, and "nothing happened" is
-        // the worst way to find out.
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(t('programs.exportNoViewer'))));
-      }
+      if (mounted) await openExported(context, ref, path);
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -240,12 +233,10 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
             tooltip: t('programs.assign'),
             onPressed: _detail == null || widget.clubId.isEmpty ? null : _assign,
           ),
-          IconButton(
-            icon: _exporting
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: t('programs.exportPdf'),
-            onPressed: _detail == null || _exporting ? null : _exportPdf,
+          SfExportButton(
+            busy: _exporting,
+            onExport: _export,
+            tooltip: t('programs.export'),
           ),
         ],
       ),
