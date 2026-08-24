@@ -114,6 +114,22 @@ function AppRoutes() {
                 </SignedInShell>
               }
             />
+            {/* The calendar, readable with no account: a meet anybody can
+                enter is worth finding before signing up.
+                /calendar rather than /events because this is the URL people
+                paste into a club chat - short, and it says what it opens. The
+                same page as /dashboard/events: what a visitor gets is decided
+                by the API, which returns only public events to an anonymous
+                caller, and by the controls here, which all ask whether there
+                is a session. */}
+            <Route
+              path="/calendar"
+              element={
+                <SignedInShell>
+                  <Events />
+                </SignedInShell>
+              }
+            />
 
             <Route
               path="/dashboard"
