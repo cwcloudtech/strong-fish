@@ -188,7 +188,7 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
               if (mounted) setState(() => _uploading = value);
             },
           );
-      if (!mounted || url.isEmpty) return;
+      if (!mounted) return;
       final text = _draft.text.trim();
       _draft.text = text.isEmpty ? url : '$text\n$url';
     } catch (error) {

@@ -143,16 +143,40 @@ String _frameHtml(String embedUrl) =>
 ///
 /// Nothing loads until it is tapped. A feed is a list, and spinning up a WebView
 /// per post would cost memory and battery for players nobody asked to watch.
-/// Whether this URL is an object the API serves itself.
+/// Whether this URL is an object served by a StrongFish media proxy -
+/// `.../v1/media/{storage}/{object}`.
 ///
-/// Matched against the configured API address rather than by path alone: a
-/// post can carry any link, and asking this API to sign somebody else's URL
-/// would be useless at best. Everything else - a public bucket's object, a
-/// Drive /preview page, a YouTube video - goes to the player untouched, which
-/// is what has always happened.
-bool isPrivateMedia(String url, String apiUrl) {
-  final base = apiUrl.replaceFirst(RegExp(r'/+$'), '');
-  return base.isNotEmpty && url.startsWith('$base/v1/media/');
+/// Recognised by the shape of the path, not by comparing the whole address
+/// against the configured API URL. The server builds these links from its own
+/// `SF_API_URL`; the phone was told an address by hand or by a scanned QR
+/// code, and the two only have to reach the same server, not be spelled the
+/// same way. A `https` against a `http`, a `www.`, an explicit `:443` or a
+/// trailing slash was enough to make a phone treat its own deployment's video
+/// as a stranger's link and hand the player a URL that answers 401 - which is
+/// why an upload played in a browser and showed nothing on a phone.
+///
+/// Everything else - a public bucket's object, a Drive /preview page, a
+/// YouTube video - goes to the player untouched, as it always has.
+bool isPrivateMedia(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) return false;
+  final parts = uri.pathSegments.where((segment) => segment.isNotEmpty).toList();
+  final media = parts.indexOf('media');
+  // `v1/media/{storage}/{object}`: the storage id and the object have to be
+  // there, or this is some other endpoint that merely contains the word.
+  return media > 0 && parts[media - 1] == 'v1' && parts.length >= media + 3;
+}
+
+/// Whether [url] is served by the very API this phone is talking to, compared
+/// host to host so the spellings above don't matter.
+bool isOwnApiHost(String url, String apiUrl) {
+  String hostOf(String value) {
+    final uri = Uri.tryParse(value.contains('://') ? value : 'https://$value');
+    return uri?.host.toLowerCase().replaceFirst(RegExp(r'^www\.'), '') ?? '';
+  }
+
+  final own = hostOf(apiUrl);
+  return own.isNotEmpty && hostOf(url) == own;
 }
 
 class MediaPlayer extends ConsumerStatefulWidget {
@@ -190,7 +214,7 @@ class _MediaPlayerState extends ConsumerState<MediaPlayer> {
 
   Future<void> _resolve() async {
     final api = ref.read(apiProvider);
-    if (!isPrivateMedia(widget.url, api.client.apiUrl)) {
+    if (!isPrivateMedia(widget.url)) {
       setState(() => _resolved = widget.url);
       return;
     }
@@ -198,12 +222,18 @@ class _MediaPlayerState extends ConsumerState<MediaPlayer> {
     setState(() => _resolved = null);
     try {
       final signed = await api.mediaLink(widget.url);
-      if (mounted) setState(() => _resolved = signed);
+      if (mounted) setState(() => _resolved = signed.isEmpty ? widget.url : signed);
     } catch (_) {
       // A file this member may not read is not an error to shout about: the
       // post shows nothing where the video would be, which is what somebody
       // else's private video should look like.
-      if (mounted) setState(() => _resolved = '');
+      //
+      // A media link from *another* instance is a different matter - this API
+      // has no such object and never will - so that one falls back to the URL
+      // as posted, which still plays if it points at something public.
+      if (!mounted) return;
+      final ours = isOwnApiHost(widget.url, api.client.apiUrl);
+      setState(() => _resolved = ours ? '' : widget.url);
     }
   }
 
