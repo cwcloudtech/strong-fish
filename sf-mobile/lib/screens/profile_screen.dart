@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../models/models.dart';
 import '../providers/app_update_provider.dart';
+import '../i18n/app_localizations.dart';
 import '../providers/providers.dart';
 import '../widgets/common.dart';
 import '../widgets/profile_badges.dart';
@@ -296,9 +297,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 trailing: DropdownButton<String>(
                   value: locale,
                   underline: const SizedBox.shrink(),
-                  items: const [
-                    DropdownMenuItem(value: 'en', child: Text('English')),
-                    DropdownMenuItem(value: 'fr', child: Text('Français')),
+                  // Built from the dictionary list rather than written out:
+                  // a locale added there should appear here without anybody
+                  // having to remember this screen.
+                  items: [
+                    for (final option in supportedLocales)
+                      DropdownMenuItem(value: option.code, child: Text(option.label)),
                   ],
                   onChanged: (value) async {
                     if (value == null) return;

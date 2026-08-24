@@ -1,6 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
-import { detectLocale, supportedLocales, translate, translateError } from "./translate";
+import { detectLocale, isRtlLocale, supportedLocales, translate, translateError } from "./translate";
+
+/** Puts the document in the picked language, and the right way round. */
+function applyLocale(locale) {
+  document.documentElement.lang = locale;
+  document.documentElement.dir = isRtlLocale(locale) ? "rtl" : "ltr";
+}
 
 const I18nContext = createContext(null);
 
@@ -10,8 +16,13 @@ export function I18nProvider({ children }) {
   const setLocale = useCallback((next) => {
     localStorage.setItem("sf.locale", next);
     setLocaleState(next);
-    document.documentElement.lang = next;
+    applyLocale(next);
   }, []);
+
+  // Also on the first render: the locale can come from storage or from the
+  // browser, and the document would otherwise stay left-to-right until
+  // somebody picked a language by hand.
+  useEffect(() => applyLocale(locale), [locale]);
 
   const value = useMemo(
     () => ({
