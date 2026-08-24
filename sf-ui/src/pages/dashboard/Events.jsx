@@ -50,6 +50,13 @@ const randomColor = () => EVENT_COLORS[Math.floor(Math.random() * EVENT_COLORS.l
  * to the clubs they manage. Subscribing is the point of the feed URL at the
  * top - the calendar people actually live in is Outlook or Google's, not this
  * page.
+ *
+ * It is also readable with no account at all, at /events, where it shows the
+ * open calendar and nothing else: a meet anybody can enter is exactly what is
+ * worth finding *before* signing up. Nothing is gated by hand for that - the
+ * API returns only public events to an anonymous caller, and every control
+ * here already asks whether there is a session (or, for editing one event,
+ * whether the API marked it editable).
  */
 export default function Events() {
   const { t, locale } = useI18n();
@@ -77,7 +84,9 @@ export default function Events() {
       // the whole calendar; the list is forward-looking unless asked.
       const [list, myClubs] = await Promise.all([
         eventsApi.list(showPast || layout === "calendar" ? { past: 1 } : undefined),
-        clubsApi.list().catch(() => []),
+        // Only for somebody signed in: a visitor has no clubs, and asking
+        // would be a 401 on every load of a page that works without one.
+        user ? clubsApi.list().catch(() => []) : Promise.resolve([]),
       ]);
       setEvents(list);
       setClubs(myClubs);
@@ -85,7 +94,7 @@ export default function Events() {
     } catch (err) {
       setError(err);
     }
-  }, [showPast, layout]);
+  }, [showPast, layout, user]);
 
   useEffect(() => {
     load();
@@ -173,7 +182,9 @@ export default function Events() {
         </div>
       </div>
 
-      <CalendarSubscription />
+      {/* The ICS feed is a member's own address - there is nothing to
+          subscribe to without an account. */}
+      {user ? <CalendarSubscription /> : null}
 
       <ErrorMessage error={error} />
 
