@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'public_profile_screen.dart';
 
 /// Account management, for a superadmin.
 ///
@@ -233,7 +234,10 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
             for (final applicant in _coachRequests)
               Card(
                 child: ListTile(
-                  leading: SfAvatar(picture: applicant.picture, name: applicant.fullName),
+                  leading: _ProfileAvatar(
+                    avatar: SfAvatar(picture: applicant.picture, name: applicant.fullName),
+                    target: applicant.handle.isNotEmpty ? applicant.handle : applicant.id,
+                  ),
                   title: Text(applicant.fullName),
                   subtitle: Text(applicant.email),
                   trailing: Row(
@@ -278,7 +282,10 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
             for (final user in visible)
               Card(
                 child: ListTile(
-                  leading: SfAvatar.of(user),
+                  leading: _ProfileAvatar(
+                    avatar: SfAvatar.of(user),
+                    target: user.handle.isNotEmpty ? user.handle : user.id,
+                  ),
                   title: Text(user.fullName.isEmpty ? user.email : user.fullName),
                   subtitle: Text(
                     '${user.email}\n${t('admin.role${_capitalize(user.role)}')}',
@@ -353,6 +360,38 @@ class _Stat extends StatelessWidget {
                 ?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold)),
         Text(label, style: Theme.of(context).textTheme.bodySmall, textAlign: TextAlign.center),
       ],
+    );
+  }
+}
+
+/// An avatar in the admin lists that opens the person behind it.
+///
+/// Only the picture is tappable, not the whole row: the row's own controls
+/// change somebody's role or delete their account, and those should stay the
+/// deliberate act they are.
+///
+/// Addressed by handle when there is one and by id otherwise - the API's
+/// profile route takes either - so a member who never picked a profile name
+/// opens just the same. Visibility is the API's decision as everywhere else,
+/// and it lets a superadmin read every profile, so from this screen the page
+/// always opens.
+class _ProfileAvatar extends ConsumerWidget {
+  final Widget avatar;
+  final String target;
+
+  const _ProfileAvatar({required this.avatar, required this.target});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Tooltip(
+      message: ref.watch(tProvider)('search.openProfile'),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => PublicProfileScreen(handle: target)),
+        ),
+        child: avatar,
+      ),
     );
   }
 }

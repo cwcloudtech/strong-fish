@@ -604,6 +604,37 @@ class SfApi {
 
   // --- profiles ---
 
+  /// Finds members, the way sf-ui's search page does: a free-text `terms`
+  /// plus the fields you can narrow by, combined with AND.
+  ///
+  /// Nothing is filtered here. Who may be seen is decided inside the API's
+  /// query, so the count that comes back is honest and a hidden profile was
+  /// never in it. With no criteria at all it answers with everybody the caller
+  /// may see, which is what makes the screen useful before anything is typed.
+  Future<Page<MemberResult>> searchMembers({
+    String terms = '',
+    String name = '',
+    String surname = '',
+    String username = '',
+    String email = '',
+    int page = 0,
+  }) async {
+    final criteria = {
+      'terms': terms,
+      'name': name,
+      'surname': surname,
+      'username': username,
+      'email': email,
+    }..removeWhere((_, value) => value.trim().isEmpty);
+
+    final response = await client.dio.get('/search/members', queryParameters: {
+      for (final entry in criteria.entries) entry.key: entry.value.trim(),
+      'page': page,
+      'size': 20,
+    });
+    return Page.fromJson(_map(response.data), MemberResult.fromJson);
+  }
+
   Future<PublicProfile> profile(String handle) async =>
       PublicProfile.fromJson(_map((await client.dio.get('/profiles/$handle')).data));
 
