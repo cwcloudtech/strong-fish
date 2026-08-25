@@ -13,7 +13,6 @@ import { readImageAsDataUrl } from "../../utils/image";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 import LinkifiedText from "../../components/common/LinkifiedText";
-import { isFramedMedia } from "../../webcomponents/MediaPlayer";
 import MediaLink from "../../components/common/MediaLink";
 
 /**
@@ -303,17 +302,14 @@ function Thread({ userId, onSent }) {
                 {/* A voice message plays where it sits - the browser's own
                     controls, no player to build. */}
                 {message.audio ? (
-                  // A voice note in Google Drive is not a file this browser can
-                  // fetch: the API stores Drive's /preview URL, which is an
-                  // embed page, and an <audio src> pointed at an HTML page
-                  // simply never plays. Framed through the media player in that
-                  // case, and played natively when the storage serves the file
-                  // itself - which is what an S3 bucket does.
-                  isFramedMedia(message.audio) ? (
-                    <MediaLink url={message.audio} />
-                  ) : (
-                    <audio className="sf-bubble-audio" src={message.audio} controls preload="metadata" />
-                  )
+                  // Always through the media player, never a bare <audio src>.
+                  // It is the only thing that knows the three shapes a voice
+                  // note comes in: a file the bucket serves publicly, Drive's
+                  // /preview page (an embed, which an <audio> element loads as
+                  // a web page and plays silently), and an address on this API
+                  // for a private bucket - which answers 401 until it has been
+                  // exchanged for a signed link.
+                  <MediaLink url={message.audio} kind="audio" />
                 ) : null}
 
                 {/* The same detection the feed uses, so a video shared in a
