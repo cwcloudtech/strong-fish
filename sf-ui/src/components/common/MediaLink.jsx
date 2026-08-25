@@ -21,7 +21,7 @@ import { apiUrl } from "../../utils/apiUrl";
  * than being rendered with a URL that would 401 and leave a broken frame on
  * screen for a second.
  */
-export default function MediaLink({ url }) {
+export default function MediaLink({ url, kind }) {
   const [resolved, setResolved] = useState(() => (isPrivateMedia(url) ? null : url));
 
   useEffect(() => {
@@ -46,7 +46,7 @@ export default function MediaLink({ url }) {
   }, [url]);
 
   if (!resolved) return null;
-  return <media-player url={resolved} />;
+  return <media-player url={resolved} kind={kind} />;
 }
 
 /**

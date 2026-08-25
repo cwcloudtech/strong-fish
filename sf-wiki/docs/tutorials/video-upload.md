@@ -151,6 +151,10 @@ Both the web app and the phone can record. On a phone Android asks for permissio
 
 A voice message stored in **Google Drive** plays in Drive's own player rather than in a plain audio bar - Drive serves an embed page for a file, not the file itself. Nothing to configure; it is worth knowing so the difference between two members' messages does not look like a bug.
 
+## Sound in a post
+
+A post plays sound the same way it plays video: paste a link to an audio file - an `.mp3`, `.m4a`, `.wav`, or a recording in your own storage - and it becomes a play bar in the post rather than a bare link. Links to files in a private storage are read through the app, so only the members allowed to hear them can.
+
 ## Troubleshooting
 
 | What you see | What it usually is |

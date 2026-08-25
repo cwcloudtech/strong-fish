@@ -151,6 +151,10 @@ Sur téléphone, Android demande l'autorisation d'utiliser le microphone la prem
 
 Un message vocal stocké sur **Google Drive** se lit dans le lecteur de Drive plutôt que dans une barre audio ordinaire — Drive sert une page d'aperçu pour un fichier, et non le fichier lui-même. Rien à configurer ; c'est bon à savoir pour que la différence entre les messages de deux membres ne ressemble pas à un bug.
 
+## Du son dans une publication
+
+Une publication lit le son comme elle lit la vidéo : collez le lien d'un fichier audio — un `.mp3`, un `.m4a`, un `.wav`, ou un enregistrement déposé dans votre stockage — et il devient une barre de lecture dans la publication plutôt qu'un simple lien. Les liens vers un fichier d'un stockage privé sont lus au travers de l'application : seuls les membres autorisés peuvent les écouter.
+
 ## En cas de problème
 
 | Ce que vous voyez | Ce que c'est généralement |

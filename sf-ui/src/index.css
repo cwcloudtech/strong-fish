@@ -2143,16 +2143,11 @@ button {
 /* --- message media --- */
 
 .sf-bubble-picture,
-.sf-bubble-audio {
-  display: block;
-  width: 100%;
-  margin-top: 6px;
-  border-radius: var(--sf-radius-sm);
-}
 
 .sf-bubble-picture { max-height: 320px; object-fit: cover; }
-.sf-bubble-audio { min-width: 220px; }
-.sf-bubble media-player { display: block; margin-top: 6px; }
+/* Wide enough for the browser's own audio controls, which collapse to an
+   unusable stub in a bubble sized to a two-word message. */
+.sf-bubble media-player { display: block; margin-top: 6px; min-width: 220px; }
 
 .sf-thread-tools {
   display: flex;

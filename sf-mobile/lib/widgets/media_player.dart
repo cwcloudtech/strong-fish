@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -11,7 +13,7 @@ import '../theme.dart';
 /// host, so a post looks the same on a phone as it does in a browser. The two
 /// have to agree: it is the same link, and a reader switching devices should
 /// not find one of them showing a player and the other a bare URL.
-enum MediaKind { youtube, vimeo, dailymotion, facebook, drive, file, image, link }
+enum MediaKind { youtube, vimeo, dailymotion, facebook, drive, file, audio, image, link }
 
 class DetectedMedia {
   final MediaKind kind;
@@ -39,6 +41,36 @@ final RegExp _imagePattern =
 /// member's own bucket ends up as.
 final RegExp _videoPattern =
     RegExp(r'\.(mp4|webm|ogv|ogg|mov|m4v)(\?.*)?$', caseSensitive: false);
+
+/// A sound file, played through the platform's own controls for the same
+/// reason. Only the extensions that can be nothing else are listed: .webm and
+/// .ogg are containers for either, and a recording in one of them is told
+/// apart by its key in [_isVoiceObject] rather than guessed at from its name.
+final RegExp _audioPattern =
+    RegExp(r'\.(mp3|m4a|aac|wav|oga|opus|flac|weba)(\?.*)?$', caseSensitive: false);
+
+/// Whether this is a voice recording served by our own media proxy.
+///
+/// The API names what it stores - `.../{userId}/voice/clip-1a2b.webm` for a
+/// recording, `.../video/...` for a film - and the object segment of a media
+/// URL is that key in base64url. Reading it is what tells an audio-only WebM
+/// from a video one; the extension cannot, and guessing wrong plays a voice
+/// message inside a black rectangle.
+bool _isVoiceObject(Uri uri) {
+  final parts = uri.pathSegments.where((segment) => segment.isNotEmpty).toList();
+  final media = parts.indexOf('media');
+  if (media < 1 || parts[media - 1] != 'v1' || parts.length < media + 3) return false;
+
+  final object = parts[media + 2];
+  final dot = object.lastIndexOf('.');
+  final encoded = dot > 0 ? object.substring(0, dot) : object;
+  try {
+    final key = utf8.decode(base64Url.decode(base64Url.normalize(encoded)));
+    return key.split('/').contains('voice');
+  } catch (_) {
+    return false;
+  }
+}
 
 DetectedMedia detectMedia(String rawUrl) {
   final uri = Uri.tryParse(rawUrl);
@@ -97,6 +129,9 @@ DetectedMedia detectMedia(String rawUrl) {
     }
   }
 
+  if (_audioPattern.hasMatch(uri.path) || _isVoiceObject(uri)) {
+    return DetectedMedia(MediaKind.audio, rawUrl);
+  }
   if (_videoPattern.hasMatch(uri.path)) return DetectedMedia(MediaKind.file, rawUrl);
   if (_imagePattern.hasMatch(uri.path)) return DetectedMedia(MediaKind.image, rawUrl);
 
@@ -127,22 +162,26 @@ String _providerLabel(MediaKind kind) {
 /// URL, rather than as the top-level page. That is what YouTube's player needs:
 /// opened bare, with no embedding origin, it refuses with a configuration
 /// error.
+/// A URL as an HTML attribute value.
+///
+/// Signed media links carry a query string, so the ampersands and quotes that
+/// would otherwise end the attribute early have to go in escaped.
+String _attribute(String url) => url
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+
 String _frameHtml(String embedUrl) =>
     '<!DOCTYPE html><html><head>'
     '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">'
     '<style>html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden}'
     '.frame{position:relative;width:100%;height:100%}'
     'iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style></head>'
-    '<body><div class="frame"><iframe src="$embedUrl" '
+    '<body><div class="frame"><iframe src="${_attribute(embedUrl)}" '
     'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" '
     'allowfullscreen></iframe></div></body></html>';
 
-/// Renders a post's link the way the web `<media-player>` does: a 16:9 embed for
-/// the hosted providers, a native player for an uploaded file, a picture for an
-/// image, and a link card for anything else.
-///
-/// Nothing loads until it is tapped. A feed is a list, and spinning up a WebView
-/// per post would cost memory and battery for players nobody asked to watch.
 /// Whether this URL is an object served by a StrongFish media proxy -
 /// `.../v1/media/{storage}/{object}`.
 ///
@@ -179,6 +218,13 @@ bool isOwnApiHost(String url, String apiUrl) {
   return own.isNotEmpty && hostOf(url) == own;
 }
 
+/// Renders a post's link the way the web `<media-player>` does: a 16:9 embed for
+/// the hosted providers, a native player for an uploaded video, the platform's
+/// audio controls for a sound file, a picture for an image, and a link card for
+/// anything else.
+///
+/// Nothing loads until it is tapped. A feed is a list, and spinning up a WebView
+/// per post would cost memory and battery for players nobody asked to watch.
 class MediaPlayer extends ConsumerStatefulWidget {
   final String url;
 
@@ -186,7 +232,21 @@ class MediaPlayer extends ConsumerStatefulWidget {
   /// frontend, so the embed has an origin to report.
   final String baseUrl;
 
-  const MediaPlayer({super.key, required this.url, required this.baseUrl});
+  /// Play this as sound even when the name says nothing.
+  ///
+  /// Set by the caller that already knows - a voice message carries its
+  /// recording in its own field, so there is nothing to detect. It matters for
+  /// a bucket that serves its files publicly: the address is then the member's
+  /// own, `.webm` and `.ogg` are containers for either kind, and without this
+  /// a voice note would be drawn as a video with nothing to show.
+  final bool preferAudio;
+
+  const MediaPlayer({
+    super.key,
+    required this.url,
+    required this.baseUrl,
+    this.preferAudio = false,
+  });
 
   @override
   ConsumerState<MediaPlayer> createState() => _MediaPlayerState();
@@ -211,6 +271,12 @@ class _MediaPlayerState extends ConsumerState<MediaPlayer> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) _resolve();
   }
+
+  /// The caller's hint, honoured for anything that is not somebody else's
+  /// player: a YouTube or Drive link stays framed, since there is no file to
+  /// hand to an audio element in the first place.
+  bool _preferAudio(MediaKind kind) =>
+      widget.preferAudio && !_framedKinds.contains(kind) && kind != MediaKind.image;
 
   Future<void> _resolve() async {
     final api = ref.read(apiProvider);
@@ -283,6 +349,12 @@ class _MediaPlayerState extends ConsumerState<MediaPlayer> {
               : _Poster(label: '', onTap: () => _playFile(media.embedUrl)),
         ),
       );
+    }
+
+    // Audio needs no poster and no 16:9 box: the controls are the whole of it,
+    // and at metadata-only preload nothing is fetched until it is played.
+    if (media.kind == MediaKind.audio || _preferAudio(media.kind)) {
+      return SizedBox(height: 56, child: AudioWebView(url: media.embedUrl));
     }
 
     if (media.kind == MediaKind.image) {
@@ -446,7 +518,7 @@ class _AudioWebViewState extends State<AudioWebView> {
       '<meta name="viewport" content="width=device-width, initial-scale=1">'
       '<style>html,body{margin:0;background:transparent}'
       'audio{width:100%;height:44px}</style></head>'
-      '<body><audio src="${widget.url}" controls preload="metadata"></audio></body></html>',
+      '<body><audio src="${_attribute(widget.url)}" controls preload="metadata"></audio></body></html>',
     );
 
   @override

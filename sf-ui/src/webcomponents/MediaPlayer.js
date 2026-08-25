@@ -1,8 +1,8 @@
 // <media-player url="..."></media-player> - a plain native custom element (not a
 // React component), so it can be reused outside this app too. Given a raw URL it
-// detects the provider (YouTube/Vimeo/Dailymotion/Facebook video, SlideShare, or
-// a direct image link) and renders the right embed, falling back to a link-out
-// card for anything else.
+// detects the provider (YouTube/Vimeo/Dailymotion/Facebook video, SlideShare, a
+// direct image link, or an uploaded video or sound file) and renders the right
+// embed, falling back to a link-out card for anything else.
 //
 // Ported from ~/uprodit/prodit-ui's webcomponents/MediaPlayer.ts: a post here
 // carries raw links (see the API's Post.links), and this is what turns a pasted
@@ -14,6 +14,35 @@ const IMAGE_EXTENSION_PATTERN = /\.(png|jpe?g|gif|webp|svg|bmp|avif)(\?.*)?$/i;
 // hosted providers below there is no embed to build: the file *is* the player's
 // source.
 const VIDEO_EXTENSION_PATTERN = /\.(mp4|webm|ogv|ogg|mov|m4v)(\?.*)?$/i;
+// A sound file, played in a native <audio> element for the same reason. Only
+// the extensions that can be nothing else are listed: .webm and .ogg are both
+// containers, and a recording in one of them is told apart by its key below
+// rather than guessed at from its name.
+const AUDIO_EXTENSION_PATTERN = /\.(mp3|m4a|aac|wav|oga|opus|flac|weba)(\?.*)?$/i;
+
+/**
+ * Whether this is a voice recording served by our own media proxy.
+ *
+ * The API names what it stores: `.../{userId}/voice/clip-1a2b.webm` for a
+ * recording, `.../video/...` for a film, and the object segment of a media URL
+ * is that key in base64url. Reading it is what tells an audio-only WebM from a
+ * video one - the extension cannot, and guessing wrong renders a voice message
+ * as a black rectangle.
+ */
+function isVoiceObject(url) {
+  const parts = url.pathname.split("/").filter(Boolean);
+  const media = parts.indexOf("media");
+  if (media < 1 || parts[media - 1] !== "v1" || parts.length < media + 3) return false;
+
+  // The object carries the file's extension after the encoded key, and
+  // base64url spells + and / as - and _.
+  const encoded = parts[media + 2].replace(/\.[^.]*$/, "").replace(/-/g, "+").replace(/_/g, "/");
+  try {
+    return atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "=")).split("/").includes("voice");
+  } catch {
+    return false;
+  }
+}
 
 function firstPathSegment(url, fromEnd = true) {
   const parts = url.pathname.split("/").filter(Boolean);
@@ -86,6 +115,10 @@ export function detectMedia(rawUrl) {
     return { kind: "slideshare", embedUrl: rawUrl };
   }
 
+  if (AUDIO_EXTENSION_PATTERN.test(url.pathname) || isVoiceObject(url)) {
+    return { kind: "audio", embedUrl: rawUrl };
+  }
+
   if (VIDEO_EXTENSION_PATTERN.test(url.pathname)) {
     return { kind: "file", embedUrl: rawUrl };
   }
@@ -100,19 +133,6 @@ export function detectMedia(rawUrl) {
 // The kinds rendered as a framed iframe. A "file" is a video too, but it plays
 // in a native <video> element rather than in somebody else's player.
 const VIDEO_KINDS = ["youtube", "vimeo", "dailymotion", "facebook", "drive"];
-
-/**
- * Reports whether a URL has to be framed rather than handed to a media element.
- *
- * A Google Drive link is the case that matters: what the API stores is Drive's
- * /preview address, which is an HTML player page, not the file. An <audio> or
- * <video> element pointed at it loads a web page and plays nothing - and does
- * so silently, which is exactly how a voice message uploaded perfectly happily
- * came out mute.
- */
-export function isFramedMedia(url) {
-  return VIDEO_KINDS.includes(detectMedia(url).kind);
-}
 
 const STYLE = `
   :host { display: block; }
@@ -131,6 +151,13 @@ const STYLE = `
     max-height: 480px;
     border-radius: 10px;
     background-color: #000;
+  }
+  .audio {
+    display: block;
+    width: 100%;
+    /* The controls are drawn by the browser and size themselves; the height is
+       fixed only so a row of them does not jitter as each one loads. */
+    height: 40px;
   }
   .image {
     display: block;
@@ -171,7 +198,7 @@ const LINK_ICON_BY_KIND = { slideshare: "📊", link: "🔗" };
 
 class MediaPlayerElement extends HTMLElement {
   static get observedAttributes() {
-    return ["url"];
+    return ["url", "kind"];
   }
 
   connectedCallback() {
@@ -194,6 +221,17 @@ class MediaPlayerElement extends HTMLElement {
     root.appendChild(style);
 
     const media = detectMedia(url);
+
+    // A caller that already knows what it holds can say so - a voice message
+    // carries its recording in its own field, so there is nothing to detect.
+    // It matters for a bucket that serves its files publicly: the address is
+    // then the member's own, .webm and .ogg are containers for either kind,
+    // and without this a voice note would be drawn as a video with nothing to
+    // show. Somebody else's player is left alone: a YouTube or Drive link has
+    // no file to hand to an audio element in the first place.
+    if (this.getAttribute("kind") === "audio" && !VIDEO_KINDS.includes(media.kind) && media.kind !== "image") {
+      media.kind = "audio";
+    }
 
     if (VIDEO_KINDS.includes(media.kind)) {
       const frame = document.createElement("div");
@@ -220,6 +258,18 @@ class MediaPlayerElement extends HTMLElement {
       // browsers block it anyway.
       video.playsInline = true;
       root.appendChild(video);
+      return;
+    }
+
+    if (media.kind === "audio") {
+      const audio = document.createElement("audio");
+      audio.className = "audio";
+      audio.src = media.embedUrl;
+      audio.controls = true;
+      // Metadata only, like the video above: a thread full of voice notes
+      // should not fetch every one of them to show a play button.
+      audio.preload = "metadata";
+      root.appendChild(audio);
       return;
     }
 

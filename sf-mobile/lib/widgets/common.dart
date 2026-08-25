@@ -204,27 +204,21 @@ class _AudioBubbleState extends State<AudioBubble> {
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
 
-    // The platform's own controls, in a minimal page - the same approach the
-    // media player takes for an uploaded video, and for the same reason: there
-    // is no audio element in Flutter, and a plugin for play/pause alone would
-    // be a dependency to carry forever.
+    // Once opened it is the media player's job, never a bare AudioWebView. It
+    // is the only thing that knows the three shapes a voice note comes in: a
+    // file the bucket serves publicly, Drive's /preview address (an HTML page,
+    // which an <audio src> loads and plays nothing of - silently, which is
+    // exactly how a recording that uploaded perfectly came out mute), and an
+    // address on this API for a private bucket, which answers 401 until it has
+    // been exchanged for a signed link. That exchange is why a voice message
+    // stored privately played on neither client.
     if (_open) {
-      // A voice note in Google Drive is not a file to play: the API stores
-      // Drive's /preview address, which is an HTML player page. Feeding that
-      // to an <audio src> loads a web page and plays nothing - silently, which
-      // is exactly how a recording that uploaded perfectly came out mute.
-      // Framed through Drive's own player in that case; played natively when
-      // the storage serves the file itself, as an S3 bucket does.
-      final detected = detectMedia(widget.url);
-      if (detected.kind == MediaKind.drive) {
-        return SizedBox(
-          height: 120,
-          child: MediaPlayer(url: widget.url, baseUrl: widget.baseUrl),
-        );
-      }
+      final drive = detectMedia(widget.url).kind == MediaKind.drive;
       return SizedBox(
-        height: 56,
-        child: AudioWebView(url: widget.url),
+        // Drive brings its own player, which needs room; everything else is a
+        // row of controls.
+        height: drive ? 120 : 56,
+        child: MediaPlayer(url: widget.url, baseUrl: widget.baseUrl, preferAudio: true),
       );
     }
 
