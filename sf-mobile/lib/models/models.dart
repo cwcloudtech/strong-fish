@@ -584,6 +584,10 @@ class CoachApplicant {
   final String email;
   final String name;
   final String surname;
+
+  /// Their profile name, when they have picked one. The profile page opens by
+  /// id just as well, so this is only what makes the address readable.
+  final String handle;
   final String picture;
   final DateTime? requestedAt;
 
@@ -592,6 +596,7 @@ class CoachApplicant {
     this.email = '',
     this.name = '',
     this.surname = '',
+    this.handle = '',
     this.picture = '',
     this.requestedAt,
   });
@@ -605,6 +610,7 @@ class CoachApplicant {
       email: _toString(json['email']),
       name: _toString(json['name']),
       surname: _toString(json['surname']),
+      handle: _toString(json['handle']),
       picture: _toString(json['picture']),
       requestedAt: _optionalDate(request['requestedAt']),
     );
@@ -943,6 +949,57 @@ class Comment {
         deletable: json['deletable'] == true,
         createdAt: _toDate(json['createdAt']),
         updatedAt: _toDate(json['updatedAt']),
+      );
+}
+
+/// One row of a member search.
+///
+/// A projection, not an account: the API decides what a caller may see of
+/// somebody else and sends only that, so a result carries no more than a name,
+/// a picture and the two badges - and [sharesClub], which is usually the
+/// answer to "why is this person in my results".
+class MemberResult {
+  final String id;
+
+  /// Empty when the member has no profile name. The profile page is reached by
+  /// handle, so a result without one can only be messaged.
+  final String handle;
+  final String name;
+  final String surname;
+  final String role;
+  final String specialty;
+  final String picture;
+
+  /// Whether this person and the caller are in the same club.
+  final bool sharesClub;
+
+  /// Whether the name above is a username rather than a person's name.
+  final bool anonymous;
+
+  const MemberResult({
+    required this.id,
+    this.handle = '',
+    this.name = '',
+    this.surname = '',
+    this.role = '',
+    this.specialty = '',
+    this.picture = '',
+    this.sharesClub = false,
+    this.anonymous = false,
+  });
+
+  String get fullName => '$name $surname'.trim();
+
+  factory MemberResult.fromJson(Map<String, dynamic> json) => MemberResult(
+        id: _toString(json['id']),
+        handle: _toString(json['handle']),
+        name: _toString(json['name']),
+        surname: _toString(json['surname']),
+        role: _toString(json['role']),
+        specialty: _toString(json['specialty']),
+        picture: _toString(json['picture']),
+        sharesClub: json['sharesClub'] == true,
+        anonymous: json['anonymous'] == true,
       );
 }
 

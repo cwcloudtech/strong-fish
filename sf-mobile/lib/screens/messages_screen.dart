@@ -10,6 +10,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import 'member_search_screen.dart';
 import 'public_profile_screen.dart';
 import '../widgets/media_player.dart';
 import '../widgets/linkified_text.dart';
@@ -44,6 +45,16 @@ class MessagesScreen extends ConsumerWidget {
                 icon: Icons.chat_bubble_outline,
                 title: t('messages.emptyTitle'),
                 message: t('messages.emptyBody'),
+                // The way out of an empty inbox: an empty state that only
+                // says "start one from a profile" is a dead end on a phone
+                // with nowhere to look a profile up.
+                action: FilledButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const MemberSearchScreen()),
+                  ),
+                  icon: const Icon(Icons.person_search),
+                  label: Text(t('messages.findSomeone')),
+                ),
               ),
             );
           }
@@ -128,6 +139,17 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
     _scroll.dispose();
     _recorder.dispose();
     super.dispose();
+  }
+
+  /// Re-reads the thread from the API.
+  ///
+  /// The optimistic copies of what this side just sent go first: the server's
+  /// answer already contains them, and keeping both would show every one of
+  /// them twice.
+  Future<void> _refresh() async {
+    setState(() => _sent.clear());
+    ref.invalidate(threadProvider(widget.userId));
+    ref.invalidate(conversationsProvider);
   }
 
   Future<void> _send() async {
@@ -306,40 +328,52 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
       body: Column(
         children: [
           Expanded(
-            child: thread.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => SfErrorState(
-                message: ref.read(tErrorProvider)(error),
-                onRetry: () => ref.invalidate(threadProvider(widget.userId)),
-                retryLabel: t('common.back'),
-              ),
-              data: (data) {
-                final messages = [...data.messages, ..._sent];
-                if (messages.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Text(t('messages.threadEmpty'), textAlign: TextAlign.center),
+            // A thread is where new content arrives while it is being read,
+            // so every one of its states pulls to refresh - including the
+            // empty one, which is what a conversation opened from the member
+            // search starts as.
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: thread.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => SfRefreshableBody(
+                  child: SfErrorState(
+                    message: ref.read(tErrorProvider)(error),
+                    onRetry: () => ref.invalidate(threadProvider(widget.userId)),
+                    retryLabel: t('common.back'),
+                  ),
+                ),
+                data: (data) {
+                  final messages = [...data.messages, ..._sent];
+                  if (messages.isEmpty) {
+                    return SfRefreshableBody(
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(32),
+                          child: Text(t('messages.threadEmpty'), textAlign: TextAlign.center),
+                        ),
+                      ),
+                    );
+                  }
+                  _scrollToBottom();
+                  return ListView.builder(
+                    controller: _scroll,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) => _Bubble(
+                      message: messages[index],
+                      onDeleted: () {
+                        // Reloaded rather than spliced out locally: the thread's
+                        // own list and the conversation summary both move with it.
+                        setState(() => _sent.clear());
+                        ref.invalidate(threadProvider(widget.userId));
+                        ref.invalidate(conversationsProvider);
+                      },
                     ),
                   );
-                }
-                _scrollToBottom();
-                return ListView.builder(
-                  controller: _scroll,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) => _Bubble(
-                    message: messages[index],
-                    onDeleted: () {
-                      // Reloaded rather than spliced out locally: the thread's
-                      // own list and the conversation summary both move with it.
-                      setState(() => _sent.clear());
-                      ref.invalidate(threadProvider(widget.userId));
-                      ref.invalidate(conversationsProvider);
-                    },
-                  ),
-                );
-              },
+                },
+              ),
             ),
           ),
           SafeArea(

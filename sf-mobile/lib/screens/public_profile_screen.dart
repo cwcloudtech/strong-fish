@@ -8,6 +8,7 @@ import '../widgets/common.dart';
 import '../widgets/profile_badges.dart';
 import '../widgets/social_share.dart';
 import '../widgets/socials.dart';
+import 'messages_screen.dart';
 
 /// Somebody else's profile, opened from a message, a post, or a search result.
 ///
@@ -81,9 +82,23 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? SfErrorState(message: _error!, onRetry: _load, retryLabel: t('common.back'))
+              // Every state pulls to refresh, not just the loaded one: a
+              // profile that failed to load is exactly where somebody pulls.
+              ? RefreshIndicator(
+                  onRefresh: _load,
+                  child: SfRefreshableBody(
+                    child: SfErrorState(
+                        message: _error!, onRetry: _load, retryLabel: t('common.back')),
+                  ),
+                )
               : profile == null
-                  ? SfEmptyState(icon: Icons.person_off_outlined, title: t('profile.notVisible'))
+                  ? RefreshIndicator(
+                      onRefresh: _load,
+                      child: SfRefreshableBody(
+                        child: SfEmptyState(
+                            icon: Icons.person_off_outlined, title: t('profile.notVisible')),
+                      ),
+                    )
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView(
@@ -136,10 +151,39 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                           ],
                         ),
                         const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: _busy ? null : _toggleFollow,
-                          child: Text(profile.followed ? t('profile.unfollow') : t('profile.follow')),
-                        ),
+                        // Neither action makes sense on your own profile, and
+                        // the API refuses both: you cannot follow or message
+                        // yourself.
+                        if (profile.id != ref.watch(sessionProvider).user?.id)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed: _busy ? null : _toggleFollow,
+                                  child: Text(profile.followed
+                                      ? t('profile.unfollow')
+                                      : t('profile.follow')),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              // Reaching this page at all means the profile is
+                              // visible to the caller, which is exactly the
+                              // API's condition for being allowed to message
+                              // its owner - the rule the web button carries.
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => ThreadScreen(
+                                      userId: profile.id,
+                                      title: profile.fullName,
+                                    ),
+                                  )),
+                                  icon: const Icon(Icons.chat_bubble_outline),
+                                  label: Text(t('messages.message')),
+                                ),
+                              ),
+                            ],
+                          ),
                         if (profile.bests.isNotEmpty) ...[
                           const Divider(height: 32),
                           Text(t('profile.bests'), style: Theme.of(context).textTheme.titleMedium),

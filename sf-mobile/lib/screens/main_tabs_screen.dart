@@ -11,6 +11,7 @@ import 'coach_screen.dart';
 import 'events_screen.dart';
 import 'feed_screen.dart';
 import 'invitations_screen.dart';
+import 'member_search_screen.dart';
 import 'messages_screen.dart';
 import 'one_rms_screen.dart';
 import 'profile_screen.dart';
@@ -62,6 +63,7 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
     // past the end of the list.
     final index = _index.clamp(0, tabs.length - 1);
     final feedIndex = tabs.indexWhere((tab) => tab.screen is FeedScreen);
+    final messagesIndex = tabs.indexWhere((tab) => tab.screen is MessagesScreen);
 
     return Scaffold(
       appBar: AppBar(
@@ -74,8 +76,11 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
         ),
       ),
       body: IndexedStack(index: index, children: [for (final tab in tabs) tab.screen]),
-      // The composer is only offered on the feed tab, where it's the obvious
-      // action; elsewhere it would just be a floating button with no context.
+      // Each tab's obvious action, and nothing on the tabs that have none:
+      // writing a post on the feed, and finding somebody to write to in the
+      // messages. A conversation can only be started with a person, and until
+      // now the phone had no way to look one up - the web's "find someone"
+      // button had no counterpart here.
       floatingActionButton: index == feedIndex
           ? FloatingActionButton(
               onPressed: () async {
@@ -88,7 +93,15 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
               },
               child: const Icon(Icons.edit),
             )
-          : null,
+          : index == messagesIndex
+              ? FloatingActionButton(
+                  tooltip: t('messages.findSomeone'),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const MemberSearchScreen()),
+                  ),
+                  child: const Icon(Icons.person_search),
+                )
+              : null,
       // The open conversations sit directly above the bar, as a row of faces -
       // the phone's answer to the web sidebar's conversation list. A bottom bar
       // cannot list them as destinations, but a tap-to-open strip above it is

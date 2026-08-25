@@ -388,7 +388,13 @@ function CoachRequestsTab() {
         <ul className="sf-list">
           {requests.map((applicant) => (
             <li className="sf-list-item" key={applicant.id}>
-              <Avatar user={applicant} size="sf-avatar-sm" />
+              {/* The picture opens the person behind the request: deciding on
+                  a coach means looking at who they are, and the profile route
+                  takes an id as readily as a handle, so an applicant who never
+                  picked a profile name opens just the same. */}
+              <Link to={`/profile/${applicant.handle || applicant.id}`} title={t("search.openProfile")}>
+                <Avatar user={applicant} size="sf-avatar-sm" />
+              </Link>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <strong>
                   {applicant.name} {applicant.surname}
