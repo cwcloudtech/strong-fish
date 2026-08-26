@@ -385,6 +385,18 @@ button {
   text-decoration: none;
 }
 
+/* A block that is no longer being run, kept for the comments left on it. The
+   tinted ground and the quieter heading are what separate the history from the
+   training in progress at a glance; the card stays fully readable and fully
+   clickable, because reading it back is the whole point of keeping it. */
+.sf-card-history {
+  background-color: var(--sf-bg-alt);
+  border-left: 3px solid var(--sf-border);
+}
+.sf-card-history h3 {
+  color: var(--sf-text-muted);
+}
+
 .sf-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -420,6 +432,9 @@ button {
 }
 
 .sf-badge-muted { background-color: var(--sf-bg-alt); color: var(--sf-text-muted); }
+/* The generic the set was missing: sf-badge-competition is the same colours
+   under an event-specific name. */
+.sf-badge-primary { background-color: var(--sf-primary-tint); color: var(--sf-primary-dark); }
 .sf-badge-success { background-color: var(--sf-success-tint); color: var(--sf-success); }
 .sf-badge-warning { background-color: var(--sf-warning-tint); color: var(--sf-warning); }
 .sf-badge-danger { background-color: var(--sf-danger-light); color: var(--sf-danger); }

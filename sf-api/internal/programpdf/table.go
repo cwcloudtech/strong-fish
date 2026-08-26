@@ -16,7 +16,7 @@ import (
 // SplitLines (so the measurement matches how the text will really break), every
 // cell in a row is given the tallest one's height, and each line is drawn at an
 // explicit (x, y) rather than wherever the previous cell left the cursor.
-func drawTable(pdf *fpdf.Fpdf, translate func(string) string, columns []programsheet.Column, rows [][]string) {
+func drawTable(pdf *fpdf.Fpdf, translate func(string) string, columns []programsheet.Column, rows []programsheet.Line) {
 	left, _, right, bottom := pdf.GetMargins()
 	pageWidth, pageHeight := pdf.GetPageSize()
 	usable := pageWidth - left - right
@@ -49,11 +49,11 @@ func drawTable(pdf *fpdf.Fpdf, translate func(string) string, columns []programs
 
 	drawHeader()
 
-	fill := false
+	zebra := false
 	for _, row := range rows {
-		lines := make([][]string, len(row))
+		lines := make([][]string, len(row.Cells))
 		tallest := 1
-		for i, cell := range row {
+		for i, cell := range row.Cells {
 			split := pdf.SplitLines([]byte(translate(cell)), widths[i])
 			wrapped := make([]string, len(split))
 			for j, line := range split {
@@ -72,6 +72,20 @@ func drawTable(pdf *fpdf.Fpdf, translate func(string) string, columns []programs
 		if pdf.GetY()+height > pageHeight-bottom {
 			pdf.AddPage()
 			drawHeader()
+		}
+
+		// A ticked-off set is a green line rather than a column of crosses:
+		// what a coach reads a feedback sheet for is which sets were missed,
+		// and that is a shape on the page. The alternating grey underneath is
+		// what keeps a long unfinished week readable.
+		filled := true
+		switch {
+		case row.Done:
+			pdf.SetFillColor(223, 246, 228)
+		case zebra:
+			pdf.SetFillColor(244, 246, 249)
+		default:
+			filled = false
 		}
 
 		y := pdf.GetY()
@@ -94,11 +108,11 @@ func drawTable(pdf *fpdf.Fpdf, translate func(string) string, columns []programs
 					border = "LRB"
 				}
 				pdf.SetXY(x, y+float64(j)*lineHeightPt)
-				pdf.CellFormat(widths[i], lineHeightPt, line, border, 0, "", fill, 0, "")
+				pdf.CellFormat(widths[i], lineHeightPt, line, border, 0, "", filled, 0, "")
 			}
 			x += widths[i]
 		}
 		pdf.SetXY(left, y+height)
-		fill = !fill
+		zebra = !zebra
 	}
 }

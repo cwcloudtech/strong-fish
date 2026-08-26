@@ -137,10 +137,7 @@ func drawDay(pdf *fpdf.Fpdf, translate func(string) string, day models.ProgramDa
 	}
 
 	sets := programsheet.SortedSets(day)
-	rows := make([][]string, 0, len(sets))
-	for _, set := range sets {
-		rows = append(rows, programsheet.Row(set, options.Feedback))
-	}
+	rows := programsheet.Lines(sets, options.Feedback)
 
 	drawTable(pdf, translate, programsheet.Columns(options.Locale, options.Feedback), rows)
 }
