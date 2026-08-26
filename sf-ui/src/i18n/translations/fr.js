@@ -291,6 +291,7 @@ const fr = {
     assign: "Assigner",
     assignTo: "Assigner ce programme",
     assigned: "Programme assigné.",
+    assignmentsSaved: "Affectations mises à jour.",
     unassign: "Retirer",
     assignments: "Assigné à",
     noAssignments: "Assigné à personne pour l'instant.",

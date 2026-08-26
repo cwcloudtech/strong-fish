@@ -287,6 +287,7 @@ const en = {
     assign: "Assign",
     assignTo: "Assign this program",
     assigned: "Program assigned.",
+    assignmentsSaved: "Assignments updated.",
     unassign: "Unassign",
     assignments: "Assigned to",
     noAssignments: "Not assigned to anyone yet.",
