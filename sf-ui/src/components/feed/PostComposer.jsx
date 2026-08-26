@@ -13,6 +13,7 @@ import { firstUrl } from "../../utils/links";
 import Select from "../common/Select";
 import MultiSelect from "../common/MultiSelect";
 import MediaLink from "../common/MediaLink";
+import { formatBytes } from "../../utils/fileSize";
 
 const MAX_PICTURES = 4;
 
@@ -69,6 +70,16 @@ export default function PostComposer({ clubs, defaultClubId, onPosted }) {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+
+    // Refused here rather than half-way through the transfer: the API stops an
+    // oversized body mid-stream, which the browser reports as a failed request
+    // and the phone as a lost connection - two minutes spent to be told
+    // nothing. The cap comes from the API, so a deployment that raised it is
+    // believed.
+    if (config?.maxVideoSize && file.size > config.maxVideoSize) {
+      toast.error(t("errors.videoTooLargeMax", { size: formatBytes(config.maxVideoSize) }), toastOptions);
+      return;
+    }
 
     setUploading(0);
     setError(null);

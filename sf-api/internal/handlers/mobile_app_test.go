@@ -56,7 +56,7 @@ func TestMobileAppURL(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			h := NewConfigHandler(nil, "email", 2.5, 0, c.version, false,
+			h := NewConfigHandler(nil, "email", 2.5, 0, 0, 0, c.version, false,
 				"https://api.strong-fish.com", c.uiURL, c.pattern, "", "")
 			if got := h.mobileAppURL(); got != c.want {
 				t.Errorf("mobileAppURL() = %q, want %q", got, c.want)

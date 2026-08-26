@@ -11,7 +11,14 @@ import 'api_exception.dart';
 /// build can point at a self-hosted instance - which is the normal case for a
 /// club running its own server.
 class ApiClient {
-  final Dio dio = Dio();
+  final Dio dio = Dio(BaseOptions(
+    // Only the *connect* phase is bounded globally. A request that is already
+    // talking to the server may legitimately take minutes - a video on a gym's
+    // connection - and cutting that off is what an upload timeout looks like
+    // from the outside. A host that never answers should still fail rather
+    // than spin forever, hence this one.
+    connectTimeout: const Duration(seconds: 30),
+  ));
 
   String _apiUrl = '';
   String? _token;
@@ -71,7 +78,18 @@ class ApiClient {
   DioException _toApiError(DioException error) {
     final response = error.response;
     if (response == null) {
-      return error.copyWith(error: ApiException(message: error.message));
+      // Nothing came back at all. On an upload that is worth naming: the API
+      // stops an oversized body part-way through, and what reaches the phone
+      // is a dropped connection, not the 413 it sent - so dio's own "the
+      // connection errored" was the whole explanation a member got for a
+      // video that was simply too long.
+      final uploading = error.requestOptions.path.startsWith('/media/');
+      return error.copyWith(
+        error: ApiException(
+          i18nCode: uploading ? 'errors.uploadInterrupted' : null,
+          message: error.message,
+        ),
+      );
     }
     final data = response.data;
     String? i18nCode;

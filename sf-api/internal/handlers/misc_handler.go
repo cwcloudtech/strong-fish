@@ -58,6 +58,8 @@ type ConfigHandler struct {
 	activationMode string
 	plateIncrement float64
 	maxImageSize   int64
+	maxVideoSize   int64
+	maxAudioSize   int64
 	version        string
 	contactEnabled bool
 	apiBaseURL     string
@@ -68,11 +70,12 @@ type ConfigHandler struct {
 }
 
 func NewConfigHandler(oidcProviders []string, activationMode string, plateIncrement float64,
-	maxImageSize int64, version string, contactEnabled bool,
+	maxImageSize, maxVideoSize, maxAudioSize int64, version string, contactEnabled bool,
 	apiBaseURL, uiBaseURL, mobileURLPattern, aboutURL, docURL string) *ConfigHandler {
 	return &ConfigHandler{
 		oidcProviders: oidcProviders, activationMode: activationMode,
-		plateIncrement: plateIncrement, maxImageSize: maxImageSize, version: version,
+		plateIncrement: plateIncrement, maxImageSize: maxImageSize,
+		maxVideoSize: maxVideoSize, maxAudioSize: maxAudioSize, version: version,
 		contactEnabled: contactEnabled, apiBaseURL: apiBaseURL, uiBaseURL: uiBaseURL,
 		mobileURLPat: mobileURLPattern, aboutURL: aboutURL, docURL: docURL,
 	}
@@ -189,8 +192,14 @@ func (h *ConfigHandler) Get(w http.ResponseWriter, r *http.Request) {
 		"activationMode": h.activationMode,
 		"plateIncrement": h.plateIncrement,
 		"maxImageSize":   h.maxImageSize,
-		"version":        h.version,
-		"locales":        []string{"en", "fr"},
+		// The upload caps, so a client can refuse a file that cannot land
+		// before spending two minutes discovering it - the API stops an
+		// oversized transfer part-way, which a phone reports as a lost
+		// connection rather than as a limit.
+		"maxVideoSize": h.maxVideoSize,
+		"maxAudioSize": h.maxAudioSize,
+		"version":      h.version,
+		"locales":      []string{"en", "fr", "ar"},
 		// Lets the frontend hide the contact link entirely when no form id is
 		// configured, rather than offering a page that can only answer 405.
 		"contactEnabled": h.contactEnabled,

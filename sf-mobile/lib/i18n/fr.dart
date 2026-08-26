@@ -537,6 +537,7 @@ const Map<String, dynamic> fr = {
     'storageUploadFailed': 'Votre stockage a refusé cet envoi. Vérifiez le bucket et ses identifiants.',
     'storageDownloadFailed': 'Ce fichier n\'a pas pu être lu depuis le stockage. Il a peut-être été supprimé, ou les identifiants ont changé.',
     'videoTooLarge': 'Cette vidéo est trop volumineuse.',
+    'uploadInterrupted': 'L\'envoi n\'a pas abouti. Vérifiez votre connexion — et si la vidéo est longue, elle dépasse peut-être la limite de taille.',
     'unsupportedVideo': 'Ce fichier n\'est pas une vidéo lisible par un navigateur. Utilisez MP4, WebM ou MOV.',
     'invalidStorageType': 'Type de stockage inconnu.',
     'invalidStorageRole': 'Choisissez lecteur ou rédacteur.',
