@@ -71,11 +71,17 @@ const (
 	// touch this app's own storage - they go to the member's own bucket - so
 	// this is about what is reasonable to push through the API, not about what
 	// a row can hold.
-	defaultMaxVideoSize int64 = 20 * 1024 * 1024
+	//
+	// 200MB, because the thing people film is a set: half a minute of a phone's
+	// 1080p is already 40-80MB and 4K several times that, so the old 20MB
+	// stopped a 28-second squat - and stopped it *mid-transfer*, which reads on
+	// the phone as a connection failure rather than as a limit. Deployments
+	// that pay for the bandwidth can lower it with SF_MAX_VIDEO_SIZE.
+	defaultMaxVideoSize int64 = 200 * 1024 * 1024
 	// defaultMaxAudioSize caps one voice message. Far below the video cap: a
 	// spoken message is a fraction of the size, and sharing the video budget
-	// would only invite a 20MB recording nobody wants to wait for.
-	defaultMaxAudioSize int64 = 5 * 1024 * 1024
+	// would only invite a recording nobody wants to wait for.
+	defaultMaxAudioSize int64 = 25 * 1024 * 1024
 	// defaultPlateIncrement is the weight step computed loads are rounded to
 	// for the "on the bar" column: 2.5kg is one small plate per side.
 	defaultPlateIncrement = 2.5

@@ -417,6 +417,15 @@ class SfApi {
     final response = await client.dio.post(
       endpoint,
       data: form,
+      // Generous on purpose: a video of a set, over whatever connection a gym
+      // has, and the request is not done until the API has forwarded every
+      // byte on to S3 or Drive. Ten minutes is far past any real upload and
+      // still short enough that a dead connection reports something in the
+      // end rather than spinning forever.
+      options: Options(
+        sendTimeout: const Duration(minutes: 10),
+        receiveTimeout: const Duration(minutes: 10),
+      ),
       onSendProgress: (sent, total) {
         if (total > 0) onProgress?.call(sent / total);
       },

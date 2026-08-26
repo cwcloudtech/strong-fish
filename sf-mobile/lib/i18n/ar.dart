@@ -537,6 +537,7 @@ const Map<String, dynamic> ar = {
     'storageUploadFailed': 'رفض التخزين لديك هذا الرفع. تحقق من الحاوية وبياناتها.',
     'storageDownloadFailed': 'تعذّر قراءة هذا الملف من التخزين. ربما حُذف، أو تغيّرت البيانات.',
     'videoTooLarge': 'هذا الفيديو كبير جداً.',
+    'uploadInterrupted': 'لم يكتمل الرفع. تحقّق من اتصالك — وإذا كان الفيديو طويلًا فقد يتجاوز حدّ الحجم.',
     'unsupportedVideo': 'هذا الملف ليس فيديو يمكن للمتصفح تشغيله. استخدم MP4 أو WebM أو MOV.',
     'invalidStorageType': 'نوع تخزين غير معروف.',
     'invalidStorageRole': 'اختر قارئاً أو كاتباً.',

@@ -221,6 +221,15 @@ export const blocks = {
 
 // --- media, events and the calendar feed ---
 
+// How long an upload is allowed to take, in milliseconds.
+//
+// Generous on purpose: this is a video of a set going to somebody's own bucket
+// over whatever connection a gym has, and the request is not finished until
+// the API has forwarded every byte on to S3 or Drive. Ten minutes is far past
+// any real upload and still short enough that a dead connection eventually
+// reports something rather than spinning forever.
+const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+
 export const media = {
   // Uploads to the member's *own* bucket and returns its public URL. 405 means
   // they haven't configured one, which is what the composer toasts.
@@ -229,6 +238,7 @@ export const media = {
     form.append("file", file);
     return body(
       client.post("/media/videos", form, {
+        timeout: UPLOAD_TIMEOUT_MS,
         onUploadProgress: (event) =>
           onProgress?.(event.total ? Math.round((event.loaded * 100) / event.total) : 0),
       })
@@ -239,7 +249,7 @@ export const media = {
   uploadAudio: (blob, filename) => {
     const form = new FormData();
     form.append("file", blob, filename);
-    return body(client.post("/media/audio", form));
+    return body(client.post("/media/audio", form, { timeout: UPLOAD_TIMEOUT_MS }));
   },
   // A playback link for an object in a private bucket.
   //

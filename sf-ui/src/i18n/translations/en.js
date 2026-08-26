@@ -528,6 +528,7 @@ const en = {
     storageUploadFailed: "Your storage rejected this upload. Check the bucket and its credentials.",
     storageDownloadFailed: "This file could not be read from the storage. It may have been deleted, or the credentials changed.",
     videoTooLarge: "This video is too large.",
+    videoTooLargeMax: "This video is too large. The limit is {{size}}.",
     unsupportedVideo: "This file is not a video a browser can play. Use MP4, WebM or MOV.",
     invalidStorageType: "Unknown storage type.",
     invalidStorageRole: "Pick reader or writer.",
