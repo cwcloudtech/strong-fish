@@ -376,11 +376,13 @@ export default function ProgramDetail() {
           clubId={clubId}
           programId={programId}
           members={members}
-          assigned={assignments.map((assignment) => assignment.userId)}
+          assignments={assignments}
           onClose={() => setAssigning(false)}
-          onAssigned={() => {
+          onSaved={({ removed }) => {
             setAssigning(false);
-            toast.success(t("programs.assigned"), toastOptions);
+            // "Assigned" would be a lie for a save that only took the program
+            // away from somebody.
+            toast.success(removed > 0 ? t("programs.assignmentsSaved") : t("programs.assigned"), toastOptions);
             load();
           }}
         />
@@ -525,30 +527,50 @@ function ProgramDetailsModal({ program, clubId, onClose, onSaved, save }) {
   );
 }
 
-function AssignModal({ clubId, programId, members, assigned, onClose, onAssigned }) {
+function AssignModal({ clubId, programId, members, assignments, onClose, onSaved }) {
   const { t } = useI18n();
+  const assignedIds = assignments.map((assignment) => assignment.userId);
   // Several at once: a coach starting a block runs it with a group, and
   // reopening this modal once per athlete is the kind of repetition that stops
   // people assigning it at all.
-  const [userIds, setUserIds] = useState([]);
+  //
+  // It opens on who has the program rather than on nobody, so the same list
+  // takes it away again: unticking somebody is how they are unassigned, which
+  // is the one thing this had to be reopened elsewhere to do.
+  const [userIds, setUserIds] = useState(assignedIds);
   const [startDate, setStartDate] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  const added = userIds.filter((id) => !assignedIds.includes(id));
+  // Only somebody the list could have shown counts as removed. An assignment
+  // whose member has since left the club is not in the options at all, so it
+  // would read as unticked - and saving would quietly take their program away.
+  const selectable = new Set(members.map((member) => member.userId));
+  const removed = assignments.filter(
+    (assignment) => selectable.has(assignment.userId) && !userIds.includes(assignment.userId)
+  );
+
   const submit = async () => {
     setBusy(true);
     setError(null);
     try {
-      await programsApi.assign(clubId, programId, { userIds, startDate, note });
-      onAssigned();
+      // Assign first: if a coach swaps one athlete for another and the second
+      // call fails, the program having reached somebody new is the better half
+      // to have completed.
+      if (added.length > 0) {
+        await programsApi.assign(clubId, programId, { userIds: added, startDate, note });
+      }
+      for (const assignment of removed) {
+        await programsApi.unassign(clubId, programId, assignment.id);
+      }
+      onSaved({ added: added.length, removed: removed.length });
     } catch (err) {
       setError(err);
       setBusy(false);
     }
   };
-
-  const available = members.filter((member) => !assigned.includes(member.userId));
 
   return (
     <Modal
@@ -559,8 +581,10 @@ function AssignModal({ clubId, programId, members, assigned, onClose, onAssigned
           <button className="sf-button sf-button-secondary" onClick={onClose}>
             {t("common.cancel")}
           </button>
-          <button className="sf-button" onClick={submit} disabled={busy || userIds.length === 0}>
-            {userIds.length > 1 ? t("programs.assignCount", { count: userIds.length }) : t("programs.assign")}
+          <button className="sf-button" onClick={submit} disabled={busy || (added.length === 0 && removed.length === 0)}>
+            {removed.length === 0 && added.length > 1
+              ? t("programs.assignCount", { count: added.length })
+              : t("common.save")}
           </button>
         </>
       }
@@ -568,7 +592,7 @@ function AssignModal({ clubId, programId, members, assigned, onClose, onAssigned
       <div className="sf-field">
         <label className="sf-label">{t("clubs.members")}</label>
         <MultiSelect
-          options={available.map((member) => ({
+          options={members.map((member) => ({
             value: member.userId,
             // The email is in the label so the search finds people by it, and
             // so two members with the same name are still told apart.
@@ -579,13 +603,15 @@ function AssignModal({ clubId, programId, members, assigned, onClose, onAssigned
           placeholder={t("programs.pickMembers")}
         />
       </div>
-      <div className="sf-field">
+      {/* Both describe an assignment being created, so they are offered only
+          when one is: nothing here changes what somebody already has. */}
+      <div className="sf-field" style={added.length === 0 ? { display: "none" } : undefined}>
         <label className="sf-label">
           {t("programs.startDate")} <span className="sf-muted">({t("common.optional")})</span>
         </label>
         <input className="sf-input" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
       </div>
-      <div className="sf-field">
+      <div className="sf-field" style={added.length === 0 ? { display: "none" } : undefined}>
         <label className="sf-label">
           {t("programs.note")} <span className="sf-muted">({t("common.optional")})</span>
         </label>

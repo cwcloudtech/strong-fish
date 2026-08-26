@@ -296,6 +296,7 @@ const ar = {
     assign: "إسناد",
     assignTo: "إسناد هذا البرنامج",
     assigned: "تم إسناد البرنامج.",
+    assignmentsSaved: "تم تحديث الإسنادات.",
     unassign: "إلغاء الإسناد",
     assignments: "مُسند إلى",
     noAssignments: "غير مُسند إلى أحد بعد.",
