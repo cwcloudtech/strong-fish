@@ -1577,6 +1577,10 @@ button {
   user-select: none;
 }
 
+/* A session's own name, beside the week and day it sits in: lighter, because
+   the numbers are what the eye scans a block by. */
+.sf-session-name { color: var(--sf-text-muted); font-weight: 500; }
+
 .sf-load { font-weight: 700; font-size: 1rem; color: var(--sf-primary-dark); }
 .sf-load-unknown { color: var(--sf-warning); font-weight: 700; }
 /* The load actually logged, shown in place of the computed one. Same weight and

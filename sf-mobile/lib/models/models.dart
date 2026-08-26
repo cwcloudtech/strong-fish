@@ -492,6 +492,18 @@ class ProgramDay {
       );
 
   int get doneCount => sets.where((set) => set.log?.done == true).length;
+
+  /// The name a coach gave this session, or '' when it has none of its own.
+  ///
+  /// A session saved without a title gets one from the API - the English
+  /// "Week 2 Day 3" - so that exports have something to print. Showing that
+  /// back would be redundant beside the week and day already on the header,
+  /// and in the wrong language for a reader in French or Arabic. Only a title
+  /// somebody actually typed is theirs to see.
+  String get name {
+    final trimmed = title.trim();
+    return trimmed == 'Week $week Day $day' ? '' : trimmed;
+  }
 }
 
 /// A program assigned to the member, as listed on the training screen.

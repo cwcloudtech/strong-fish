@@ -7,6 +7,7 @@ import { ErrorMessage } from "../common/Feedback";
 import { programs as programsApi } from "../../api/services";
 import { describeLoad, formatReps } from "../../utils/setFormat";
 import { useI18n } from "../../i18n/I18nContext";
+import { sessionTitle } from "../../utils/sessionTitle";
 
 const exerciseLabel = (set, locale) =>
   set.exerciseLabels?.[locale] || set.exerciseLabels?.en || set.exerciseSlug;
@@ -58,6 +59,7 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
       <div className="sf-row-between">
         <h3 style={{ margin: 0 }}>
           {t("programs.week", { week: day.week })} · {t("programs.day", { day: day.day })}
+          {sessionTitle(day) ? <span className="sf-session-name"> · {sessionTitle(day)}</span> : null}
         </h3>
         <div className="sf-row" style={{ gap: "0.25rem" }}>
           <button className="sf-button sf-button-ghost sf-button-sm" onClick={() => setEditingDay(true)}>

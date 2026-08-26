@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/export_menu.dart';
 import '../widgets/multi_select.dart';
@@ -267,9 +268,21 @@ class _ProgramEditorScreenState extends ConsumerState<ProgramEditorScreen> {
                                 child: Column(
                                   children: [
                                     ListTile(
-                                      title: Text(
-                                        '${t('programs.week', {'week': '${day.week}'})} · '
-                                        '${t('programs.day', {'day': '${day.day}'})}',
+                                      title: Text.rich(
+                                        TextSpan(children: [
+                                          TextSpan(
+                                            text: '${t('programs.week', {'week': '${day.week}'})} · '
+                                                '${t('programs.day', {'day': '${day.day}'})}',
+                                          ),
+                                          if (day.name.isNotEmpty)
+                                            TextSpan(
+                                              text: ' · ${day.name}',
+                                              style: TextStyle(
+                                                color: AppColors.of(context).textMuted,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                        ]),
                                         style: Theme.of(context).textTheme.titleMedium,
                                       ),
                                       trailing: IconButton(
