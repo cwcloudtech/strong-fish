@@ -357,6 +357,8 @@ const Map<String, dynamic> fr = {
     'actualLoad': 'Charge utilisée',
     'loggedLoad': 'La charge que vous avez enregistrée pour cette série.',
     'loggedLoadPlanned': 'La charge que vous avez enregistrée pour cette série. Prévu : {{value}}.',
+    'loggedReps': 'Les répétitions que vous avez enregistrées pour cette série.',
+    'loggedRepsPlanned': 'Les répétitions que vous avez enregistrées pour cette série. Prévu : {{value}}.',
     'comment': 'Commentaire pour votre coach',
     'done': 'Fait',
     'clearLog': 'Effacer',

@@ -141,7 +141,25 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
                         ) : null}
                         {set.notes ? <div className="sf-muted">{set.notes}</div> : null}
                       </td>
-                      <td className="sf-table-num">{formatReps(set)}</td>
+                      <td className="sf-table-num">
+                        {/* What the athlete actually got, for the same reason
+                            the load reads that way: a set logged at 3 reps has
+                            no business still saying 5. */}
+                        {set.log?.actualReps != null ? (
+                          <span
+                            className="sf-logged"
+                            title={
+                              set.reps > 0
+                                ? t("session.loggedRepsPlanned", { value: set.reps })
+                                : t("session.loggedReps")
+                            }
+                          >
+                            {set.log.actualReps}
+                          </span>
+                        ) : (
+                          formatReps(set)
+                        )}
+                      </td>
                       <td className="sf-table-num">{set.rpe ?? t("common.unknown")}</td>
                       <td className="sf-table-num">
                         {set.loadKnown && set.computedPercentage ? `${set.computedPercentage}%` : "—"}
@@ -181,7 +199,7 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
                             the bar describes a set nobody did. */}
                         {set.log?.actualLoad != null ? (
                           <span
-                            className="sf-load-actual"
+                            className="sf-logged"
                             title={
                               set.loadKnown && set.roundedLoad
                                 ? t("session.loggedLoadPlanned", {

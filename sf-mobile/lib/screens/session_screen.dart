@@ -314,9 +314,26 @@ class _SetTile extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     final logged = set.log?.done == true;
 
-    // What was actually lifted, and what the bar reads because of it.
+    // What was actually done, and what the row reads because of it: a logged
+    // rep count and a logged load stand in for the ones the program asked for.
     final usedLoad = set.log?.actualLoad;
+    final usedReps = set.log?.actualReps;
     final onTheBar = usedLoad ?? (set.loadKnown && set.roundedLoad > 0 ? set.roundedLoad : null);
+    final reps = usedReps ?? set.reps;
+    final logStyle = TextStyle(color: AppColors.of(context).success, fontWeight: FontWeight.w600);
+
+    // The plan is not lost when the row shows what was done: it moves into a
+    // long-press, the way the web keeps it in the cell's tooltip.
+    final planned = [
+      if (usedReps != null)
+        set.reps > 0
+            ? t('session.loggedRepsPlanned', {'value': '${set.reps}'})
+            : t('session.loggedReps'),
+      if (usedLoad != null)
+        set.loadKnown && set.roundedLoad > 0
+            ? t('session.loggedLoadPlanned', {'value': '${_fmt(set.roundedLoad)} ${t('common.kg')}'})
+            : t('session.loggedLoad'),
+    ];
 
     return ListTile(
       dense: true,
@@ -330,30 +347,24 @@ class _SetTile extends ConsumerWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // "On the bar" is what the bar actually read, so a logged load
-          // replaces the computed one here - a set logged at 130 next to
-          // 122.5 on the bar describes a session nobody did. The colour is
-          // what says which of the two you are looking at, and the plan moves
-          // into a long-press rather than being lost.
+          // The reps and "on the bar" both read as what happened when there
+          // is a log: a set logged at 3 reps and 130 kg next to "5 × 122.5"
+          // describes a session nobody did. The colour is what says which of
+          // the two you are looking at.
           Tooltip(
-            message: usedLoad == null
-                ? ''
-                : (set.loadKnown && set.roundedLoad > 0
-                    ? t('session.loggedLoadPlanned', {'value': '${_fmt(set.roundedLoad)} ${t('common.kg')}'})
-                    : t('session.loggedLoad')),
-            triggerMode: usedLoad == null ? TooltipTriggerMode.manual : TooltipTriggerMode.longPress,
+            message: planned.join('\n'),
+            triggerMode: planned.isEmpty ? TooltipTriggerMode.manual : TooltipTriggerMode.longPress,
             child: Text.rich(TextSpan(children: [
+              TextSpan(text: '$reps', style: usedReps != null ? logStyle : null),
               TextSpan(
-                text: '${set.reps} × ${t('session.rpe')} ${set.rpe?.toStringAsFixed(set.rpe! % 1 == 0 ? 0 : 1) ?? t('common.unknown')}'
+                text: ' × ${t('session.rpe')} ${set.rpe?.toStringAsFixed(set.rpe! % 1 == 0 ? 0 : 1) ?? t('common.unknown')}'
                     '${set.loadKnown && set.computedPercentage > 0 ? ' · ${set.computedPercentage.toStringAsFixed(0)}%' : ''}',
               ),
               if (onTheBar != null) ...[
                 TextSpan(text: ' · ${t('session.onTheBar')} '),
                 TextSpan(
                   text: '${_fmt(onTheBar)}${t('common.kg')}',
-                  style: usedLoad != null
-                      ? TextStyle(color: AppColors.of(context).success, fontWeight: FontWeight.w600)
-                      : null,
+                  style: usedLoad != null ? logStyle : null,
                 ),
               ],
             ])),
