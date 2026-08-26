@@ -87,6 +87,9 @@ type styles struct {
 	day      int
 	header   int
 	cell     int
+	// cellDone is the same cell on a green ground: a set the member ticked off.
+	// A colour rather than a "Done" column, so the width goes to the numbers.
+	cellDone int
 }
 
 func newStyles(file *excelize.File) (styles, error) {
@@ -119,6 +122,14 @@ func newStyles(file *excelize.File) (styles, error) {
 	}
 	if s.cell, err = file.NewStyle(&excelize.Style{
 		Alignment: &excelize.Alignment{Vertical: "top", WrapText: true},
+	}); err != nil {
+		return s, err
+	}
+	// Light enough that black text on it still reads, and that a page of them
+	// prints without soaking a cartridge.
+	if s.cellDone, err = file.NewStyle(&excelize.Style{
+		Alignment: &excelize.Alignment{Vertical: "top", WrapText: true},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"DFF6E4"}},
 	}); err != nil {
 		return s, err
 	}
@@ -170,9 +181,13 @@ func writeWeek(file *excelize.File, sheet string, program models.Program,
 		}
 		row++
 
-		for _, set := range sets {
-			for column, value := range programsheet.Row(set, options.Feedback) {
-				if err := writeCell(file, sheet, column+1, row, value, styles.cell); err != nil {
+		for _, line := range programsheet.Lines(sets, options.Feedback) {
+			style := styles.cell
+			if line.Done {
+				style = styles.cellDone
+			}
+			for column, value := range line.Cells {
+				if err := writeCell(file, sheet, column+1, row, value, style); err != nil {
 					return err
 				}
 			}

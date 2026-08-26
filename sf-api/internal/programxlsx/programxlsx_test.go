@@ -2,6 +2,7 @@ package programxlsx
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/xuri/excelize/v2"
@@ -118,12 +119,79 @@ func TestRenderWithFeedback(t *testing.T) {
 	flat := flatten(rows)
 
 	for _, want := range []string{
-		"Done", "RPE felt", "e1RM", "Athlete's comment",
-		"X", "9", "187.9 kg", "Harder than it looked",
+		"RPE felt", "e1RM", "Athlete's comment",
+		"9", "187.9 kg", "Harder than it looked",
 	} {
 		if !contains(flat, want) {
 			t.Errorf("the feedback sheet does not carry %q", want)
 		}
+	}
+
+	// Whether a set was ticked off is the row's colour, not a column: the
+	// heading and the crosses that used to carry it are gone from the sheet.
+	for _, unwanted := range []string{"Done", "X"} {
+		if contains(flat, unwanted) {
+			t.Errorf("the feedback sheet still carries the done column: %q", unwanted)
+		}
+	}
+}
+
+// TestDoneSetsAreGreen covers what replaced the Done column: the row of a set
+// the member ticked off is filled, and the row below it - a set they did not -
+// is not.
+func TestDoneSetsAreGreen(t *testing.T) {
+	program, days := fixture()
+
+	data, err := Render(program, days, Options{Locale: "en", Feedback: true})
+	if err != nil {
+		t.Fatalf("rendering: %v", err)
+	}
+	file := open(t, data)
+
+	rows, err := file.GetRows("Week 1")
+	if err != nil {
+		t.Fatalf("reading: %v", err)
+	}
+
+	// The fixture's first session has a logged squat followed by a bench
+	// nobody touched; find them by name rather than by counting header lines.
+	squat, bench := 0, 0
+	for index, row := range rows {
+		switch {
+		case len(row) > 0 && row[0] == "Squat":
+			squat = index + 1
+		case len(row) > 0 && row[0] == "Bench press":
+			bench = index + 1
+		}
+	}
+	if squat == 0 || bench == 0 {
+		t.Fatalf("fixture rows not found: squat=%d bench=%d", squat, bench)
+	}
+
+	fillOf := func(row int) string {
+		axis, err := excelize.CoordinatesToCellName(1, row)
+		if err != nil {
+			t.Fatalf("cell name: %v", err)
+		}
+		id, err := file.GetCellStyle("Week 1", axis)
+		if err != nil {
+			t.Fatalf("cell style: %v", err)
+		}
+		style, err := file.GetStyle(id)
+		if err != nil {
+			t.Fatalf("style: %v", err)
+		}
+		if len(style.Fill.Color) == 0 {
+			return ""
+		}
+		return strings.ToUpper(strings.TrimPrefix(style.Fill.Color[0], "FF"))
+	}
+
+	if got := fillOf(squat); got != "DFF6E4" {
+		t.Errorf("a set that was ticked off is not green: fill = %q", got)
+	}
+	if got := fillOf(bench); got == "DFF6E4" {
+		t.Errorf("a set nobody did is green anyway")
 	}
 }
 

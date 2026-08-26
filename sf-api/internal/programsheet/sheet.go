@@ -48,10 +48,10 @@ type Column struct {
 //
 // With feedback on, what happened is added to the right of the prescription -
 // read left to right, a row says what was asked and then what was done, which
-// is the comparison the sheet exists for. The load is the exception: rather
-// than printing the computed weight and the lifted one in two columns, the one
-// Load column carries what was actually lifted (see Row), so there is no
-// second load column here.
+// is the comparison the sheet exists for. Two exceptions, both to spend the
+// page on numbers rather than on columns: the one Load column carries what was
+// actually lifted (see Row), and whether a set was ticked off is the row's
+// colour (see Line) rather than a column of crosses.
 func Columns(locale string, feedback bool) []Column {
 	columns := []Column{
 		{Header: Heading(locale, "exercise"), Weight: 3.4},
@@ -64,7 +64,6 @@ func Columns(locale string, feedback bool) []Column {
 		return columns
 	}
 	return append(columns,
-		Column{Header: Heading(locale, "done"), Weight: 0.7},
 		Column{Header: Heading(locale, "repsDone"), Weight: 0.9},
 		Column{Header: Heading(locale, "rpeFelt"), Weight: 0.9},
 		Column{Header: Heading(locale, "e1rm"), Weight: 1.0},
@@ -104,15 +103,37 @@ func Row(set models.ProgramSet, feedback bool) []string {
 	if log == nil {
 		// A set with no log at all still gets its cells, empty: a gap in the
 		// week is what the coach is looking for.
-		return append(cells, "", "", "", "", "")
+		return append(cells, "", "", "", "")
 	}
 	return append(cells,
-		doneMark(log.Done),
 		formatIntPtr(log.ActualReps),
 		formatFloatPtr(log.ActualRPE),
 		formatKg(log.E1RM),
 		log.Comment,
 	)
+}
+
+// Line is one set as a row of cells, plus whether the member ticked it off.
+//
+// Done is not a cell: a column of crosses costs a tenth of the width on every
+// page to say something a colour says at a glance, and what a coach reads a
+// feedback sheet for is which sets were missed - which is a shape on the page,
+// not a value to scan for.
+type Line struct {
+	Cells []string
+	Done  bool
+}
+
+// Lines is a session's sets as rows, in the order they are performed.
+func Lines(sets []models.ProgramSet, feedback bool) []Line {
+	lines := make([]Line, 0, len(sets))
+	for _, set := range sets {
+		lines = append(lines, Line{
+			Cells: Row(set, feedback),
+			Done:  feedback && set.Log != nil && set.Log.Done,
+		})
+	}
+	return lines
 }
 
 // Weeks groups the sessions into weeks, in order.
@@ -267,13 +288,4 @@ func formatKgPtr(value *float64) string {
 		return ""
 	}
 	return formatKg(*value)
-}
-
-// doneMark is an X rather than a tick: the PDF's font is cp1252, which has no
-// check mark, and an X reads the same in a spreadsheet.
-func doneMark(done bool) string {
-	if done {
-		return "X"
-	}
-	return ""
 }
