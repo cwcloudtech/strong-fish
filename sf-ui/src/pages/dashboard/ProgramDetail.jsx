@@ -607,7 +607,10 @@ function AssignModal({ clubId, programId, members, assigned, onClose, onAssigned
 function CopyProgramModal({ program, clubId, canManage, onClose, onCopied, onMoved }) {
   const { t } = useI18n();
   const [clubs, setClubs] = useState([]);
-  const [destination, setDestination] = useState("");
+  // Where it already is, by default: the common copy is a second version of a
+  // block in the same place, under a different name.
+  const [destination, setDestination] = useState(clubId || "");
+  const [name, setName] = useState(program.name || "");
   const [move, setMove] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -623,7 +626,12 @@ function CopyProgramModal({ program, clubId, canManage, onClose, onCopied, onMov
     setBusy(true);
     setError(null);
     try {
-      const result = await programsApi.copy(clubId, program.id, { clubId: destination, move });
+      const result = await programsApi.copy(clubId, program.id, {
+        clubId: destination,
+        move,
+        // The name is the copy's alone; a move keeps carrying its own.
+        name: move ? undefined : name.trim(),
+      });
       (move ? onMoved : onCopied)(result);
     } catch (err) {
       setError(err);
@@ -631,23 +639,29 @@ function CopyProgramModal({ program, clubId, canManage, onClose, onCopied, onMov
     }
   };
 
-  // The club it is already in is not a destination, and a personal program's
-  // "own library" is not one either when that is where it already is.
+  // Where it already is is a destination like any other for a copy - that is
+  // how a second version of a block is made - so the list holds every place
+  // this member may write, including the current one.
   const options = [
-    ...(clubId ? [{ value: "", label: t("programs.myLibrary") }] : []),
-    ...clubs.filter((club) => club.id !== clubId).map((club) => ({ value: club.id, label: club.name })),
+    { value: "", label: t("programs.myLibrary") },
+    ...clubs.map((club) => ({ value: club.id, label: club.name })),
   ];
+
+  // A move to where it already is would do nothing, so that one combination is
+  // refused rather than offered and then rejected by the API.
+  const samePlace = destination === (clubId || "");
+  const blocked = move ? samePlace : !name.trim();
 
   return (
     <Modal
       title={t("programs.copy")}
       onClose={onClose}
-      footer={
+      actions={
         <>
           <button className="sf-button sf-button-secondary" onClick={onClose}>
             {t("common.cancel")}
           </button>
-          <button className="sf-button" onClick={submit} disabled={busy || (!destination && !clubId)}>
+          <button className="sf-button" onClick={submit} disabled={busy || blocked}>
             {move ? t("programs.move") : t("programs.copy")}
           </button>
         </>
@@ -657,6 +671,24 @@ function CopyProgramModal({ program, clubId, canManage, onClose, onCopied, onMov
         {t("programs.copyHelp")}
       </p>
 
+      {/* A copy needs a name of its own more than it needs a destination: two
+          blocks called the same thing in one club is the reason this field is
+          here. A move keeps the name it has, so the field goes with it. */}
+      {move ? null : (
+        <div className="sf-field">
+          <label className="sf-label" htmlFor="copy-name">
+            {t("programs.name")}
+          </label>
+          <input
+            id="copy-name"
+            className="sf-input"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoFocus
+          />
+        </div>
+      )}
+
       <div className="sf-field">
         <label className="sf-label">{t("programs.destination")}</label>
         <Select
@@ -665,6 +697,7 @@ function CopyProgramModal({ program, clubId, canManage, onClose, onCopied, onMov
           onChange={setDestination}
           placeholder={t("programs.pickDestination")}
         />
+        {move && samePlace ? <p className="sf-muted">{t("programs.moveNeedsElsewhere")}</p> : null}
       </div>
 
       {/* Moving takes the program away from everybody reading it where it is

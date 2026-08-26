@@ -49,6 +49,7 @@
   --sf-danger-dark: #b91c1c;
   --sf-danger-light: #fee2e2;
   --sf-success: #16a34a;
+  --sf-load-actual: #16a34a;
   --sf-success-tint: #dcfce7;
   --sf-warning: #d97706;
   --sf-warning-tint: #fef3c7;
@@ -110,6 +111,7 @@
     --sf-danger-light: rgba(220, 38, 38, 0.18);
     --sf-success-tint: rgba(22, 163, 74, 0.16);
     --sf-warning-tint: rgba(217, 119, 6, 0.18);
+    --sf-load-actual: #4ade80;
     --sf-role-superadmin: #f0b429;
     --sf-lift-squat: #a78bfa;
     --sf-lift-bench: #22d3ee;
@@ -138,6 +140,7 @@
   --sf-danger-light: #fee2e2;
   --sf-success-tint: #dcfce7;
   --sf-warning-tint: #fef3c7;
+  --sf-load-actual: #16a34a;
   --sf-role-superadmin: #b45309;
   --sf-lift-squat: #7c3aed;
   --sf-lift-bench: #0e7490;
@@ -165,6 +168,7 @@
   --sf-danger-light: rgba(220, 38, 38, 0.18);
   --sf-success-tint: rgba(22, 163, 74, 0.16);
   --sf-warning-tint: rgba(217, 119, 6, 0.18);
+  --sf-load-actual: #4ade80;
   --sf-role-superadmin: #f0b429;
   --sf-lift-squat: #a78bfa;
   --sf-lift-bench: #22d3ee;
@@ -1575,6 +1579,11 @@ button {
 
 .sf-load { font-weight: 700; font-size: 1rem; color: var(--sf-primary-dark); }
 .sf-load-unknown { color: var(--sf-warning); font-weight: 700; }
+/* The load actually logged, shown in place of the computed one. Same weight and
+   size as the row's other numbers - only the colour says which of the two you
+   are reading. The plain green goes muddy on the dark surface, hence a token of
+   its own rather than --sf-success. */
+.sf-load-actual { font-weight: 700; color: var(--sf-load-actual); }
 .sf-set-done td { background-color: var(--sf-success-tint); }
 .sf-set-log-row td { padding-top: 0; }
 

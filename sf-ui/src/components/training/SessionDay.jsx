@@ -171,7 +171,27 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
                         )}
                       </td>
                       <td className="sf-table-num">
-                        {set.loadKnown && set.roundedLoad ? `${set.roundedLoad} ${t("common.kg")}` : "—"}
+                        {/* The used load belongs here too: it is a real bar
+                            weight, and a row reading 130 used next to 122.5 on
+                            the bar describes a set nobody did. */}
+                        {set.log?.actualLoad != null ? (
+                          <span
+                            className="sf-load-actual"
+                            title={
+                              set.loadKnown && set.roundedLoad
+                                ? t("session.loggedLoadPlanned", {
+                                    value: `${set.roundedLoad} ${t("common.kg")}`,
+                                  })
+                                : t("session.loggedLoad")
+                            }
+                          >
+                            {set.log.actualLoad} {t("common.kg")}
+                          </span>
+                        ) : set.loadKnown && set.roundedLoad ? (
+                          `${set.roundedLoad} ${t("common.kg")}`
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       {editable ? (
                         <td className="sf-table-num">

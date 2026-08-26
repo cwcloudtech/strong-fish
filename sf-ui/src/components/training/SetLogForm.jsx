@@ -7,9 +7,15 @@ import { useI18n } from "../../i18n/I18nContext";
  * What the member actually did on one set: the reps and weight, the RPE they
  * perceived, and a comment for their coach.
  *
- * The fields pre-fill from the prescription (and from any earlier log), because
- * the common case is "did exactly what was asked" - the member should only have
- * to change what differed.
+ * Reps and RPE pre-fill from the prescription (and from any earlier log),
+ * because the common case is "did exactly what was asked" - the member should
+ * only have to change what differed.
+ *
+ * The load does not. A pre-filled weight is saved as if it had been typed the
+ * moment the set is ticked off, so every set came back claiming a load the
+ * member never entered - and the row then shows it as the weight they used.
+ * The prescription is offered as the field's placeholder instead: visible, and
+ * not a value.
  */
 export default function SetLogForm({ set, onSubmit, onCancel }) {
   const { t } = useI18n();
@@ -18,7 +24,7 @@ export default function SetLogForm({ set, onSubmit, onCancel }) {
   const [form, setForm] = useState({
     actualReps: log?.actualReps ?? set.reps,
     actualRpe: log?.actualRpe ?? set.rpe ?? "",
-    actualLoad: log?.actualLoad ?? (set.loadKnown ? set.roundedLoad : ""),
+    actualLoad: log?.actualLoad ?? "",
     comment: log?.comment ?? "",
   });
   const [error, setError] = useState(null);
@@ -75,6 +81,7 @@ export default function SetLogForm({ set, onSubmit, onCancel }) {
               type="number"
               min="0"
               step="0.5"
+              placeholder={set.loadKnown && set.roundedLoad ? String(set.roundedLoad) : undefined}
               value={form.actualLoad}
               onChange={set_("actualLoad")}
             />

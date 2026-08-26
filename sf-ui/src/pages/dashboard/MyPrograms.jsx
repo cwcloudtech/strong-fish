@@ -123,7 +123,7 @@ function NewProgramModal({ onClose, onCreated }) {
     <Modal
       title={t("programs.new")}
       onClose={onClose}
-      footer={
+      actions={
         <>
           <button className="sf-button sf-button-secondary" onClick={onClose}>
             {t("common.cancel")}
