@@ -5,6 +5,7 @@ import SetLogForm from "./SetLogForm";
 import Select from "../common/Select";
 import { formatReps } from "../../utils/setFormat";
 import { useI18n } from "../../i18n/I18nContext";
+import { sessionTitle } from "../../utils/sessionTitle";
 
 /**
  * The perceived-RPE values on offer, as the chart itself is written: half
@@ -83,6 +84,10 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
           {open ? <FiChevronDown /> : <FiChevronRight />}
           <h3 style={{ margin: 0 }}>
             {t("programs.week", { week: day.week })} · {t("programs.day", { day: day.day })}
+            {/* The name the coach gave this session, when they gave it one:
+                it was saved and then shown nowhere, so a titled session was
+                indistinguishable from an untitled one. */}
+            {sessionTitle(day) ? <span className="sf-session-name"> · {sessionTitle(day)}</span> : null}
           </h3>
           <span className="sf-badge sf-badge-muted">{t("programs.setCount", { count: sets.length })}</span>
         </div>

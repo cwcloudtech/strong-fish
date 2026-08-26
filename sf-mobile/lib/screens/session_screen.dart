@@ -219,8 +219,20 @@ class _DayCard extends ConsumerWidget {
         title: Row(
           children: [
             Expanded(
-              child: Text(
-                '${t('programs.week', {'week': '${day.week}'})} · ${t('programs.day', {'day': '${day.day}'})}',
+              // The session's own name follows the numbers when it has one:
+              // it was saved and then shown nowhere, so a titled session
+              // looked exactly like an untitled one.
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                    text: '${t('programs.week', {'week': '${day.week}'})} · ${t('programs.day', {'day': '${day.day}'})}',
+                  ),
+                  if (day.name.isNotEmpty)
+                    TextSpan(
+                      text: ' · ${day.name}',
+                      style: TextStyle(color: AppColors.of(context).textMuted, fontWeight: FontWeight.w500),
+                    ),
+                ]),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
