@@ -302,6 +302,10 @@ class _SetTile extends ConsumerWidget {
     final scheme = Theme.of(context).colorScheme;
     final logged = set.log?.done == true;
 
+    // What was actually lifted, and what the bar reads because of it.
+    final usedLoad = set.log?.actualLoad;
+    final onTheBar = usedLoad ?? (set.loadKnown && set.roundedLoad > 0 ? set.roundedLoad : null);
+
     return ListTile(
       dense: true,
       tileColor: logged ? scheme.primaryContainer.withValues(alpha: 0.25) : null,
@@ -314,10 +318,33 @@ class _SetTile extends ConsumerWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${set.reps} × ${t('session.rpe')} ${set.rpe?.toStringAsFixed(set.rpe! % 1 == 0 ? 0 : 1) ?? t('common.unknown')}'
-            '${set.loadKnown && set.computedPercentage > 0 ? ' · ${set.computedPercentage.toStringAsFixed(0)}%' : ''}'
-            '${set.loadKnown && set.roundedLoad > 0 ? ' · ${t('session.onTheBar')} ${_fmt(set.roundedLoad)}${t('common.kg')}' : ''}',
+          // "On the bar" is what the bar actually read, so a logged load
+          // replaces the computed one here - a set logged at 130 next to
+          // 122.5 on the bar describes a session nobody did. The colour is
+          // what says which of the two you are looking at, and the plan moves
+          // into a long-press rather than being lost.
+          Tooltip(
+            message: usedLoad == null
+                ? ''
+                : (set.loadKnown && set.roundedLoad > 0
+                    ? t('session.loggedLoadPlanned', {'value': '${_fmt(set.roundedLoad)} ${t('common.kg')}'})
+                    : t('session.loggedLoad')),
+            triggerMode: usedLoad == null ? TooltipTriggerMode.manual : TooltipTriggerMode.longPress,
+            child: Text.rich(TextSpan(children: [
+              TextSpan(
+                text: '${set.reps} × ${t('session.rpe')} ${set.rpe?.toStringAsFixed(set.rpe! % 1 == 0 ? 0 : 1) ?? t('common.unknown')}'
+                    '${set.loadKnown && set.computedPercentage > 0 ? ' · ${set.computedPercentage.toStringAsFixed(0)}%' : ''}',
+              ),
+              if (onTheBar != null) ...[
+                TextSpan(text: ' · ${t('session.onTheBar')} '),
+                TextSpan(
+                  text: '${_fmt(onTheBar)}${t('common.kg')}',
+                  style: usedLoad != null
+                      ? TextStyle(color: AppColors.of(context).success, fontWeight: FontWeight.w600)
+                      : null,
+                ),
+              ],
+            ])),
           ),
           if (set.log?.comment.isNotEmpty == true)
             Text('“${set.log!.comment}”', style: Theme.of(context).textTheme.bodySmall),
@@ -505,8 +532,14 @@ class _PerceivedRpeState extends ConsumerState<_PerceivedRpe> {
 }
 
 /// The log form: what was actually done, the RPE it felt like, and a comment for
-/// the coach. Fields pre-fill from the prescription, since the common case is
-/// "did what was asked".
+/// the coach. Reps and RPE pre-fill from the prescription, since the common
+/// case is "did what was asked".
+///
+/// The load does not. A pre-filled weight is saved as if it had been typed the
+/// moment the set is ticked off, so every set came back claiming a load the
+/// member never entered - and the row then shows it as the weight they used.
+/// The prescription is offered as the field's hint instead: visible, and not a
+/// value.
 class _LogSheet extends ConsumerStatefulWidget {
   final ProgramSet set;
   final String assignmentId;
@@ -533,10 +566,7 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
     _reps = TextEditingController(text: '${log?.actualReps ?? widget.set.reps}');
     _rpe = TextEditingController(
         text: log?.actualRpe != null ? _fmt(log!.actualRpe!) : (widget.set.rpe != null ? _fmt(widget.set.rpe!) : ''));
-    _load = TextEditingController(
-        text: log?.actualLoad != null
-            ? _fmt(log!.actualLoad!)
-            : (widget.set.loadKnown && widget.set.roundedLoad > 0 ? _fmt(widget.set.roundedLoad) : ''));
+    _load = TextEditingController(text: log?.actualLoad != null ? _fmt(log!.actualLoad!) : '');
     _comment = TextEditingController(text: log?.comment ?? '');
   }
 
@@ -619,7 +649,12 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
                   child: TextField(
                     controller: _load,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(labelText: t('session.actualLoad')),
+                    decoration: InputDecoration(
+                      labelText: t('session.actualLoad'),
+                      hintText: widget.set.loadKnown && widget.set.roundedLoad > 0
+                          ? _fmt(widget.set.roundedLoad)
+                          : null,
+                    ),
                   ),
                 ),
               ],

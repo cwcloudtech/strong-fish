@@ -355,6 +355,8 @@ const Map<String, dynamic> en = {
     'actualReps': 'Reps done',
     'actualRpe': 'RPE felt',
     'actualLoad': 'Load used',
+    'loggedLoad': 'The load you logged for this set.',
+    'loggedLoadPlanned': 'The load you logged for this set. Planned: {{value}}.',
     'comment': 'Comment for your coach',
     'done': 'Done',
     'clearLog': 'Clear',

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
@@ -20,6 +21,11 @@ type copyProgramPayload struct {
 	// cannot lose anything: a transfer takes the program away from everybody
 	// who was reading it in the club it came from.
 	Move bool `json:"move"`
+	// Name is what the copy is called. Blank keeps the original's name, which
+	// is what a copy into another club wants; naming it is what makes a copy
+	// into the *same* club useful - a second version of a block, told apart
+	// from the one it came from.
+	Name string `json:"name"`
 }
 
 // CopyToClub duplicates a program into another club, into the caller's own
@@ -50,7 +56,10 @@ func (h *ProgramHandler) CopyToClub(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &p) {
 		return
 	}
-	if p.ClubID == program.ClubID {
+	// Only a move has nowhere to go when the destination is where the program
+	// already is. A copy into the same club is a deliberate thing: a coach
+	// making a second version of a block, under its own name.
+	if p.Move && p.ClubID == program.ClubID {
 		writeError(w, http.StatusBadRequest, "This program is already in that club", CodeInvalidRequestBody)
 		return
 	}
@@ -82,7 +91,7 @@ func (h *ProgramHandler) CopyToClub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	copied, err := h.duplicate(r, program, p.ClubID, callerID)
+	copied, err := h.duplicate(r, program, p.ClubID, callerID, p.Name)
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -117,7 +126,7 @@ func (h *ProgramHandler) canWriteInClub(r *http.Request, callerID, clubID string
 // a copy is built exactly like any other program rather than through a
 // row-copying shortcut that would have to be kept in step with the schema.
 func (h *ProgramHandler) duplicate(r *http.Request, program models.Program,
-	clubID, authorID string) (models.Program, error) {
+	clubID, authorID, name string) (models.Program, error) {
 	days, err := h.programs.ListDays(r.Context(), program.ID)
 	if err != nil {
 		return models.Program{}, err
@@ -150,9 +159,13 @@ func (h *ProgramHandler) duplicate(r *http.Request, program models.Program,
 	// The copy is the copier's, not the original author's: they are the one
 	// who may now edit it, and the club it lands in should see who put it
 	// there. Its visibility comes across as it was.
+	copyName := strings.TrimSpace(name)
+	if utils.IsBlank(copyName) {
+		copyName = program.Name
+	}
 	return h.programs.Create(r.Context(), store.NewProgram{
 		ClubID: clubID, AuthorID: authorID,
-		Name: program.Name, Description: program.Description,
+		Name: copyName, Description: program.Description,
 		SourceFileName: program.SourceFileName, Visibility: program.Visibility,
 		Days: newDays,
 	})

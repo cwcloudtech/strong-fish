@@ -46,9 +46,12 @@ type Column struct {
 // Columns is the sheet's layout. The exercise gets the space, because it is
 // the only cell whose text is a name rather than a number.
 //
-// With feedback on, the prescription keeps its columns and what happened is
-// added to the right of them - read left to right, a row says what was asked
-// and then what was done, which is the comparison the sheet exists for.
+// With feedback on, what happened is added to the right of the prescription -
+// read left to right, a row says what was asked and then what was done, which
+// is the comparison the sheet exists for. The load is the exception: rather
+// than printing the computed weight and the lifted one in two columns, the one
+// Load column carries what was actually lifted (see Row), so there is no
+// second load column here.
 func Columns(locale string, feedback bool) []Column {
 	columns := []Column{
 		{Header: Heading(locale, "exercise"), Weight: 3.4},
@@ -64,36 +67,49 @@ func Columns(locale string, feedback bool) []Column {
 		Column{Header: Heading(locale, "done"), Weight: 0.7},
 		Column{Header: Heading(locale, "repsDone"), Weight: 0.9},
 		Column{Header: Heading(locale, "rpeFelt"), Weight: 0.9},
-		Column{Header: Heading(locale, "loadLifted"), Weight: 1.1},
 		Column{Header: Heading(locale, "e1rm"), Weight: 1.0},
 		Column{Header: Heading(locale, "comment"), Weight: 2.2},
 	)
 }
 
 // Row is one set as a line of cells, in the order Columns gives.
+//
+// On a feedback sheet the Load column carries the weight the member logged,
+// never the computed one. A sheet of what was done should not print a load
+// nobody lifted: a blank there says the set was run without a weight being
+// recorded, which is a different fact from "you were asked for 122.5 kg" - and
+// the prescription is still on the row, in Reps and Intensity.
 func Row(set models.ProgramSet, feedback bool) []string {
+	log := set.Log
+
+	load := FormatLoad(set)
+	if feedback {
+		load = ""
+		if log != nil {
+			load = formatKgPtr(log.ActualLoad)
+		}
+	}
+
 	cells := []string{
 		ExerciseName(set),
 		formatInt(set.Reps),
 		FormatIntensity(set),
-		FormatLoad(set),
+		load,
 		set.Notes,
 	}
 	if !feedback {
 		return cells
 	}
 
-	log := set.Log
 	if log == nil {
 		// A set with no log at all still gets its cells, empty: a gap in the
 		// week is what the coach is looking for.
-		return append(cells, "", "", "", "", "", "")
+		return append(cells, "", "", "", "", "")
 	}
 	return append(cells,
 		doneMark(log.Done),
 		formatIntPtr(log.ActualReps),
 		formatFloatPtr(log.ActualRPE),
-		formatKgPtr(log.ActualLoad),
 		formatKg(log.E1RM),
 		log.Comment,
 	)

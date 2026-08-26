@@ -355,6 +355,8 @@ const Map<String, dynamic> ar = {
     'actualReps': 'التكرارات المنجزة',
     'actualRpe': 'RPE المُحسّ',
     'actualLoad': 'الحمل المستخدم',
+    'loggedLoad': 'الحمل الذي سجّلته لهذه المجموعة.',
+    'loggedLoadPlanned': 'الحمل الذي سجّلته لهذه المجموعة. المُخطَّط: {{value}}.',
     'comment': 'تعليق لمدربك',
     'done': 'منجزة',
     'clearLog': 'مسح',
