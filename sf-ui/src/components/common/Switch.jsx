@@ -7,6 +7,12 @@
  * semantics and screen readers all keep working without being reimplemented.
  *
  * Ported from ~/cwclock's Switch.
+ *
+ * onChange receives the new state, not the change event. It takes a `checked`
+ * value, so it gives one back - and the alternative had gone wrong three times
+ * out of five here: a handler written as `(value) => ...` was handed an event
+ * object, which is truthy whichever way the switch was flipped, so the toggle
+ * turned on once and then sat there.
  */
 export default function Switch({ checked, onChange, disabled, id, ...props }) {
   return (
@@ -16,7 +22,7 @@ export default function Switch({ checked, onChange, disabled, id, ...props }) {
         type="checkbox"
         className="sf-switch-input"
         checked={checked}
-        onChange={onChange}
+        onChange={(event) => onChange?.(event.target.checked)}
         disabled={disabled}
         {...props}
       />
