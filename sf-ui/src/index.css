@@ -361,6 +361,50 @@ button {
 .sf-button-ghost:disabled { background-color: transparent; opacity: 0.55; }
 
 .sf-button-sm { padding: 6px 12px; font-size: 0.85rem; }
+/* A button whose whole content is one icon: square rather than a pill with a
+   lone glyph rattling around in it. The gap goes too - there is nothing to sit
+   beside the icon. */
+.sf-button-icon { padding: 9px; gap: 0; }
+.sf-button-icon.sf-button-sm { padding: 6px; }
+/* The trigger's own spinner, sized to the icon it replaces so the button does
+   not change shape while it works. */
+.sf-button-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: sf-spin 0.8s linear infinite;
+}
+
+/* A small on/off chip: a badge you can press. Reads as state first and as a
+   control second, which is what a per-set answer like "beltless" is. Disabled
+   it is the same chip without the pointer - a coach sees the answer, the
+   athlete gives it. */
+.sf-chip-toggle {
+  margin-left: 0.4rem;
+  padding: 2px 8px;
+  border: 1px solid var(--sf-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--sf-text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color var(--sf-transition), border-color var(--sf-transition),
+    color var(--sf-transition);
+}
+.sf-chip-toggle:hover:not(:disabled) { border-color: var(--sf-primary); color: var(--sf-primary); }
+.sf-chip-toggle.is-on {
+  border-color: transparent;
+  background-color: var(--sf-warning-tint);
+  color: var(--sf-warning);
+}
+.sf-chip-toggle:disabled { cursor: default; }
 
 /* --- surfaces --- */
 

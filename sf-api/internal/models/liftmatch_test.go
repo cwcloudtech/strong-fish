@@ -86,3 +86,37 @@ func TestLiftRulesAreValid(t *testing.T) {
 		}
 	}
 }
+
+// TestWithBelt covers which movements ask about a belt: the squat and the
+// deadlift families, and nothing else.
+func TestWithBelt(t *testing.T) {
+	cases := []struct {
+		name string
+		ref  string
+		want bool
+	}{
+		{name: "squat", want: true},
+		{name: "High bar squat", want: true},
+		{name: "Paused deadlift", want: true},
+		{name: "Halting deadlift", want: true},
+		{name: "Sumo deadlift", want: true},
+		{name: "RDL", want: true},
+		{name: "Souleve de terre", want: true},
+		{name: "Bench press", want: false},
+		{name: "Larsen press", want: false},
+		{name: "Pull-up", want: false},
+		// The table keeps these out of the squat family on purpose, and a belt
+		// follows the family.
+		{name: "Goblet squat", want: false},
+		{name: "Belt squat", want: false},
+		// A reference a coach set wins over the name, as it does for the load.
+		{name: "Some machine", ref: CategoryDeadlift, want: true},
+		{name: "Squat", ref: CategoryBench, want: false},
+	}
+
+	for _, c := range cases {
+		if got := WithBelt(c.ref, c.name); got != c.want {
+			t.Errorf("WithBelt(%q, %q) = %v, want %v", c.ref, c.name, got, c.want)
+		}
+	}
+}

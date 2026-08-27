@@ -292,6 +292,10 @@ class SetLog {
   final int? actualReps;
   final double? actualRpe;
   final double? actualLoad;
+
+  /// Whether the member ran this set without their belt. Only asked about on a
+  /// movement that would normally be belted (see [ProgramSet.withBelt]).
+  final bool beltless;
   final String comment;
   final bool done;
   final double e1rm;
@@ -300,6 +304,7 @@ class SetLog {
     this.actualReps,
     this.actualRpe,
     this.actualLoad,
+    this.beltless = false,
     this.comment = '',
     this.done = false,
     this.e1rm = 0,
@@ -309,6 +314,7 @@ class SetLog {
         actualReps: _toIntOrNull(json['actualReps']),
         actualRpe: _toDoubleOrNull(json['actualRpe']),
         actualLoad: _toDoubleOrNull(json['actualLoad']),
+        beltless: json['beltless'] == true,
         comment: _toString(json['comment']),
         done: json['done'] == true,
         e1rm: _toDouble(json['e1rm']),
@@ -322,6 +328,11 @@ class ProgramSet {
   final String id;
   final String exerciseId;
   final String exerciseSlug;
+
+  /// Whether this movement is one a lifter wears a belt for - the squat and
+  /// the deadlift and their variations, decided by the API off the same table
+  /// the loads come from. It is what puts a beltless switch on the set.
+  final bool withBelt;
   final Map<String, String> exerciseLabels;
   final String exerciseOneRmRef;
   final bool bodyweight;
@@ -347,6 +358,7 @@ class ProgramSet {
     required this.id,
     this.exerciseId = '',
     this.exerciseSlug = '',
+    this.withBelt = false,
     this.exerciseLabels = const {},
     this.exerciseOneRmRef = '',
     this.bodyweight = false,
@@ -369,6 +381,7 @@ class ProgramSet {
         id: _toString(json['id']),
         exerciseId: _toString(json['exerciseId']),
         exerciseSlug: _toString(json['exerciseSlug']),
+        withBelt: json['withBelt'] == true,
         exerciseLabels: _toLabels(json['exerciseLabels']),
         exerciseOneRmRef: _toString(json['exerciseOneRmRef']),
         bodyweight: json['bodyweight'] == true,

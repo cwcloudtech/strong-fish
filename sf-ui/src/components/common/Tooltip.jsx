@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /**
@@ -23,10 +23,15 @@ const OPEN_DELAY = 300;
 /** The gap between the trigger and the bubble. */
 const OFFSET = 10;
 
+/** How close to the window's edge the bubble may sit before it is nudged in. */
+const EDGE = 8;
+
 export default function Tooltip({ label, position = "top", className = "", children }) {
   const wrapperRef = useRef(null);
+  const bubbleRef = useRef(null);
   const timerRef = useRef(null);
   const [origin, setOrigin] = useState(null);
+  const [shift, setShift] = useState(0);
 
   const hide = useCallback(() => {
     clearTimeout(timerRef.current);
@@ -40,6 +45,28 @@ export default function Tooltip({ label, position = "top", className = "", child
       if (rect) setOrigin(rect);
     }, OPEN_DELAY);
   }, []);
+
+  // Nudged back inside the window once its width is known.
+  //
+  // The bubble is centred on its trigger, and a trigger near the right edge -
+  // an icon button in a heading's corner, which is most of them - pushed half
+  // the bubble off screen, where it was simply cut off mid-word. Measured
+  // rather than guessed, because the text is a translation and its width is
+  // not knowable in advance. offsetWidth is used rather than the rendered
+  // rect: the width does not depend on the nudge, so this cannot feed back on
+  // itself.
+  useLayoutEffect(() => {
+    if (!origin) {
+      setShift(0);
+      return;
+    }
+    const width = bubbleRef.current?.offsetWidth;
+    if (!width) return;
+
+    const centred = position === "right" ? origin.right + OFFSET : origin.left + origin.width / 2 - width / 2;
+    const clamped = Math.max(EDGE, Math.min(centred, window.innerWidth - EDGE - width));
+    setShift(clamped - centred);
+  }, [origin, position]);
 
   // A tooltip left behind by an unmounting trigger would hang on screen with
   // nothing to dismiss it.
@@ -76,10 +103,11 @@ export default function Tooltip({ label, position = "top", className = "", child
       {origin
         ? createPortal(
             <span
+              ref={bubbleRef}
               className="sf-tooltip-bubble"
               data-position={position}
               role="tooltip"
-              style={bubbleStyle(position, origin)}
+              style={{ ...bubbleStyle(position, origin), marginLeft: shift }}
             >
               {label}
             </span>,

@@ -98,8 +98,11 @@ type ProgramSet struct {
 	// against ("bench" for a Larsen press). The client shows it so a member can
 	// see - and go and fix - the max a set's weight actually came from.
 	ExerciseOneRMRef string `json:"exerciseOneRmRef,omitempty"`
-	Position         int    `json:"position"`
-	Reps             int    `json:"reps"`
+	// WithBelt says this movement is one a lifter wears a belt for, which is
+	// what puts a beltless switch on the row (see models.WithBelt).
+	WithBelt bool `json:"withBelt"`
+	Position int  `json:"position"`
+	Reps     int  `json:"reps"`
 	// RPE is the prescribed rate of perceived exertion. Nil is the
 	// spreadsheet's "?": the coach left it open, and the set falls back to its
 	// percentage.
@@ -184,16 +187,20 @@ func IsValidAssignmentStatus(status string) bool {
 // SetLog is what the member actually did on a prescribed set: the RPE they
 // perceived, and a comment for their coach.
 type SetLog struct {
-	ID           string     `json:"id"`
-	AssignmentID string     `json:"assignmentId"`
-	SetID        string     `json:"setId"`
-	UserID       string     `json:"userId"`
-	ActualReps   *int       `json:"actualReps,omitempty"`
-	ActualRPE    *float64   `json:"actualRpe,omitempty"`
-	ActualLoad   *float64   `json:"actualLoad,omitempty"`
-	Comment      string     `json:"comment,omitempty"`
-	Done         bool       `json:"done"`
-	CompletedAt  *time.Time `json:"completedAt,omitempty"`
+	ID           string   `json:"id"`
+	AssignmentID string   `json:"assignmentId"`
+	SetID        string   `json:"setId"`
+	UserID       string   `json:"userId"`
+	ActualReps   *int     `json:"actualReps,omitempty"`
+	ActualRPE    *float64 `json:"actualRpe,omitempty"`
+	ActualLoad   *float64 `json:"actualLoad,omitempty"`
+	// Beltless says the member ran this set without their belt. Only asked
+	// about on a movement that would normally be belted; absent means they
+	// wore it, which is what a belt movement's default is.
+	Beltless    bool       `json:"beltless,omitempty"`
+	Comment     string     `json:"comment,omitempty"`
+	Done        bool       `json:"done"`
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
 	// E1RM is the max this performance estimates, derived from the logged
 	// load/reps/RPE - the spreadsheet's e1RM column, computed from what
 	// actually happened rather than from what was prescribed.

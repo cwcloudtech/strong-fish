@@ -269,6 +269,7 @@ class SfApi {
     int? actualReps,
     double? actualRpe,
     double? actualLoad,
+    bool beltless = false,
     String comment = '',
     bool done = true,
   }) async {
@@ -276,6 +277,7 @@ class SfApi {
       'actualReps': actualReps,
       'actualRpe': actualRpe,
       'actualLoad': actualLoad,
+      'beltless': beltless,
       'comment': comment,
       'done': done,
     });

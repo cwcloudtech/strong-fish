@@ -78,7 +78,7 @@ func Columns(locale string, feedback bool) []Column {
 // nobody lifted: a blank there says the set was run without a weight being
 // recorded, which is a different fact from "you were asked for 122.5 kg" - and
 // the prescription is still on the row, in Reps and Intensity.
-func Row(set models.ProgramSet, feedback bool) []string {
+func Row(set models.ProgramSet, feedback bool, locale string) []string {
 	log := set.Log
 
 	load := FormatLoad(set)
@@ -106,7 +106,7 @@ func Row(set models.ProgramSet, feedback bool) []string {
 		return append(cells, "", "", "", "")
 	}
 	return append(cells,
-		formatIntPtr(log.ActualReps),
+		repsDone(*log, locale),
 		formatFloatPtr(log.ActualRPE),
 		formatKg(log.E1RM),
 		log.Comment,
@@ -125,15 +125,35 @@ type Line struct {
 }
 
 // Lines is a session's sets as rows, in the order they are performed.
-func Lines(sets []models.ProgramSet, feedback bool) []Line {
+func Lines(sets []models.ProgramSet, feedback bool, locale string) []Line {
 	lines := make([]Line, 0, len(sets))
 	for _, set := range sets {
 		lines = append(lines, Line{
-			Cells: Row(set, feedback),
+			Cells: Row(set, feedback, locale),
 			Done:  feedback && set.Log != nil && set.Log.Done,
 		})
 	}
 	return lines
+}
+
+// repsDone is what the member actually got, and whether they got it without
+// their belt: "2 beltless".
+//
+// A mention on the reps rather than a column of its own. A column would spend
+// width on every sheet - including every bench and every accessory - to answer
+// a question only the squat and the deadlift ask, and it would be empty almost
+// everywhere it was printed.
+func repsDone(log models.SetLog, locale string) string {
+	reps := formatIntPtr(log.ActualReps)
+	if !log.Beltless {
+		return reps
+	}
+	if reps == "" {
+		// Somebody who ticked the switch but never wrote a rep count still
+		// said something worth printing.
+		return Heading(locale, "beltless")
+	}
+	return reps + " " + Heading(locale, "beltless")
 }
 
 // Weeks groups the sessions into weeks, in order.
