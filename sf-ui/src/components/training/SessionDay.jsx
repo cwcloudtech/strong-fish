@@ -173,27 +173,13 @@ export default function SessionDay({
                             {t("session.bodyweight")}
                           </span>
                         ) : null}
-                        {/* Only where a belt is the norm: the squat and the
-                            deadlift and their variations, which the API reads
-                            off the same table the loads come from. Asking it
-                            of a bench would be noise on every row of every
-                            push session.
-
-                            It sits beside the movement rather than among the
-                            row's actions so that a coach reading the session
-                            back sees it too - the actions are drawn for the
-                            athlete running the block and nobody else. */}
-                        {set.withBelt && (editable || set.log?.beltless) ? (
-                          <button
-                            type="button"
-                            className={`sf-chip-toggle${set.log?.beltless ? " is-on" : ""}`}
-                            disabled={!editable}
-                            onClick={() => logWith(set, { beltless: !set.log?.beltless })}
-                            title={set.log?.beltless ? t("session.beltlessOn") : t("session.beltlessOff")}
-                            aria-pressed={Boolean(set.log?.beltless)}
-                          >
+                        {/* A sign on the set, not a control: it is switched in
+                            the log form. Here it says how the set was run, to
+                            the athlete and to the coach reading it back. */}
+                        {set.log?.beltless ? (
+                          <span className="sf-badge sf-badge-warning" style={{ marginLeft: "0.4rem" }}>
                             {t("session.beltless")}
-                          </button>
+                          </span>
                         ) : null}
                         {set.notes ? <div className="sf-muted">{set.notes}</div> : null}
                       </td>
