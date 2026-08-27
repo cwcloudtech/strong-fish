@@ -182,7 +182,7 @@ export default function Settings() {
           </span>
           <Switch
             checked={form.anonymous}
-            onChange={set("anonymous")}
+            onChange={(anonymous) => setForm((current) => ({ ...current, anonymous }))}
             // Nothing to be known by without a username, and the API refuses
             // it - so the switch is unavailable rather than silently failing.
             disabled={!form.username.trim()}

@@ -594,8 +594,7 @@ function EventFormModal({ event, clubs, canPostGlobally, canPublish, onClose, on
           <Switch
             id="allDay"
             checked={form.allDay}
-            onChange={(fieldEvent) => {
-              const allDay = fieldEvent.target.checked;
+            onChange={(allDay) => {
               setForm((current) => ({
                 ...current,
                 allDay,
