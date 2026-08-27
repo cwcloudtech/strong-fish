@@ -149,6 +149,26 @@ func MatchOneRMRef(names ...string) string {
 	return best
 }
 
+// WithBelt reports whether a movement is one a lifter wears a belt for.
+//
+// Read off the same decision table the loads are: a movement that resolves to
+// the squat or the deadlift is a belt movement, which covers the variations
+// without a second list to maintain - a halting deadlift, a paused deadlift, a
+// highbar squat all answer yes because they already answer "deadlift" and
+// "squat" to MatchOneRMRef. A bench does not, and neither does a goblet squat,
+// which that table already keeps out of the squat family on purpose.
+//
+// The reference a coach set on the catalog entry wins over the name, exactly
+// as it does for the load: if they said this movement is loaded off the
+// deadlift, it is a deadlift for this too.
+func WithBelt(oneRMRef string, names ...string) bool {
+	ref := oneRMRef
+	if utils.IsBlank(ref) {
+		ref = MatchOneRMRef(names...)
+	}
+	return ref == CategorySquat || ref == CategoryDeadlift
+}
+
 // liftWords splits a name into comparable words: lowercased, stripped of
 // accents, and broken on anything that is not a letter or a digit. It borrows
 // Slugify for that, which is the same normalization the catalog's own slugs go

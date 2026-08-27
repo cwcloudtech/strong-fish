@@ -132,8 +132,12 @@ type logSetPayload struct {
 	ActualReps *int     `json:"actualReps"`
 	ActualRPE  *float64 `json:"actualRpe"`
 	ActualLoad *float64 `json:"actualLoad"`
-	Comment    string   `json:"comment"`
-	Done       bool     `json:"done"`
+	// Beltless is the member's own answer for this set. Sent for any set: a
+	// movement nobody belts anyway simply never asks, so a true here is either
+	// somebody's honest note or a client bug, and neither is worth refusing.
+	Beltless bool   `json:"beltless"`
+	Comment  string `json:"comment"`
+	Done     bool   `json:"done"`
 }
 
 // LogSet records what the member actually did on a prescribed set: the RPE they
@@ -184,7 +188,7 @@ func (h *TrainingHandler) LogSet(w http.ResponseWriter, r *http.Request) {
 
 	log, err := h.programs.LogSet(r.Context(), assignment.ID, setID, callerID, store.SetLogFields{
 		ActualReps: p.ActualReps, ActualRPE: p.ActualRPE, ActualLoad: p.ActualLoad,
-		Comment: p.Comment, Done: p.Done,
+		Beltless: p.Beltless, Comment: p.Comment, Done: p.Done,
 	})
 	if err != nil {
 		writeStoreError(w, err)

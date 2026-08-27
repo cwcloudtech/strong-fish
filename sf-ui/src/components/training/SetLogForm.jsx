@@ -43,6 +43,10 @@ export default function SetLogForm({ set, onSubmit, onCancel }) {
         actualReps: form.actualReps === "" ? null : Number(form.actualReps),
         actualRpe: form.actualRpe === "" ? null : Number(form.actualRpe),
         actualLoad: form.actualLoad === "" ? null : Number(form.actualLoad),
+        // Carried, not asked for again: the switch on the row is where this is
+        // set, and the API replaces a log wholesale - so a form that left it
+        // out would quietly re-belt the set.
+        beltless: Boolean(log?.beltless),
         comment: form.comment,
         // Filling this in is saying you did the set; the button in the row
         // says the same thing, and the two must not disagree.

@@ -181,7 +181,7 @@ func writeWeek(file *excelize.File, sheet string, program models.Program,
 		}
 		row++
 
-		for _, line := range programsheet.Lines(sets, options.Feedback) {
+		for _, line := range programsheet.Lines(sets, options.Feedback, options.Locale) {
 			style := styles.cell
 			if line.Done {
 				style = styles.cellDone

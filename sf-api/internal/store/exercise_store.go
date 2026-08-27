@@ -55,6 +55,8 @@ func scanExercise(row pgx.Row) (models.Exercise, error) {
 	e.Bodyweight = d.Bodyweight
 	e.Main = d.Main
 	e.CreatedBy = d.CreatedBy
+	// Derived on the way out rather than stored: see models.Exercise.WithBelt.
+	e.WithBelt = models.WithBelt(e.OneRMRef, e.Slug, e.Labels["en"], e.Labels["fr"])
 	return e, nil
 }
 

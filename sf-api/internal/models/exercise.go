@@ -53,7 +53,16 @@ type Exercise struct {
 	Bodyweight bool `json:"bodyweight"`
 	// Main marks the three competition lifts, which every member is prompted
 	// to record a 1RM for.
-	Main      bool      `json:"main"`
+	Main bool `json:"main"`
+	// WithBelt marks a movement people wear a belt for - the squat and the
+	// deadlift and their variations. Derived from the name and the reference
+	// lift (see WithBelt), never stored: it is the same answer the loads are
+	// resolved with, so the two cannot drift apart, and renaming a movement
+	// re-reads it.
+	//
+	// What it is for: a set of a belt movement carries a beltless switch in
+	// training, and a set of a bench does not.
+	WithBelt  bool      `json:"withBelt"`
 	CreatedBy string    `json:"createdBy,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

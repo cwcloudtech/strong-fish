@@ -416,6 +416,9 @@ func scanSet(row pgx.Row) (models.ProgramSet, error) {
 		}
 		return models.ProgramSet{}, err
 	}
+	s.WithBelt = models.WithBelt(s.ExerciseOneRMRef, s.ExerciseSlug,
+		s.ExerciseLabels["en"], s.ExerciseLabels["fr"])
+
 	var d setData
 	if err := json.Unmarshal(raw, &d); err != nil {
 		return models.ProgramSet{}, err
@@ -682,6 +685,7 @@ type setLogData struct {
 	ActualReps  *int       `json:"actualReps,omitempty"`
 	ActualRPE   *float64   `json:"actualRpe,omitempty"`
 	ActualLoad  *float64   `json:"actualLoad,omitempty"`
+	Beltless    bool       `json:"beltless,omitempty"`
 	Comment     string     `json:"comment,omitempty"`
 	Done        bool       `json:"done"`
 	CompletedAt *time.Time `json:"completedAt,omitempty"`
@@ -705,6 +709,7 @@ func scanSetLog(row pgx.Row) (models.SetLog, error) {
 	l.ActualReps = d.ActualReps
 	l.ActualRPE = d.ActualRPE
 	l.ActualLoad = d.ActualLoad
+	l.Beltless = d.Beltless
 	l.Comment = d.Comment
 	l.Done = d.Done
 	l.CompletedAt = d.CompletedAt
@@ -716,6 +721,7 @@ type SetLogFields struct {
 	ActualReps *int
 	ActualRPE  *float64
 	ActualLoad *float64
+	Beltless   bool
 	Comment    string
 	Done       bool
 }
@@ -724,7 +730,7 @@ type SetLogFields struct {
 func (s *ProgramStore) LogSet(ctx context.Context, assignmentID, setID, userID string, f SetLogFields) (models.SetLog, error) {
 	payload := setLogData{
 		ActualReps: f.ActualReps, ActualRPE: f.ActualRPE, ActualLoad: f.ActualLoad,
-		Comment: f.Comment, Done: f.Done,
+		Beltless: f.Beltless, Comment: f.Comment, Done: f.Done,
 	}
 	if f.Done {
 		now := time.Now().UTC()
@@ -871,6 +877,7 @@ func (s *ProgramStore) ListFeedbackForClub(ctx context.Context, clubID string, p
 		f.ActualReps = d.ActualReps
 		f.ActualRPE = d.ActualRPE
 		f.ActualLoad = d.ActualLoad
+		f.Beltless = d.Beltless
 		f.Comment = d.Comment
 		f.Done = d.Done
 		f.CompletedAt = d.CompletedAt

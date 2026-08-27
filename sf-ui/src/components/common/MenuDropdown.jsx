@@ -19,6 +19,9 @@ export default function MenuDropdown({
   className = "",
   triggerClassName = "sf-button sf-button-secondary",
   title,
+  // What the trigger is called when it carries no text of its own - an
+  // icon-only button is otherwise announced as "button" and nothing more.
+  ariaLabel,
   disabled,
   children,
 }) {
@@ -50,6 +53,7 @@ export default function MenuDropdown({
         className={triggerClassName}
         onClick={() => setOpen((current) => !current)}
         title={title}
+        aria-label={ariaLabel}
         disabled={disabled}
         aria-haspopup="menu"
         aria-expanded={open}
