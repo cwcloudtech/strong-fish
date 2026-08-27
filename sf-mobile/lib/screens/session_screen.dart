@@ -377,11 +377,9 @@ class _SetTile extends ConsumerWidget {
               spacing: 6,
               children: [
                 Text(set.label(locale)),
-                // Only where a belt is the norm: the squat and the deadlift
-                // and their variations, which the API reads off the same table
-                // the loads come from. Asking it of a bench would be noise on
-                // every row of every push session.
-                if (set.withBelt) _BeltlessChip(set: set, assignmentId: assignmentId),
+                // How the set was run, when it was run without a belt. The
+                // switch that answers it lives in the log sheet.
+                if (set.log?.beltless == true) const _BeltlessBadge(),
               ],
             ),
           ),
@@ -530,76 +528,29 @@ class _LoadLabel extends ConsumerWidget {
   }
 }
 
-/// The member's own answer for one set: run with a belt, or without.
+/// A sign on a set that was run without a belt.
 ///
-/// A chip that is state first and a control second, matching the web's. It
-/// writes through the same wholesale log every other control here does, so it
-/// carries the rest of the feedback with it.
-class _BeltlessChip extends ConsumerStatefulWidget {
-  final ProgramSet set;
-  final String assignmentId;
-
-  const _BeltlessChip({required this.set, required this.assignmentId});
+/// Not a control: the switch that sets it is in the log sheet. Here it says
+/// how the set was run, to the athlete and to the coach reading it back.
+class _BeltlessBadge extends ConsumerWidget {
+  const _BeltlessBadge();
 
   @override
-  ConsumerState<_BeltlessChip> createState() => _BeltlessChipState();
-}
-
-class _BeltlessChipState extends ConsumerState<_BeltlessChip> {
-  bool _busy = false;
-
-  Future<void> _toggle() async {
-    setState(() => _busy = true);
-    final log = widget.set.log;
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ref.read(apiProvider).logSet(
-            widget.assignmentId,
-            widget.set.id,
-            actualReps: log?.actualReps,
-            actualRpe: log?.actualRpe,
-            actualLoad: log?.actualLoad,
-            beltless: !(log?.beltless ?? false),
-            comment: log?.comment ?? '',
-            // Saying how a set was run is not saying it was run: unlike the
-            // RPE, this can be answered while writing the session down.
-            done: log?.done ?? false,
-          );
-      ref.invalidate(assignmentProvider(widget.assignmentId));
-    } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final t = ref.watch(tProvider);
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = AppColors.of(context);
-    final on = widget.set.log?.beltless ?? false;
-
-    return Tooltip(
-      message: on ? t('session.beltlessOn') : t('session.beltlessOff'),
-      child: InkWell(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        onTap: _busy ? null : _toggle,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            color: on ? colors.warning.withValues(alpha: 0.18) : null,
-            border: Border.all(color: on ? Colors.transparent : colors.border),
-          ),
-          child: Text(
-            t('session.beltless'),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
-              color: on ? colors.warning : colors.textMuted,
-            ),
-          ),
+        color: colors.warning.withValues(alpha: 0.18),
+      ),
+      child: Text(
+        ref.watch(tProvider)('session.beltless'),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+          color: colors.warning,
         ),
       ),
     );
@@ -701,6 +652,7 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
   late final TextEditingController _rpe;
   late final TextEditingController _load;
   late final TextEditingController _comment;
+  late bool _beltless;
   bool _busy = false;
   String? _error;
 
@@ -713,6 +665,7 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
         text: log?.actualRpe != null ? _fmt(log!.actualRpe!) : (widget.set.rpe != null ? _fmt(widget.set.rpe!) : ''));
     _load = TextEditingController(text: log?.actualLoad != null ? _fmt(log!.actualLoad!) : '');
     _comment = TextEditingController(text: log?.comment ?? '');
+    _beltless = log?.beltless ?? false;
   }
 
   @override
@@ -735,10 +688,7 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
             actualReps: int.tryParse(_reps.text.trim()),
             actualRpe: double.tryParse(_rpe.text.trim().replaceAll(',', '.')),
             actualLoad: double.tryParse(_load.text.trim().replaceAll(',', '.')),
-            // Carried, not asked for again: the switch on the set is where
-            // this is answered, and the API replaces a log wholesale - so a
-            // form that left it out would quietly re-belt the set.
-            beltless: widget.set.log?.beltless ?? false,
+            beltless: _beltless,
             comment: _comment.text.trim(),
           );
       if (mounted) Navigator.of(context).pop(true);
@@ -809,6 +759,17 @@ class _LogSheetState extends ConsumerState<_LogSheet> {
               ],
             ],
           ),
+          // Only where a belt is the norm: the squat and the deadlift and
+          // their variations, which the API reads off the same table the loads
+          // come from. A bench is never asked.
+          if (widget.set.withBelt)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(t('session.beltlessQuestion')),
+              value: _beltless,
+              onChanged: (value) => setState(() => _beltless = value),
+            ),
           const SizedBox(height: 12),
           TextField(
             controller: _comment,

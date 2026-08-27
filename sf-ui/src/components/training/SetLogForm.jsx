@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { ErrorMessage } from "../common/Feedback";
+import Switch from "../common/Switch";
 import { useI18n } from "../../i18n/I18nContext";
 
 /**
@@ -25,6 +26,7 @@ export default function SetLogForm({ set, onSubmit, onCancel }) {
     actualReps: log?.actualReps ?? set.reps,
     actualRpe: log?.actualRpe ?? set.rpe ?? "",
     actualLoad: log?.actualLoad ?? "",
+    beltless: Boolean(log?.beltless),
     comment: log?.comment ?? "",
   });
   const [error, setError] = useState(null);
@@ -43,10 +45,7 @@ export default function SetLogForm({ set, onSubmit, onCancel }) {
         actualReps: form.actualReps === "" ? null : Number(form.actualReps),
         actualRpe: form.actualRpe === "" ? null : Number(form.actualRpe),
         actualLoad: form.actualLoad === "" ? null : Number(form.actualLoad),
-        // Carried, not asked for again: the switch on the row is where this is
-        // set, and the API replaces a log wholesale - so a form that left it
-        // out would quietly re-belt the set.
-        beltless: Boolean(log?.beltless),
+        beltless: Boolean(form.beltless),
         comment: form.comment,
         // Filling this in is saying you did the set; the button in the row
         // says the same thing, and the two must not disagree.
@@ -88,6 +87,21 @@ export default function SetLogForm({ set, onSubmit, onCancel }) {
               placeholder={set.loadKnown && set.roundedLoad ? String(set.roundedLoad) : undefined}
               value={form.actualLoad}
               onChange={set_("actualLoad")}
+            />
+          </div>
+        ) : null}
+        {/* Only where a belt is the norm: the squat and the deadlift and
+            their variations, which the API reads off the same table the loads
+            come from. A bench is never asked. */}
+        {set.withBelt ? (
+          <div className="sf-field">
+            <label className="sf-label" htmlFor={`beltless-${set.id}`}>
+              {t("session.beltlessQuestion")}
+            </label>
+            <Switch
+              id={`beltless-${set.id}`}
+              checked={Boolean(form.beltless)}
+              onChange={(value) => setForm((current) => ({ ...current, beltless: value }))}
             />
           </div>
         ) : null}
