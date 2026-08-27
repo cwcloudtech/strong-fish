@@ -229,8 +229,9 @@ func sheetFileName(name, format string) string {
 // is why it is authorized exactly like the assignment itself: the member, a
 // manager of the club the program belongs to, or a superadmin.
 //
-// ?week=N limits it to one week. A block is a dozen pages and a week is one,
-// and what gets discussed on a Sunday evening is the week just finished.
+// ?week=N limits it to one week and ?day=<id> to a single session. A block is
+// a dozen pages, a week is one, and a session is what gets discussed the
+// evening it was trained - the smallest thing worth sending somebody.
 func (h *TrainingHandler) ExportAssignment(w http.ResponseWriter, r *http.Request) {
 	assignment, ok := h.authorizeAssignment(w, r)
 	if !ok {
@@ -274,7 +275,7 @@ func (h *TrainingHandler) ExportAssignment(w http.ResponseWriter, r *http.Reques
 	for i := range days {
 		days[i].Sets = byDay[days[i].ID]
 	}
-	days = daysOfWeek(days, r.URL.Query().Get("week"))
+	days = narrowDays(days, r.URL.Query().Get("week"), r.URL.Query().Get("day"))
 
 	writeProgramSheet(w, exportFormat(r), program, days, programsheet.Options{
 		MemberName: h.sets.memberName(r, assignment.UserID),
@@ -284,13 +285,28 @@ func (h *TrainingHandler) ExportAssignment(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// daysOfWeek narrows a block to one week, or leaves it whole when no week was
-// asked for.
+// narrowDays limits a block to one session, or to one week, or leaves it whole
+// when neither was asked for.
 //
-// A week that has no sessions comes back empty rather than falling back to the
-// whole block: somebody who asked for week 7 of a six-week block should get a
-// sheet saying there is nothing there, not twelve pages they did not ask for.
-func daysOfWeek(days []models.ProgramDay, week string) []models.ProgramDay {
+// A session wins over a week when both are given: it is the narrower answer,
+// and a client sending both means the session inside that week.
+//
+// A week or a session that has no sets comes back empty rather than falling
+// back to the whole block: somebody who asked for week 7 of a six-week block
+// should get a sheet saying there is nothing there, not twelve pages they did
+// not ask for.
+func narrowDays(days []models.ProgramDay, week, dayID string) []models.ProgramDay {
+	if utils.IsNotBlank(dayID) {
+		wanted := strings.TrimSpace(dayID)
+		filtered := make([]models.ProgramDay, 0, 1)
+		for _, day := range days {
+			if day.ID == wanted {
+				filtered = append(filtered, day)
+			}
+		}
+		return filtered
+	}
+
 	if utils.IsBlank(week) {
 		return days
 	}

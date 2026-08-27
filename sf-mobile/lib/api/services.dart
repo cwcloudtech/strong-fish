@@ -192,6 +192,7 @@ class SfApi {
     required String fileName,
     String format = 'pdf',
     int week = 0,
+    String dayId = '',
     String locale = 'en',
   }) async {
     final path = '$directory/$fileName';
@@ -200,6 +201,9 @@ class SfApi {
       path,
       queryParameters: {
         if (week > 0) 'week': week,
+        // The narrower of the two wins server-side, so sending both is the
+        // session inside that week rather than a contradiction.
+        if (dayId.isNotEmpty) 'day': dayId,
         'locale': locale,
       },
     );

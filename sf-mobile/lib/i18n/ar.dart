@@ -338,6 +338,7 @@ const Map<String, dynamic> ar = {
     'fromTodaysE1rm': 'من الـ{{value}} كغ التي أظهرتها للتو في هذه الحركة، لا من 1RM المسجّل',
     'perceivedRpe': 'الإحساس',
     'exportWeek': 'تصدير هذا الأسبوع',
+    'exportSession': 'تصدير هذه الحصة',
     'exportBlock': 'تصدير الدورة',
     'markDone': 'وضع علامة: منجزة',
     'markUndone': 'وضع علامة: غير منجزة',
