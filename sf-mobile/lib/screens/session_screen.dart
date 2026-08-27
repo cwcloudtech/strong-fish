@@ -110,6 +110,7 @@ class SessionScreen extends ConsumerWidget {
                     _DayCard(
                       day: day,
                       assignmentId: assignmentId,
+                      programName: data.assignment.programName,
                       initiallyExpanded: week == _weeksOf(data.days).first && day == week.days.first,
                     ),
                 ],
@@ -136,11 +137,19 @@ List<({int number, List<ProgramDay> days})> _weeksOf(List<ProgramDay> days) {
   return [for (final number in numbers) (number: number, days: byNumber[number]!)];
 }
 
-/// Exports an assigned block - or one week of it - with the member's feedback.
+/// Exports an assigned block - or one week of it, or one session - with the
+/// member's feedback.
 class _AssignmentExport extends ConsumerStatefulWidget {
   final String assignmentId;
   final String programName;
   final int week;
+
+  /// The session to export on its own. Empty for a whole week or block.
+  final String dayId;
+
+  /// Its day number, which is what makes the file tell one session from
+  /// another once it is in a downloads folder.
+  final int day;
   final String tooltip;
 
   const _AssignmentExport({
@@ -148,6 +157,8 @@ class _AssignmentExport extends ConsumerStatefulWidget {
     required this.programName,
     required this.tooltip,
     this.week = 0,
+    this.dayId = '',
+    this.day = 0,
   });
 
   @override
@@ -164,6 +175,7 @@ class _AssignmentExportState extends ConsumerState<_AssignmentExport> {
       final name = [
         _safeFileName(widget.programName),
         if (widget.week > 0) 'w${widget.week}',
+        if (widget.day > 0) 'd${widget.day}',
       ].join('-');
 
       final path = await ref.read(apiProvider).downloadAssignment(
@@ -172,6 +184,7 @@ class _AssignmentExportState extends ConsumerState<_AssignmentExport> {
             fileName: '$name.${format.extension}',
             format: format.extension,
             week: widget.week,
+            dayId: widget.dayId,
             locale: ref.read(localeProvider),
           );
       if (mounted) await openExported(context, ref, path);
@@ -201,9 +214,15 @@ String _safeFileName(String name) {
 class _DayCard extends ConsumerWidget {
   final ProgramDay day;
   final String assignmentId;
+  final String programName;
   final bool initiallyExpanded;
 
-  const _DayCard({required this.day, required this.assignmentId, required this.initiallyExpanded});
+  const _DayCard({
+    required this.day,
+    required this.assignmentId,
+    required this.programName,
+    required this.initiallyExpanded,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -235,6 +254,18 @@ class _DayCard extends ConsumerWidget {
                 ]),
                 style: Theme.of(context).textTheme.titleMedium,
               ),
+            ),
+            // One session on its own, beside the week's own export: a
+            // session is what gets discussed the evening it was trained, and
+            // sending a whole block to say one thing about one day is why
+            // nobody sends it.
+            _AssignmentExport(
+              assignmentId: assignmentId,
+              programName: programName,
+              week: day.week,
+              dayId: day.id,
+              day: day.day,
+              tooltip: t('session.exportSession'),
             ),
             // The whole session in one tap, on the right of the panel. It sits
             // in the title rather than in `trailing`, which the expand arrow

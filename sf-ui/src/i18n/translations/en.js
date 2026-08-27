@@ -329,6 +329,7 @@ const en = {
     fromTodaysE1rm: "from the {{value}}kg you just showed on this lift, not from your recorded 1RM",
     perceivedRpe: "Felt like",
     exportWeek: "Export this week",
+    exportSession: "Export this session",
     exportBlock: "Export the block",
     markDone: "Mark as done",
     markUndone: "Mark as not done",

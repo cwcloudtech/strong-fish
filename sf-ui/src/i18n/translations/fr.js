@@ -334,6 +334,7 @@ const fr = {
     fromTodaysE1rm: "d'après les {{value}}kg que vous venez de montrer sur ce mouvement, pas de votre 1RM enregistré",
     perceivedRpe: "Ressenti",
     exportWeek: "Exporter la semaine",
+    exportSession: "Exporter cette séance",
     exportBlock: "Exporter le bloc",
     markDone: "Marquer comme faite",
     markUndone: "Marquer comme non faite",

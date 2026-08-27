@@ -59,14 +59,20 @@ export default function TrainingSession() {
     load();
   };
 
-  // The block, or one week of it, with the member's feedback on it. week is
-  // undefined for the whole thing - which is what the API's ?week does too, so
-  // there is one rule rather than two.
-  const exportAs = async (format, week) => {
+  // The block, one week of it, or one session, with the member's feedback on
+  // it. Both narrowings are undefined for the whole thing - which is what the
+  // API's ?week and ?day do too, so there is one rule rather than two.
+  const exportAs = async (format, week, day) => {
     setExporting(true);
     try {
-      const blob = await training.export(assignmentId, { format, week, locale });
-      const name = [assignment?.program?.name || "program", week ? `w${week}` : null]
+      const blob = await training.export(assignmentId, { format, week, day: day?.id, locale });
+      // A session's file says which one it is: three files called
+      // "bloc-force.pdf" in a downloads folder help nobody.
+      const name = [
+        assignment?.program?.name || "program",
+        week ? `w${week}` : null,
+        day ? `d${day.day}` : null,
+      ]
         .filter(Boolean)
         .join("-");
       downloadBlob(blob, `${name}.${format}`);
@@ -156,6 +162,8 @@ export default function TrainingSession() {
               editable={isOwner}
               onLog={logSet}
               onDayDone={setDayDone}
+              onExport={(format) => exportAs(format, week.number, day)}
+              exporting={exporting}
             />
           ))}
         </section>

@@ -6,6 +6,7 @@ import Select from "../common/Select";
 import { formatReps } from "../../utils/setFormat";
 import { useI18n } from "../../i18n/I18nContext";
 import { sessionTitle } from "../../utils/sessionTitle";
+import ExportMenu from "../programs/ExportMenu";
 
 /**
  * The perceived-RPE values on offer, as the chart itself is written: half
@@ -50,7 +51,16 @@ export function exerciseLabel(set, locale) {
  * the member's own current 1RM, so it changes the moment they update a max. A
  * "?" means they haven't recorded the max it would come from yet.
  */
-export default function SessionDay({ day, locale, defaultOpen = false, editable = false, onLog, onDayDone }) {
+export default function SessionDay({
+  day,
+  locale,
+  defaultOpen = false,
+  editable = false,
+  onLog,
+  onDayDone,
+  onExport,
+  exporting = false,
+}) {
   const { t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
   const [logging, setLogging] = useState(null);
@@ -91,14 +101,37 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
           </h3>
           <span className="sf-badge sf-badge-muted">{t("programs.setCount", { count: sets.length })}</span>
         </div>
-        {editable ? (
-          <div className="sf-row" style={{ gap: "0.5rem" }}>
+        <div className="sf-row" style={{ gap: "0.5rem" }}>
+          {editable ? (
             <span className={`sf-badge ${allDone ? "sf-badge-success" : "sf-badge-muted"}`}>
               {t("session.progress", { done, total: sets.length })}
             </span>
-            {/* The whole session in one tap. It sits in the header rather than
-                among the sets because it is about the session, and it stops
-                the click from opening the panel underneath it. */}
+          ) : null}
+          {/* One session on its own, beside the week's own export: a session is
+              what gets discussed the evening it was trained, and sending a
+              twelve-page block to say one thing about one day is why nobody
+              sends it. Offered to whoever may read the session, like the
+              week's - a coach exporting their athlete's day is not editing it.
+              The click is stopped short of the header, which would otherwise
+              collapse the panel underneath the menu. */}
+          {onExport ? (
+            <span
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              role="presentation"
+            >
+              <ExportMenu
+                onExport={onExport}
+                busy={exporting}
+                label={t("session.exportSession")}
+                size="sf-button-sm"
+              />
+            </span>
+          ) : null}
+          {/* The whole session in one tap. It sits in the header rather than
+              among the sets because it is about the session, and it stops the
+              click from opening the panel underneath it. */}
+          {editable ? (
             <DoneButton
               done={allDone}
               label={allDone ? t("session.markDayUndone") : t("session.markDayDone")}
@@ -107,8 +140,8 @@ export default function SessionDay({ day, locale, defaultOpen = false, editable 
                 onDayDone(day, !allDone);
               }}
             />
-          </div>
-        ) : null}
+          ) : null}
+        </div>
       </div>
 
       {open ? (

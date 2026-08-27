@@ -145,10 +145,10 @@ export const training = {
   setDayDone: (assignmentId, dayId, done) => body(client.put(`/training/${assignmentId}/days/${dayId}/log`, { done })),
   // The block with this member's feedback on it, whole or one week - the sheet
   // a lifter sends their coach, and the one a coach reads away from the app.
-  export: (assignmentId, { format = "pdf", week, locale } = {}) =>
+  export: (assignmentId, { format = "pdf", week, day, locale } = {}) =>
     client
       .get(`/training/${assignmentId}/export.${format}`, {
-        params: { ...(week ? { week } : {}), ...(locale ? { locale } : {}) },
+        params: { ...(week ? { week } : {}), ...(day ? { day } : {}), ...(locale ? { locale } : {}) },
         responseType: "blob",
       })
       .then((response) => response.data),
