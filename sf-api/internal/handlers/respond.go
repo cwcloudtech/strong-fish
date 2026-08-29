@@ -23,18 +23,21 @@ type errorBody struct {
 // dictionaries, falling back to the English Message when a code is absent or
 // unrecognized (an older client, or one that doesn't know the code).
 const (
-	CodeInternal             = "errors.internal"
-	CodeNotFound             = "errors.notFound"
-	CodeInvalidRequestBody   = "errors.invalidRequestBody"
-	CodeAllFieldsRequired    = "errors.allFieldsRequired"
-	CodeInvalidCredentials   = "errors.invalidCredentials"
-	CodeDuplicateEmail       = "errors.duplicateEmail"
-	CodeDuplicateHandle      = "errors.duplicateHandle"
-	CodeInvalidEmail         = "errors.invalidEmail"
-	CodeInvalidHandle        = "errors.invalidHandle"
-	CodeInvalidUsername      = "errors.invalidUsername"
-	CodeDuplicateUsername    = "errors.duplicateUsername"
-	CodeUsernameRequired     = "errors.usernameRequired"
+	CodeInternal           = "errors.internal"
+	CodeNotFound           = "errors.notFound"
+	CodeInvalidRequestBody = "errors.invalidRequestBody"
+	CodeAllFieldsRequired  = "errors.allFieldsRequired"
+	CodeInvalidCredentials = "errors.invalidCredentials"
+	CodeDuplicateEmail     = "errors.duplicateEmail"
+	CodeDuplicateHandle    = "errors.duplicateHandle"
+	CodeInvalidEmail       = "errors.invalidEmail"
+	CodeInvalidHandle      = "errors.invalidHandle"
+	CodeInvalidUsername    = "errors.invalidUsername"
+	CodeDuplicateUsername  = "errors.duplicateUsername"
+	CodeUsernameRequired   = "errors.usernameRequired"
+	// CodeNameOrUsername is signing up with neither a name nor a username.
+	// Either is enough to be somebody in a club; nothing is not.
+	CodeNameOrUsername       = "errors.nameOrUsername"
 	CodeUserNotFound         = "errors.userNotFound"
 	CodeNoUserWithEmail      = "errors.noUserWithEmail"
 	CodePasswordsMismatch    = "errors.passwordsMismatch"

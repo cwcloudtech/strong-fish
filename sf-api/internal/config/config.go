@@ -72,12 +72,14 @@ const (
 	// this is about what is reasonable to push through the API, not about what
 	// a row can hold.
 	//
-	// 200MB, because the thing people film is a set: half a minute of a phone's
-	// 1080p is already 40-80MB and 4K several times that, so the old 20MB
-	// stopped a 28-second squat - and stopped it *mid-transfer*, which reads on
-	// the phone as a connection failure rather than as a limit. Deployments
-	// that pay for the bandwidth can lower it with SF_MAX_VIDEO_SIZE.
-	defaultMaxVideoSize int64 = 200 * 1024 * 1024
+	// 500MB, sized to two minutes of a phone's video, which is the length of a
+	// warm-up set filmed from the side: a minute of 1080p30 runs 60-75MB and
+	// 1080p60 twice that, so two minutes wants 300MB before anybody has
+	// touched the camera settings. The earlier 20MB stopped at eight seconds
+	// and did it *mid-transfer*, which reads on a phone as a lost connection
+	// rather than as a limit. Deployments that pay for the bandwidth can lower
+	// it with SF_MAX_VIDEO_SIZE.
+	defaultMaxVideoSize int64 = 500 * 1024 * 1024
 	// defaultMaxAudioSize caps one voice message. Far below the video cap: a
 	// spoken message is a fraction of the size, and sharing the video budget
 	// would only invite a recording nobody wants to wait for.

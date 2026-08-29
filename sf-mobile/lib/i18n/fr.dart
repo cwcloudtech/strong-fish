@@ -72,6 +72,7 @@ const Map<String, dynamic> fr = {
   },
   'auth': {
     'welcomeBack': 'Content de vous revoir',
+    'nameOrUsername': "Vos nom et prénom, ou un pseudo : l'un ou l'autre suffit.",
     'accountType': 'Je suis...',
     'imAnAthlete': 'Un athlète',
     'imAnAthleteHelp': 'Vous suivez les programmes écrits par votre coach.',
@@ -532,6 +533,7 @@ const Map<String, dynamic> fr = {
   },
   'errors': {
     'generic': 'Une erreur est survenue. Veuillez réessayer.',
+    'nameOrUsername': 'Indiquez des nom et prénom, ou choisissez un pseudo.',
     'copyFailed': 'Impossible de copier dans le presse-papiers.',
     'apiKeyDescription': 'Merci d\'indiquer à quoi sert cette clé.',
     'invalidExpiration': 'Merci de saisir une date d\'expiration valide.',
@@ -540,7 +542,8 @@ const Map<String, dynamic> fr = {
     'storageUploadFailed': 'Votre stockage a refusé cet envoi. Vérifiez le bucket et ses identifiants.',
     'storageDownloadFailed': 'Ce fichier n\'a pas pu être lu depuis le stockage. Il a peut-être été supprimé, ou les identifiants ont changé.',
     'videoTooLarge': 'Cette vidéo est trop volumineuse.',
-    'uploadInterrupted': 'L\'envoi n\'a pas abouti. Vérifiez votre connexion — et si la vidéo est longue, elle dépasse peut-être la limite de taille.',
+    'videoTooLargeMax': 'Cette vidéo est trop volumineuse. La limite est de {{size}}.',
+    'uploadInterrupted': 'L\'envoi s\'est interrompu. La vidéo est probablement trop volumineuse — vérifiez la limite sur votre écran de stockage.',
     'unsupportedVideo': 'Ce fichier n\'est pas une vidéo lisible par un navigateur. Utilisez MP4, WebM ou MOV.',
     'invalidStorageType': 'Type de stockage inconnu.',
     'invalidStorageRole': 'Choisissez lecteur ou rédacteur.',

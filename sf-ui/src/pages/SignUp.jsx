@@ -15,7 +15,7 @@ export default function SignUp() {
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
-    name: "", surname: "", email: "", password: "", confirmPassword: "",
+    name: "", surname: "", username: "", email: "", password: "", confirmPassword: "",
     // A claim, not a grant: choosing "coach" queues the account for a
     // superadmin to confirm, and it stays an athlete until they do.
     coach: false,
@@ -23,6 +23,10 @@ export default function SignUp() {
   const [busy, setBusy] = useState(false);
 
   const set = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  // The API's rule, mirrored here so the form says what is missing before it
+  // is sent: either both halves of a name, or a username.
+  const named = Boolean((form.name.trim() && form.surname.trim()) || form.username.trim());
 
   const submit = async (event) => {
     event.preventDefault();
@@ -37,6 +41,7 @@ export default function SignUp() {
         password: form.password,
         name: form.name,
         surname: form.surname,
+        username: form.username,
         coach: form.coach,
         locale,
       });
@@ -70,19 +75,32 @@ export default function SignUp() {
         <h1 style={{ textAlign: "center" }}>{t("auth.signup")}</h1>
 
         <form onSubmit={submit}>
+          {/* A name and surname, or a username: either makes somebody
+              addressable in a club, and requiring both would turn away the
+              members who joined precisely to not train under their own name.
+              Neither field is `required`, because which one is needed depends
+              on the other - the rule is on the button instead, where it can
+              say what is missing. */}
           <div className="sf-row" style={{ gap: "0.6rem" }}>
             <div className="sf-field" style={{ flex: 1, minWidth: 140 }}>
               <label className="sf-label" htmlFor="name">
                 {t("auth.name")}
               </label>
-              <input id="name" className="sf-input" value={form.name} onChange={set("name")} required />
+              <input id="name" className="sf-input" value={form.name} onChange={set("name")} />
             </div>
             <div className="sf-field" style={{ flex: 1, minWidth: 140 }}>
               <label className="sf-label" htmlFor="surname">
                 {t("auth.surname")}
               </label>
-              <input id="surname" className="sf-input" value={form.surname} onChange={set("surname")} required />
+              <input id="surname" className="sf-input" value={form.surname} onChange={set("surname")} />
             </div>
+          </div>
+          <div className="sf-field">
+            <label className="sf-label" htmlFor="username">
+              {t("profile.username")}
+            </label>
+            <input id="username" className="sf-input" value={form.username} onChange={set("username")} />
+            <p className="sf-muted" style={{ margin: "0.25rem 0 0" }}>{t("auth.nameOrUsername")}</p>
           </div>
           <div className="sf-field">
             <label className="sf-label" htmlFor="email">
@@ -147,7 +165,7 @@ export default function SignUp() {
               required
             />
           </div>
-          <button className="sf-button" type="submit" style={{ width: "100%" }} disabled={busy}>
+          <button className="sf-button" type="submit" style={{ width: "100%" }} disabled={busy || !named}>
             {busy ? t("common.loading") : t("auth.signup")}
           </button>
         </form>

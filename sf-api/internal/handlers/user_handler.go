@@ -50,6 +50,10 @@ type registerPayload struct {
 	Password string `json:"password"`
 	Name     string `json:"name"`
 	Surname  string `json:"surname"`
+	// Username is the other way to be somebody here: a member who would rather
+	// not sign up under their own name picks one instead, and it is what every
+	// screen shows them as (see models.User.DisplayName).
+	Username string `json:"username"`
 	Locale   string `json:"locale"`
 	// Coach is the "I'm a coach" box on the signup form. It records a claim,
 	// never a grant: coaching means writing other people's training, so the
@@ -66,8 +70,25 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &p) {
 		return
 	}
-	if utils.IsBlank(p.Email) || utils.IsBlank(p.Password) || utils.IsBlank(p.Name) || utils.IsBlank(p.Surname) {
+	if utils.IsBlank(p.Email) || utils.IsBlank(p.Password) {
 		writeError(w, http.StatusBadRequest, "Please add all fields", CodeAllFieldsRequired)
+		return
+	}
+
+	// Normalized rather than validated character by character, exactly as the
+	// profile does it: "Marie Dubois" becomes "marie-dubois" instead of an
+	// error, and only a name with no usable letters at all is refused.
+	username := utils.Slugify(p.Username)
+	if utils.IsNotBlank(p.Username) && utils.IsBlank(username) {
+		writeError(w, http.StatusBadRequest, "This username cannot be used", CodeInvalidUsername)
+		return
+	}
+	// A name and surname, or a username: either makes somebody addressable in
+	// a club, and requiring both would turn away the members who joined here
+	// precisely to not train under their own name.
+	if (utils.IsBlank(p.Name) || utils.IsBlank(p.Surname)) && utils.IsBlank(username) {
+		writeError(w, http.StatusBadRequest,
+			"Give a name and surname, or pick a username", CodeNameOrUsername)
 		return
 	}
 	if !utils.IsValidEmail(p.Email) {
@@ -77,6 +98,18 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if ok, code := utils.IsPasswordValid(p.Password); !ok {
 		writeInvalidPassword(w, code)
 		return
+	}
+
+	if utils.IsNotBlank(username) {
+		taken, err := h.users.UsernameTaken(r.Context(), username, utils.EMPTY)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		if taken {
+			writeError(w, http.StatusBadRequest, "This username is already taken", CodeDuplicateUsername)
+			return
+		}
 	}
 
 	if _, err := h.users.FindByEmail(r.Context(), p.Email); err == nil {
@@ -93,7 +126,10 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.users.Create(r.Context(), p.Email, string(hash), p.Name, p.Surname, p.Locale)
+	user, err := h.users.Create(r.Context(), store.NewAccount{
+		Email: p.Email, PasswordHash: string(hash),
+		Name: p.Name, Surname: p.Surname, Username: username, Locale: p.Locale,
+	})
 	if err != nil {
 		writeStoreError(w, err)
 		return

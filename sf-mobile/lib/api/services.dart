@@ -34,6 +34,10 @@ class SfApi {
     required String name,
     required String surname,
     required String locale,
+    /// The other way to be somebody here: a member who would rather not sign
+    /// up under their own name picks one instead. Either this or a name and
+    /// surname; the API refuses neither.
+    String username = '',
     bool coach = false,
   }) async {
     final response = await client.dio.post('/users', data: {
@@ -41,6 +45,7 @@ class SfApi {
       'password': password,
       'name': name,
       'surname': surname,
+      'username': username,
       'coach': coach,
       'locale': locale,
     });

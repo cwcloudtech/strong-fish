@@ -146,15 +146,29 @@ func (s *UserStore) Count(ctx context.Context) (int, error) {
 
 // insertUser inserts a brand-new account with an already-decided role, giving
 // it a unique profile handle derived from its email.
-func (s *UserStore) insertUser(ctx context.Context, email, passwordHash, name, surname, locale string, role models.GlobalRole) (models.User, error) {
-	handle, err := s.availableHandle(ctx, handleSeed(email, name))
+func (s *UserStore) insertUser(ctx context.Context, account NewAccount, role models.GlobalRole) (models.User, error) {
+	// The same precedence the handle follows for the rest of the account's
+	// life (see deriveHandle): the username when there is one, the name
+	// otherwise. Both halves of the name, so the first profile save does not
+	// rename a handle seeded from the first name alone.
+	seed := account.Username
+	if utils.IsBlank(seed) {
+		seed = strings.TrimSpace(account.Name + " " + account.Surname)
+	}
+	handle, err := s.availableHandle(ctx, handleSeed(account.Email, seed))
 	if err != nil {
 		return models.User{}, err
 	}
 
+	// Somebody who registered under a username alone has no other name to be
+	// shown by, which is what anonymous means here.
+	anonymous := utils.IsNotBlank(account.Username) &&
+		(utils.IsBlank(account.Name) || utils.IsBlank(account.Surname))
+
 	data, err := json.Marshal(userData{
-		Password: passwordHash, Name: name, Surname: surname,
-		Role: string(role), Handle: handle, Locale: locale,
+		Password: account.PasswordHash, Name: account.Name, Surname: account.Surname,
+		Username: account.Username, Anonymous: anonymous,
+		Role: string(role), Handle: handle, Locale: account.Locale,
 	})
 	if err != nil {
 		return models.User{}, err
@@ -163,20 +177,32 @@ func (s *UserStore) insertUser(ctx context.Context, email, passwordHash, name, s
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO users (email, data)
 		VALUES ($1, $2)
-		RETURNING `+userColumns, strings.TrimSpace(email), data)
+		RETURNING `+userColumns, strings.TrimSpace(account.Email), data)
 	return scanUser(row)
+}
+
+// NewAccount is what registering needs: an address to reach somebody at, a way
+// for them to sign in, and something to call them - a name, or the username
+// they picked instead of one.
+type NewAccount struct {
+	Email        string
+	PasswordHash string
+	Name         string
+	Surname      string
+	Username     string
+	Locale       string
 }
 
 // Create registers a user. The very first account ever created becomes the
 // superadmin; every other account starts disabled until it's confirmed (by
 // email link or by an administrator, depending on the activation mode).
-func (s *UserStore) Create(ctx context.Context, email, passwordHash, name, surname, locale string) (models.User, error) {
+func (s *UserStore) Create(ctx context.Context, account NewAccount) (models.User, error) {
 	count, err := s.Count(ctx)
 	if err != nil {
 		return models.User{}, err
 	}
 	role := utils.If(count == 0, models.GlobalRoleSuperadmin, models.GlobalRoleDisabled)
-	return s.insertUser(ctx, email, passwordHash, name, surname, locale, role)
+	return s.insertUser(ctx, account, role)
 }
 
 // FindOrCreateOIDC logs in a user authenticated via an OIDC provider: an
@@ -206,7 +232,8 @@ func (s *UserStore) FindOrCreateOIDC(ctx context.Context, email, name, surname, 
 	case activationMode == models.ActivationModeEmail:
 		role = models.GlobalRoleConfirmed
 	}
-	return s.insertUser(ctx, email, utils.EMPTY, name, surname, utils.EMPTY, role)
+	// An identity provider gives a name, never a username of ours.
+	return s.insertUser(ctx, NewAccount{Email: email, Name: name, Surname: surname}, role)
 }
 
 func (s *UserStore) FindByEmail(ctx context.Context, email string) (models.User, error) {
@@ -541,11 +568,19 @@ func (s *UserStore) UsernameTaken(ctx context.Context, username, exceptID string
 	if utils.IsBlank(username) {
 		return false, nil
 	}
+	// Registration has no account to exclude yet, and an empty string is not a
+	// uuid: passed as NULL rather than as "", which the cast used to choke on.
+	var except any
+	if utils.IsNotBlank(exceptID) {
+		except = exceptID
+	}
+
 	var taken bool
 	err := s.pool.QueryRow(ctx, `
 		SELECT exists(SELECT 1 FROM users
-		              WHERE lower(data->>'username') = lower($1) AND id <> $2::uuid)
-	`, strings.TrimSpace(username), exceptID).Scan(&taken)
+		              WHERE lower(data->>'username') = lower($1)
+		                AND ($2::uuid IS NULL OR id <> $2::uuid))
+	`, strings.TrimSpace(username), except).Scan(&taken)
 	return taken, err
 }
 
