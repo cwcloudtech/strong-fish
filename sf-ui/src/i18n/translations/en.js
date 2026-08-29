@@ -65,6 +65,7 @@ const en = {
   },
   auth: {
     welcomeBack: "Welcome back",
+    nameOrUsername: "Give your name and surname, or pick a username - either is enough.",
     accountType: "I am...",
     imAnAthlete: "An athlete",
     imAnAthleteHelp: "You follow the programs your coach writes.",
@@ -523,6 +524,7 @@ const en = {
   },
   errors: {
     generic: "Something went wrong. Please try again.",
+    nameOrUsername: "Give a name and surname, or pick a username.",
     copyFailed: "Could not copy to the clipboard.",
     apiKeyDescription: "Please say what this key is for.",
     invalidExpiration: "Please enter a valid expiration date.",

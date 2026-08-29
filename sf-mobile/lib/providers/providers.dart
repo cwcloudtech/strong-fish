@@ -250,6 +250,44 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
 final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
 
 /// The exercise catalog, loaded once and reused by the 1RM screen.
+/// The deployment's own settings: the upload caps, mostly.
+///
+/// Fetched rather than assumed, because a club that pays for its own bandwidth
+/// can raise or lower them (SF_MAX_VIDEO_SIZE). Read before an upload so a file
+/// that cannot land is refused in a sentence rather than after two minutes of
+/// transfer - the API stops an oversized body part-way, which reaches the phone
+/// as a lost connection and explains nothing.
+final serverConfigProvider = FutureProvider<Map<String, dynamic>>((ref) async {
+  return ref.watch(apiProvider).config();
+});
+
+/// The largest video this deployment accepts, in bytes, or 0 when the config
+/// cannot be read - in which case the upload is attempted and the API has the
+/// final word, as it always did.
+///
+/// Awaited rather than read: nothing on screen watches the config, so a lazy
+/// provider would never have fetched it and the limit would read as 0 forever.
+/// The result is cached by riverpod, so this costs one request per session.
+Future<int> maxVideoSize(WidgetRef ref) async {
+  try {
+    final config = await ref.read(serverConfigProvider.future);
+    final value = config['maxVideoSize'];
+    return value is num ? value.toInt() : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+/// A byte count as something a person can compare a file against - "500 MB".
+///
+/// Rounded rather than exact: the number exists to answer "is my video near
+/// the limit", and 524288000 answers that worse than 500 MB does.
+String formatBytes(int bytes) {
+  final mb = bytes / (1024 * 1024);
+  if (mb <= 0) return '';
+  return mb >= 1024 ? '${(mb / 1024).toStringAsFixed(1)} GB' : '${mb.round()} MB';
+}
+
 final exercisesProvider = FutureProvider<List<Exercise>>((ref) async {
   // Rebuilds when the session changes, so signing in as someone else doesn't
   // serve the previous account's cached list.

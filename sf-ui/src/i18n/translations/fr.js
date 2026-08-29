@@ -65,6 +65,7 @@ const fr = {
   },
   auth: {
     welcomeBack: "Content de vous revoir",
+    nameOrUsername: "Indiquez vos nom et prénom, ou choisissez un pseudo : l'un ou l'autre suffit.",
     accountType: "Je suis...",
     imAnAthlete: "Un athlète",
     imAnAthleteHelp: "Vous suivez les programmes écrits par votre coach.",
@@ -534,6 +535,7 @@ const fr = {
   },
   errors: {
     generic: "Une erreur est survenue. Veuillez réessayer.",
+    nameOrUsername: "Indiquez des nom et prénom, ou choisissez un pseudo.",
     copyFailed: "Impossible de copier dans le presse-papiers.",
     apiKeyDescription: "Merci d'indiquer à quoi sert cette clé.",
     invalidExpiration: "Merci de saisir une date d'expiration valide.",

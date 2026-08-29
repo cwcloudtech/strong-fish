@@ -25,6 +25,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _password = TextEditingController();
   final _name = TextEditingController();
   final _surname = TextEditingController();
+  final _username = TextEditingController();
   final _code = TextEditingController();
   final _apiUrl = TextEditingController();
 
@@ -47,7 +48,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
-    for (final controller in [_email, _password, _name, _surname, _code, _apiUrl]) {
+    for (final controller in [_email, _password, _name, _surname, _username, _code, _apiUrl]) {
       controller.dispose();
     }
     super.dispose();
@@ -89,6 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               password: _password.text,
               name: _name.text.trim(),
               surname: _surname.text.trim(),
+              username: _username.text.trim(),
               coach: _coach,
               locale: ref.read(localeProvider),
             );
@@ -233,9 +235,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return [
       if (_mode == _Mode.signup) ...[
+        // A name and surname, or a username: either makes somebody addressable
+        // in a club, and requiring both would turn away the members who joined
+        // precisely to not train under their own name.
         TextField(controller: _name, decoration: InputDecoration(labelText: t('auth.name'))),
         const SizedBox(height: 12),
         TextField(controller: _surname, decoration: InputDecoration(labelText: t('auth.surname'))),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _username,
+          decoration: InputDecoration(
+            labelText: t('profile.username'),
+            helperText: t('auth.nameOrUsername'),
+            helperMaxLines: 2,
+          ),
+        ),
         const SizedBox(height: 12),
         // Which of the two this account is. Picking "coach" grants nothing on
         // its own - it queues a request.

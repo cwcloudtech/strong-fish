@@ -72,6 +72,7 @@ const Map<String, dynamic> ar = {
   },
   'auth': {
     'welcomeBack': 'أهلاً بعودتك',
+    'nameOrUsername': 'اسمك ولقبك، أو اسم مستخدم — أحدهما يكفي.',
     'accountType': 'أنا...',
     'imAnAthlete': 'رياضي',
     'imAnAthleteHelp': 'تتبع البرامج التي يكتبها مدربك.',
@@ -532,6 +533,7 @@ const Map<String, dynamic> ar = {
   },
   'errors': {
     'generic': 'حدث خطأ ما. حاول مرة أخرى.',
+    'nameOrUsername': 'أدخل الاسم واللقب، أو اختر اسم مستخدم.',
     'copyFailed': 'تعذّر النسخ إلى الحافظة.',
     'apiKeyDescription': 'اذكر الغرض من هذا المفتاح.',
     'invalidExpiration': 'أدخل تاريخ انتهاء صالحاً.',
@@ -540,7 +542,8 @@ const Map<String, dynamic> ar = {
     'storageUploadFailed': 'رفض التخزين لديك هذا الرفع. تحقق من الحاوية وبياناتها.',
     'storageDownloadFailed': 'تعذّر قراءة هذا الملف من التخزين. ربما حُذف، أو تغيّرت البيانات.',
     'videoTooLarge': 'هذا الفيديو كبير جداً.',
-    'uploadInterrupted': 'لم يكتمل الرفع. تحقّق من اتصالك — وإذا كان الفيديو طويلًا فقد يتجاوز حدّ الحجم.',
+    'videoTooLargeMax': 'هذا الفيديو كبير جدًا. الحد الأقصى {{size}}.',
+    'uploadInterrupted': 'توقّف الرفع قبل اكتماله. الفيديو على الأرجح كبير جدًا — راجع الحد في شاشة التخزين.',
     'unsupportedVideo': 'هذا الملف ليس فيديو يمكن للمتصفح تشغيله. استخدم MP4 أو WebM أو MOV.',
     'invalidStorageType': 'نوع تخزين غير معروف.',
     'invalidStorageRole': 'اختر قارئاً أو كاتباً.',

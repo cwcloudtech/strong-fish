@@ -72,6 +72,7 @@ const Map<String, dynamic> en = {
   },
   'auth': {
     'welcomeBack': 'Welcome back',
+    'nameOrUsername': 'Your name and surname, or a username - either is enough.',
     'accountType': 'I am...',
     'imAnAthlete': 'An athlete',
     'imAnAthleteHelp': 'You follow the programs your coach writes.',
@@ -532,6 +533,7 @@ const Map<String, dynamic> en = {
   },
   'errors': {
     'generic': 'Something went wrong. Please try again.',
+    'nameOrUsername': 'Give a name and surname, or pick a username.',
     'copyFailed': 'Could not copy to the clipboard.',
     'apiKeyDescription': 'Please say what this key is for.',
     'invalidExpiration': 'Please enter a valid expiration date.',
@@ -540,7 +542,8 @@ const Map<String, dynamic> en = {
     'storageUploadFailed': 'Your storage rejected this upload. Check the bucket and its credentials.',
     'storageDownloadFailed': 'This file could not be read from the storage. It may have been deleted, or the credentials changed.',
     'videoTooLarge': 'This video is too large.',
-    'uploadInterrupted': 'The upload did not finish. Check your connection - and if the video is long, it may be over the size limit.',
+    'videoTooLargeMax': 'This video is too large. The limit is {{size}}.',
+    'uploadInterrupted': 'The upload stopped before it finished. The video is probably too large - check the limit on your storage screen.',
     'unsupportedVideo': 'This file is not a video a browser can play. Use MP4, WebM or MOV.',
     'invalidStorageType': 'Unknown storage type.',
     'invalidStorageRole': 'Pick reader or writer.',

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -201,6 +202,20 @@ class _ThreadScreenState extends ConsumerState<ThreadScreen> {
   Future<void> _addVideo() async {
     final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
     if (picked == null) return;
+
+    // Refused here rather than half-way through the transfer: the API stops an
+    // oversized body mid-stream, which reaches the phone as a lost connection
+    // and explains nothing. The cap comes from the deployment, so a club that
+    // raised it is believed.
+    final limit = await maxVideoSize(ref);
+    final size = await File(picked.path).length();
+    if (!mounted) return;
+    if (limit > 0 && size > limit) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ref.read(tProvider)('errors.videoTooLargeMax', {'size': formatBytes(limit)})),
+      ));
+      return;
+    }
 
     setState(() => _uploading = 0);
     try {

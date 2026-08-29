@@ -76,6 +76,7 @@ const ar = {
   },
   auth: {
     welcomeBack: "أهلاً بعودتك",
+    nameOrUsername: "أدخل اسمك ولقبك، أو اختر اسم مستخدم — أحدهما يكفي.",
     accountType: "أنا...",
     imAnAthlete: "رياضي",
     imAnAthleteHelp: "تتبع البرامج التي يكتبها مدربك.",
@@ -531,6 +532,7 @@ const ar = {
   },
   errors: {
     generic: "حدث خطأ ما. حاول مرة أخرى.",
+    nameOrUsername: "أدخل الاسم واللقب، أو اختر اسم مستخدم.",
     copyFailed: "تعذّر النسخ إلى الحافظة.",
     apiKeyDescription: "اذكر الغرض من هذا المفتاح.",
     invalidExpiration: "أدخل تاريخ انتهاء صالحاً.",
