@@ -98,6 +98,17 @@ class ApiClient {
       i18nCode = data['i18n_code'] as String?;
       message = data['message'] as String?;
     }
+
+    // A 413 does not always come from this API. A reverse proxy in front of it
+    // refuses an oversized body itself, and what it sends back is its own HTML
+    // error page - no i18n code, nothing this app can read - so the member was
+    // told "something went wrong" about a video that was simply too big. The
+    // status alone says enough.
+    if (response.statusCode == 413 && (i18nCode == null || i18nCode.isEmpty)) {
+      i18nCode = 'errors.videoTooLarge';
+      message = null;
+    }
+
     return error.copyWith(
       error: ApiException(i18nCode: i18nCode, message: message, statusCode: response.statusCode),
     );
