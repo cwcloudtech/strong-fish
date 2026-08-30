@@ -57,6 +57,10 @@ export function translateError(locale, error) {
     const translated = resolve(dictionaries[locale], body.i18n_code) ?? resolve(dictionaries[DEFAULT_LOCALE], body.i18n_code);
     if (translated) return translated;
   }
+  // A 413 does not always come from this API: a reverse proxy in front of it
+  // refuses an oversized body itself and answers with its own HTML error page,
+  // which carries no code to look up. The status alone says enough.
+  if (error?.response?.status === 413) return translate(locale, "errors.videoTooLarge");
   if (body?.message) return body.message;
   if (error?.response) return translate(locale, "errors.internal");
   return translate(locale, "errors.network");
