@@ -420,6 +420,12 @@ button {
 }
 
 .sf-percentile { margin-top: var(--sf-spacing-sm); }
+/* The headline number on the calculator: what share of the lifters here this
+   total is at least as strong as. */
+.sf-percentile-head { display: flex; align-items: baseline; gap: var(--sf-spacing-sm); }
+.sf-percentile-value { font-size: 1.4rem; color: var(--sf-primary-dark); }
+/* On a profile the summary and the badges are one block. */
+.sf-strength-profile { display: flex; flex-direction: column; gap: var(--sf-spacing-sm); margin-bottom: var(--sf-spacing); }
 .sf-percentile-bar {
   height: 8px;
   border-radius: 999px;

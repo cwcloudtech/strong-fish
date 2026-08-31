@@ -99,54 +99,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'birthdate': user.birthdate,
       'bodyweight': user.bodyweight,
       'gender': user.gender,
-      'specialty': user.specialty,
       'socials': user.socials,
       ...changes,
     });
     await ref.read(sessionProvider.notifier).refresh();
   }
 
-  /// Offers the badges as badges: the point of the field is the colour it
-  /// puts on the profile, so picking it from a list of plain rows would be
-  /// picking blind.
-  Future<void> _pickSpecialty(User user) async {
-    final t = ref.read(tProvider);
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text(t('profile.specialty'), style: Theme.of(sheetContext).textTheme.titleMedium),
-              subtitle: Text(t('profile.specialtyHelp')),
-            ),
-            const Divider(height: 1),
-            for (final specialty in specialties)
-              ListTile(
-                title: SpecialtyBadge(specialty: specialty),
-                trailing: user.specialty == specialty ? const Icon(Icons.check) : null,
-                onTap: () => Navigator.of(sheetContext).pop(specialty),
-              ),
-            // Picking none is a real answer, so it is on the list rather than
-            // something to be reached by some other gesture.
-            ListTile(
-              title: Text(t('profile.specialtyNone')),
-              trailing: user.specialty.isEmpty ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.of(sheetContext).pop(''),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (picked == null || picked == user.specialty) return;
-
-    try {
-      await _patchProfile(user, {'specialty': picked});
-    } catch (error) {
-      _toast(ref.read(tErrorProvider)(error));
-    }
-  }
 
   void _toast(String message) {
     if (!mounted) return;
@@ -197,9 +155,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Text(user.fullName, style: Theme.of(context).textTheme.titleLarge),
                 Text('@${user.handle}', style: Theme.of(context).textTheme.bodySmall),
                 const SizedBox(height: 6),
-                // Standing and specialty, each in its own colour - the same
-                // two badges the web profile carries.
-                ProfileBadges(role: user.role, specialty: user.specialty),
+                ProfileBadges(role: user.role),
                 if (user.socials.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   SocialLinks(socials: user.socials),
@@ -422,15 +378,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               // labels are long ("Spécialiste du développé couché"), and the
               // options are worth showing as the coloured badges they will
               // become rather than as four lines of text.
-              ListTile(
-                leading: const Icon(Icons.workspace_premium_outlined),
-                title: Text(t('profile.specialty')),
-                subtitle: Text(t('profile.specialtyHelp')),
-                trailing: user.specialty.isEmpty
-                    ? Text(t('profile.specialtyNone'), style: Theme.of(context).textTheme.bodySmall)
-                    : SpecialtyBadge(specialty: user.specialty),
-                onTap: () => _pickSpecialty(user),
-              ),
               // MFA enrollment needs a QR scan or a WebAuthn ceremony, neither
               // of which belongs in this screen - the web app owns it, and the
               // app just reports the state.

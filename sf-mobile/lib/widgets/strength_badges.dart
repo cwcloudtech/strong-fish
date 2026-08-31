@@ -5,51 +5,49 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 
-/// A lifter's tier, where they sit among the members here, and their badges.
+/// What a total is worth in one line: the tier it falls in, and where it sits
+/// among the lifters here.
 ///
-/// The API decides all of it (internal/strength); this renders what it was
-/// handed and translates the keys. Locked badges are shown alongside the earned
-/// ones with how far along they are - a target you can see is worth more than
-/// one that appears out of nowhere the day you hit it.
-class StrengthBadges extends ConsumerWidget {
+/// Split from the badges because the two answer different questions. This one
+/// is about a number somebody just typed - the calculator's whole job - while
+/// a badge is something a member has *earned*, which belongs on the profile
+/// that earned it.
+class StrengthSummary extends ConsumerWidget {
   final StrengthResult result;
 
-  /// A profile shows what has been won; the calculator shows what is left too.
-  final bool earnedOnly;
-
-  const StrengthBadges({super.key, required this.result, this.earnedOnly = false});
+  const StrengthSummary({super.key, required this.result});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(tProvider);
     final colors = AppColors.of(context);
-    final shown = earnedOnly
-        ? result.earned
-        : [
-            ...result.earned,
-            ...result.badges.where((badge) => !badge.earned && badge.progress > 0),
-          ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (result.tierKey.isNotEmpty)
-          Row(
-            children: [
-              _Tier(tierKey: result.tierKey),
-              const SizedBox(width: 8),
-              Text(
-                t('strength.tierFrom', {'value': _fmt(result.dots)}),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
+        StrengthTier(result: result),
 
         // Where this score sits among the members of this deployment - not a
         // published curve fitted on international meets, which would tell a
         // beginners' gym that everybody in it is bottom decile.
         if (result.sample > 0) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(t('strength.strongerThan'), style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(width: 8),
+              Text(
+                '${result.percentile}%',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.bold, color: colors.primary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
@@ -66,50 +64,110 @@ class StrengthBadges extends ConsumerWidget {
             }),
             style: Theme.of(context).textTheme.bodySmall,
           ),
+        ] else ...[
+          const SizedBox(height: 8),
+          Text(t('strength.noPopulation'), style: Theme.of(context).textTheme.bodySmall),
         ],
-
-        const SizedBox(height: 12),
-        if (shown.isEmpty)
-          Text(t('strength.noBadges'), style: Theme.of(context).textTheme.bodySmall)
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [for (final badge in shown) _BadgeChip(badge: badge)],
-          ),
       ],
     );
   }
 }
 
-/// The tier, which is the one badge that gets a colour of its own: it is a
-/// thing to be proud of rather than a row in a list.
-class _Tier extends ConsumerWidget {
-  final String tierKey;
+/// What a lifter has earned.
+///
+/// Shown on a profile, not on the calculator: a badge is something a member won
+/// with their own recorded maxes, and awarding one for a number somebody typed
+/// into a form would make it worth nothing.
+class StrengthBadges extends ConsumerWidget {
+  final StrengthResult result;
 
-  const _Tier({required this.tierKey});
+  /// A profile shows what has been won; pass false to show the locked ones too.
+  final bool earnedOnly;
+
+  const StrengthBadges({super.key, required this.result, this.earnedOnly = true});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final shown = earnedOnly
+        ? result.earned
+        : [
+            ...result.earned,
+            ...result.badges.where((badge) => !badge.earned && badge.progress > 0),
+          ];
+
+    if (shown.isEmpty) {
+      return Text(
+        ref.watch(tProvider)('strength.noBadges'),
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [for (final badge in shown) _BadgeChip(badge: badge)],
+    );
+  }
+}
+
+/// The tier a DOTS score falls in - "Platform Contender", "Titan" - as the one
+/// badge that gets a colour of its own.
+///
+/// Where the lifter sits among the members here is its tooltip rather than a
+/// line of its own: on a profile the tier is the headline, and a percentile
+/// printed beside it competes with the thing it is describing. The calculator
+/// draws the same number as a bar, because there it *is* the answer.
+class StrengthTier extends ConsumerWidget {
+  final StrengthResult result;
+  final bool showScore;
+
+  const StrengthTier({super.key, required this.result, this.showScore = true});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (result.tierKey.isEmpty) return const SizedBox.shrink();
+
+    final t = ref.watch(tProvider);
     final colors = AppColors.of(context);
-    final ink = switch (tierKey) {
+    final ink = switch (result.tierKey) {
       'intermediate' => colors.primary,
       'advanced' => colors.success,
       'elite' => colors.warning,
       'worldClass' => colors.danger,
       _ => colors.textMuted,
     };
+    final percentile = result.sample > 0
+        ? t('strength.percentile', {
+            'value': '${result.percentile}',
+            'sample': '${result.sample}',
+          })
+        : t('strength.noPopulation');
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: ink.withValues(alpha: 0.16),
-      ),
-      child: Text(
-        ref.watch(tProvider)('strength.tiers.$tierKey'),
-        style: TextStyle(color: ink, fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 0.3),
-      ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: percentile,
+          triggerMode: TooltipTriggerMode.tap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              color: ink.withValues(alpha: 0.16),
+            ),
+            child: Text(
+              t('strength.tiers.${result.tierKey}'),
+              style: TextStyle(color: ink, fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 0.3),
+            ),
+          ),
+        ),
+        if (showScore) ...[
+          const SizedBox(width: 8),
+          Text(
+            t('strength.tierFrom', {'value': _fmt(result.dots)}),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ],
     );
   }
 }

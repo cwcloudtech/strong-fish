@@ -8,6 +8,7 @@ import PostCard from "../components/feed/PostCard";
 import ShareButtons from "../components/common/ShareButtons";
 import ProfileBadges from "../components/common/ProfileBadges";
 import StrengthBadges from "../components/strength/StrengthBadges";
+import StrengthTier from "../components/strength/StrengthTier";
 import { filledSocials } from "../utils/socialProfiles";
 import { EmptyState, ErrorMessage, Spinner } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
@@ -82,7 +83,7 @@ export default function Profile() {
                 {/* Standing and specialty, each in its own colour: this is the
                     line somebody reads first, and "Coach" in grey text next to
                     the handle was not read at all. */}
-                <ProfileBadges role={profile.role} specialty={profile.specialty} />
+                <ProfileBadges role={profile.role} />
               </div>
               {user && !isSelf ? (
                 <div className="sf-row" style={{ gap: "0.4rem" }}>
@@ -143,7 +144,15 @@ export default function Profile() {
                 sit among the club, and what they have earned. Absent for
                 somebody who has not weighed in or entered no lifts - a profile
                 with nothing to measure wears nothing. */}
-            {profile.strength ? <StrengthBadges result={profile.strength} compact /> : null}
+            {profile.strength ? (
+              <div className="sf-strength-profile">
+                {/* The tier is the headline here, and where they sit among the
+                    club is its tooltip: a percentile printed beside it would
+                    compete with the thing it describes. */}
+                <StrengthTier result={profile.strength} />
+                <StrengthBadges result={profile.strength} earnedOnly />
+              </div>
+            ) : null}
 
             <div className="sf-profile-stats">
               <div>

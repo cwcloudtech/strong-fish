@@ -339,7 +339,6 @@ class _MemberRow extends ConsumerWidget {
           const SizedBox(height: 4),
           ProfileBadges(
             role: member.role,
-            specialty: member.specialty,
             alignment: MainAxisAlignment.start,
           ),
         ],

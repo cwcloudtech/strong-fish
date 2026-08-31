@@ -243,7 +243,7 @@ export default function Search() {
                   </div>
                   {/* The same badges the profile carries: a list of names is
                       where telling a coach from an athlete matters most. */}
-                  <ProfileBadges role={member.role} specialty={member.specialty} />
+                  <ProfileBadges role={member.role} />
                 </div>
                 {member.handle ? (
                   <Link className="sf-button sf-button-secondary sf-button-sm" to={`/profile/${member.handle}`}>

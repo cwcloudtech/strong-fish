@@ -75,20 +75,21 @@ demande de coach est confirmée.
 
 **Ce que vous soulevez** ensuite, et celui-là vous appartient :
 
+Vos badges sont déduits des maxima que vous enregistrez, pas choisis dans une
+liste :
+
 | Badge | Pour |
 | --- | --- |
-| Spécialiste du squat | le mouvement qui vous caractérise est le squat |
-| Spécialiste du développé couché | ... le développé couché |
-| Spécialiste du soulevé de terre | ... le soulevé de terre |
-| Totaliseur équilibré | aucun mouvement ne vous porte à lui seul - c'est le total |
+| Recrue de fonte … Titan | votre niveau, d'après votre score DOTS |
+| Squat à 2x le poids de corps, développé à 1,5x, soulevé à 2,5x | ce que vous soulevez rapporté à ce que vous pesez |
+| Club des 500 kg, des 1000 lb, des 1500 lb | les totaux repères |
+| Club des 300 / 400 / 500 DOTS | les paliers de coefficient |
+| Spécialiste du squat, du soulevé de terre, Survivant du développé pauvre | la forme de vos trois mouvements |
 
-Choisissez-le dans **Paramètres → Ma spécialité** sur le web, ou dans l'onglet
-profil de l'application. C'est facultatif, modifiable quand vous voulez, et
-*aucune spécialité* est une réponse tout à fait valable.
-
-C'est une revendication, pas un calcul. StrongFish ne le déduit jamais de vos
-maxima : quelqu'un qui n'en a saisi aucun a tout autant le droit de dire ce
-qu'il est, et un mauvais jour au squat ne doit réétiqueter personne.
+Ils apparaissent sur votre profil dès que votre poids de corps et vos trois
+maxima sont enregistrés, et le calculateur de force montre ce que vaudrait
+n'importe quel total avant d'y arriver. Rien à choisir et rien à tenir à jour :
+les badges suivent les chiffres.
 
 ## Rejoindre un club
 

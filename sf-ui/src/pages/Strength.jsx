@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import Select from "../components/common/Select";
 import StrengthBadges from "../components/strength/StrengthBadges";
+import StrengthSummary from "../components/strength/StrengthSummary";
 import { ErrorMessage } from "../components/common/Feedback";
 import { strength as strengthApi } from "../api/services";
 import { useI18n } from "../i18n/I18nContext";
@@ -175,7 +176,15 @@ export default function Strength() {
             ))}
           </div>
 
-          <StrengthBadges result={result} />
+          {/* The tier, how this total compares with the lifters here, and what
+              it would earn - locked badges included, because on a calculator
+              they are the targets somebody came to find. A profile shows the
+              same tier with the percentile in its tooltip, and only the badges
+              actually won. */}
+          <div className="sf-card">
+            <StrengthSummary result={result} />
+            <StrengthBadges result={result} />
+          </div>
         </>
       ) : (
         <p className="sf-muted">{t("strength.enterLifts")}</p>

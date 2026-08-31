@@ -75,9 +75,6 @@ class User {
   final String profileVisibility;
   final String birthdate;
   final double bodyweight;
-  /// The lift the member claims as their own: 'squat', 'bench', 'deadlift',
-  /// 'total' - or empty, which is a first-class answer and the default.
-  final String specialty;
 
   /// Which set of strength coefficients applies: 'male' or 'female'.
   /// Powerlifting fits DOTS, Wilks and IPF GL separately, and there is no
@@ -104,7 +101,6 @@ class User {
     this.profileVisibility = 'private',
     this.birthdate = '',
     this.bodyweight = 0,
-    this.specialty = '',
     this.gender = 'male',
     this.socials = const {},
     this.mfaEnabled = false,
@@ -126,7 +122,6 @@ class User {
         profileVisibility: _toString(json['profileVisibility'], 'private'),
         birthdate: _toString(json['birthdate']),
         bodyweight: _toDouble(json['bodyweight']),
-        specialty: _toString(json['specialty']),
         gender: _toString(json['gender'], 'male'),
         socials: _toLabels(json['socials']),
         mfaEnabled: json['mfaEnabled'] == true,
@@ -999,7 +994,6 @@ class MemberResult {
   final String name;
   final String surname;
   final String role;
-  final String specialty;
   final String picture;
 
   /// Whether this person and the caller are in the same club.
@@ -1014,7 +1008,6 @@ class MemberResult {
     this.name = '',
     this.surname = '',
     this.role = '',
-    this.specialty = '',
     this.picture = '',
     this.sharesClub = false,
     this.anonymous = false,
@@ -1028,7 +1021,6 @@ class MemberResult {
         name: _toString(json['name']),
         surname: _toString(json['surname']),
         role: _toString(json['role']),
-        specialty: _toString(json['specialty']),
         picture: _toString(json['picture']),
         sharesClub: json['sharesClub'] == true,
         anonymous: json['anonymous'] == true,
@@ -1124,8 +1116,6 @@ class PublicProfile {
   final String name;
   final String surname;
   final String role;
-  /// The badge the member picked for themselves; empty when they picked none.
-  final String specialty;
   /// Where else to find them, keyed as the API names them.
   final Map<String, String> socials;
   final String bio;
@@ -1147,7 +1137,6 @@ class PublicProfile {
     this.name = '',
     this.surname = '',
     this.role = '',
-    this.specialty = '',
     this.socials = const {},
     this.bio = '',
     this.picture = '',
@@ -1166,7 +1155,6 @@ class PublicProfile {
         name: _toString(json['name']),
         surname: _toString(json['surname']),
         role: _toString(json['role']),
-        specialty: _toString(json['specialty']),
         strength: json['strength'] is Map<String, dynamic>
             ? StrengthResult.fromJson(json['strength'] as Map<String, dynamic>)
             : null,

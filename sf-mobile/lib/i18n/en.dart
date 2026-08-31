@@ -157,16 +157,6 @@ const Map<String, dynamic> en = {
     'socials': 'Where else to find me',
     'socialsHelp': 'Your account on each - or paste the address of your profile, and the name is taken out of it.',
     'rank': 'Rank',
-    'specialty': 'My specialty',
-    'specialtyNone': 'No specialty',
-    'specialtyHelp': 'The lift you call your own. You pick it yourself - it is never worked out from your maxes - and you can clear it at any time.',
-    'specialties': {
-      'squat': 'Squat specialist',
-      'bench': 'Bench specialist',
-      'deadlift': 'Deadlift specialist',
-      'total': 'Balanced totaler',
-    },
-    'badgesPreview': 'On your profile',
     'avatar': 'Avatar',
     'changeAvatar': 'Change avatar',
     'saved': 'Profile saved.',
@@ -627,7 +617,7 @@ const Map<String, dynamic> en = {
   'about': {
     'title': 'About',
     'unavailable': 'This page has not been written yet.',
-    'openSource': 'StrongFish is an open-source product by CWCloud. Sources are available',
+    'openSource': 'StrongFish is an open-source product (MIT) by CWCloud. Sources are available',
     'openSourceLink': 'here',
   },
   'apiKeys': {
@@ -851,7 +841,7 @@ const Map<String, dynamic> en = {
   },
   'cookieBanner': {
     'title': 'Cookie notice',
-    'message': 'StrongFish is an open-source product. The cookies and local storage it uses are required only for the app to function (sign-in, your theme and language) - never for tracking or analytics.',
+    'message': 'StrongFish is an open-source (MIT) product. The cookies and local storage it uses are required only for the app to function (sign-in, your theme and language) - never for tracking or analytics.',
     'understand': 'I understand',
   },
   'contact': {
@@ -882,6 +872,8 @@ const Map<String, dynamic> en = {
     'enterLifts': 'Enter a bodyweight and at least one lift to see the scores.',
     'tierFrom': '{{value}} DOTS',
     'percentile': 'Ahead of {{value}}% of the {{sample}} lifters here who have recorded all three lifts.',
+    'strongerThan': 'Stronger than',
+    'noPopulation': 'Nobody here has recorded all three lifts yet, so there is nothing to compare against.',
     'noBadges': 'No badge yet. Record your three maxes to start earning them.',
     'tiers': {
       'novice': 'Iron Recruit',
