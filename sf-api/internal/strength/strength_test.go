@@ -147,8 +147,6 @@ func TestBadges(t *testing.T) {
 		"club.total1500lb":        false,
 		"style.deadliftDominant":  true,
 		"style.squatDominant":     false,
-		// 100 x 4 = 400, against a squat and deadlift of 400: not under it.
-		"style.povertyBench": false,
 	}
 	for key, want := range earned {
 		badge, ok := badgeByKey(badges, key)
@@ -158,14 +156,6 @@ func TestBadges(t *testing.T) {
 		if badge.Earned != want {
 			t.Errorf("%s earned = %v, want %v (value %.2f, target %.2f)", key, badge.Earned, want, badge.Value, badge.Target)
 		}
-	}
-
-	// One kilo off the bench and the shape badge trips, which is the whole
-	// point of it being a shape rather than a threshold.
-	poverty := in
-	poverty.Lifts.Bench = 99
-	if badge, _ := badgeByKey(Badges(poverty, Score(poverty)), "style.povertyBench"); !badge.Earned {
-		t.Error("a bench under a quarter of squat+deadlift should earn the poverty bench badge")
 	}
 
 	// A locked badge still says how far along it is.

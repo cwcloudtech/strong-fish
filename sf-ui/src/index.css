@@ -475,6 +475,22 @@ button {
 }
 .sf-badge-progress span { display: block; height: 100%; background-color: var(--sf-primary); }
 
+/* The auth footer's overflow menu: a link among links, not a button among
+   them - it sits in a row of plain text links and should read as one. */
+.sf-auth-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.sf-auth-menu-trigger:hover { opacity: 1; }
+.sf-auth-footer .sf-menu { display: inline-flex; }
+
 /* --- surfaces --- */
 
 .sf-card {

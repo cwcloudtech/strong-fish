@@ -5,7 +5,6 @@ import { toast } from "react-toastify";
 import toastOptions from "../utils/toastOptions";
 import { contact } from "../api/services";
 import AuthLayout from "../components/auth/AuthLayout";
-import { aboutUrl } from "../utils/aboutUrl";
 import { useAuth } from "../context/AuthContext";
 import { useI18n } from "../i18n/I18nContext";
 
@@ -22,7 +21,7 @@ const EMPTY = { firstname: "", name: "", email: "", subject: "", message: "" };
  */
 export default function Contact() {
   const { t, tError } = useI18n();
-  const { user, config } = useAuth();
+  const { user } = useAuth();
 
   // Prefill the address for a signed-in user rather than making them retype one
   // the app already knows.
@@ -114,9 +113,6 @@ export default function Contact() {
         <Link to={user ? "/dashboard/feed" : "/login"}>
           {user ? t("nav.feed") : t("auth.login")}
         </Link>
-        <a href={aboutUrl(config)} target="_blank" rel="noopener noreferrer">
-          {t("nav.about")}
-        </a>
       </div>
     </AuthLayout>
   );

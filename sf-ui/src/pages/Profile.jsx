@@ -6,7 +6,7 @@ import { profiles } from "../api/services";
 import Avatar from "../components/common/Avatar";
 import PostCard from "../components/feed/PostCard";
 import ShareButtons from "../components/common/ShareButtons";
-import ProfileBadges from "../components/common/ProfileBadges";
+import { RoleBadge } from "../components/common/ProfileBadges";
 import StrengthBadges from "../components/strength/StrengthBadges";
 import StrengthTier from "../components/strength/StrengthTier";
 import { filledSocials } from "../utils/socialProfiles";
@@ -80,10 +80,13 @@ export default function Profile() {
                   @{profile.handle}
                   {profile.bodyweight ? ` · ${profile.bodyweight} ${t("common.kg")}` : ""}
                 </div>
-                {/* Standing and specialty, each in its own colour: this is the
-                    line somebody reads first, and "Coach" in grey text next to
-                    the handle was not read at all. */}
-                <ProfileBadges role={profile.role} />
+                {/* Standing and tier on one line, each in its own colour:
+                    this is what somebody reads first about a lifter, and the
+                    tier on a line of its own read as a second heading. */}
+                <div className="sf-profile-badges">
+                  <RoleBadge role={profile.role} />
+                  {profile.strength ? <StrengthTier result={profile.strength} showScore={false} /> : null}
+                </div>
               </div>
               {user && !isSelf ? (
                 <div className="sf-row" style={{ gap: "0.4rem" }}>
@@ -146,10 +149,6 @@ export default function Profile() {
                 with nothing to measure wears nothing. */}
             {profile.strength ? (
               <div className="sf-strength-profile">
-                {/* The tier is the headline here, and where they sit among the
-                    club is its tooltip: a percentile printed beside it would
-                    compete with the thing it describes. */}
-                <StrengthTier result={profile.strength} />
                 <StrengthBadges result={profile.strength} earnedOnly />
               </div>
             ) : null}

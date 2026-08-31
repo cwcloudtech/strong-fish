@@ -120,10 +120,18 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                                     Text('@${profile.handle}',
                                         style: TextStyle(color: colors.textMuted)),
                                   const SizedBox(height: 6),
-                                  // Standing and specialty, each in its own
-                                  ProfileBadges(
-                                    role: profile.role,
-                                    alignment: MainAxisAlignment.start,
+                                  // Standing and tier on one line, each in its
+                                  // own colour: this is what somebody reads
+                                  // first about a lifter, and the tier on a
+                                  // line of its own read as a second heading.
+                                  Wrap(
+                                    spacing: 6,
+                                    runSpacing: 6,
+                                    children: [
+                                      RoleBadge(role: profile.role),
+                                      if (profile.strength != null)
+                                        StrengthTier(result: profile.strength!, showScore: false),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -145,11 +153,6 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                         // wears nothing.
                         if (profile.strength != null) ...[
                           const SizedBox(height: 16),
-                          // The tier is the headline; where they sit among
-                          // the club is its tooltip, so it does not compete
-                          // with the thing it describes.
-                          StrengthTier(result: profile.strength!),
-                          const SizedBox(height: 10),
                           StrengthBadges(result: profile.strength!),
                         ],
                         const SizedBox(height: 16),

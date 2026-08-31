@@ -84,7 +84,7 @@ liste :
 | Squat à 2x le poids de corps, développé à 1,5x, soulevé à 2,5x | ce que vous soulevez rapporté à ce que vous pesez |
 | Club des 500 kg, des 1000 lb, des 1500 lb | les totaux repères |
 | Club des 300 / 400 / 500 DOTS | les paliers de coefficient |
-| Spécialiste du squat, du soulevé de terre, Survivant du développé pauvre | la forme de vos trois mouvements |
+| Spécialiste du squat, du soulevé de terre | la forme de vos trois mouvements |
 
 Ils apparaissent sur votre profil dès que votre poids de corps et vos trois
 maxima sont enregistrés, et le calculateur de force montre ce que vaudrait

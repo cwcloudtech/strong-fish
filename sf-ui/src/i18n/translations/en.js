@@ -44,6 +44,7 @@ const en = {
     myPrograms: "My programs",
     strength: "Strength",
     find: "Find",
+    more: "More",
     feed: "Feed",
     training: "My training",
     oneRms: "My 1RMs",
@@ -904,7 +905,6 @@ const en = {
         500: "500 DOTS club",
       },
       style: {
-        povertyBench: "Poverty Bench Survivor",
         squatDominant: "Squat specialist",
         deadliftDominant: "Deadlift specialist",
       },
