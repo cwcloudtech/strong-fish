@@ -11,6 +11,7 @@ import (
 
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/store"
+	"strong-fish-api/internal/strength"
 	"strong-fish-api/internal/utils"
 )
 
@@ -204,6 +205,7 @@ func meResponse(user models.User, activationMode string) models.UserMeResponse {
 		Username: user.Username, Anonymous: user.Anonymous,
 		ProfileVisibility: user.ProfileVisibility, Birthdate: user.Birthdate,
 		CoachRequest: user.CoachRequest, Bodyweight: user.Bodyweight,
+		Gender:     string(strength.NormalizeGender(user.Gender)),
 		Specialty:  models.NormalizeSpecialty(user.Specialty),
 		Socials:    models.NormalizeSocials(user.Socials),
 		MFAEnabled: user.MFAEnabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,

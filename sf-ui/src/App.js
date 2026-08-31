@@ -11,6 +11,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { I18nProvider, useI18n } from "./i18n/I18nContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
+import Strength from "./pages/Strength";
 import Admin from "./pages/dashboard/Admin";
 import Blocks from "./pages/dashboard/Blocks";
 import ApiKeys from "./pages/dashboard/ApiKeys";
@@ -122,6 +123,18 @@ function AppRoutes() {
                 by the API, which returns only public events to an anonymous
                 caller, and by the controls here, which all ask whether there
                 is a session. */}
+            {/* The powerlifting calculator, readable with no account: working
+                out what a total is worth is the question somebody asks before
+                they have one, and it is the page most likely to give them one.
+                The form fills itself in for a member who is signed in. */}
+            <Route
+              path="/strength"
+              element={
+                <SignedInShell>
+                  <Strength />
+                </SignedInShell>
+              }
+            />
             <Route
               path="/calendar"
               element={

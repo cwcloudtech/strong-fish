@@ -103,7 +103,9 @@ func main() {
 
 	providers := oidc.BuildProviders(cfg)
 
-	profileHandler := handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore)
+	strengthHandler := handlers.NewStrengthHandler(exerciseStore, userStore)
+	profileHandler := handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore).
+		WithStrength(strengthHandler)
 
 	programHandler := handlers.NewProgramHandler(programStore, clubStore, exerciseStore, oneRMStore,
 		userStore, mailer, cfg.MaxUploadSize, cfg.PlateIncrement, cfg.UIBaseURL)
@@ -147,6 +149,7 @@ func main() {
 		Event:    handlers.NewEventHandler(eventStore, clubStore, userStore, cfg.MaxUploadSize),
 		Calendar: handlers.NewCalendarHandler(userStore, eventStore, clubStore, cfg.APIBaseURL),
 		Search:   handlers.NewSearchHandler(userStore, clubStore, profileHandler),
+		Strength: strengthHandler,
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),
 		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, cfg.MaxImageSize),

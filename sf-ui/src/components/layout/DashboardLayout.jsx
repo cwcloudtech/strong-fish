@@ -22,6 +22,7 @@ import {
   FiSun,
   FiUser,
   FiUsers,
+  FiTrendingUp,
 } from "react-icons/fi";
 
 import { admin, invitations as invitationsApi, messages as messagesApi } from "../../api/services";
@@ -105,6 +106,7 @@ export default function DashboardLayout({ children }) {
     // are "the block I am running", one written by a coach and one by them.
     { to: "/dashboard/programs", label: t("nav.myPrograms"), icon: <FiFileText /> },
     { to: "/dashboard/one-rms", label: t("nav.oneRms"), icon: <FiAward /> },
+    { to: "/strength", label: t("nav.strength"), icon: <FiTrendingUp /> },
     { to: "/dashboard/clubs", label: t("nav.clubs"), icon: <FiUsers /> },
     { to: "/dashboard/events", label: t("nav.events"), icon: <FiCalendar /> },
     {

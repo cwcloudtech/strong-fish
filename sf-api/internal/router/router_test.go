@@ -58,6 +58,8 @@ var routes = []struct{ method, path string }{
 	{"POST", "/v1/contact"},
 	{"GET", "/v1/mobile-app"},
 	{"GET", "/v1/metrics"},
+	{"POST", "/v1/strength/score"},
+	{"GET", "/v1/strength/defaults"},
 	{"GET", "/v1/public/programs/prog-1"},
 	{"GET", "/v1/media/st-1/obj-1"},
 	{"GET", "/v1/public/programs/prog-1/export.pdf"},

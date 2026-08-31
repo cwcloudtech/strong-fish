@@ -230,6 +230,18 @@ export const blocks = {
 // reports something rather than spinning forever.
 const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 
+// The powerlifting calculator. Scored server-side (internal/strength): three
+// fitted polynomials in two languages would be two answers to the same
+// question, and nobody would notice which had drifted.
+export const strength = {
+  // Readable logged out - the calculator is the page somebody opens before
+  // they have an account.
+  score: (payload) => body(client.post("/strength/score", payload)),
+  // The form, pre-filled from the caller's profile and recorded maxes. An
+  // anonymous caller gets an empty one back.
+  defaults: () => body(client.get("/strength/defaults")),
+};
+
 export const media = {
   // Uploads to the member's *own* bucket and returns its public URL. 405 means
   // they haven't configured one, which is what the composer toasts.

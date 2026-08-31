@@ -378,6 +378,97 @@ button {
   animation: sf-spin 0.8s linear infinite;
 }
 
+/* --- strength: the calculator's scores, a lifter's tier and their badges --- */
+
+.sf-strength-scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-spacing);
+  align-items: baseline;
+}
+.sf-strength-total,
+.sf-strength-score {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 110px;
+}
+.sf-strength-total strong { font-size: 1.6rem; color: var(--sf-primary-dark); }
+.sf-strength-score strong { font-size: 1.3rem; }
+
+.sf-strength-tier { display: flex; align-items: center; gap: var(--sf-spacing-sm); flex-wrap: wrap; }
+
+/* A tier is a thing to be proud of, so it is the one badge that gets a colour
+   of its own rather than the shared muted chip. */
+.sf-tier {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background-color: var(--sf-bg-alt);
+  color: var(--sf-text-muted);
+}
+.sf-tier-novice { background-color: var(--sf-bg-alt); color: var(--sf-text-muted); }
+.sf-tier-intermediate { background-color: var(--sf-primary-tint); color: var(--sf-primary-dark); }
+.sf-tier-advanced { background-color: var(--sf-success-tint); color: var(--sf-success); }
+.sf-tier-elite { background-color: var(--sf-warning-tint); color: var(--sf-warning); }
+.sf-tier-worldClass {
+  background: linear-gradient(90deg, var(--sf-warning), var(--sf-danger));
+  color: #fff;
+}
+
+.sf-percentile { margin-top: var(--sf-spacing-sm); }
+.sf-percentile-bar {
+  height: 8px;
+  border-radius: 999px;
+  background-color: var(--sf-bg-alt);
+  overflow: hidden;
+}
+.sf-percentile-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--sf-primary), var(--sf-success));
+}
+
+.sf-badges {
+  list-style: none;
+  margin: var(--sf-spacing) 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sf-spacing-sm);
+}
+/* A locked badge is drawn like an earned one, dimmed: the point of showing it
+   is that it is a target, and a target has to be legible. */
+.sf-badge-card {
+  flex: 0 0 auto;
+  min-width: 140px;
+  padding: 8px 12px;
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius-sm);
+  background-color: var(--sf-bg-alt);
+  opacity: 0.55;
+}
+.sf-badge-card.is-earned {
+  opacity: 1;
+  border-color: transparent;
+  background-color: var(--sf-success-tint);
+  color: var(--sf-success);
+}
+.sf-badge-name { display: block; font-weight: 700; font-size: 0.85rem; }
+.sf-badge-progress {
+  display: block;
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background-color: var(--sf-border);
+  overflow: hidden;
+}
+.sf-badge-progress span { display: block; height: 100%; background-color: var(--sf-primary); }
+
 /* --- surfaces --- */
 
 .sf-card {

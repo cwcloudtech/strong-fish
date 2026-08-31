@@ -399,6 +399,35 @@ class SfApi {
     await client.dio.put('/admin/coach-requests/$userId', data: {'status': status, 'motive': motive});
   }
 
+  // --- the strength calculator ---
+
+  /// Scores a total. Readable logged out, which is the point: working out what
+  /// a total is worth is the question somebody asks before they have an
+  /// account. Weights go up in kilograms; the screen converts pounds first.
+  Future<StrengthResult> score({
+    required String gender,
+    required String division,
+    required double bodyweight,
+    required double squat,
+    required double bench,
+    required double deadlift,
+  }) async {
+    final response = await client.dio.post('/strength/score', data: {
+      'gender': gender,
+      'division': division,
+      'bodyweight': bodyweight,
+      'squat': squat,
+      'bench': bench,
+      'deadlift': deadlift,
+    });
+    return StrengthResult.fromJson(_map(response.data));
+  }
+
+  /// The calculator's form, pre-filled from this member's profile and recorded
+  /// maxes. A signed-out caller gets an empty one back.
+  Future<Map<String, dynamic>> strengthDefaults() async =>
+      _map((await client.dio.get('/strength/defaults')).data);
+
   // --- media ---
 
   /// Uploads a video to the member's own storage and returns its URL.
