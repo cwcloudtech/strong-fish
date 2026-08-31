@@ -120,10 +120,6 @@ var badgeRules = []badgeRule{
 	// These are not a distance to close, so they carry no progress: a lifter
 	// either has this shape today or does not, and a bar creeping towards
 	// "your bench is poor" would be a strange thing to show anybody.
-	{key: "style.povertyBench", kind: "style",
-		earned: func(in Input, _ Scores) bool {
-			return complete(in) && in.Lifts.Bench*4 < in.Lifts.Squat+in.Lifts.Deadlift
-		}},
 	{key: "style.squatDominant", kind: "style",
 		earned: func(in Input, _ Scores) bool {
 			return complete(in) && in.Lifts.Squat > in.Lifts.Deadlift

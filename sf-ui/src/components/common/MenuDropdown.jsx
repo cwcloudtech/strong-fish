@@ -69,9 +69,17 @@ export default function MenuDropdown({
   );
 }
 
-/** One command in the menu. */
-export function MenuItem({ className = "", ...props }) {
-  return <button type="button" role="menuitem" className={`sf-menu-item ${className}`.trim()} {...props} />;
+/**
+ * One command in the menu.
+ *
+ * A button by default, because that is what a command is. `as` takes anything
+ * else that renders - a router Link, for the menus whose items are navigation
+ * rather than actions - so those keep working as links: middle-click, open in
+ * a new tab, and a status bar showing where they go.
+ */
+export function MenuItem({ as: Component = "button", className = "", ...props }) {
+  const type = Component === "button" ? { type: "button" } : {};
+  return <Component role="menuitem" className={`sf-menu-item ${className}`.trim()} {...type} {...props} />;
 }
 
 /** A heading or a note between items - not clickable. */

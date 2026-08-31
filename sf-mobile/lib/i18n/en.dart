@@ -900,7 +900,6 @@ const Map<String, dynamic> en = {
         '500': '500 DOTS club',
       },
       'style': {
-        'povertyBench': 'Poverty Bench Survivor',
         'squatDominant': 'Squat specialist',
         'deadliftDominant': 'Deadlift specialist',
       },

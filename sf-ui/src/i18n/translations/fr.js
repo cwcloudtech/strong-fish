@@ -44,6 +44,7 @@ const fr = {
     myPrograms: "Mes programmes",
     strength: "Force",
     find: "Rechercher",
+    more: "Plus",
     feed: "Actualités",
     training: "Mon entraînement",
     oneRms: "Mes 1RM",
@@ -921,7 +922,6 @@ const fr = {
         500: "Club des 500 DOTS",
       },
       style: {
-        povertyBench: "Survivant du développé pauvre",
         squatDominant: "Spécialiste du squat",
         deadliftDominant: "Spécialiste du soulevé de terre",
       },

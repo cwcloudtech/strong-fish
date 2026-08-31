@@ -61,7 +61,7 @@ Your badges are worked out from the maxes you record, not picked from a list:
 | 2x bodyweight squat, 1.5x bench, 2.5x deadlift | what you lift against what you weigh |
 | 500 kg club, 1000 lb club, 1500 lb club | milestone totals |
 | 300 / 400 / 500 DOTS club | coefficient milestones |
-| Squat specialist, Deadlift specialist, Poverty Bench Survivor | the shape of your three lifts |
+| Squat specialist, Deadlift specialist | the shape of your three lifts |
 
 They appear on your profile as soon as you have a bodyweight and your three
 maxes on record, and the strength calculator shows what any total would earn

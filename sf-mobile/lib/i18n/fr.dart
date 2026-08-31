@@ -900,7 +900,6 @@ const Map<String, dynamic> fr = {
         '500': 'Club des 500 DOTS',
       },
       'style': {
-        'povertyBench': 'Survivant du développé pauvre',
         'squatDominant': 'Spécialiste du squat',
         'deadliftDominant': 'Spécialiste du soulevé de terre',
       },

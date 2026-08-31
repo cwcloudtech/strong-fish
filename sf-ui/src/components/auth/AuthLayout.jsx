@@ -1,6 +1,9 @@
 import { Link } from "react-router-dom";
 
+import { FiCalendar, FiMenu, FiSearch, FiTrendingUp } from "react-icons/fi";
+
 import Logo from "../common/Logo";
+import MenuDropdown, { MenuItem } from "../common/MenuDropdown";
 import LanguageDropdown from "../common/LanguageDropdown";
 import { DownloadAppIcon } from "../common/DownloadApp";
 import { aboutUrl } from "../../utils/aboutUrl";
@@ -72,17 +75,35 @@ export default function AuthLayout({ children }) {
             <a href={aboutUrl(config)} target="_blank" rel="noopener noreferrer">
               {t("nav.about")}
             </a>
-            {/* The three screens worth opening before signing up. Without a
-                link here they exist and nobody without an account would ever
-                find them: an open calendar, a calculator that answers the
-                question people arrive with, and the members who chose to be
-                visible to everyone. */}
-            <Link to="/calendar">{t("nav.events")}</Link>
-            <Link to="/strength">{t("nav.strength")}</Link>
-            <Link to="/find">{t("nav.find")}</Link>
             {/* Hidden when no CWCLOUD_CONTACT_FORM_ID is set: the page would
                 only be able to report that it isn't configured. */}
             {config?.contactEnabled ? <Link to="/contact">{t("nav.contact")}</Link> : null}
+            {/* The pages worth opening before signing up - an open calendar, a
+                calculator that answers the question people arrive with, and
+                the members who chose to be visible to everyone - collapsed
+                into one control, the way uprodit's own overflow menu does it.
+                Spelled out, five links crowded the two that matter on a page
+                whose job is a login form. */}
+            <MenuDropdown
+              trigger={<FiMenu />}
+              align="start"
+              triggerClassName="sf-auth-menu-trigger"
+              ariaLabel={t("nav.more")}
+            >
+              {(close) => (
+                <>
+                  <MenuItem as={Link} to="/calendar" onClick={close}>
+                    <FiCalendar /> {t("nav.events")}
+                  </MenuItem>
+                  <MenuItem as={Link} to="/strength" onClick={close}>
+                    <FiTrendingUp /> {t("nav.strength")}
+                  </MenuItem>
+                  <MenuItem as={Link} to="/find" onClick={close}>
+                    <FiSearch /> {t("nav.find")}
+                  </MenuItem>
+                </>
+              )}
+            </MenuDropdown>
             <DownloadAppIcon />
             <LanguageDropdown variant="light" align="left" />
           </div>

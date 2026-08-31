@@ -55,6 +55,7 @@ const ar = {
     myPrograms: "برامجي",
     strength: "القوة",
     find: "بحث",
+    more: "المزيد",
     feed: "المستجدات",
     training: "تدريبي",
     oneRms: "أرقامي القصوى (1RM)",
@@ -912,7 +913,6 @@ const ar = {
         500: "نادي 500 DOTS",
       },
       style: {
-        povertyBench: "ناجٍ من ضعف البنش",
         squatDominant: "متخصص السكوات",
         deadliftDominant: "متخصص الرفعة المميتة",
       },
