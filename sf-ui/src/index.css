@@ -710,6 +710,14 @@ button {
   right: 0;
 }
 
+/* Opens upwards, for a trigger sitting at the bottom of the page: a footer
+   menu that drops down lands below the fold, where it renders correctly and is
+   seen by nobody. */
+.sf-menu-list.drop-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
 .sf-menu-item {
   display: flex;
   align-items: center;

@@ -16,6 +16,9 @@ import { useEffect, useRef, useState } from "react";
 export default function MenuDropdown({
   trigger,
   align = "end",
+  // "up" for a trigger near the bottom of the page - a footer's menu has to
+  // open towards the middle of the screen or it lands below the fold.
+  drop = "down",
   className = "",
   triggerClassName = "sf-button sf-button-secondary",
   title,
@@ -61,7 +64,10 @@ export default function MenuDropdown({
         {trigger}
       </button>
       {!disabled && open ? (
-        <div className={`sf-menu-list ${align === "end" ? "align-end" : ""}`} role="menu">
+        <div
+          className={`sf-menu-list ${align === "end" ? "align-end" : ""} ${drop === "up" ? "drop-up" : ""}`.trim()}
+          role="menu"
+        >
           {typeof children === "function" ? children(() => setOpen(false)) : children}
         </div>
       ) : null}

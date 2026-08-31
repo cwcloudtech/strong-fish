@@ -87,6 +87,7 @@ export default function AuthLayout({ children }) {
             <MenuDropdown
               trigger={<FiMenu />}
               align="start"
+              drop="up"
               triggerClassName="sf-auth-menu-trigger"
               ariaLabel={t("nav.more")}
             >
