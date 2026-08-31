@@ -280,9 +280,6 @@ type updateProfilePayload struct {
 	// Gender drives the strength coefficients. Anything but "female" reads as
 	// male, which is the default an account has never been asked about.
 	Gender string `json:"gender"`
-	// Specialty is the lift the member claims as theirs. Anything unknown is
-	// normalized away rather than refused: a badge is not worth a 400.
-	Specialty string `json:"specialty"`
 	// Socials are the accounts to show on the profile, normalized rather than
 	// validated: somebody pasting their profile URL should get a working link,
 	// not an error (see models.NormalizeSocialAccount).
@@ -367,7 +364,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		Bio: p.Bio, Locale: p.Locale,
 		ProfileVisibility: p.ProfileVisibility, Birthdate: birthdate,
 		Bodyweight: p.Bodyweight, Gender: string(strength.NormalizeGender(p.Gender)),
-		Specialty: p.Specialty, Socials: p.Socials,
+		Socials:      p.Socials,
 		PasswordHash: passwordHash,
 	})
 	if err != nil {

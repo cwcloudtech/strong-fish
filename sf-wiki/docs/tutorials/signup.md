@@ -53,16 +53,20 @@ Your profile carries two of them, side by side under your name, each in its own 
 
 **What you lift** is the second, and that one is yours to choose:
 
+Your badges are worked out from the maxes you record, not picked from a list:
+
 | Badge | For |
 | --- | --- |
-| Squat specialist | the lift you are known for is the squat |
-| Bench specialist | ... the bench press |
-| Deadlift specialist | ... the deadlift |
-| Balanced totaler | no single lift carries you - the total does |
+| Iron Recruit … Titan | your tier, from your DOTS score |
+| 2x bodyweight squat, 1.5x bench, 2.5x deadlift | what you lift against what you weigh |
+| 500 kg club, 1000 lb club, 1500 lb club | milestone totals |
+| 300 / 400 / 500 DOTS club | coefficient milestones |
+| Squat specialist, Deadlift specialist, Poverty Bench Survivor | the shape of your three lifts |
 
-Pick it under **Settings → My specialty** on the web, or on the profile tab in the app. It is optional, you can change it whenever you like, and *no specialty* is a perfectly good answer.
-
-It is a claim, not a calculation. StrongFish never works it out from your maxes: somebody who has entered none is still entitled to say what they are, and a bad squat day should not relabel anybody.
+They appear on your profile as soon as you have a bodyweight and your three
+maxes on record, and the strength calculator shows what any total would earn
+before you get there. Nothing to pick and nothing to keep up to date: the
+badges follow the numbers.
 
 ## Joining a club
 

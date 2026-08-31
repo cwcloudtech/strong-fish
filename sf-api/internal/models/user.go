@@ -89,9 +89,6 @@ type User struct {
 	// Bodyweight, in kg, shown on the public profile next to the member's
 	// bests. Zero means "not stated".
 	Bodyweight float64 `json:"bodyweight,omitempty"`
-	// Specialty is the lift the member says is theirs - or that none is (see
-	// specialty.go). Empty means they have not picked one.
-	Specialty string `json:"specialty,omitempty"`
 	// Socials are the accounts the member chose to show, stored as names on
 	// their service rather than as URLs (see socials.go).
 	Socials Socials `json:"socials,omitempty"`
@@ -174,10 +171,6 @@ type UserMeResponse struct {
 	CoachRequest CoachRequest `json:"coachRequest,omitempty"`
 	Gender       string       `json:"gender,omitempty"`
 	Bodyweight   float64      `json:"bodyweight,omitempty"`
-	// Specialty is sent even when empty: this is the account's own view, and
-	// the form needs to be able to tell "none picked" from "not in the
-	// response at all".
-	Specialty string `json:"specialty"`
 	// Socials, likewise, is the form's own view of what it will edit.
 	Socials    Socials   `json:"socials"`
 	MFAEnabled bool      `json:"mfaEnabled"`
@@ -206,9 +199,6 @@ type PublicProfile struct {
 	PictureX   float64 `json:"pictureX"`
 	PictureY   float64 `json:"pictureY"`
 	Bodyweight float64 `json:"bodyweight,omitempty"`
-	// Specialty is the badge the member picked for themselves, absent when
-	// they picked none.
-	Specialty string `json:"specialty,omitempty"`
 	// Socials are the accounts to link to from the profile; absent when the
 	// member filled none in.
 	Socials Socials `json:"socials,omitempty"`

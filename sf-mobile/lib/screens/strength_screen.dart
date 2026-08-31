@@ -227,7 +227,16 @@ class _StrengthScreenState extends ConsumerState<StrengthScreen> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: StrengthBadges(result: result),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    StrengthSummary(result: result),
+                    const SizedBox(height: 12),
+                    // Locked badges included: on a calculator they are the
+                    // targets somebody came to find.
+                    StrengthBadges(result: result, earnedOnly: false),
+                  ],
+                ),
               ),
             ),
           ],

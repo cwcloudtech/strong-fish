@@ -52,7 +52,6 @@ type userData struct {
 	CoachRequest      *models.CoachRequest  `json:"coachRequest,omitempty"`
 	IPs               []models.ConnectionIP `json:"ips,omitempty"`
 	Bodyweight        float64               `json:"bodyweight,omitempty"`
-	Specialty         string                `json:"specialty,omitempty"`
 	Socials           *models.Socials       `json:"socials,omitempty"`
 	MFAEnabled        bool                  `json:"mfaEnabled,omitempty"`
 	MFATOTPSecret     string                `json:"mfaTotpSecret,omitempty"`
@@ -109,10 +108,6 @@ func scanUser(row pgx.Row) (models.User, error) {
 	u.IPs = d.IPs
 	u.Bodyweight = d.Bodyweight
 	u.Gender = d.Gender
-	// Normalized on the way out as well as in: a payload written by hand, or
-	// by a version of this app that knew a badge this one does not, must not
-	// reach a client that would render the raw value.
-	u.Specialty = models.NormalizeSpecialty(d.Specialty)
 	if d.Socials != nil {
 		u.Socials = models.NormalizeSocials(*d.Socials)
 	}
@@ -498,8 +493,6 @@ type ProfileFields struct {
 	Bodyweight        float64
 	// Gender is "male" or "female", and drives the strength coefficients.
 	Gender string
-	// Specialty is the badge the member wears; blank clears it.
-	Specialty string
 	// Socials replaces the stored accounts wholesale, so a form that sends a
 	// field blank clears it.
 	Socials      models.Socials
@@ -529,7 +522,6 @@ func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileField
 		"birthdate":         f.Birthdate,
 		"bodyweight":        f.Bodyweight,
 		"gender":            f.Gender,
-		"specialty":         models.NormalizeSpecialty(f.Specialty),
 		// Written as a whole object rather than field by field: the payload
 		// merge is shallow, so this key replaces what was there, which is what
 		// makes clearing one account work.

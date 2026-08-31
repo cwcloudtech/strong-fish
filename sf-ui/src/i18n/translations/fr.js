@@ -150,16 +150,6 @@ const fr = {
     socials: "Où me trouver ailleurs",
     socialsHelp: "Votre compte sur chacun - ou collez l'adresse de votre profil, le nom en sera extrait.",
     rank: "Classement",
-    specialty: "Ma spécialité",
-    specialtyNone: "Aucune spécialité",
-    specialtyHelp: "Le mouvement que vous revendiquez. C'est vous qui le choisissez - il n'est jamais déduit de vos maxima - et vous pouvez l'effacer à tout moment.",
-    specialties: {
-      squat: "Spécialiste du squat",
-      bench: "Spécialiste du développé couché",
-      deadlift: "Spécialiste du soulevé de terre",
-      total: "Totaliseur équilibré",
-    },
-    badgesPreview: "Sur votre profil",
     avatar: "Avatar",
     changeAvatar: "Changer d'avatar",
     saved: "Profil enregistré.",
@@ -629,7 +619,7 @@ const fr = {
   about: {
     title: "À propos",
     unavailable: "Cette page n'a pas encore été rédigée.",
-    openSource: "StrongFish est un produit open source de CWCloud. Les sources sont disponibles",
+    openSource: "StrongFish est un produit open source (MIT) de CWCloud. Les sources sont disponibles",
     openSourceLink: "ici",
   },
   apiKeys: {
@@ -870,7 +860,7 @@ const fr = {
   },
   cookieBanner: {
     title: "Avis relatif aux cookies",
-    message: "StrongFish est un produit open-source. Les cookies et le stockage local qu'il utilise sont nécessaires uniquement au fonctionnement de l'application (connexion, thème et langue) - jamais pour le suivi ou l'analyse.",
+    message: "StrongFish est un produit open-source (MIT). Les cookies et le stockage local qu'il utilise sont nécessaires uniquement au fonctionnement de l'application (connexion, thème et langue) - jamais pour le suivi ou l'analyse.",
     understand: "J'ai compris",
   },
   contact: {
@@ -902,6 +892,8 @@ const fr = {
     enterLifts: "Saisissez un poids de corps et au moins un mouvement pour voir les scores.",
     tierFrom: "{{value}} DOTS",
     percentile: "Devant {{value}}% des {{sample}} pratiquants d'ici ayant enregistré les trois mouvements.",
+    strongerThan: "Plus fort que",
+    noPopulation: "Personne ici n'a encore enregistré les trois mouvements : rien à quoi se comparer.",
     noBadges: "Aucun badge pour l'instant. Enregistrez vos trois maxs pour commencer.",
     tiers: {
       novice: "Recrue de fonte",

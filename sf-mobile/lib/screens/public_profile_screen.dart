@@ -121,11 +121,8 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                                         style: TextStyle(color: colors.textMuted)),
                                   const SizedBox(height: 6),
                                   // Standing and specialty, each in its own
-                                  // colour: this is the line somebody reads
-                                  // first about a stranger.
                                   ProfileBadges(
                                     role: profile.role,
-                                    specialty: profile.specialty,
                                     alignment: MainAxisAlignment.start,
                                   ),
                                 ],
@@ -148,7 +145,12 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                         // wears nothing.
                         if (profile.strength != null) ...[
                           const SizedBox(height: 16),
-                          StrengthBadges(result: profile.strength!, earnedOnly: true),
+                          // The tier is the headline; where they sit among
+                          // the club is its tooltip, so it does not compete
+                          // with the thing it describes.
+                          StrengthTier(result: profile.strength!),
+                          const SizedBox(height: 10),
+                          StrengthBadges(result: profile.strength!),
                         ],
                         const SizedBox(height: 16),
                         Row(
