@@ -43,6 +43,7 @@ const en = {
   nav: {
     myPrograms: "My programs",
     strength: "Strength",
+    find: "Find",
     feed: "Feed",
     training: "My training",
     oneRms: "My 1RMs",

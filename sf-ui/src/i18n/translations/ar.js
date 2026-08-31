@@ -54,6 +54,7 @@ const ar = {
   nav: {
     myPrograms: "برامجي",
     strength: "القوة",
+    find: "بحث",
     feed: "المستجدات",
     training: "تدريبي",
     oneRms: "أرقامي القصوى (1RM)",

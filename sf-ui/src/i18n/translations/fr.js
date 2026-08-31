@@ -43,6 +43,7 @@ const fr = {
   nav: {
     myPrograms: "Mes programmes",
     strength: "Force",
+    find: "Rechercher",
     feed: "Actualités",
     training: "Mon entraînement",
     oneRms: "Mes 1RM",
