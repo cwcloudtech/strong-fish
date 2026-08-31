@@ -48,6 +48,7 @@ type userData struct {
 	PublicProfile     bool                  `json:"publicProfile,omitempty"`
 	ProfileVisibility string                `json:"profileVisibility,omitempty"`
 	Birthdate         string                `json:"birthdate,omitempty"`
+	Gender            string                `json:"gender,omitempty"`
 	CoachRequest      *models.CoachRequest  `json:"coachRequest,omitempty"`
 	IPs               []models.ConnectionIP `json:"ips,omitempty"`
 	Bodyweight        float64               `json:"bodyweight,omitempty"`
@@ -107,6 +108,7 @@ func scanUser(row pgx.Row) (models.User, error) {
 	}
 	u.IPs = d.IPs
 	u.Bodyweight = d.Bodyweight
+	u.Gender = d.Gender
 	// Normalized on the way out as well as in: a payload written by hand, or
 	// by a version of this app that knew a badge this one does not, must not
 	// reach a client that would render the raw value.
@@ -494,6 +496,8 @@ type ProfileFields struct {
 	ProfileVisibility string
 	Birthdate         string
 	Bodyweight        float64
+	// Gender is "male" or "female", and drives the strength coefficients.
+	Gender string
 	// Specialty is the badge the member wears; blank clears it.
 	Specialty string
 	// Socials replaces the stored accounts wholesale, so a form that sends a
@@ -524,6 +528,7 @@ func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileField
 		"profileVisibility": models.NormalizeProfileVisibility(f.ProfileVisibility),
 		"birthdate":         f.Birthdate,
 		"bodyweight":        f.Bodyweight,
+		"gender":            f.Gender,
 		"specialty":         models.NormalizeSpecialty(f.Specialty),
 		// Written as a whole object rather than field by field: the payload
 		// merge is shallow, so this key replaces what was there, which is what

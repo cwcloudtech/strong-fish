@@ -503,3 +503,87 @@ func (s *OneRMStore) ListBests(ctx context.Context, userID string) ([]models.Pro
 	}
 	return bests, total, rows.Err()
 }
+
+// LifterProfile is one member's numbers for the strength coefficients: what
+// they weigh, which set of coefficients applies, and their three competition
+// maxes.
+type LifterProfile struct {
+	UserID     string
+	Gender     string
+	Bodyweight float64
+	Squat      float64
+	Bench      float64
+	Deadlift   float64
+}
+
+// ListLifters is every member with a bodyweight and all three competition
+// maxes on record - the population a percentile is computed against.
+//
+// Only complete profiles: a member who has entered a squat and nothing else has
+// no total to rank, and counting them would drag every percentile up by
+// pretending their zero is a score.
+//
+// Matched on the exercise's category rather than on a slug, so a club that
+// renamed "Squat" to "Flexion" is still counted.
+func (s *ExerciseStore) ListLifters(ctx context.Context) ([]LifterProfile, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT u.id,
+		       coalesce(u.data->>'gender', ''),
+		       coalesce((u.data->>'bodyweight')::float8, 0),
+		       max(o.value) FILTER (WHERE e.data->>'category' = 'squat'),
+		       max(o.value) FILTER (WHERE e.data->>'category' = 'bench'),
+		       max(o.value) FILTER (WHERE e.data->>'category' = 'deadlift')
+		FROM users u
+		JOIN (SELECT user_id, exercise_id, (data->>'value')::float8 AS value FROM one_rms) o
+		  ON o.user_id = u.id
+		JOIN exercises e ON e.id = o.exercise_id
+		WHERE coalesce((u.data->>'bodyweight')::float8, 0) > 0
+		GROUP BY u.id
+		HAVING max(o.value) FILTER (WHERE e.data->>'category' = 'squat') > 0
+		   AND max(o.value) FILTER (WHERE e.data->>'category' = 'bench') > 0
+		   AND max(o.value) FILTER (WHERE e.data->>'category' = 'deadlift') > 0
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	lifters := []LifterProfile{}
+	for rows.Next() {
+		var l LifterProfile
+		if err := rows.Scan(&l.UserID, &l.Gender, &l.Bodyweight, &l.Squat, &l.Bench, &l.Deadlift); err != nil {
+			return nil, err
+		}
+		lifters = append(lifters, l)
+	}
+	return lifters, rows.Err()
+}
+
+// LifterFor is one member's own numbers, whether or not they are complete: the
+// calculator pre-fills from this, and half a profile still saves somebody
+// typing the half they have.
+func (s *ExerciseStore) LifterFor(ctx context.Context, userID string) (LifterProfile, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT u.id,
+		       coalesce(u.data->>'gender', ''),
+		       coalesce((u.data->>'bodyweight')::float8, 0),
+		       coalesce(max(o.value) FILTER (WHERE e.data->>'category' = 'squat'), 0),
+		       coalesce(max(o.value) FILTER (WHERE e.data->>'category' = 'bench'), 0),
+		       coalesce(max(o.value) FILTER (WHERE e.data->>'category' = 'deadlift'), 0)
+		FROM users u
+		LEFT JOIN (SELECT user_id, exercise_id, (data->>'value')::float8 AS value FROM one_rms) o
+		  ON o.user_id = u.id
+		LEFT JOIN exercises e ON e.id = o.exercise_id
+		WHERE u.id = $1
+		GROUP BY u.id
+	`, userID)
+
+	var l LifterProfile
+	if err := row.Scan(&l.UserID, &l.Gender, &l.Bodyweight, &l.Squat, &l.Bench, &l.Deadlift); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return LifterProfile{}, ErrNotFound
+		}
+		return LifterProfile{}, err
+	}
+	return l, nil
+}

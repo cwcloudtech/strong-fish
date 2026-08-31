@@ -78,6 +78,11 @@ class User {
   /// The lift the member claims as their own: 'squat', 'bench', 'deadlift',
   /// 'total' - or empty, which is a first-class answer and the default.
   final String specialty;
+
+  /// Which set of strength coefficients applies: 'male' or 'female'.
+  /// Powerlifting fits DOTS, Wilks and IPF GL separately, and there is no
+  /// unisex variant of any of them. Male is the default.
+  final String gender;
   /// The accounts the member chose to show, keyed as the API names them (see
   /// socials.dart). Values are names on the service, never whole URLs.
   final Map<String, String> socials;
@@ -100,6 +105,7 @@ class User {
     this.birthdate = '',
     this.bodyweight = 0,
     this.specialty = '',
+    this.gender = 'male',
     this.socials = const {},
     this.mfaEnabled = false,
     this.i18nCode = '',
@@ -121,6 +127,7 @@ class User {
         birthdate: _toString(json['birthdate']),
         bodyweight: _toDouble(json['bodyweight']),
         specialty: _toString(json['specialty']),
+        gender: _toString(json['gender'], 'male'),
         socials: _toLabels(json['socials']),
         mfaEnabled: json['mfaEnabled'] == true,
         i18nCode: _toString(json['i18nCode']),
@@ -1028,6 +1035,88 @@ class MemberResult {
       );
 }
 
+/// What a lifter's total is worth: the three coefficients, the tier it puts
+/// them in, where it sits among the members here, and what it has earned.
+///
+/// Every number is the API's (internal/strength). Nothing here recomputes a
+/// coefficient - three fitted polynomials in two languages would be two
+/// answers to the same question.
+class StrengthResult {
+  final double total;
+  final double dots;
+  final double wilks;
+  final double ipfGl;
+  final String tierKey;
+  final int percentile;
+
+  /// How many members the percentile is out of. A percentile among four people
+  /// is a fact about four people, so the count travels with it.
+  final int sample;
+  final List<StrengthBadge> badges;
+
+  const StrengthResult({
+    this.total = 0,
+    this.dots = 0,
+    this.wilks = 0,
+    this.ipfGl = 0,
+    this.tierKey = '',
+    this.percentile = 0,
+    this.sample = 0,
+    this.badges = const [],
+  });
+
+  factory StrengthResult.fromJson(Map<String, dynamic> json) {
+    final scores = json['scores'] is Map<String, dynamic>
+        ? json['scores'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final tier = json['tier'] is Map<String, dynamic>
+        ? json['tier'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final percentile = json['percentile'] is Map<String, dynamic>
+        ? json['percentile'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    return StrengthResult(
+      total: _toDouble(json['total']),
+      dots: _toDouble(scores['dots']),
+      wilks: _toDouble(scores['wilks']),
+      ipfGl: _toDouble(scores['ipfGl']),
+      tierKey: _toString(tier['key']),
+      percentile: _toInt(percentile['value']),
+      sample: _toInt(percentile['sample']),
+      badges: (json['badges'] as List? ?? const [])
+          .whereType<Map<String, dynamic>>()
+          .map(StrengthBadge.fromJson)
+          .toList(),
+    );
+  }
+
+  List<StrengthBadge> get earned => badges.where((badge) => badge.earned).toList();
+}
+
+/// One achievement, earned or not. An unearned one carries how far along it is,
+/// because a target you can see is worth more than one that appears out of
+/// nowhere the day you hit it.
+class StrengthBadge {
+  final String key;
+  final String kind;
+  final bool earned;
+  final double progress;
+
+  const StrengthBadge({
+    required this.key,
+    this.kind = '',
+    this.earned = false,
+    this.progress = 0,
+  });
+
+  factory StrengthBadge.fromJson(Map<String, dynamic> json) => StrengthBadge(
+        key: _toString(json['key']),
+        kind: _toString(json['kind']),
+        earned: json['earned'] == true,
+        progress: _toDouble(json['progress']),
+      );
+}
+
 /// A member's or coach's public profile.
 class PublicProfile {
   final String id;
@@ -1048,6 +1137,10 @@ class PublicProfile {
   final int following;
   final bool followed;
 
+  /// What their own maxes are worth. Null for somebody who has not weighed in
+  /// or entered no lifts: a profile with nothing to measure wears nothing.
+  final StrengthResult? strength;
+
   const PublicProfile({
     required this.id,
     this.handle = '',
@@ -1064,6 +1157,7 @@ class PublicProfile {
     this.followers = 0,
     this.following = 0,
     this.followed = false,
+    this.strength,
   });
 
   factory PublicProfile.fromJson(Map<String, dynamic> json) => PublicProfile(
@@ -1073,6 +1167,9 @@ class PublicProfile {
         surname: _toString(json['surname']),
         role: _toString(json['role']),
         specialty: _toString(json['specialty']),
+        strength: json['strength'] is Map<String, dynamic>
+            ? StrengthResult.fromJson(json['strength'] as Map<String, dynamic>)
+            : null,
         socials: _toLabels(json['socials']),
         bio: _toString(json['bio']),
         picture: _toString(json['picture']),

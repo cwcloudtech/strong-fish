@@ -6,6 +6,7 @@ import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/profile_badges.dart';
+import '../widgets/strength_badges.dart';
 import '../widgets/social_share.dart';
 import '../widgets/socials.dart';
 import 'messages_screen.dart';
@@ -139,6 +140,15 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                         if (profile.socials.isNotEmpty) ...[
                           const SizedBox(height: 12),
                           SocialLinks(socials: profile.socials, alignment: WrapAlignment.start),
+                        ],
+                        // What their own maxes are worth: the tier, where it
+                        // sits among the members here, and what it has earned.
+                        // Absent for somebody who has not weighed in or
+                        // entered no lifts - a profile with nothing to measure
+                        // wears nothing.
+                        if (profile.strength != null) ...[
+                          const SizedBox(height: 16),
+                          StrengthBadges(result: profile.strength!, earnedOnly: true),
                         ],
                         const SizedBox(height: 16),
                         Row(

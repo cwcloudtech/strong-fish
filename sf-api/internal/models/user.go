@@ -81,6 +81,11 @@ type User struct {
 	// Birthdate is optional, stored as YYYY-MM-DD. When set it becomes a
 	// calendar entry for the people who may see the profile.
 	Birthdate string `json:"birthdate,omitempty"`
+	// Gender is what the strength coefficients are computed against - powerlifting
+	// fits DOTS, Wilks and IPF GL separately for men and women, and there is no
+	// unisex variant of any of them. Male by default, which is what an account
+	// that has never been asked reads as.
+	Gender string `json:"gender,omitempty"`
 	// Bodyweight, in kg, shown on the public profile next to the member's
 	// bests. Zero means "not stated".
 	Bodyweight float64 `json:"bodyweight,omitempty"`
@@ -167,6 +172,7 @@ type UserMeResponse struct {
 	// CoachRequest is the account's own view of its coach application: whether
 	// it is still waiting, and - if it was turned down - why.
 	CoachRequest CoachRequest `json:"coachRequest,omitempty"`
+	Gender       string       `json:"gender,omitempty"`
 	Bodyweight   float64      `json:"bodyweight,omitempty"`
 	// Specialty is sent even when empty: this is the account's own view, and
 	// the form needs to be able to tell "none picked" from "not in the
@@ -184,11 +190,15 @@ type UserMeResponse struct {
 // carries the email or any account setting, since it's readable by anyone
 // (including logged-out visitors) when the owner opted in.
 type PublicProfile struct {
-	ID      string     `json:"id"`
-	Handle  string     `json:"handle,omitempty"`
-	Name    string     `json:"name"`
-	Surname string     `json:"surname"`
-	Role    GlobalRole `json:"role"`
+	ID string `json:"id"`
+	// Strength is the tier and the badges, computed from this member's own
+	// maxes. Absent for somebody who has not weighed in or has entered no
+	// lifts - a profile with nothing to measure wears nothing.
+	Strength any        `json:"strength,omitempty"`
+	Handle   string     `json:"handle,omitempty"`
+	Name     string     `json:"name"`
+	Surname  string     `json:"surname"`
+	Role     GlobalRole `json:"role"`
 	// Anonymous says the name above is a username, not a person's name.
 	Anonymous  bool    `json:"anonymous,omitempty"`
 	Bio        string  `json:"bio,omitempty"`

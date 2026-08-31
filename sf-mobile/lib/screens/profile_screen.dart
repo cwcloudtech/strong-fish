@@ -98,6 +98,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'profileVisibility': user.profileVisibility,
       'birthdate': user.birthdate,
       'bodyweight': user.bodyweight,
+      'gender': user.gender,
       'specialty': user.specialty,
       'socials': user.socials,
       ...changes,
@@ -292,6 +293,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         Card(
           child: Column(
             children: [
+              // Powerlifting's coefficients are fitted separately for men and
+              // women - there is no unisex variant of DOTS, Wilks or IPF GL -
+              // so a strength score cannot be computed without this. Male by
+              // default, which is what an account never asked reads as.
+              ListTile(
+                leading: const Icon(Icons.wc_outlined),
+                title: Text(t('profile.gender')),
+                trailing: SegmentedButton<String>(
+                  segments: [
+                    ButtonSegment(value: 'male', label: Text(t('profile.genderMale'))),
+                    ButtonSegment(value: 'female', label: Text(t('profile.genderFemale'))),
+                  ],
+                  selected: {user.gender.isEmpty ? 'male' : user.gender},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (selection) async {
+                    try {
+                      await _patchProfile(user, {'gender': selection.first});
+                    } catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
               ListTile(
                 leading: const Icon(Icons.translate),
                 title: Text(t('common.language')),

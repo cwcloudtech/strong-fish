@@ -7,6 +7,7 @@ import Avatar from "../components/common/Avatar";
 import PostCard from "../components/feed/PostCard";
 import ShareButtons from "../components/common/ShareButtons";
 import ProfileBadges from "../components/common/ProfileBadges";
+import StrengthBadges from "../components/strength/StrengthBadges";
 import { filledSocials } from "../utils/socialProfiles";
 import { EmptyState, ErrorMessage, Spinner } from "../components/common/Feedback";
 import { useAuth } from "../context/AuthContext";
@@ -137,6 +138,12 @@ export default function Profile() {
                 label={t("share.label")}
               />
             ) : null}
+
+            {/* What this lifter's own maxes are worth: their tier, where they
+                sit among the club, and what they have earned. Absent for
+                somebody who has not weighed in or entered no lifts - a profile
+                with nothing to measure wears nothing. */}
+            {profile.strength ? <StrengthBadges result={profile.strength} compact /> : null}
 
             <div className="sf-profile-stats">
               <div>

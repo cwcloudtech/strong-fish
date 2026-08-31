@@ -16,6 +16,7 @@ import (
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/store"
+	"strong-fish-api/internal/strength"
 	"strong-fish-api/internal/utils"
 )
 
@@ -276,6 +277,9 @@ type updateProfilePayload struct {
 	ProfileVisibility string  `json:"profileVisibility"`
 	Birthdate         string  `json:"birthdate"`
 	Bodyweight        float64 `json:"bodyweight"`
+	// Gender drives the strength coefficients. Anything but "female" reads as
+	// male, which is the default an account has never been asked about.
+	Gender string `json:"gender"`
 	// Specialty is the lift the member claims as theirs. Anything unknown is
 	// normalized away rather than refused: a badge is not worth a 400.
 	Specialty string `json:"specialty"`
@@ -362,7 +366,8 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		Name: p.Name, Surname: p.Surname, Username: username, Anonymous: p.Anonymous,
 		Bio: p.Bio, Locale: p.Locale,
 		ProfileVisibility: p.ProfileVisibility, Birthdate: birthdate,
-		Bodyweight: p.Bodyweight, Specialty: p.Specialty, Socials: p.Socials,
+		Bodyweight: p.Bodyweight, Gender: string(strength.NormalizeGender(p.Gender)),
+		Specialty: p.Specialty, Socials: p.Socials,
 		PasswordHash: passwordHash,
 	})
 	if err != nil {

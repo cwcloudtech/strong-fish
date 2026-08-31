@@ -42,7 +42,7 @@ function slugify(value) {
 }
 
 export default function Settings() {
-  const { t, locale, setLocale } = useI18n();
+  const { t, locale, setLocale, locales } = useI18n();
   const { user, setUser, config } = useAuth();
   const fileInput = useRef(null);
 
@@ -59,6 +59,7 @@ export default function Settings() {
       anonymous: Boolean(user.anonymous),
       bio: user.bio || "",
       bodyweight: user.bodyweight || "",
+      gender: user.gender || "male",
       specialty: user.specialty || "",
       // One key per entry in the table, plus the rank the one entry that has
       // it carries. Built from the table so a network added there needs
@@ -95,6 +96,7 @@ export default function Settings() {
       const updated = await auth.updateProfile({
         ...form,
         bodyweight: form.bodyweight === "" ? 0 : Number(form.bodyweight),
+        gender: form.gender,
         // The language is part of the profile so transactional emails go out in
         // the one the user is actually reading the app in.
         locale,
@@ -196,6 +198,22 @@ export default function Settings() {
         </div>
 
         <div className="sf-row" style={{ gap: "0.6rem" }}>
+          {/* Beside the bodyweight because the two are asked the same
+              question: powerlifting's coefficients are fitted separately for
+              men and women, so a DOTS score cannot be computed without both.
+              Male by default, which is what an account that has never been
+              asked reads as. */}
+          <div className="sf-field" style={{ flex: 1, minWidth: 160 }}>
+            <label className="sf-label">{t("profile.gender")}</label>
+            <Select
+              options={[
+                { value: "male", label: t("profile.genderMale") },
+                { value: "female", label: t("profile.genderFemale") },
+              ]}
+              value={form.gender}
+              onChange={(gender) => setForm((current) => ({ ...current, gender }))}
+            />
+          </div>
           <div className="sf-field" style={{ flex: 1, minWidth: 160 }}>
             <label className="sf-label">
               {t("profile.bodyweight")} ({t("common.kg")})
@@ -204,11 +222,11 @@ export default function Settings() {
           </div>
           <div className="sf-field" style={{ flex: 1, minWidth: 160 }}>
             <label className="sf-label">{t("common.language")}</label>
+            {/* The app's own list rather than a copy: Arabic was added to the
+                header's picker and this one was left behind, so the language
+                could be chosen from the top bar and not from the profile. */}
             <Select
-              options={[
-                { value: "en", label: "English" },
-                { value: "fr", label: "Français" },
-              ]}
+              options={locales.map((option) => ({ value: option.code, label: option.label }))}
               value={locale}
               onChange={setLocale}
             />

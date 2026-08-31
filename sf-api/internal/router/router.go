@@ -35,6 +35,7 @@ type Handlers struct {
 	Search     *handlers.SearchHandler
 	Invitation *handlers.InvitationHandler
 	Message    *handlers.MessageHandler
+	Strength   *handlers.StrengthHandler
 }
 
 // Options carries the settings the middleware chain needs.
@@ -112,6 +113,15 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		// A program its coach chose to share. Unauthenticated by design - the
 		// point is a link that works for anybody - and it is the store's
 		// visibility predicate, not this route, that decides what may be read.
+		// The strength calculator. Open on purpose: somebody working out what
+		// their meet total is worth has no reason to have an account first,
+		// and it is the page most likely to give them one. What it can see of
+		// other members is one number - the spread of DOTS scores behind the
+		// percentile bar - and never who holds them.
+		r.Post("/strength/score", h.Strength.Score)
+		r.With(middleware.OptionalAuth(o.JWTSecret, o.ApiKeys)).
+			Get("/strength/defaults", h.Strength.Defaults)
+
 		r.Get("/public/programs/{programId}", h.Program.GetPublic)
 		// The same sheet the member's own export produces, without the weights:
 		// a reader outside the club has no maxes to resolve them against.

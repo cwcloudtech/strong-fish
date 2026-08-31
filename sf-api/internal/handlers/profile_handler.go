@@ -21,6 +21,9 @@ type ProfileHandler struct {
 	social *store.SocialStore
 	clubs  *store.ClubStore
 	oneRMs *store.OneRMStore
+	// strength scores the profile's badges. Optional: a router built without
+	// one simply serves profiles that wear none.
+	strength *StrengthHandler
 }
 
 func NewProfileHandler(users *store.UserStore, social *store.SocialStore, clubs *store.ClubStore, oneRMs *store.OneRMStore) *ProfileHandler {
@@ -107,6 +110,7 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 		Birthdate: target.Birthdate,
 		Bests:     bests, Total: total, Followers: followers, Following: following,
 		Followed: followed, Clubs: clubs, CreatedAt: target.CreatedAt,
+		Strength: h.strengthFor(r, target.ID),
 	})
 }
 
@@ -139,4 +143,24 @@ func (h *ProfileHandler) Posts(w http.ResponseWriter, r *http.Request) {
 		posts[i] = decoratePost(posts[i], callerID, superadmin)
 	}
 	writeJSON(w, http.StatusOK, models.Page[models.Post]{Results: posts, TotalResults: total})
+}
+
+// WithStrength gives the profile handler the scorer that computes its badges.
+// Set after construction because the two handlers need each other: the profile
+// wears the badges, and the calculator resolves the member the same way.
+func (h *ProfileHandler) WithStrength(strength *StrengthHandler) *ProfileHandler {
+	h.strength = strength
+	return h
+}
+
+// strengthFor is the member's tier and badges, or nil when this deployment was
+// built without a scorer or the member has nothing to score.
+func (h *ProfileHandler) strengthFor(r *http.Request, userID string) any {
+	if h.strength == nil {
+		return nil
+	}
+	if result := h.strength.ForUser(r, userID); result != nil {
+		return result
+	}
+	return nil
 }
