@@ -123,6 +123,19 @@ function AppRoutes() {
                 by the API, which returns only public events to an anonymous
                 caller, and by the controls here, which all ask whether there
                 is a session. */}
+            {/* Finding people, readable with no account. What comes back is
+                the API's decision, not this route's: a logged-out caller only
+                ever sees the profiles whose owners chose "everyone".
+                /find rather than /dashboard/search because this is the URL
+                that goes in a footer - short, and it says what it opens. */}
+            <Route
+              path="/find"
+              element={
+                <SignedInShell>
+                  <Search />
+                </SignedInShell>
+              }
+            />
             {/* The powerlifting calculator, readable with no account: working
                 out what a total is worth is the question somebody asks before
                 they have one, and it is the page most likely to give them one.

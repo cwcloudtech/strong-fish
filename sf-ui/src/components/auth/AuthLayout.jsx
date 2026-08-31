@@ -72,10 +72,14 @@ export default function AuthLayout({ children }) {
             <a href={aboutUrl(config)} target="_blank" rel="noopener noreferrer">
               {t("nav.about")}
             </a>
-            {/* The one screen worth reading before signing up: the open
-                calendar. Without a link here it exists but nobody without an
-                account would ever find it. */}
+            {/* The three screens worth opening before signing up. Without a
+                link here they exist and nobody without an account would ever
+                find them: an open calendar, a calculator that answers the
+                question people arrive with, and the members who chose to be
+                visible to everyone. */}
             <Link to="/calendar">{t("nav.events")}</Link>
+            <Link to="/strength">{t("nav.strength")}</Link>
+            <Link to="/find">{t("nav.find")}</Link>
             {/* Hidden when no CWCLOUD_CONTACT_FORM_ID is set: the page would
                 only be able to report that it isn't configured. */}
             {config?.contactEnabled ? <Link to="/contact">{t("nav.contact")}</Link> : null}
