@@ -37,7 +37,10 @@ func birthdayEvents(ctx context.Context, users *store.UserStore, clubs *store.Cl
 		return nil, nil
 	}
 
-	mates, err := users.ListByIDs(ctx, mateIDs)
+	// Four fields per member, not their whole profile: an avatar is stored
+	// inline as base64, and reading 300 of them to draw a birthday list was
+	// tens of megabytes off the database per calendar load.
+	mates, err := users.ListBirthdays(ctx, mateIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -55,21 +58,28 @@ func birthdayEvents(ctx context.Context, users *store.UserStore, clubs *store.Cl
 		from = time.Now().UTC()
 	}
 
+	// Asked once for every club-mate at a time, rather than once per mate: the
+	// answer is a single join, and doing it in the loop below was 300 round
+	// trips on a 300-member club's calendar.
+	managed, err := clubs.ManagedMembers(ctx, mateIDs, callerID)
+	if err != nil {
+		return nil, err
+	}
+
 	events := []models.Event{}
 	for _, mate := range mates {
-		if utils.IsBlank(mate.Birthdate) {
-			continue
-		}
 		birthdate, err := time.Parse("2006-01-02", mate.Birthdate)
 		if err != nil {
 			continue
 		}
 
-		relation, err := clubs.RelationTo(ctx, mate.ID, callerID)
-		if err != nil {
-			return nil, err
+		// A club-mate shares a club by construction - that is where the ids
+		// came from - so the only questions left are the two below.
+		relation := models.ViewerRelation{
+			SharesClub:  true,
+			ManagesClub: managed[mate.UserID],
+			Superadmin:  superadmin,
 		}
-		relation.Superadmin = superadmin
 		if !models.CanSeeProfile(mate.ProfileVisibility, relation) {
 			continue
 		}
@@ -84,7 +94,7 @@ func birthdayEvents(ctx context.Context, users *store.UserStore, clubs *store.Cl
 			// Synthetic, and stable across years on purpose: the ICS feed emits
 			// this once with a yearly recurrence rule, so a UID carrying the
 			// year would make every January look like a brand-new event.
-			ID:       "birthday-" + mate.ID,
+			ID:       "birthday-" + mate.UserID,
 			Title:    name,
 			Kind:     models.EventKindBirthday,
 			StartsAt: next,
@@ -92,9 +102,11 @@ func birthdayEvents(ctx context.Context, users *store.UserStore, clubs *store.Cl
 			// (see models.Event.WholeDay) rather than a flag on the entry.
 			EndsAt:     next.AddDate(0, 0, 1),
 			Visibility: models.VisibilityClub,
+			// No picture: the same reason a stored event does not carry one
+			// (see store.eventSelect) - an inline avatar per entry is most of
+			// the calendar's weight and nothing draws it.
 			Author: models.UserSummary{
-				ID: mate.ID, Handle: mate.Handle, Name: mate.Name,
-				Surname: mate.Surname, Picture: mate.Picture,
+				ID: mate.UserID, Handle: mate.Handle, Name: mate.Name, Surname: mate.Surname,
 			},
 		})
 	}

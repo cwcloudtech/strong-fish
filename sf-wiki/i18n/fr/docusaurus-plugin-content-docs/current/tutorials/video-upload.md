@@ -62,48 +62,23 @@ StrongFish accorde à chaque fichier déposé un accès en lecture « toute pers
 Les deux types de stockage se lisent différemment, et il vaut mieux savoir
 lequel vous avez :
 
-* **Un bucket est toujours servi par StrongFish lui-même.** Le lien de la
-  publication est une adresse sur l'application, pas sur votre bucket :
-  StrongFish récupère l'objet avec *vos* identifiants et le transmet au
-  lecteur. Cela fonctionne que le bucket soit public ou non, et c'est bien
-  l'intérêt — un bucket qui interdit les fichiers publics est la configuration
-  normale en entreprise, et un lien qui ne marche que sur les buckets publics
-  ne marche que par chance.
-* **Un fichier Drive est lu depuis Drive.** L'envoi le partage avec toute
-  personne détenant le lien, et la publication porte l'adresse `/preview` de
-  Drive, que le lecteur intègre. Un fichier Drive est donc accessible à
-  quiconque a le lien, et StrongFish ne peut pas restreindre cela. S'il vous
-  faut des médias que seul votre club puisse voir, prenez un bucket.
+* **Un bucket est toujours servi par StrongFish lui-même.** Le lien de la publication est une adresse sur l'application, pas sur votre bucket : StrongFish récupère l'objet avec *vos* identifiants et le transmet au lecteur. Cela fonctionne que le bucket soit public ou privé.
+* **Un fichier Drive est lu depuis Drive.** L'envoi le partage avec toute personne détenant le lien, et la publication porte l'adresse `/preview` de Drive, que le lecteur intègre. Un fichier Drive est donc accessible à quiconque a le lien, et StrongFish ne peut pas restreindre cela. S'il vous faut des médias que seul votre club puisse voir, prenez un bucket.
 
-**Qui peut regarder le fichier d'un bucket** suit la visibilité de votre profil
-— la même règle qui décide si vos publications sont lisibles : tout le monde,
-vos clubs, ou vos coachs (voir [créer un compte](./signup.md)). Les personnes
-avec qui vous partagez le stockage le peuvent aussi. Les autres ne voient rien,
-exactement comme si la publication ne contenait pas de vidéo.
+**Qui peut regarder le fichier d'un bucket** suit la visibilité de votre profil — la même règle qui décide si vos publications sont lisibles : tout le monde, vos clubs, ou vos coachs (voir [créer un compte](./signup.md)). Les personnes avec qui vous partagez le stockage le peuvent aussi. Les autres ne voient rien, exactement comme si la publication ne contenait pas de vidéo.
 
-**Ce bucket n'est pas public**, dans Paramètres → Stockage vidéo, ne contrôle
-qu'une chose : si l'envoi demande un accès public au moment de l'écriture.
-Activez-le si votre bucket refuse les fichiers publics. Cela ne change pas qui
-peut regarder — c'est toujours la règle ci-dessus.
+**Ce bucket n'est pas public**, dans _Paramètres_ → _Stockage vidéo_, ne contrôle qu'une chose : si l'envoi demande un accès public au moment de l'écriture. Activez-le si votre bucket refuse les fichiers publics. Cela ne change pas qui peut regarder — c'est toujours la règle ci-dessus.
 
 ## Plusieurs stockages à la fois
 
 Vous pouvez en configurer plusieurs, et l'ordre compte :
 
-* **chaque envoi est déposé dans tous** — le même fichier, sous le même nom,
-  dans chacun ;
+* **chaque envoi est déposé dans tous** — le même fichier, sous le même nom, dans chacun ;
 * **le lien de la publication vient du premier**.
 
-C'est ainsi qu'un club garde une seconde copie des vidéos de ses athlètes : le
-bucket de la salle en premier, un bucket hors site en second. Si une
-destination refuse l'envoi, la publication passe quand même par celles qui
-l'ont accepté et l'échec vous est signalé — un bucket qui a cessé d'accepter
-les fichiers ne fait donc pas échouer votre publication, mais ne reste pas
-silencieux pour autant.
+C'est ainsi qu'un club garde une seconde copie des vidéos de ses athlètes : le bucket de la salle en premier, un bucket hors site en second. Si une destination refuse l'envoi, la publication passe quand même par celles qui l'ont accepté et l'échec vous est signalé — un bucket qui a cessé d'accepter les fichiers ne fait donc pas échouer votre publication, mais ne reste pas silencieux pour autant.
 
-Utilisez les flèches dans **Paramètres → Stockage vidéo** pour changer le
-premier. Un stockage ajouté se place en dernier : le promouvoir est une
-décision, pas un effet de bord de sa configuration.
+Utilisez les flèches dans _Paramètres → Stockage vidéo_ pour changer le premier. Un stockage ajouté se place en dernier : le promouvoir est une décision, pas un effet de bord de sa configuration.
 
 ## Partager votre stockage
 
@@ -116,14 +91,9 @@ choisissez des membres et donnez-leur un rôle :
 | Lire | Regarder ce qui se trouve dans ce stockage, même si votre profil ne le leur permettrait pas |
 | Déposer et lire | Ce qui précède, et y déposer leurs propres vidéos |
 
-Vous seul pouvez partager votre stockage, et vous seul pouvez arrêter de le
-partager : une personne à qui vous donnez le droit d'écrire ne peut pas le
-transmettre.
+Vous seul pouvez partager votre stockage, et vous seul pouvez arrêter de le partager : une personne à qui vous donnez le droit d'écrire ne peut pas le transmettre.
 
-**Où vont vos propres envois :** dans vos stockages d'abord, dans votre ordre,
-puis dans ceux partagés avec vous. Une personne qui n'en a aucun dépose dans le
-premier stockage partagé avec elle — un athlète à qui son coach a prêté un
-bucket peut donc publier une vidéo sans en posséder un.
+**Où vont vos propres envois :** dans vos stockages d'abord, dans votre ordre, puis dans ceux partagés avec vous. Une personne qui n'en a aucun dépose dans le premier stockage partagé avec elle — un athlète à qui son coach a prêté un bucket peut donc publier une vidéo sans en posséder un.
 
 ## Publier une vidéo
 

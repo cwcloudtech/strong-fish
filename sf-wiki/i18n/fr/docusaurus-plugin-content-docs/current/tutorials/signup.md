@@ -41,15 +41,10 @@ l'étape 3.
 
 Ce qui change, c'est la suite :
 
-1. Votre compte est créé **en tant qu'athlète**, et fonctionne immédiatement
-   comme tel.
-2. Une demande est mise en file pour un superadmin, et tous les superadmins sont
-   prévenus par e-mail.
-3. Lorsqu'ils la confirment, votre compte devient coach et vous êtes prévenu.
-   L'écran **Clubs** gagne un bouton de création, et **Exercices** devient
-   modifiable.
-4. S'ils la refusent, vous recevez le motif par e-mail. Votre compte continue de
-   fonctionner en tant qu'athlète.
+1. Votre compte est créé **en tant qu'athlète**, et fonctionne immédiatement comme tel.
+2. Une demande est mise en file pour un superadmin, et tous les superadmins sont prévenus par e-mail.
+3. Lorsqu'ils la confirment, votre compte devient coach et vous êtes prévenu. L'écran **Clubs** gagne un bouton de création, et **Exercices** devient modifiable.
+4. S'ils la refusent, vous recevez le motif par e-mail. Votre compte continue de fonctionner en tant qu'athlète.
 
 :::info Pourquoi cette attente
 Choisir « coach » enregistre une déclaration, pas une autorisation. Un coach
@@ -95,10 +90,8 @@ les badges suivent les chiffres.
 
 Deux entrées possibles, et ce sont deux gestes différents :
 
-* **Un coach vous ajoute.** Vous êtes simplement dans le club, et vous recevez
-  un e-mail vous le disant.
-* **Un coach vous invite.** L'invitation vous attend dans **Invitations**
-  jusqu'à ce que vous l'acceptiez ou la refusiez. Elle arrive aussi par e-mail.
+* **Un coach vous ajoute.** Vous êtes simplement dans le club, et vous recevez un e-mail vous le disant.
+* **Un coach vous invite.** L'invitation vous attend dans **Invitations** jusqu'à ce que vous l'acceptiez ou la refusiez. Elle arrive aussi par e-mail.
 
 Une invitation est adressée à votre **adresse e-mail**, pas à votre compte : un
 coach peut donc vous inviter avant même votre inscription. Créez le compte avec
@@ -106,7 +99,6 @@ cette même adresse et l'invitation vous attendra dès votre première visite.
 
 ## Ensuite
 
-* [RPE, 1RM et e1RM](../vocabulary.md) — ce que veulent dire les nombres de
-  votre programme.
-* [Se connecter avec une clé d'API](./api-key-login.md) — installer
-  l'application sur votre téléphone sans taper de mot de passe.
+* [RPE, 1RM et e1RM](../vocabulary.md) — ce que veulent dire les nombres de votre programme.
+* [Application mobile](./mobile.md) — installer l'application sur votre téléphone.
+* [API RESTful](./api.md) — connecter un script, ou votre téléphone, avec une clé d'API.

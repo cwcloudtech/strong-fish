@@ -66,17 +66,8 @@ StrongFish grants each uploaded file anyone-with-the-link read access as it writ
 The two kinds of storage are read differently, and it is worth knowing which
 you have:
 
-* **A bucket is always served by StrongFish itself.** The link in the post is
-  an address on the app, not on your bucket; StrongFish fetches the object with
-  *your* credentials and streams it to the reader. That works whether the
-  bucket is public or not, which is the point - a bucket that forbids public
-  files is the normal corporate setting, and a link that only works on public
-  buckets works by luck.
-* **A Drive file is read from Drive.** The upload shares it with anyone holding
-  the link and the post carries Drive's own `/preview` address, which the
-  player embeds. So a Drive file is reachable by anyone who has the link, and
-  StrongFish cannot narrow that. If you need media only your club can see, use
-  a bucket.
+* **A bucket is always served by StrongFish itself.** The link in the post is an address on the app, not on your bucket; StrongFish fetches the object with *your* credentials and streams it to the reader. That works whether the bucket is public or private.
+* **A Drive file is read from Drive.** The upload shares it with anyone holding the link and the post carries Drive's own `/preview` address, which the player embeds. So a Drive file is reachable by anyone who has the link, and StrongFish cannot narrow that. If you need media only your club can see, use a bucket.
 
 **Who can watch a bucket's file** is your profile's own rule - the same one that
 decides whether your posts are readable at all: public, your clubs, or your
@@ -84,7 +75,7 @@ coaches (see [signing up](./signup.md)). Anybody you shared the storage with
 can watch it too. Everyone else gets nothing, exactly as if the post had no
 video.
 
-**This bucket is not public** under Settings → Video storage only controls one
+**This bucket is not public** under _Settings → Video storage_ only controls one
 thing: whether the upload asks for public access as it writes. Turn it on when
 your bucket refuses public files. It does not change who can watch - that is
 the rule above, always.
@@ -93,17 +84,16 @@ the rule above, always.
 
 You can configure more than one, and the order matters:
 
-* **an upload is written to every one of them** - the same file, the same name,
-  in each;
+* **an upload is written to every one of them** - the same file, the same name, in each;
 * **the link in the post comes from the first**.
 
-That is how a club keeps a second copy of its athletes' videos: bucket at the
+That is how a club keeps a second copy of its athlete's videos: bucket at the
 gym first, an off-site bucket second. If a target refuses the upload, the post
 still goes out through the ones that took it and the failure is reported back
 to you - so a bucket that has quietly stopped accepting files does not fail
 your post, but it does not stay a secret either.
 
-Use the arrows in **Settings → Video storage** to change which one is first.
+Use the arrows in _Settings → Video storage_ to change which one is first.
 Adding a storage puts it last: promoting it is a decision you make, not a side
 effect of configuring it.
 

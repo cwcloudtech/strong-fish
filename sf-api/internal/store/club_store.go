@@ -457,3 +457,42 @@ func (s *ClubStore) Count(ctx context.Context) (int64, error) {
 	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM clubs`).Scan(&count)
 	return count, err
 }
+
+// ManagedMembers reports which of targetIDs the caller manages: the ones in a
+// club where the caller is an owner or an admin.
+//
+// The batched form of RelationTo's second answer. It exists because the
+// calendar asks the same question about every club-mate at once - one query
+// per member turned a 300-member club's calendar into 300 round trips, which
+// is most of what made it slow.
+//
+// SharesClub is not returned: every caller of this already has a list of people
+// it knows share a club, which is where the ids came from.
+func (s *ClubStore) ManagedMembers(ctx context.Context, targetIDs []string, callerID string) (map[string]bool, error) {
+	managed := map[string]bool{}
+	if len(targetIDs) == 0 || callerID == "" {
+		return managed, nil
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT target.user_id::text
+		FROM club_members target
+		JOIN club_members caller
+		  ON caller.club_id = target.club_id AND caller.user_id::text = $2
+		WHERE target.user_id::text = ANY($1)
+		  AND caller.role IN ('owner', 'admin')
+	`, targetIDs, callerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		managed[id] = true
+	}
+	return managed, rows.Err()
+}
