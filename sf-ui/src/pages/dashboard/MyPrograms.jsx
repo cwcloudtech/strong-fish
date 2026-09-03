@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiFileText, FiPlus, FiUpload } from "react-icons/fi";
+import { FiPlus, FiUpload } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import Modal from "../../components/common/Modal";
@@ -40,7 +40,7 @@ export default function MyPrograms() {
   if (programs === null) return <Spinner />;
 
   return (
-    <div className="sf-page" style={{ maxWidth: 800 }}>
+    <div className="sf-page">
       <div className="sf-page-header">
         <div>
           <h1 className="sf-title">{t("programs.mine")}</h1>
@@ -54,22 +54,26 @@ export default function MyPrograms() {
       <ErrorMessage error={error} />
 
       {programs.length === 0 ? (
-        <EmptyState
-          icon={<FiFileText />}
-          title={t("programs.mineEmptyTitle")}
-          body={t("programs.mineEmptyBody")}
-        />
+        <EmptyState title={t("programs.mineEmptyTitle")} message={t("programs.mineEmptyBody")} />
       ) : (
-        programs.map((program) => (
-          <Link key={program.id} to={`/dashboard/programs/${program.id}`} className="sf-card sf-card-link">
-            <h3 style={{ margin: 0 }}>{program.name}</h3>
-            <p className="sf-muted" style={{ margin: "0.2rem 0 0" }}>
-              {t("programs.weeks", { count: program.weeks })} ·{" "}
-              {t("programs.sessions", { count: program.dayCount })} ·{" "}
-              {t("programs.setCount", { count: program.setCount })}
-            </p>
-          </Link>
-        ))
+        <div className="sf-grid">
+          {programs.map((program) => (
+            <Link
+              key={program.id}
+              to={`/dashboard/programs/${program.id}`}
+              className="sf-card sf-card-clickable"
+              style={{ display: "block", color: "inherit" }}
+            >
+              <h3 style={{ margin: 0 }}>{program.name}</h3>
+              {program.description ? <p className="sf-muted">{program.description}</p> : null}
+              <div className="sf-muted">
+                {t("programs.weeks", { count: program.weeks })} ·{" "}
+                {t("programs.sessions", { count: program.dayCount })} ·{" "}
+                {t("programs.setCount", { count: program.setCount })}
+              </div>
+            </Link>
+          ))}
+        </div>
       )}
 
       {creating ? (
