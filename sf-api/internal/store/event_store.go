@@ -46,12 +46,18 @@ type eventData struct {
 	Visibility  string `json:"visibility"`
 }
 
+// The author's name travels with an event; their picture does not.
+//
+// Avatars are stored inline as base64 data URIs, so shipping one per event
+// meant the same 40KB was repeated once for every entry its author had
+// written: a club with a few thousand events answered its calendar in 160MB,
+// which is what made the page slow. No client draws an avatar on a calendar
+// entry, and one that wants a face has the handle to fetch it by.
 var eventSelect = `
 	SELECT e.id, e.club_id, e.author_id, e.data, e.created_at, e.updated_at,
 	       coalesce(c.data->>'name', ''),
 	       coalesce(u.data->>'handle', ''),
-	       ` + displayName("u") + `, ` + displaySurname("u") + `,
-	       coalesce(u.data->>'picture', '')
+	       ` + displayName("u") + `, ` + displaySurname("u") + `
 	FROM events e
 	JOIN users u ON u.id = e.author_id
 	LEFT JOIN clubs c ON c.id = e.club_id`
@@ -61,7 +67,7 @@ func scanEvent(row pgx.Row) (models.Event, error) {
 	var raw []byte
 	var clubID *string
 	if err := row.Scan(&e.ID, &clubID, &e.AuthorID, &raw, &e.CreatedAt, &e.UpdatedAt,
-		&e.ClubName, &e.Author.Handle, &e.Author.Name, &e.Author.Surname, &e.Author.Picture); err != nil {
+		&e.ClubName, &e.Author.Handle, &e.Author.Name, &e.Author.Surname); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.Event{}, ErrNotFound
 		}

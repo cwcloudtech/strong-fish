@@ -906,3 +906,52 @@ func (s *UserStore) RecordConnection(ctx context.Context, userID, ip string, at 
 	_, err = s.merge(ctx, userID, map[string]any{"ips": ips})
 	return err
 }
+
+// Birthday is the little a calendar needs to draw somebody's birthday: who
+// they are, when it is, and who may see it.
+type Birthday struct {
+	UserID            string
+	Handle            string
+	Name              string
+	Surname           string
+	Birthdate         string
+	ProfileVisibility string
+}
+
+// ListBirthdays reads those fields for a set of members.
+//
+// A narrow projection rather than ListByIDs, because a profile row carries the
+// member's avatar inline as base64: fetching whole rows to read four fields
+// pulled tens of megabytes out of Postgres on every calendar load, for a
+// picture the calendar does not draw.
+func (s *UserStore) ListBirthdays(ctx context.Context, ids []string) ([]Birthday, error) {
+	if len(ids) == 0 {
+		return []Birthday{}, nil
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT id::text,
+		       coalesce(data->>'handle', ''),
+		       `+displayName("users")+`,
+		       `+displaySurname("users")+`,
+		       coalesce(data->>'birthdate', ''),
+		       coalesce(data->>'profileVisibility', '')
+		FROM users
+		WHERE id = ANY($1) AND coalesce(data->>'birthdate', '') <> ''
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	birthdays := []Birthday{}
+	for rows.Next() {
+		var b Birthday
+		if err := rows.Scan(&b.UserID, &b.Handle, &b.Name, &b.Surname,
+			&b.Birthdate, &b.ProfileVisibility); err != nil {
+			return nil, err
+		}
+		birthdays = append(birthdays, b)
+	}
+	return birthdays, rows.Err()
+}

@@ -80,4 +80,5 @@ An invitation is addressed to your **email address**, not to your account, which
 ## Next
 
 * [RPE, 1RM and e1RM](../vocabulary.md) - what the numbers in your program mean.
-* [Signing in with an API key](./api-key-login.md) - getting the app onto your phone without typing a password.
+* [Mobile application](./mobile.md) - getting the app onto your phone.
+* [RESTful API](./api.md) - signing a script, or your phone, in with an API key.
