@@ -31,7 +31,11 @@ Donc **RPE 8 = RIR 2** : vous vous arrêtez avec deux répétitions en réserve.
 
 ### Pourquoi les coachs programment à la RPE
 
-Un pourcentage est une promesse sur une journée que vous n'avez pas encore vécue. La RPE est une consigne sur la journée que vous vivez réellement : si vous avez mal dormi, « 3 @ RPE 8 » est une barre plus légère que la semaine dernière, et c'est toujours le bon entraînement.
+Un pourcentage est une promesse sur une journée que vous n'avez pas encore vécue. La RPE est une consigne sur la journée que vous vivez réellement : si vous avez mal dormi, « 3 @ RPE 8 » est une barre plus légère que la semaine dernière, et c'est toujours la bonne façon de vous entrainer.
+
+:::infos
+Suivez toujours les RPE en priorité sur les charges indiquées ou estimmée
+:::
 
 ### Comment StrongFish convertit la RPE en kilos
 
