@@ -17,7 +17,7 @@ You do not have to have tested it recently, or at all. An honest estimate is eno
 **Rate of Perceived Exertion**, on a 1–10 scale. In powerlifting it is used in
 one specific sense: *how many more reps could you have done?*
 
-| RPE | Meaning | RIR |
+| RPE | Meaning | RIR[^1] |
 | --- | --- | --- |
 | 10 | No reps left. A true maximum. | 0 |
 | 9.5 | Maybe a rep, maybe not. | 0–1 |
@@ -73,3 +73,5 @@ Three things are tried, in this order:
 A few movements carry a lift's name without being loaded off it - a *goblet squat*, a *Bulgarian split squat*, a *bench pull* - and those are deliberately left alone: they stay unloaded until you record a 1M (max) for them.
 
 If none of the three answers, the load shows as **?** and the movement is listed as needing a 1RM.
+
+[^1]: RIR means _Repetitions in reserve_ (how many repetitions you have left before reaching muscular or neurological failure).
