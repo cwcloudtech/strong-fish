@@ -372,8 +372,19 @@ class SfApi {
   /// Changes one account's global role. This is the whole of what the phone
   /// offers: activating somebody, promoting a coach, banning an abuser - the
   /// three things worth being able to do away from a desk.
-  Future<User> adminSetRole(String userId, String role) async {
-    final response = await client.dio.put('/admin/users/$userId', data: {'role': role});
+  ///
+  /// The whole account goes up, not just the role. The endpoint replaces what
+  /// it is given - email outright, name and surname through the JSONB patch -
+  /// so a payload carrying the role alone asks it to blank the rest. It
+  /// refuses, because an empty email is not a valid one, and the phone was
+  /// told the email was invalid when nobody had touched it.
+  Future<User> adminSetRole(User user, String role) async {
+    final response = await client.dio.put('/admin/users/${user.id}', data: {
+      'email': user.email,
+      'name': user.name,
+      'surname': user.surname,
+      'role': role,
+    });
     return User.fromJson(_map(response.data));
   }
 

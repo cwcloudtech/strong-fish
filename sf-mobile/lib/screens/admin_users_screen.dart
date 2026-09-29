@@ -303,7 +303,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                                 _confirmDelete(user);
                               default:
                                 _run(user.id,
-                                    () => ref.read(apiProvider).adminSetRole(user.id, action));
+                                    () => ref.read(apiProvider).adminSetRole(user, action));
                             }
                           },
                           itemBuilder: (context) => [
