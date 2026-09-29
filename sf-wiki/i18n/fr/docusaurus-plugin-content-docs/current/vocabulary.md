@@ -16,7 +16,7 @@ Vous n'avez pas besoin de l'avoir testé récemment, ni même du tout : une esti
 
 **Rate of Perceived Exertion**, sur une échelle de 1 à 10. En powerlifting, elle est utilisée dans un sens précis : *combien de répétitions auriez-vous pu faire en plus ?*
 
-| RPE | Signification | RIR |
+| RPE | Signification | RIR[^1] |
 | --- | --- | --- |
 | 10 | Aucune répétition en réserve. Un vrai maximum. | 0 |
 | 9,5 | Peut-être une répétition, peut-être pas. | 0–1 |
@@ -71,3 +71,5 @@ Trois pistes, dans cet ordre :
 Quelques mouvements portent le nom d'un mouvement de compétition sans devoir en être chargés - un *goblet squat* et sont volontairement laissés de côté : ils restent sans charge tant que vous n'avez pas enregistré un 1RM (maximum) pour eux.
 
 Si aucune des trois pistes n'aboutit, la charge s'affiche **?** et le mouvement est signalé comme nécessitant un 1RM.
+
+[^1]: RIR signifie _Repetition in reserve_ (combien de répétition vous avez en réserve avant d'atteindre l'échec musculaire ou nerveux).
