@@ -307,7 +307,7 @@ const en = {
     noSessions: "No session yet. Add the first one.",
     addSet: "Add a set",
     duplicateSet: "Duplicate this set",
-    duplicateSession: "Duplicate this session and its sets",
+    duplicateSession: "Copy this session and its sets onto the same day of the next free week",
     reorderSession: "Drag to reorder this session",
     dropSetHere: "Drop a set here",
     reorderHelp: "Drag a set by its handle to reorder it, or onto another session to move it there. Sessions move the same way, by the handle next to their title.",

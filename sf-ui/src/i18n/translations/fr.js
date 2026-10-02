@@ -312,7 +312,7 @@ const fr = {
     noSessions: "Aucune séance. Ajoutez la première.",
     addSet: "Ajouter une série",
     duplicateSet: "Dupliquer cette série",
-    duplicateSession: "Dupliquer cette séance et ses séries",
+    duplicateSession: "Copier cette séance et ses séries sur le même jour de la prochaine semaine libre",
     reorderSession: "Faites glisser pour réordonner cette séance",
     dropSetHere: "Déposer une série ici",
     reorderHelp: "Faites glisser une série par sa poignée pour la réordonner, ou vers une autre séance pour l'y déplacer. Les séances se déplacent de la même façon, par la poignée à côté de leur titre.",
