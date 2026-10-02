@@ -127,6 +127,13 @@ export const programs = {
     body(client.put(`${programsBase(clubId)}/${programId}/sets/${setId}`, payload)),
   removeSet: (clubId, programId, setId) =>
     body(client.delete(`${programsBase(clubId)}/${programId}/sets/${setId}`)),
+  // dayId may be the set's own session (a reorder) or another one (a move).
+  // Position is 1-based; the API clamps it rather than refusing a drop past
+  // the end of a list.
+  moveSet: (clubId, programId, setId, dayId, position) =>
+    body(client.put(`${programsBase(clubId)}/${programId}/sets/${setId}/move`, { dayId, position })),
+  duplicateSet: (clubId, programId, setId) =>
+    body(client.post(`${programsBase(clubId)}/${programId}/sets/${setId}/duplicate`)),
   assignments: (clubId, programId) => body(client.get(`${programsBase(clubId)}/${programId}/assignments`)),
   assign: (clubId, programId, payload) =>
     body(client.post(`${programsBase(clubId)}/${programId}/assignments`, payload)),

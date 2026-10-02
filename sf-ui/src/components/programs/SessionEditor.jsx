@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FiEdit2, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiCopy, FiEdit2, FiMove, FiPlus, FiTrash2 } from "react-icons/fi";
 
 import Modal, { ConfirmModal } from "../common/Modal";
 import SetFormModal from "./SetFormModal";
@@ -11,6 +11,15 @@ import { sessionTitle } from "../../utils/sessionTitle";
 
 const exerciseLabel = (set, locale) =>
   set.exerciseLabels?.[locale] || set.exerciseLabels?.en || set.exerciseSlug;
+
+/**
+ * A private MIME type, so a session only accepts sets.
+ *
+ * It also makes the drag readable during dragover, where the browser hides the
+ * payload itself and exposes nothing but the list of types - which is all that
+ * is needed to decide whether to light a row up.
+ */
+const DRAG_TYPE = "application/x-sf-set";
 
 /**
  * One session in edit mode: its sets as an editable list, plus the actions that
@@ -29,6 +38,11 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
   const [editingDay, setEditingDay] = useState(false);
   const [deletingDay, setDeletingDay] = useState(false);
   const [error, setError] = useState(null);
+  const [dragging, setDragging] = useState(null);
+  // Where the dragged set would land: the row being hovered and which side of
+  // it. Kept per session, so two cards never both draw an insertion line.
+  const [dropAt, setDropAt] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   const removeSet = async () => {
     try {
@@ -38,6 +52,77 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
     } catch (err) {
       setError(err);
       setDeletingSet(null);
+    }
+  };
+
+  const duplicateSet = async (set) => {
+    setBusy(true);
+    try {
+      await programsApi.duplicateSet(clubId, programId, set.id);
+      onChanged();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startDrag = (event, set) => {
+    event.dataTransfer.setData(DRAG_TYPE, JSON.stringify({ setId: set.id, dayId: day.id }));
+    event.dataTransfer.effectAllowed = "move";
+    setDragging(set.id);
+  };
+
+  const dragOverRow = (event, index) => {
+    if (!event.dataTransfer.types.includes(DRAG_TYPE)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    // The half of the row the pointer is in decides which side of it the set
+    // lands on, which is what makes the last slot of a list reachable.
+    const box = event.currentTarget.getBoundingClientRect();
+    const after = event.clientY > box.top + box.height / 2;
+    setDropAt({ index, after });
+  };
+
+  // The side of the row is read from the drop itself rather than from the
+  // hover state: a quick drag can be dropped on a row before React has
+  // rendered the dragover that would have recorded which half it was over.
+  const drop = async (event, index, after) => {
+    if (!event.dataTransfer.types.includes(DRAG_TYPE)) return;
+    event.preventDefault();
+    setDropAt(null);
+    setDragging(null);
+
+    if (after === undefined) {
+      const box = event.currentTarget.getBoundingClientRect();
+      after = event.clientY > box.top + box.height / 2;
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(event.dataTransfer.getData(DRAG_TYPE));
+    } catch {
+      return;
+    }
+    if (!payload?.setId) return;
+
+    // The index is counted in the list the set is not part of, which is the
+    // list the API inserts into - otherwise a set dragged downwards inside its
+    // own session lands one slot short of where it was dropped.
+    const sameDay = payload.dayId === day.id;
+    const from = sets.findIndex((set) => set.id === payload.setId);
+    let target = index + (after ? 1 : 0);
+    if (sameDay && from >= 0 && from < target) target -= 1;
+    if (sameDay && from === target) return;
+
+    setBusy(true);
+    try {
+      await programsApi.moveSet(clubId, programId, payload.setId, day.id, target + 1);
+      onChanged();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -77,6 +162,7 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
         <table className="sf-table">
           <thead>
             <tr>
+              <th style={{ width: 28 }} />
               <th>{t("session.exercise")}</th>
               <th className="sf-table-num">{t("session.reps")}</th>
               <th>{t("session.loadMode")}</th>
@@ -84,8 +170,28 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
             </tr>
           </thead>
           <tbody>
-            {sets.map((set) => (
-              <tr key={set.id}>
+            {sets.map((set, index) => (
+              <tr
+                key={set.id}
+                draggable
+                onDragStart={(event) => startDrag(event, set)}
+                onDragEnd={() => {
+                  setDragging(null);
+                  setDropAt(null);
+                }}
+                onDragOver={(event) => dragOverRow(event, index)}
+                onDragLeave={() => setDropAt((at) => (at?.index === index ? null : at))}
+                onDrop={(event) => drop(event, index)}
+                className={[
+                  dragging === set.id ? "sf-row-dragging" : "",
+                  dropAt?.index === index ? (dropAt.after ? "sf-drop-after" : "sf-drop-before") : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                <td className="sf-drag-handle" aria-hidden="true">
+                  <FiMove />
+                </td>
                 <td>
                   {exerciseLabel(set, locale)}
                   {set.notes ? <div className="sf-muted">{set.notes}</div> : null}
@@ -94,6 +200,15 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
                 <td className="sf-muted">{describeLoad(t, set)}</td>
                 <td className="sf-table-num">
                   <div className="sf-row" style={{ justifyContent: "flex-end", gap: "0.25rem" }}>
+                    <button
+                      className="sf-button sf-button-ghost sf-button-sm"
+                      onClick={() => duplicateSet(set)}
+                      disabled={busy}
+                      aria-label={t("programs.duplicateSet")}
+                      title={t("programs.duplicateSet")}
+                    >
+                      <FiCopy />
+                    </button>
                     <button
                       className="sf-button sf-button-ghost sf-button-sm"
                       onClick={() => setEditingSet(set)}
@@ -112,6 +227,23 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
                 </td>
               </tr>
             ))}
+            {/* A session with nothing in it still has to be a target, or a set
+                can never be moved back into an emptied day. */}
+            <tr
+              className={dropAt?.index === -1 ? "sf-drop-before" : ""}
+              onDragOver={(event) => {
+                if (!event.dataTransfer.types.includes(DRAG_TYPE)) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropAt({ index: -1, after: false });
+              }}
+              onDragLeave={() => setDropAt((at) => (at?.index === -1 ? null : at))}
+              onDrop={(event) => drop(event, sets.length - 1, true)}
+            >
+              <td colSpan={5} className="sf-muted sf-drop-rest">
+                {sets.length === 0 ? t("programs.dropSetHere") : ""}
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>

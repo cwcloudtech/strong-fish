@@ -788,6 +788,29 @@ button {
 
 .sf-table-wrapper { overflow-x: auto; }
 
+/* --- reordering sets inside a session ---
+   The handle is a grip, not a button: the whole row is draggable, and the
+   icon is there to say so. The insertion line is drawn inset on the cells
+   rather than as a border, because a border would shift the row by a pixel
+   and make the list twitch as the pointer crosses it. */
+.sf-drag-handle {
+  cursor: grab;
+  color: var(--sf-text-muted);
+  opacity: 0.55;
+  padding-right: 0;
+}
+.sf-table tr:hover .sf-drag-handle { opacity: 1; }
+.sf-drag-handle:active { cursor: grabbing; }
+
+.sf-row-dragging { opacity: 0.4; }
+
+.sf-drop-before td { box-shadow: inset 0 2px 0 0 var(--sf-primary); }
+.sf-drop-after td { box-shadow: inset 0 -2px 0 0 var(--sf-primary); }
+
+/* The tail of the table stays a target even when the session is empty, so a
+   set can be dropped back into a day everything was dragged out of. */
+.sf-drop-rest { height: 26px; text-align: center; font-size: 0.82rem; }
+
 .sf-table {
   width: 100%;
   border-collapse: collapse;
