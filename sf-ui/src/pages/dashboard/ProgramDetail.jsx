@@ -330,6 +330,11 @@ export default function ProgramDetail() {
 
       {building ? (
         <>
+          {(program.days || []).length > 0 ? (
+            <p className="sf-muted" style={{ margin: "0 0 0.6rem" }}>
+              {t("programs.reorderHelp")}
+            </p>
+          ) : null}
           {(program.days || []).map((day) => (
             <SessionEditor
               key={day.id}

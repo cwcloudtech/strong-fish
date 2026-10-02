@@ -726,6 +726,85 @@ func (h *ProgramHandler) UpdateSet(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, set)
 }
 
+type moveSetPayload struct {
+	// DayID is the session the set should end up in. Blank means the one it
+	// is already in, which is a plain reorder.
+	DayID string `json:"dayId"`
+	// Position is 1-based, and out-of-range values are clamped rather than
+	// refused: a drop past the end of a list means "last", not "invalid".
+	Position int `json:"position"`
+}
+
+// MoveSet reorders a set within its session, or moves it to another session of
+// the same program.
+func (h *ProgramHandler) MoveSet(w http.ResponseWriter, r *http.Request) {
+	setID := chi.URLParam(r, "setId")
+	programID := chi.URLParam(r, "programId")
+
+	var p moveSetPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+
+	existing, err := h.programs.FindSet(r.Context(), setID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if existing.ProgramID != programID {
+		writeError(w, http.StatusNotFound, "Set not found", CodeNotFound)
+		return
+	}
+
+	dayID := p.DayID
+	if utils.IsBlank(dayID) {
+		dayID = existing.DayID
+	}
+	// The target session is checked against the program rather than trusted:
+	// otherwise a crafted dayId would deal a set into somebody else's block,
+	// where the manager check that guards this route does not apply.
+	if dayID != existing.DayID {
+		day, err := h.programs.FindDay(r.Context(), dayID)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		if day.ProgramID != programID {
+			writeError(w, http.StatusNotFound, "Session not found", CodeNotFound)
+			return
+		}
+	}
+
+	set, err := h.programs.MoveSet(r.Context(), setID, dayID, p.Position)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, set)
+}
+
+// DuplicateSet copies a set in place, for a coach writing five similar sets.
+func (h *ProgramHandler) DuplicateSet(w http.ResponseWriter, r *http.Request) {
+	setID := chi.URLParam(r, "setId")
+
+	existing, err := h.programs.FindSet(r.Context(), setID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if existing.ProgramID != chi.URLParam(r, "programId") {
+		writeError(w, http.StatusNotFound, "Set not found", CodeNotFound)
+		return
+	}
+
+	set, err := h.programs.DuplicateSet(r.Context(), setID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, set)
+}
+
 func (h *ProgramHandler) DeleteSet(w http.ResponseWriter, r *http.Request) {
 	setID := chi.URLParam(r, "setId")
 

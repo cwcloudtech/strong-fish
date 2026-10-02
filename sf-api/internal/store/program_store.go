@@ -545,6 +545,143 @@ func (s *ProgramStore) NextSetPosition(ctx context.Context, dayID string) (int, 
 	return *next, nil
 }
 
+// MoveSet puts a set at a chosen place in a session: the one it is already in,
+// which reorders it, or another one, which moves it between days.
+//
+// Positions are rewritten 1..n over the whole session rather than nudged. An
+// imported block numbers its sets from the spreadsheet's rows, so the stored
+// positions arrive with gaps and ties, and "put this one third" has no single
+// answer while two sets both claim position 3.
+func (s *ProgramStore) MoveSet(ctx context.Context, setID, dayID string, position int) (models.ProgramSet, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.ProgramSet{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var sourceDayID string
+	if err := tx.QueryRow(ctx, `SELECT day_id::text FROM program_sets WHERE id = $1`, setID).Scan(&sourceDayID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.ProgramSet{}, ErrNotFound
+		}
+		return models.ProgramSet{}, err
+	}
+
+	if sourceDayID != dayID {
+		if _, err := tx.Exec(ctx, `
+			UPDATE program_sets SET day_id = $2, updated_at = now() WHERE id = $1
+		`, setID, dayID); err != nil {
+			return models.ProgramSet{}, err
+		}
+		// The session it left is renumbered too, or it keeps the hole.
+		if err := renumberSets(ctx, tx, sourceDayID, "", 0); err != nil {
+			return models.ProgramSet{}, err
+		}
+	}
+	if err := renumberSets(ctx, tx, dayID, setID, position); err != nil {
+		return models.ProgramSet{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return models.ProgramSet{}, err
+	}
+	return s.FindSet(ctx, setID)
+}
+
+// DuplicateSet copies a set back into its own session, immediately after the
+// original.
+//
+// The copy is made from the stored row, not from anything a client sends: a
+// duplicate then keeps every field the original had, including any the editor
+// does not show, and no field can be dropped on the way out and back.
+func (s *ProgramStore) DuplicateSet(ctx context.Context, setID string) (models.ProgramSet, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.ProgramSet{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var newID, dayID string
+	// The copy carries the original's position, so ordering by position and
+	// then by creation puts it directly behind the set it came from - which
+	// is what the renumbering below then makes permanent.
+	err = tx.QueryRow(ctx, `
+		INSERT INTO program_sets (program_id, day_id, exercise_id, data)
+		SELECT program_id, day_id, exercise_id, data FROM program_sets WHERE id = $1
+		RETURNING id::text, day_id::text
+	`, setID).Scan(&newID, &dayID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.ProgramSet{}, ErrNotFound
+		}
+		return models.ProgramSet{}, err
+	}
+
+	if err := renumberSets(ctx, tx, dayID, "", 0); err != nil {
+		return models.ProgramSet{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return models.ProgramSet{}, err
+	}
+	return s.FindSet(ctx, newID)
+}
+
+// renumberSets rewrites one session's positions as 1..n, in the order the
+// sets already read in.
+//
+// When moveID is given, that set is lifted out of the order and put back at
+// index (1-based), which is how a caller says "this one now sits here" without
+// having to know what the other positions are. Ties are broken by creation
+// time, so a set that was added later stays behind the one it was added after.
+func renumberSets(ctx context.Context, tx pgx.Tx, dayID, moveID string, index int) error {
+	rows, err := tx.Query(ctx, `
+		SELECT id::text FROM program_sets WHERE day_id = $1
+		ORDER BY (data->>'position')::int, created_at
+	`, dayID)
+	if err != nil {
+		return err
+	}
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if moveID != "" {
+		others := make([]string, 0, len(ids))
+		for _, id := range ids {
+			if id != moveID {
+				others = append(others, id)
+			}
+		}
+		if index < 1 {
+			index = 1
+		}
+		if index > len(others)+1 {
+			index = len(others) + 1
+		}
+		ids = append(append(others[:index-1:index-1], moveID), others[index-1:]...)
+	}
+
+	for i, id := range ids {
+		if _, err := tx.Exec(ctx, `
+			UPDATE program_sets
+			SET data = jsonb_set(data, '{position}', to_jsonb($2::int)), updated_at = now()
+			WHERE id = $1
+		`, id, i+1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // --- assignments ---
 
 // assignmentData is the JSONB payload of the program_assignments table.
