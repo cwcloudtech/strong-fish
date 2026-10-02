@@ -545,6 +545,172 @@ func (s *ProgramStore) NextSetPosition(ctx context.Context, dayID string) (int, 
 	return *next, nil
 }
 
+// MoveDay puts a session at a chosen place in a week: the one it is already
+// in, which reorders it, or another one, which moves it between weeks.
+//
+// Unlike a set, a session carries its place in its own name - the clients read
+// "Week 1 - Day 2" off the week and day numbers - so reordering has to rewrite
+// the day numbers, not a position nobody sees. Sessions are renumbered 1..n
+// across the weeks touched, and any generated title follows its session to its
+// new number.
+func (s *ProgramStore) MoveDay(ctx context.Context, dayID string, week, index int) (models.ProgramDay, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.ProgramDay{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var programID string
+	var sourceWeek int
+	if err := tx.QueryRow(ctx, `
+		SELECT program_id::text, coalesce((data->>'week')::int, 1) FROM program_days WHERE id = $1
+	`, dayID).Scan(&programID, &sourceWeek); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.ProgramDay{}, ErrNotFound
+		}
+		return models.ProgramDay{}, err
+	}
+	if week <= 0 {
+		week = sourceWeek
+	}
+
+	if week != sourceWeek {
+		if _, err := tx.Exec(ctx, `
+			UPDATE program_days
+			SET data = jsonb_set(data, '{week}', to_jsonb($2::int)), updated_at = now()
+			WHERE id = $1
+		`, dayID, week); err != nil {
+			return models.ProgramDay{}, err
+		}
+		// The week it left is renumbered too, or it keeps a hole in its days.
+		if err := renumberDays(ctx, tx, programID, sourceWeek, "", 0); err != nil {
+			return models.ProgramDay{}, err
+		}
+	}
+	if err := renumberDays(ctx, tx, programID, week, dayID, index); err != nil {
+		return models.ProgramDay{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return models.ProgramDay{}, err
+	}
+	return s.FindDay(ctx, dayID)
+}
+
+// DuplicateDay copies a session and everything prescribed in it back into the
+// same week, directly after the original - the cheap way to write a block
+// whose sessions are variations on one another.
+func (s *ProgramStore) DuplicateDay(ctx context.Context, dayID string) (models.ProgramDay, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return models.ProgramDay{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var newID, programID string
+	var week int
+	err = tx.QueryRow(ctx, `
+		INSERT INTO program_days (program_id, data)
+		SELECT program_id, data FROM program_days WHERE id = $1
+		RETURNING id::text, program_id::text, coalesce((data->>'week')::int, 1)
+	`, dayID).Scan(&newID, &programID, &week)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.ProgramDay{}, ErrNotFound
+		}
+		return models.ProgramDay{}, err
+	}
+
+	// A session is its sets. Copying the row alone would hand the coach an
+	// empty day and call it a duplicate.
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO program_sets (program_id, day_id, exercise_id, data)
+		SELECT program_id, $2, exercise_id, data FROM program_sets WHERE day_id = $1
+	`, dayID, newID); err != nil {
+		return models.ProgramDay{}, err
+	}
+
+	// The copy shares the original's day number, so ordering by day and then
+	// by creation puts it directly behind - which renumbering then fixes.
+	if err := renumberDays(ctx, tx, programID, week, "", 0); err != nil {
+		return models.ProgramDay{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return models.ProgramDay{}, err
+	}
+	return s.FindDay(ctx, newID)
+}
+
+// renumberDays rewrites one week's day numbers as 1..n, in the order they
+// already read in, optionally lifting moveID out and putting it back at index
+// (1-based). Position is kept in step with the day number, and a generated
+// title is regenerated so a session never advertises the number it used to
+// have.
+func renumberDays(ctx context.Context, tx pgx.Tx, programID string, week int, moveID string, index int) error {
+	type dayRow struct {
+		id    string
+		title string
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT id::text, coalesce(data->>'title', '') FROM program_days
+		WHERE program_id = $1 AND coalesce((data->>'week')::int, 1) = $2
+		ORDER BY (data->>'day')::int, (data->>'position')::int, created_at
+	`, programID, week)
+	if err != nil {
+		return err
+	}
+	days := []dayRow{}
+	for rows.Next() {
+		var d dayRow
+		if err := rows.Scan(&d.id, &d.title); err != nil {
+			rows.Close()
+			return err
+		}
+		days = append(days, d)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if moveID != "" {
+		others := make([]dayRow, 0, len(days))
+		var moved dayRow
+		for _, d := range days {
+			if d.id == moveID {
+				moved = d
+				continue
+			}
+			others = append(others, d)
+		}
+		if moved.id != "" {
+			if index < 1 {
+				index = 1
+			}
+			if index > len(others)+1 {
+				index = len(others) + 1
+			}
+			days = append(append(others[:index-1:index-1], moved), others[index-1:]...)
+		}
+	}
+
+	for i, d := range days {
+		number := i + 1
+		title := d.title
+		if models.IsGeneratedDayTitle(title) {
+			title = models.GeneratedDayTitle(week, number)
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE program_days
+			SET data = data || jsonb_build_object('day', $2::int, 'position', $2::int, 'title', $3::text),
+			    updated_at = now()
+			WHERE id = $1
+		`, d.id, number, title); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // MoveSet puts a set at a chosen place in a session: the one it is already in,
 // which reorders it, or another one, which moves it between days.
 //

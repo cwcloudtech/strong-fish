@@ -21,6 +21,9 @@ const exerciseLabel = (set, locale) =>
  */
 const DRAG_TYPE = "application/x-sf-set";
 
+/** The same, for whole sessions. Separate, so the two drags never cross. */
+const DAY_DRAG_TYPE = "application/x-sf-day";
+
 /**
  * One session in edit mode: its sets as an editable list, plus the actions that
  * change the session itself.
@@ -31,7 +34,7 @@ const DRAG_TYPE = "application/x-sf-set";
  * about the weight, and merging both into one component would mean every row
  * carrying two sets of controls.
  */
-export default function SessionEditor({ clubId, programId, day, locale, onChanged }) {
+export default function SessionEditor({ clubId, programId, day, place, locale, onChanged }) {
   const { t } = useI18n();
   const [editingSet, setEditingSet] = useState(null);
   const [deletingSet, setDeletingSet] = useState(null);
@@ -43,6 +46,8 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
   // it. Kept per session, so two cards never both draw an insertion line.
   const [dropAt, setDropAt] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Where a dragged session would land relative to this one.
+  const [dropDay, setDropDay] = useState(null);
 
   const removeSet = async () => {
     try {
@@ -126,6 +131,59 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
     }
   };
 
+  const duplicateDay = async () => {
+    setBusy(true);
+    try {
+      await programsApi.duplicateDay(clubId, programId, day.id);
+      onChanged();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startDayDrag = (event) => {
+    event.dataTransfer.setData(DAY_DRAG_TYPE, JSON.stringify({ dayId: day.id }));
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  const dayDragOver = (event) => {
+    if (!event.dataTransfer.types.includes(DAY_DRAG_TYPE)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const box = event.currentTarget.getBoundingClientRect();
+    setDropDay({ after: event.clientY > box.top + box.height / 2 });
+  };
+
+  // A session dropped onto another session's header takes that one's week,
+  // and the place just before or after it.
+  const dropOnDay = async (event) => {
+    if (!event.dataTransfer.types.includes(DAY_DRAG_TYPE)) return;
+    event.preventDefault();
+    const box = event.currentTarget.getBoundingClientRect();
+    const after = event.clientY > box.top + box.height / 2;
+    setDropDay(null);
+
+    let payload;
+    try {
+      payload = JSON.parse(event.dataTransfer.getData(DAY_DRAG_TYPE));
+    } catch {
+      return;
+    }
+    if (!payload?.dayId || payload.dayId === day.id) return;
+
+    setBusy(true);
+    try {
+      await programsApi.moveDay(clubId, programId, payload.dayId, day.week, place + (after ? 1 : 0));
+      onChanged();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const removeDay = async () => {
     try {
       await programsApi.removeDay(clubId, programId, day.id);
@@ -141,12 +199,44 @@ export default function SessionEditor({ clubId, programId, day, locale, onChange
 
   return (
     <div className="sf-card">
-      <div className="sf-row-between">
-        <h3 style={{ margin: 0 }}>
+      <div
+        className={[
+          "sf-row-between",
+          "sf-session-header",
+          dropDay ? (dropDay.after ? "sf-drop-after" : "sf-drop-before") : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        onDragOver={dayDragOver}
+        onDragLeave={() => setDropDay(null)}
+        onDrop={dropOnDay}
+      >
+        <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {/* Only the grip is draggable: the header holds buttons, and a
+              header that is itself draggable turns every stray click on one
+              into the start of a drag. */}
+          <span
+            className="sf-drag-handle"
+            draggable
+            onDragStart={startDayDrag}
+            onDragEnd={() => setDropDay(null)}
+            title={t("programs.reorderSession")}
+            aria-hidden="true"
+          >
+            <FiMove />
+          </span>
           {t("programs.week", { week: day.week })} · {t("programs.day", { day: day.day })}
           {sessionTitle(day) ? <span className="sf-session-name"> · {sessionTitle(day)}</span> : null}
         </h3>
         <div className="sf-row" style={{ gap: "0.25rem" }}>
+          <button
+            className="sf-button sf-button-ghost sf-button-sm"
+            onClick={duplicateDay}
+            disabled={busy}
+            title={t("programs.duplicateSession")}
+          >
+            <FiCopy /> {t("common.duplicate")}
+          </button>
           <button className="sf-button sf-button-ghost sf-button-sm" onClick={() => setEditingDay(true)}>
             <FiEdit2 /> {t("common.edit")}
           </button>
@@ -310,7 +400,10 @@ export function SessionFormModal({ clubId, programId, day, onClose, onSaved }) {
   const [form, setForm] = useState({
     week: day?.week ?? "",
     day: day?.day ?? "",
-    title: day?.title || "",
+    // sessionTitle, not day.title: an unnamed session is stored as "Week 1
+    // Day 3", and prefilling that would save it as a title the coach chose
+    // the moment the session is renumbered.
+    title: sessionTitle(day),
   });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);

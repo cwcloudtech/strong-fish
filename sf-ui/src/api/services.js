@@ -121,6 +121,12 @@ export const programs = {
     body(client.put(`${programsBase(clubId)}/${programId}/days/${dayId}`, payload)),
   removeDay: (clubId, programId, dayId) =>
     body(client.delete(`${programsBase(clubId)}/${programId}/days/${dayId}`)),
+  // week 0 means the week the session is already in (a reorder); position is
+  // the 1-based place among that week's sessions.
+  moveDay: (clubId, programId, dayId, week, position) =>
+    body(client.put(`${programsBase(clubId)}/${programId}/days/${dayId}/move`, { week, position })),
+  duplicateDay: (clubId, programId, dayId) =>
+    body(client.post(`${programsBase(clubId)}/${programId}/days/${dayId}/duplicate`)),
   addSet: (clubId, programId, dayId, payload) =>
     body(client.post(`${programsBase(clubId)}/${programId}/days/${dayId}/sets`, payload)),
   updateSet: (clubId, programId, setId, payload) =>

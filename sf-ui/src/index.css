@@ -811,6 +811,17 @@ button {
    set can be dropped back into a day everything was dragged out of. */
 .sf-drop-rest { height: 26px; text-align: center; font-size: 0.82rem; }
 
+/* A session's own header is both its grip and the target another session is
+   dropped on: compact, always visible, and clear of the sets table's own
+   drop zones inside the card. */
+.sf-session-header {
+  padding-bottom: 4px;
+  border-radius: var(--sf-radius-sm);
+}
+.sf-session-header.sf-drop-before { box-shadow: inset 0 3px 0 0 var(--sf-primary); }
+.sf-session-header.sf-drop-after { box-shadow: inset 0 -3px 0 0 var(--sf-primary); }
+.sf-session-header .sf-drag-handle { display: inline-flex; align-items: center; }
+
 .sf-table {
   width: 100%;
   border-collapse: collapse;

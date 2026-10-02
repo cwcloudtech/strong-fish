@@ -40,6 +40,21 @@ function audiences(t, clubId) {
 }
 
 /**
+ * Each session paired with its 1-based place inside its own week.
+ *
+ * A session dropped onto another one takes that one's place, and "that one's
+ * place" is counted within its week - the numbering the API renumbers and the
+ * header prints - not within the flat list of every session in the block.
+ */
+function placesInWeek(days) {
+  const counts = {};
+  return (days || []).map((day) => {
+    counts[day.week] = (counts[day.week] || 0) + 1;
+    return [day, counts[day.week]];
+  });
+}
+
+/**
  * A program as its coach sees it: the sessions, and who is running it.
  *
  * The loads shown are resolved against whoever is selected in "viewing as" -
@@ -335,12 +350,13 @@ export default function ProgramDetail() {
               {t("programs.reorderHelp")}
             </p>
           ) : null}
-          {(program.days || []).map((day) => (
+          {placesInWeek(program.days).map(([day, place]) => (
             <SessionEditor
               key={day.id}
               clubId={clubId}
               programId={programId}
               day={day}
+              place={place}
               locale={locale}
               onChanged={load}
             />
