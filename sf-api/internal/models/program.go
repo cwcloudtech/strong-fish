@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"regexp"
+	"time"
+)
 
 // Program is a training block a coach uploaded into a club - typically an
 // imported spreadsheet, one sheet per week.
@@ -67,6 +71,28 @@ func NormalizeProgramVisibility(visibility string) string {
 
 // ProgramDay is one training session - "WEEK 2 DAY 3" in the source
 // spreadsheet.
+// generatedDayTitle matches the title the API gives a session the coach did
+// not name.
+var generatedDayTitle = regexp.MustCompile(`^Week \d+ Day \d+$`)
+
+// GeneratedDayTitle is what an unnamed session is stored as, so exports and
+// other clients always have something to print.
+func GeneratedDayTitle(week, day int) string {
+	return fmt.Sprintf("Week %d Day %d", week, day)
+}
+
+// IsGeneratedDayTitle reports whether a title is one of ours rather than one
+// somebody typed.
+//
+// It matters whenever a session is renumbered: a generated title names the
+// numbers it was made from, so left alone it would start reading as a title
+// the coach chose - a session moved to day 1 announcing itself as "Week 1
+// Day 3". A coach who typed exactly that string loses nothing, since the
+// clients hide a title that matches the session's own numbers anyway.
+func IsGeneratedDayTitle(title string) bool {
+	return generatedDayTitle.MatchString(title)
+}
+
 type ProgramDay struct {
 	ID        string `json:"id"`
 	ProgramID string `json:"programId"`

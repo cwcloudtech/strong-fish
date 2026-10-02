@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -514,6 +513,50 @@ func (h *ProgramHandler) UpdateDay(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+type moveDayPayload struct {
+	// Week is where the session should end up. Zero means the week it is
+	// already in, which is a plain reorder.
+	Week int `json:"week"`
+	// Position is the 1-based place among that week's sessions, clamped
+	// rather than refused.
+	Position int `json:"position"`
+}
+
+// MoveDay reorders a session within its week, or moves it to another week.
+func (h *ProgramHandler) MoveDay(w http.ResponseWriter, r *http.Request) {
+	day, ok := h.dayOfProgram(w, r)
+	if !ok {
+		return
+	}
+
+	var p moveDayPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+
+	updated, err := h.programs.MoveDay(r.Context(), day.ID, p.Week, p.Position)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+// DuplicateDay copies a session, its sets included.
+func (h *ProgramHandler) DuplicateDay(w http.ResponseWriter, r *http.Request) {
+	day, ok := h.dayOfProgram(w, r)
+	if !ok {
+		return
+	}
+
+	copied, err := h.programs.DuplicateDay(r.Context(), day.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, copied)
+}
+
 // DeleteDay removes a session and the sets in it.
 func (h *ProgramHandler) DeleteDay(w http.ResponseWriter, r *http.Request) {
 	day, ok := h.dayOfProgram(w, r)
@@ -533,7 +576,7 @@ func dayTitle(title string, week, day int) string {
 	if utils.IsNotBlank(title) {
 		return title
 	}
-	return fmt.Sprintf("Week %d Day %d", week, day)
+	return models.GeneratedDayTitle(week, day)
 }
 
 // authorizeProgram loads the addressed program and decides whether this caller
