@@ -3,6 +3,7 @@
 export APPS="ui api ui-and-mobile wiki"
 export APP_PREFIX="sf"
 export VERSION="$(grep -oE "^[0-9\.]+$" VERSION)"
+export UI_VERSION="${UI_VERSION}-mobile"
 export VERSION_SHA="${VERSION}-${CI_COMMIT_SHORT_SHA}"
 export SF_API_URL="https://api.strong-fish.com"
 export SF_UI_URL="https://www.strong-fish.com"

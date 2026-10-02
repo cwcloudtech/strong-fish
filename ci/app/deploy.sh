@@ -19,4 +19,9 @@ echo "SF_GIT_REPO_URL=${SF_GIT_REPO_URL}" >> .env.sf.ui
 
 docker ps -a | grep -i sf | awk '{system ("docker rm -f "$1)}' || :
 docker compose -f docker-compose-live.yml up -d --force-recreate
+if [[ $? != 0 ]]; then
+  export UI_VERSION="${VERSION}"
+  echo "Deploying non-mobile version"
+  docker compose -f docker-compose-live.yml up -d --force-recreate
+fi
 docker logs sf-db-migrate || :
