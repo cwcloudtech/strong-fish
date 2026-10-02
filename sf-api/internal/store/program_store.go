@@ -596,9 +596,21 @@ func (s *ProgramStore) MoveDay(ctx context.Context, dayID string, week, index in
 	return s.FindDay(ctx, dayID)
 }
 
-// DuplicateDay copies a session and everything prescribed in it back into the
-// same week, directly after the original - the cheap way to write a block
-// whose sessions are variations on one another.
+// DuplicateDay copies a session and everything prescribed in it, keeping the
+// day of the week it sits on.
+//
+// The copy goes in the program's last week when that day is free there, and
+// into a week of its own after it when it is taken. That is how a block gets
+// written: duplicate week 1's three sessions one after another and they land
+// as week 2's day 1, day 2 and day 3 - each on the same day it had, none of
+// them displacing anything.
+//
+// Nothing is renumbered. The copy takes the slot it was given, so a week with
+// a gap in it keeps that gap rather than closing it under the coach.
+//
+// The copy keeps the original's title. A generated one is the exception, and
+// has to be: it names the week and day it was made for, so carried over
+// unchanged it would sit in a later week announcing itself as week 1.
 func (s *ProgramStore) DuplicateDay(ctx context.Context, dayID string) (models.ProgramDay, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -606,17 +618,50 @@ func (s *ProgramStore) DuplicateDay(ctx context.Context, dayID string) (models.P
 	}
 	defer tx.Rollback(ctx)
 
-	var newID, programID string
-	var week int
-	err = tx.QueryRow(ctx, `
-		INSERT INTO program_days (program_id, data)
-		SELECT program_id, data FROM program_days WHERE id = $1
-		RETURNING id::text, program_id::text, coalesce((data->>'week')::int, 1)
-	`, dayID).Scan(&newID, &programID, &week)
-	if err != nil {
+	var programID, title string
+	var day int
+	if err := tx.QueryRow(ctx, `
+		SELECT program_id::text, coalesce((data->>'day')::int, 1), coalesce(data->>'title', '')
+		FROM program_days WHERE id = $1
+	`, dayID).Scan(&programID, &day, &title); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.ProgramDay{}, ErrNotFound
 		}
+		return models.ProgramDay{}, err
+	}
+
+	var week int
+	if err := tx.QueryRow(ctx, `
+		SELECT coalesce(max((data->>'week')::int), 1) FROM program_days WHERE program_id = $1
+	`, programID).Scan(&week); err != nil {
+		return models.ProgramDay{}, err
+	}
+	var taken bool
+	if err := tx.QueryRow(ctx, `
+		SELECT exists(
+			SELECT 1 FROM program_days
+			WHERE program_id = $1
+			  AND coalesce((data->>'week')::int, 1) = $2
+			  AND coalesce((data->>'day')::int, 1) = $3)
+	`, programID, week, day).Scan(&taken); err != nil {
+		return models.ProgramDay{}, err
+	}
+	if taken {
+		week++
+	}
+	if models.IsGeneratedDayTitle(title) {
+		title = models.GeneratedDayTitle(week, day)
+	}
+
+	var newID string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO program_days (program_id, data)
+		SELECT program_id,
+		       data || jsonb_build_object('week', $2::int, 'day', $3::int,
+		                                  'position', $3::int, 'title', $4::text)
+		FROM program_days WHERE id = $1
+		RETURNING id::text
+	`, dayID, week, day, title).Scan(&newID); err != nil {
 		return models.ProgramDay{}, err
 	}
 
@@ -629,11 +674,6 @@ func (s *ProgramStore) DuplicateDay(ctx context.Context, dayID string) (models.P
 		return models.ProgramDay{}, err
 	}
 
-	// The copy shares the original's day number, so ordering by day and then
-	// by creation puts it directly behind - which renumbering then fixes.
-	if err := renumberDays(ctx, tx, programID, week, "", 0); err != nil {
-		return models.ProgramDay{}, err
-	}
 	if err := tx.Commit(ctx); err != nil {
 		return models.ProgramDay{}, err
 	}
