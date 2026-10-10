@@ -239,6 +239,7 @@ const Map<String, dynamic> en = {
     'exportPdf': 'PDF sheet',
     'export': 'Export',
     'exportXlsx': 'Excel spreadsheet (.xlsx)',
+    'exportPng': 'Image to share (.png)',
     'exportWeek': 'Export this week',
     'exportBlock': 'Export the whole block',
     'exporting': 'Preparing...',
