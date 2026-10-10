@@ -18,6 +18,7 @@ echo "SF_MAX_IMAGE_SIZE=${SF_MAX_IMAGE_SIZE}" >> .env.sf.ui
 echo "SF_GIT_REPO_URL=${SF_GIT_REPO_URL}" >> .env.sf.ui
 
 docker ps -a | grep -i sf | awk '{system ("docker rm -f "$1)}' || :
+docker login "${CI_REGISTRY}" --username "${CI_REGISTRY_USER}" --password "${CI_REGISTRY_PASSWORD}"
 if ! docker manifest inspect "${CI_REGISTRY}/sf-ui:${UI_VERSION}" > /dev/null 2>&1; then
   export UI_VERSION="${VERSION}"
   echo "Deploying non-mobile version"
