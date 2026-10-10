@@ -1,27 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../providers/providers.dart';
 
-/// The two formats a program is exported in.
+/// The formats a program is exported in.
 ///
-/// The same pair the web offers, and they are not the same document by
+/// The same set the web offers, and they are not the same document by
 /// accident: the PDF is what a coach prints and takes to the gym, the XLSX is
-/// what an athlete fills in on a laptop and mails back.
+/// what an athlete fills in on a laptop and mails back, and the image is what
+/// either of them pastes into a conversation - one picture, nothing to open.
 enum ExportFormat {
   pdf('pdf'),
-  xlsx('xlsx');
+  xlsx('xlsx'),
+  png('png');
 
   const ExportFormat(this.extension);
   final String extension;
 }
 
-/// "Export" opening the two formats.
+/// "Export" opening the formats.
 ///
-/// A menu rather than two buttons: exporting happens rarely and in one of two
-/// ways, and two slots in an app bar is two the sessions themselves do not
-/// get. Mirrors the web's ExportMenu.
+/// A menu rather than a row of buttons: exporting happens rarely, and the
+/// slots in an app bar are ones the sessions themselves do not get. Mirrors
+/// the web's ExportMenu.
 class SfExportButton extends ConsumerWidget {
   final Future<void> Function(ExportFormat) onExport;
   final bool busy;
@@ -68,18 +71,44 @@ class SfExportButton extends ConsumerWidget {
             Text(t('programs.exportXlsx')),
           ]),
         ),
+        PopupMenuItem(
+          value: ExportFormat.png,
+          child: Row(children: [
+            const Icon(Icons.image_outlined, size: 18),
+            const SizedBox(width: 10),
+            Text(t('programs.exportPng')),
+          ]),
+        ),
       ],
     );
   }
 }
 
-/// Opens a file that was just downloaded, and says so when nothing can.
+/// Hands over a file that was just downloaded, and says so when nothing can
+/// take it.
+///
+/// A document is opened; an image is shared. The picture exists to be sent to
+/// somebody - opening it in a gallery is a detour through the one app the
+/// person is not trying to reach - so it goes straight to the share sheet,
+/// where the conversation they had in mind already is.
 ///
 /// A phone with no PDF viewer - or, more often, no spreadsheet app - is a real
 /// case, and "nothing happened" is the worst way to find out.
 Future<void> openExported(BuildContext context, WidgetRef ref, String path) async {
   final messenger = ScaffoldMessenger.of(context);
   final t = ref.read(tProvider);
+
+  if (path.toLowerCase().endsWith('.png')) {
+    // The origin rect is what anchors the popover on iPad; without it the
+    // sheet opens in the corner.
+    final box = context.findRenderObject() as RenderBox?;
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile(path, mimeType: 'image/png')],
+      sharePositionOrigin:
+          box != null && box.hasSize ? box.localToGlobal(Offset.zero) & box.size : null,
+    ));
+    return;
+  }
 
   final result = await OpenFilex.open(path);
   if (result.type != ResultType.done) {

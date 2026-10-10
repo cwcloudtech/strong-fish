@@ -128,6 +128,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		// Both formats, chosen by the extension.
 		r.Get("/public/programs/{programId}/export.pdf", h.Program.ExportPublicPDF)
 		r.Get("/public/programs/{programId}/export.xlsx", h.Program.ExportPublicPDF)
+		r.Get("/public/programs/{programId}/export.png", h.Program.ExportPublicPDF)
 
 		// A private bucket's object, served by this API with the owner's own
 		// credentials.
@@ -383,6 +384,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 							// is not a coaching action.
 							r.Get("/export.pdf", h.Program.ExportPDF)
 							r.Get("/export.xlsx", h.Program.ExportPDF)
+							r.Get("/export.png", h.Program.ExportPDF)
 							// Not manager-gated: any member of this club may
 							// copy a program they can read into their own
 							// library. Copying it into *another club* is a
@@ -413,6 +415,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Delete("/", h.Program.Delete)
 					r.Get("/export.pdf", h.Program.ExportPDF)
 					r.Get("/export.xlsx", h.Program.ExportPDF)
+					r.Get("/export.png", h.Program.ExportPDF)
 					r.Post("/copy", h.Program.CopyToClub)
 					r.Post("/days", h.Program.AddDay)
 					r.Put("/days/{dayId}", h.Program.UpdateDay)
@@ -446,6 +449,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					// their coach to read away from the app.
 					r.Get("/export.pdf", h.Training.ExportAssignment)
 					r.Get("/export.xlsx", h.Training.ExportAssignment)
+					r.Get("/export.png", h.Training.ExportAssignment)
 				})
 			})
 

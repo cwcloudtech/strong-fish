@@ -241,6 +241,7 @@ const ar = {
     exportPdf: "ورقة PDF",
     export: "تصدير",
     exportXlsx: "جدول Excel ‏(.xlsx)",
+    exportPng: "صورة للمشاركة ‏(.png)",
     exportWeek: "تصدير هذا الأسبوع",
     exportBlock: "تصدير الدورة كاملة",
     exporting: "جارٍ التحضير...",

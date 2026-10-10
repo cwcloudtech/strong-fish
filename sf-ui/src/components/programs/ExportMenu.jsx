@@ -1,11 +1,11 @@
-import { FiDownload, FiFileText, FiGrid } from "react-icons/fi";
+import { FiDownload, FiFileText, FiGrid, FiImage } from "react-icons/fi";
 
 import MenuDropdown, { MenuItem } from "../common/MenuDropdown";
 import Tooltip from "../common/Tooltip";
 import { useI18n } from "../../i18n/I18nContext";
 
 /**
- * "Export" opening the two formats the API renders.
+ * "Export" opening the formats the API renders.
  *
  * A menu rather than two buttons: a program is exported rarely and in one of
  * two ways, and a toolbar that spends two slots on it crowds out the actions
@@ -17,9 +17,10 @@ import { useI18n } from "../../i18n/I18nContext";
  * kind of control, which is not what they are. The phone has drawn it this way
  * all along.
  *
- * The two formats are not the same document by accident: the PDF is what a
- * coach prints and takes to the gym, the XLSX is what an athlete fills in on a
- * laptop and mails back.
+ * The formats are not the same document by accident: the PDF is what a coach
+ * prints and takes to the gym, the XLSX is what an athlete fills in on a
+ * laptop and mails back, and the image is what either of them pastes into a
+ * conversation - one picture, no attachment to open.
  */
 export default function ExportMenu({ onExport, busy = false, label, size = "" }) {
   const { t } = useI18n();
@@ -50,6 +51,14 @@ export default function ExportMenu({ onExport, busy = false, label, size = "" })
               }}
             >
               <FiGrid /> {t("programs.exportXlsx")}
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                onExport("png");
+                close();
+              }}
+            >
+              <FiImage /> {t("programs.exportPng")}
             </MenuItem>
           </>
         )}

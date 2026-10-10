@@ -11,6 +11,7 @@ import (
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/programpdf"
+	"strong-fish-api/internal/programpng"
 	"strong-fish-api/internal/programsheet"
 	"strong-fish-api/internal/programxlsx"
 	"strong-fish-api/internal/utils"
@@ -124,10 +125,12 @@ func (h *ProgramHandler) ExportPublicPDF(w http.ResponseWriter, r *http.Request)
 const (
 	formatPDF  = "pdf"
 	formatXLSX = "xlsx"
+	formatPNG  = "png"
 )
 
 const (
 	mediaPDF  = "application/pdf"
+	mediaPNG  = "image/png"
 	mediaXLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 
@@ -144,10 +147,14 @@ func writeProgramSheet(w http.ResponseWriter, format string, program models.Prog
 		media string
 		err   error
 	)
-	if format == formatXLSX {
+	switch format {
+	case formatXLSX:
 		body, err = programxlsx.Render(program, days, options)
 		media = mediaXLSX
-	} else {
+	case formatPNG:
+		body, err = programpng.Render(program, days, options)
+		media = mediaPNG
+	default:
 		body, err = programpdf.Render(program, days, options)
 		media = mediaPDF
 	}
@@ -169,8 +176,11 @@ func writeProgramSheet(w http.ResponseWriter, format string, program models.Prog
 // Anything else is a PDF: the routes only register the two, and a format that
 // somehow arrives unrecognized should still hand back a readable sheet.
 func exportFormat(r *http.Request) string {
-	if strings.HasSuffix(r.URL.Path, ".xlsx") {
+	switch {
+	case strings.HasSuffix(r.URL.Path, ".xlsx"):
 		return formatXLSX
+	case strings.HasSuffix(r.URL.Path, ".png"):
+		return formatPNG
 	}
 	return formatPDF
 }
