@@ -168,7 +168,12 @@ func (h *DeviceHandler) Callback(w http.ResponseWriter, r *http.Request) {
 
 	token, err := provider.Exchange(r.Context(), code, h.redirectURI(providerName))
 	if err != nil {
-		slog.Error("device link exchange failed", "provider", providerName, "error", err)
+		// The redirect URI is logged because it is half of the commonest
+		// failure: the provider compares it character for character against
+		// what is registered, and the value it was given is the only way to
+		// see which end is wrong.
+		slog.Error("device link: the provider refused the code exchange",
+			"provider", providerName, "redirect_uri", h.redirectURI(providerName), "error", err)
 		h.finish(w, r, providerName, "exchange_failed")
 		return
 	}
@@ -182,8 +187,14 @@ func (h *DeviceHandler) Callback(w http.ResponseWriter, r *http.Request) {
 			h.finish(w, r, providerName, "not_linked")
 			return
 		}
-		slog.Error("device link account check failed", "provider", providerName, "error", err)
-		h.finish(w, r, providerName, "exchange_failed")
+		// Its own outcome, not "exchange_failed": consent worked and the
+		// token is good - what failed is reading the account with it, which
+		// is usually the provider's API not being enabled on the project.
+		// Telling the two apart is the difference between checking the OAuth
+		// client and checking the API library.
+		slog.Error("device link: consent succeeded but the account could not be read",
+			"provider", providerName, "error", err)
+		h.finish(w, r, providerName, "account_failed")
 		return
 	}
 
@@ -192,8 +203,9 @@ func (h *DeviceHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		AccessToken: token.AccessToken, RefreshToken: token.RefreshToken,
 		ExpiresAt: token.ExpiresAt, Scope: token.Scope, ExternalUserID: externalID,
 	}); err != nil {
-		slog.Error("device link save failed", "provider", providerName, "error", err)
-		h.finish(w, r, providerName, "exchange_failed")
+		slog.Error("device link: the grant could not be stored",
+			"provider", providerName, "error", err)
+		h.finish(w, r, providerName, "store_failed")
 		return
 	}
 

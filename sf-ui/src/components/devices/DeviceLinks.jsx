@@ -37,6 +37,8 @@ const OUTCOMES = new Set([
   "missing_code",
   "unavailable",
   "exchange_failed",
+  "account_failed",
+  "store_failed",
 ]);
 
 // translate() falls back to the key itself for an unknown one, which would put

@@ -184,7 +184,10 @@ func (c *Client) token(ctx context.Context, form url.Values) (devicelink.Token, 
 	}
 	var parsed tokenResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return devicelink.Token{}, fmt.Errorf("googlehealth: token response unreadable: %w", err)
+		// Not JSON at all: a proxy's error page, usually. The snippet is what
+		// tells the operator that, instead of leaving them with "unreadable".
+		return devicelink.Token{}, fmt.Errorf("googlehealth: token response unreadable (http %d): %s",
+			resp.StatusCode, snippet(body))
 	}
 	if resp.StatusCode != http.StatusOK || parsed.AccessToken == "" {
 		// invalid_grant is what a revoked or already-spent grant looks like,
@@ -192,7 +195,16 @@ func (c *Client) token(ctx context.Context, form url.Values) (devicelink.Token, 
 		if parsed.Error == "invalid_grant" {
 			return devicelink.Token{}, devicelink.ErrReauthorize
 		}
-		return devicelink.Token{}, fmt.Errorf("googlehealth: token exchange failed: %s %s", parsed.Error, parsed.ErrorDesc)
+		// Google's own error code and description, verbatim: "invalid_client"
+		// and "redirect_uri_mismatch" are the two that actually happen, and
+		// each points at a different box in the Cloud console. Anything
+		// unrecognized carries the body so nothing is lost in translation.
+		detail := strings.TrimSpace(parsed.Error + " " + parsed.ErrorDesc)
+		if detail == "" {
+			detail = snippet(body)
+		}
+		return devicelink.Token{}, fmt.Errorf("googlehealth: token exchange refused (http %d): %s",
+			resp.StatusCode, detail)
 	}
 
 	return devicelink.Token{
@@ -356,13 +368,32 @@ func (c *Client) call(ctx context.Context, method, path, accessToken string, bod
 		case resp.StatusCode == http.StatusUnauthorized:
 			return devicelink.ErrReauthorize
 		}
-		return fmt.Errorf("googlehealth: %s %s: %d %s", method, path, resp.StatusCode, failure.Error.Message)
+		// SERVICE_DISABLED here means the Google Health API is not enabled on
+		// the Cloud project - a different fix from anything to do with the
+		// OAuth client, and invisible unless the status is carried through.
+		detail := strings.TrimSpace(failure.Error.Status + " " + failure.Error.Message)
+		if detail == "" {
+			detail = snippet(raw)
+		}
+		return fmt.Errorf("googlehealth: %s %s refused (http %d): %s", method, path, resp.StatusCode, detail)
 	}
 
 	if out == nil {
 		return nil
 	}
 	return json.Unmarshal(raw, out)
+}
+
+// snippet is as much of an unexpected response as is worth putting in a log
+// line: enough to recognize an HTML error page or an unfamiliar error code,
+// not so much that a log file fills with somebody's markup.
+func snippet(body []byte) string {
+	const limit = 300
+	text := strings.TrimSpace(string(body))
+	if len(text) > limit {
+		return text[:limit] + "..."
+	}
+	return text
 }
 
 func truncateDay(t time.Time) time.Time {
