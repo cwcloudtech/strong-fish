@@ -261,6 +261,83 @@ class Exercise {
 
 /// One of the member's maxes. Everything the training screens show is computed
 /// from these server-side, so changing one recalculates the whole program.
+/// An outside account that counts a member's steps for them, and whether this
+/// member has connected it.
+///
+/// Provider-keyed rather than named after one integration: Google Health is
+/// where Fitbit data arrives now that the Fitbit Web API is switched off, and
+/// the next one will be a different name again.
+class DeviceConnection {
+  final String provider;
+  final bool available;
+  final bool connected;
+  final DateTime? connectedAt;
+
+  const DeviceConnection({
+    required this.provider,
+    this.available = false,
+    this.connected = false,
+    this.connectedAt,
+  });
+
+  factory DeviceConnection.fromJson(Map<String, dynamic> json) => DeviceConnection(
+        provider: _toString(json['provider']),
+        available: json['available'] == true,
+        connected: json['connected'] == true,
+        connectedAt: json['connectedAt'] == null ? null : _toDate(json['connectedAt']),
+      );
+}
+
+/// One day's step count.
+class StepDay {
+  final String date;
+  final int steps;
+
+  const StepDay({this.date = '', this.steps = 0});
+
+  factory StepDay.fromJson(Map<String, dynamic> json) => StepDay(
+        date: _toString(json['date']),
+        steps: _toInt(json['steps']),
+      );
+}
+
+/// A range of days and what to say about it.
+///
+/// The average comes from the API rather than being worked out here, so the
+/// phone and the web app cannot disagree about the same week - in particular
+/// about what to do with a day the provider had nothing for.
+class StepSeries {
+  final String provider;
+  final String range;
+  final String from;
+  final String to;
+  final List<StepDay> days;
+  final int total;
+  final int dailyAverage;
+
+  const StepSeries({
+    this.provider = '',
+    this.range = '',
+    this.from = '',
+    this.to = '',
+    this.days = const [],
+    this.total = 0,
+    this.dailyAverage = 0,
+  });
+
+  factory StepSeries.fromJson(Map<String, dynamic> json) => StepSeries(
+        provider: _toString(json['provider']),
+        range: _toString(json['range']),
+        from: _toString(json['from']),
+        to: _toString(json['to']),
+        days: (json['days'] as List? ?? [])
+            .map((item) => StepDay.fromJson(Map<String, dynamic>.from(item as Map)))
+            .toList(),
+        total: _toInt(json['total']),
+        dailyAverage: _toInt(json['dailyAverage']),
+      );
+}
+
 class OneRm {
   final String exerciseId;
   final String slug;

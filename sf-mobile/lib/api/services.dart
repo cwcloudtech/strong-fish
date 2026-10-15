@@ -357,6 +357,41 @@ class SfApi {
     return Post.fromJson(_map(response.data));
   }
 
+  // --- connected devices ---
+
+  /// The outside accounts that count a member's steps, and which ones they
+  /// have connected.
+  Future<List<DeviceConnection>> deviceConnections() async {
+    final response = await client.dio.get('/users/me/devices');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => DeviceConnection.fromJson(_map(item))).toList();
+  }
+
+  /// Where the member's browser has to go to consent.
+  ///
+  /// A URL rather than a flow the app drives: consent belongs to the provider,
+  /// and it happens in a real browser where the member can see whose login
+  /// they are typing into.
+  Future<String> deviceAuthorizeUrl(String provider) async {
+    final response = await client.dio.get('/users/me/devices/$provider/authorize');
+    return _map(response.data)['url']?.toString() ?? '';
+  }
+
+  Future<void> disconnectDevice(String provider) async {
+    await client.dio.delete('/users/me/devices/$provider');
+  }
+
+  /// [range] is one of 24h, 48h, week, month, 90d - the API names the windows,
+  /// so the phone and the web app cannot mean different things by "a month".
+  Future<StepSeries> deviceSteps(String provider, String range) async {
+    final response = await client.dio.get(
+      '/users/me/devices/$provider/steps',
+      queryParameters: {'range': range},
+    );
+    return StepSeries.fromJson(_map(response.data));
+  }
+
   // --- administration (superadmin only) ---
 
   Future<Map<String, dynamic>> adminStats() async =>

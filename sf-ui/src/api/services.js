@@ -84,6 +84,25 @@ export const oneRms = {
  */
 const programsBase = (clubId) => (clubId ? `/clubs/${clubId}/programs` : "/programs");
 
+/**
+ * The outside accounts that count a member's steps for them.
+ *
+ * Provider-keyed rather than named after one integration: Google Health is
+ * where Fitbit data arrives now that the Fitbit Web API is switched off, and
+ * that sentence has had a different subject before.
+ */
+export const devices = {
+  list: () => body(client.get("/users/me/devices")),
+  // The consent URL, not a redirect: the caller decides whether that opens in
+  // this tab or a new one.
+  authorizeUrl: (provider) => body(client.get(`/users/me/devices/${provider}/authorize`)),
+  disconnect: (provider) => body(client.delete(`/users/me/devices/${provider}`)),
+  // range is one of 24h, 48h, week, month, 90d - the API names the windows so
+  // the clients cannot disagree about what "a month" means.
+  steps: (provider, range) =>
+    body(client.get(`/users/me/devices/${provider}/steps`, { params: { range } })),
+};
+
 export const programs = {
   // Programs of a club, or - with no club - the ones the caller wrote for
   // themselves.

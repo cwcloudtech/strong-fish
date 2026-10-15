@@ -532,6 +532,44 @@ button {
   gap: var(--sf-spacing);
 }
 
+/* --- a week of step counts ---
+   Bars drawn with divs rather than a charting library: one series of plain
+   daily numbers does not justify the dependency, and a flex row of heights is
+   the whole of what it would draw. Decoration only - the counts themselves are
+   in the table underneath, which is what a screen reader gets. */
+.sf-steps-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 90px;
+  margin-top: 0.7rem;
+  padding: 4px;
+  background-color: var(--sf-bg-alt);
+  border-radius: var(--sf-radius-sm);
+}
+.sf-steps-bar {
+  flex: 1;
+  min-width: 2px;
+  /* A day with no steps still draws a sliver, so the row reads as "nothing
+     that day" rather than as a gap in the data. */
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+}
+
+/* The walking scale: under 6k, under 10k, under 15k, and above it. The same
+   four bands colour a bar, a day in the table and the per-24h figure, so the
+   chart and the numbers under it cannot say different things. */
+.sf-steps-low { --sf-steps-tone: var(--sf-danger); }
+.sf-steps-fair { --sf-steps-tone: var(--sf-warning); }
+.sf-steps-good { --sf-steps-tone: #65c37a; }
+.sf-steps-high { --sf-steps-tone: var(--sf-success); }
+
+.sf-steps-bar { background-color: var(--sf-steps-tone, var(--sf-primary)); }
+.sf-steps-figure {
+  font-size: 1.3rem;
+  color: var(--sf-steps-tone, var(--sf-text));
+}
+
 .sf-error { color: var(--sf-danger); font-size: 0.85rem; margin: 4px 0 0; }
 .sf-success { color: var(--sf-success); font-size: 0.85rem; margin: 4px 0 0; }
 
