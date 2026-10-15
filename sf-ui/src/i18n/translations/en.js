@@ -555,7 +555,9 @@ const en = {
       invalid_state: "That link had expired. Please start again.",
       missing_code: "The provider sent no authorization back. Please try again.",
       unavailable: "This integration is not enabled on this server.",
-      exchange_failed: "The account could not be connected. Please try again.",
+      exchange_failed: "Google refused the connection. If you administer this server, the reason is in its logs.",
+      account_failed: "You are signed in, but your activity could not be read. If you administer this server, check that the Google Health API is enabled on the project - the reason is in the logs.",
+      store_failed: "The connection could not be saved. Please try again.",
     },
   },
   errors: {

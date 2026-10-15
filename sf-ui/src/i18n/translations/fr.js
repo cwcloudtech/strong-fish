@@ -566,7 +566,9 @@ const fr = {
       invalid_state: "Ce lien avait expiré. Recommencez.",
       missing_code: "Le fournisseur n'a renvoyé aucune autorisation. Réessayez.",
       unavailable: "Cette intégration n'est pas activée sur ce serveur.",
-      exchange_failed: "Le compte n'a pas pu être connecté. Réessayez.",
+      exchange_failed: "Google a refusé la connexion. Si vous administrez ce serveur, la raison est dans ses logs.",
+      account_failed: "Vous êtes authentifié, mais votre activité n'a pas pu être lue. Si vous administrez ce serveur, vérifiez que l'API Google Health est activée sur le projet - la raison est dans les logs.",
+      store_failed: "La connexion n'a pas pu être enregistrée. Réessayez.",
     },
   },
   errors: {

@@ -163,9 +163,9 @@ const Map<String, dynamic> fr = {
     'avatar': 'Avatar',
     'changeAvatar': 'Changer d\'avatar',
     'saved': 'Profil enregistré.',
-    'postUnavailable': 'Cette publication n\\\\\\\\\\\\\\\'est pas disponible. Elle a peut-être été supprimée, ou partagée uniquement avec un club.',
+    'postUnavailable': 'Cette publication n\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'est pas disponible. Elle a peut-être été supprimée, ou partagée uniquement avec un club.',
     'joinToReply': 'Rejoignez StrongFish pour aimer cette publication et y répondre.',
-    'likes': '{{count}} j\\\\\\\\\\\\\\\'aime',
+    'likes': '{{count}} j\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'aime',
     'myProfile': 'Mon profil public',
     'myProfileHelp': 'Ce que voient les autres, et le lien à partager.',
     'viewProfile': 'Voir',
@@ -331,7 +331,7 @@ const Map<String, dynamic> fr = {
     'edit': 'Modifier le programme',
     'done': 'Terminer',
     'buildMode': 'Modifier le programme',
-    'noMembers': 'Ce club n\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'a pas encore de membre à qui l\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'assigner.',
+    'noMembers': 'Ce club n\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'a pas encore de membre à qui l\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'assigner.',
     'exportNoViewer': 'Aucune application de ce téléphone ne peut ouvrir ce fichier.',
   },
   'session': {
@@ -570,7 +570,9 @@ const Map<String, dynamic> fr = {
       'invalid_state': 'Ce lien avait expiré. Recommencez.',
       'missing_code': 'Le fournisseur n\'a renvoyé aucune autorisation. Réessayez.',
       'unavailable': 'Cette intégration n\'est pas activée sur ce serveur.',
-      'exchange_failed': 'Le compte n\'a pas pu être connecté. Réessayez.',
+      'exchange_failed': 'Google a refusé la connexion. Si vous administrez ce serveur, la raison est dans ses logs.',
+      'account_failed': 'Vous êtes authentifié, mais votre activité n\'a pas pu être lue. Si vous administrez ce serveur, vérifiez que l\'API Google Health est activée sur le projet - la raison est dans les logs.',
+      'store_failed': 'La connexion n\'a pas pu être enregistrée. Réessayez.',
     },
   },
   'errors': {
@@ -666,7 +668,7 @@ const Map<String, dynamic> fr = {
     'contactRateLimited': 'Vous avez envoyé trop de messages. Veuillez réessayer plus tard.',
     'contactMessageTooShort': 'Votre message est trop court : donnez-nous un peu plus de détails.',
     'contactGibberish': 'Votre message a été signalé comme indésirable. Veuillez le reformuler.',
-    'uploadInterrupted': 'L\\\\\\\\\\\\\\\'envoi s\\\\\\\\\\\\\\\'est interrompu. La vidéo est probablement trop volumineuse — vérifiez la limite sur votre écran de stockage.',
+    'uploadInterrupted': 'L\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'envoi s\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'est interrompu. La vidéo est probablement trop volumineuse — vérifiez la limite sur votre écran de stockage.',
   },
   'about': {
     'title': 'À propos',
@@ -764,7 +766,7 @@ const Map<String, dynamic> fr = {
     'install': 'Mettre à jour',
     'downloading': 'Téléchargement de la mise à jour...',
     'failed': 'La mise à jour n\'a pas pu être téléchargée ou installée. Veuillez réessayer plus tard.',
-    'storeManaged': 'Les mises à jour arrivent via l\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'App Store',
+    'storeManaged': 'Les mises à jour arrivent via l\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'App Store',
   },
   'storage': {
     'noTargets': 'Aucun stockage configuré.',
@@ -840,7 +842,7 @@ const Map<String, dynamic> fr = {
     'deleted': 'Message supprimé',
     'recordVoice': 'Enregistrer un message vocal',
     'voiceMessage': 'Message vocal',
-    'micDenied': 'StrongFish a besoin de l\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'accès au microphone.',
+    'micDenied': 'StrongFish a besoin de l\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\'accès au microphone.',
   },
   'blocks': {
     'title': 'Membres bloqués',
