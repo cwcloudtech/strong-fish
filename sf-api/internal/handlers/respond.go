@@ -57,6 +57,17 @@ const (
 	CodeAlreadyMember        = "errors.alreadyMember"
 	CodeNotAClubMember       = "errors.notAClubMember"
 	CodeDuplicateExercise    = "errors.duplicateExercise"
+	// The three ways reading somebody's steps can fail in a way they can act
+	// on: nothing connected here, nothing linked at the provider, or a grant
+	// that has to be given again.
+	CodeDeviceNotConnected = "errors.deviceNotConnected"
+	CodeDeviceNotLinked    = "errors.deviceNotLinked"
+	CodeDeviceReauthorize  = "errors.deviceReauthorize"
+	CodeInvalidRange       = "errors.invalidRange"
+	// CodeUpstream is a service strong-fish depends on being unreachable or
+	// answering with something unusable - not the member's doing, and not
+	// something a retry in the same second will fix.
+	CodeUpstream             = "errors.upstream"
 	CodeInvalidCategory      = "errors.invalidCategory"
 	CodeInvalidOneRM         = "errors.invalidOneRm"
 	CodeInvalidSet           = "errors.invalidSet"

@@ -14,7 +14,9 @@ import (
 	"strong-fish-api/internal/config"
 	"strong-fish-api/internal/contact"
 	"strong-fish-api/internal/db"
+	"strong-fish-api/internal/devicelink"
 	"strong-fish-api/internal/email"
+	"strong-fish-api/internal/googlehealth"
 	"strong-fish-api/internal/handlers"
 	"strong-fish-api/internal/metrics"
 	"strong-fish-api/internal/middleware"
@@ -80,6 +82,7 @@ func main() {
 	invitationStore := store.NewInvitationStore(pool)
 	storageStore := store.NewStorageStore(pool)
 	messageStore := store.NewMessageStore(pool)
+	deviceLinkStore := store.NewDeviceLinkStore(pool)
 
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
 	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
@@ -102,6 +105,20 @@ func main() {
 	}
 
 	providers := oidc.BuildProviders(cfg)
+
+	// The integrations that read what a member's watch counted. One today;
+	// the list is what makes adding the next one a line here.
+	var devices []devicelink.Provider
+	googleHealth := googlehealth.New(googlehealth.Config{
+		ClientID:     cfg.GoogleHealthClientID,
+		ClientSecret: cfg.GoogleHealthClientSecret,
+		AuthURL:      cfg.GoogleHealthAuthURL,
+		TokenURL:     cfg.GoogleHealthTokenURL,
+		APIBaseURL:   cfg.GoogleHealthAPIURL,
+	})
+	if googleHealth.Enabled() {
+		devices = append(devices, googleHealth)
+	}
 
 	strengthHandler := handlers.NewStrengthHandler(exerciseStore, userStore)
 	profileHandler := handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore).
@@ -150,6 +167,8 @@ func main() {
 		Calendar: handlers.NewCalendarHandler(userStore, eventStore, clubStore, cfg.APIBaseURL),
 		Search:   handlers.NewSearchHandler(userStore, clubStore, profileHandler),
 		Strength: strengthHandler,
+		Device: handlers.NewDeviceHandler(devices, deviceLinkStore, cfg.JWTSecret,
+			cfg.APIBaseURL, cfg.UIBaseURL),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),
 		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, cfg.MaxImageSize),

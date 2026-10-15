@@ -34,6 +34,15 @@ type Config struct {
 	OIDCKeycloakClientID     string
 	OIDCKeycloakClientSecret string
 	OIDCKeycloakGroups       []string
+	// The Google Health integration: where a member's steps come from now
+	// that the Fitbit Web API is switched off. The three URLs are overridable
+	// so the flow can be pointed somewhere else while developing; left blank
+	// they are Google's own.
+	GoogleHealthClientID     string
+	GoogleHealthClientSecret string
+	GoogleHealthAuthURL      string
+	GoogleHealthTokenURL     string
+	GoogleHealthAPIURL       string
 	CWCloudAPIURL            string
 	CWCloudAPIKey            string
 	CWCloudContactFormID     string
@@ -170,6 +179,11 @@ func Load() Config {
 		OIDCKeycloakClientID:     os.Getenv("SF_OIDC_KEYCLOAK_CLIENT_ID"),
 		OIDCKeycloakClientSecret: os.Getenv("SF_OIDC_KEYCLOAK_CLIENT_SECRET"),
 		OIDCKeycloakGroups:       utils.SplitList(os.Getenv("SF_OIDC_KEYCLOAK_GROUPS")),
+		GoogleHealthClientID:     os.Getenv("SF_GOOGLE_HEALTH_CLIENT_ID"),
+		GoogleHealthClientSecret: os.Getenv("SF_GOOGLE_HEALTH_CLIENT_SECRET"),
+		GoogleHealthAuthURL:      os.Getenv("SF_GOOGLE_HEALTH_AUTH_URL"),
+		GoogleHealthTokenURL:     os.Getenv("SF_GOOGLE_HEALTH_TOKEN_URL"),
+		GoogleHealthAPIURL:       os.Getenv("SF_GOOGLE_HEALTH_API_URL"),
 		CWCloudAPIURL:            utils.GetBaseUrlFromEnvWithFallback("CWCLOUD_API_URL", "https://api.cwcloud.tech"),
 		CWCloudAPIKey:            os.Getenv("CWCLOUD_API_KEY"),
 		CWCloudContactFormID:     os.Getenv("CWCLOUD_CONTACT_FORM_ID"),

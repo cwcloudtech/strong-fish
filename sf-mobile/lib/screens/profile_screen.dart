@@ -10,6 +10,7 @@ import '../providers/app_update_provider.dart';
 import '../i18n/app_localizations.dart';
 import '../providers/providers.dart';
 import '../widgets/common.dart';
+import '../widgets/device_links.dart';
 import '../widgets/profile_badges.dart';
 import '../widgets/social_share.dart';
 import '../widgets/socials.dart';
@@ -245,6 +246,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
           ),
+
+        // What the member's own watch counted, read from whatever they
+        // connected. Nothing of it is stored here.
+        const DeviceLinksSection(),
 
         Card(
           child: Column(

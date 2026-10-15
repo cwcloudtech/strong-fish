@@ -36,6 +36,7 @@ type Handlers struct {
 	Invitation *handlers.InvitationHandler
 	Message    *handlers.MessageHandler
 	Strength   *handlers.StrengthHandler
+	Device     *handlers.DeviceHandler
 }
 
 // Options carries the settings the middleware chain needs.
@@ -159,6 +160,12 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			r.Get("/{provider}/callback", h.OIDC.Callback)
 		})
 
+		// Where a provider sends the browser back after a member consents.
+		// Unauthenticated by necessity - it is the provider's redirect, with
+		// no Authorization header - so who it belongs to comes from the
+		// signed state instead.
+		r.Get("/devices/{provider}/callback", h.Device.Callback)
+
 		r.Get("/user/confirmation", h.User.Confirm)
 
 		r.Route("/users", func(r chi.Router) {
@@ -196,6 +203,14 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Get("/", h.ApiKey.List)
 					r.Post("/", h.ApiKey.Create)
 					r.Delete("/{keyId}", h.ApiKey.Delete)
+				})
+
+				// The outside accounts that count a member's steps for them.
+				r.Route("/me/devices", func(r chi.Router) {
+					r.Get("/", h.Device.List)
+					r.Get("/{provider}/authorize", h.Device.Authorize)
+					r.Delete("/{provider}", h.Device.Disconnect)
+					r.Get("/{provider}/steps", h.Device.Steps)
 				})
 
 				// The invitations waiting for this account's address. They are

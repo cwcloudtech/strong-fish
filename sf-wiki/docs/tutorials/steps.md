@@ -1,0 +1,85 @@
+---
+id: steps
+title: Steps from your watch
+sidebar_position: 6
+---
+
+StrongFish can show the steps your watch already counted, next to the rest of
+your training. It reads them; it never writes anything back, and it keeps no
+copy - the numbers come from your account every time you look.
+
+## What it connects to
+
+**Google Health**, which is where Fitbit data lives now. Fitbit's own developer
+API was switched off on 30 October 2026, and a Fitbit, a Pixel Watch or a phone
+that records steps all report into the same Google Health profile.
+
+So the account you connect is your **Google account**, and what it reads is
+whatever your devices have put in Google Health.
+
+## Before you connect
+
+Your watch has to be linked to Google Health already. For a Fitbit that means
+opening the **Google Health app** once and linking your Fitbit account to your
+Google account.
+
+This catches people out: the Google consent screen will happily say yes for an
+account that has no Google Health profile behind it, and nothing would ever
+arrive. StrongFish checks at the moment you connect and tells you if that is
+the case, rather than leaving you with an empty chart.
+
+## Connecting
+
+1. Open **Settings** on the web app, or your **profile** on the phone.
+2. Under _Connected devices_, choose **Connect** next to Google Health.
+3. Google asks you to sign in and to allow StrongFish to read your activity.
+4. You land back on StrongFish, connected.
+
+Only one permission is asked for: reading activity and fitness. Not your sleep,
+not your weight, and nothing at all to write.
+
+On the phone, consent opens in your browser rather than inside the app - so you
+can see whose login page you are typing into. Come back to the app afterwards
+and the connection is there.
+
+## What you see
+
+Steps per day, in whichever window you pick:
+
+| View | What it covers |
+| --- | --- |
+| Last 24h | Today's count |
+| Last 48h | Today and yesterday |
+| Last week | Seven days, with the average per 24h |
+| Last month | Thirty days, with the average per 24h |
+| Last 90 days | Ninety days, with the average per 24h |
+
+These are whole days, not rolling windows: "last 24h" is today's total, the
+same number the watch itself shows. Ninety days is the longest view there is,
+because it is the longest range Google returns in one request.
+
+Each day is coloured on the usual walking scale - under 6,000 steps, under
+10,000, under 15,000, and above it - and so is the per-24h figure. Totals over
+several days are left uncoloured: a month of walking adds up to a number that
+would sit in the top band whatever you actually did.
+
+## Disconnecting
+
+**Disconnect** in the same place removes StrongFish's access from its side, and
+the numbers stop being read.
+
+It does not revoke anything in your Google account - that is yours to do, from
+[your Google account's permissions page](https://myaccount.google.com/permissions),
+and StrongFish deliberately does not reach in and do it for you.
+
+## For whoever runs the server
+
+The integration is off until an operator configures it. It needs an OAuth
+client in a Google Cloud project with the Google Health API enabled, and
+`<your API URL>/v1/devices/google-health/callback` registered as an authorized
+redirect URI. Set `SF_GOOGLE_HEALTH_CLIENT_ID` and
+`SF_GOOGLE_HEALTH_CLIENT_SECRET`, and the section appears.
+
+One thing to plan for: until Google verifies the OAuth client, it is capped at
+**100 users**, who each have to be added to the project's test-user list by
+hand.
