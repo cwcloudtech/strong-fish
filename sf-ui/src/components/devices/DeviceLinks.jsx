@@ -58,7 +58,7 @@ function outcomeMessage(t, outcome) {
  * here with the outcome in the query string, since the window that consented
  * belongs to Google, not to this app.
  */
-export default function DeviceSettings() {
+export default function DeviceLinks() {
   const { t } = useI18n();
   const [connections, setConnections] = useState(null);
   const [error, setError] = useState(null);
@@ -123,8 +123,7 @@ export default function DeviceSettings() {
 
   return (
     <div className="sf-card">
-      <h2>{t("devices.title")}</h2>
-      <p className="sf-muted">{t("devices.subtitle")}</p>
+      <p className="sf-muted" style={{ marginTop: 0 }}>{t("devices.subtitle")}</p>
 
       {outcome ? (
         <div

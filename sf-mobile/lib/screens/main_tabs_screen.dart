@@ -14,6 +14,7 @@ import 'invitations_screen.dart';
 import 'member_search_screen.dart';
 import 'messages_screen.dart';
 import 'one_rms_screen.dart';
+import 'steps_screen.dart';
 import 'strength_screen.dart';
 import 'profile_screen.dart';
 import 'training_screen.dart';
@@ -46,6 +47,7 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
       (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
       (label: t('nav.training'), icon: Icons.fitness_center, screen: const TrainingScreen()),
       (label: t('nav.oneRms'), icon: Icons.emoji_events_outlined, screen: const OneRmsScreen()),
+      (label: t('nav.steps'), icon: Icons.watch_outlined, screen: const StepsScreen()),
       // Beside the maxes, because it is what they are worth.
       (label: t('nav.strength'), icon: Icons.leaderboard_outlined, screen: const StrengthScreen()),
       if (isCoach)

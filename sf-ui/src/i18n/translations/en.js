@@ -50,6 +50,7 @@ const en = {
     feed: "Feed",
     training: "My training",
     oneRms: "My 1RMs",
+    steps: "Steps",
     clubs: "Clubs",
     exercises: "Exercises",
     profile: "Profile",

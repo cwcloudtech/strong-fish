@@ -204,7 +204,7 @@ func (h *DeviceHandler) Callback(w http.ResponseWriter, r *http.Request) {
 // string, which is the only channel there is: the window came from the
 // provider, not from the app.
 func (h *DeviceHandler) finish(w http.ResponseWriter, r *http.Request, provider, status string) {
-	http.Redirect(w, r, h.uiBaseURL+"/dashboard/settings?device="+url.QueryEscape(provider)+
+	http.Redirect(w, r, h.uiBaseURL+"/dashboard/steps?device="+url.QueryEscape(provider)+
 		"&status="+url.QueryEscape(status), http.StatusFound)
 }
 
