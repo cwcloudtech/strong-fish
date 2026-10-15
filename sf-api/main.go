@@ -107,18 +107,22 @@ func main() {
 	providers := oidc.BuildProviders(cfg)
 
 	// The integrations that read what a member's watch counted. One today;
-	// the list is what makes adding the next one a line here.
+	// the list is what makes adding the next one a line here. Registered even
+	// without credentials: the profile screen then shows it as switched off,
+	// which is a better answer than an empty space.
 	var devices []devicelink.Provider
 	googleHealth := googlehealth.New(googlehealth.Config{
-		ClientID:     cfg.GoogleHealthClientID,
-		ClientSecret: cfg.GoogleHealthClientSecret,
+		// The same OAuth client that signs people in with Google. One client
+		// can ask for different scopes per request, and a second set of
+		// credentials for the same Cloud project would only be one more thing
+		// to keep in step.
+		ClientID:     cfg.OIDCGoogleClientID,
+		ClientSecret: cfg.OIDCGoogleClientSecret,
 		AuthURL:      cfg.GoogleHealthAuthURL,
 		TokenURL:     cfg.GoogleHealthTokenURL,
 		APIBaseURL:   cfg.GoogleHealthAPIURL,
 	})
-	if googleHealth.Enabled() {
-		devices = append(devices, googleHealth)
-	}
+	devices = append(devices, googleHealth)
 
 	strengthHandler := handlers.NewStrengthHandler(exerciseStore, userStore)
 	profileHandler := handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore).

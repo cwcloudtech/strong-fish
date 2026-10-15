@@ -114,6 +114,9 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
     final connections = _connections;
+    // Empty only when this build knows of no integration at all. A provider
+    // the operator has not configured still appears, switched off: a blank
+    // space leaves a member wondering whether the feature exists.
     if (connections == null || connections.isEmpty) return const SizedBox.shrink();
 
     return Card(
@@ -131,11 +134,14 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   Text(t('devices.provider.${connection.provider}'),
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                   Text(
-                    connection.connected
-                        ? t('devices.connectedSince', {
-                            'date': connection.connectedAt?.toIso8601String().substring(0, 10) ?? '',
-                          })
-                        : t('devices.notConnected'),
+                    !connection.available
+                        ? t('devices.unavailable')
+                        : connection.connected
+                            ? t('devices.connectedSince', {
+                                'date':
+                                    connection.connectedAt?.toIso8601String().substring(0, 10) ?? '',
+                              })
+                            : t('devices.notConnected'),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ]),
@@ -150,7 +156,10 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                 )
               else
                 FilledButton.icon(
-                  onPressed: () => _connect(connection.provider),
+                  // Offered but not pressable when the server has no
+                  // credentials for it: there is nothing to consent to.
+                  onPressed:
+                      connection.available ? () => _connect(connection.provider) : null,
                   icon: const Icon(Icons.link, size: 18),
                   label: Text(t('devices.connect')),
                 ),

@@ -116,6 +116,9 @@ export default function DeviceSettings() {
   };
 
   if (connections === null) return <Spinner />;
+  // Only when this build knows of no integration at all. A provider the
+  // operator has not configured still appears, switched off: a blank space
+  // leaves a member wondering whether the feature exists.
   if (connections.length === 0) return null;
 
   return (
@@ -144,9 +147,11 @@ export default function DeviceSettings() {
             <div>
               <strong>{t(`devices.provider.${connection.provider}`)}</strong>
               <div className="sf-muted">
-                {connection.connected
-                  ? t("devices.connectedSince", { date: (connection.connectedAt || "").slice(0, 10) })
-                  : t("devices.notConnected")}
+                {!connection.available
+                  ? t("devices.unavailable")
+                  : connection.connected
+                    ? t("devices.connectedSince", { date: (connection.connectedAt || "").slice(0, 10) })
+                    : t("devices.notConnected")}
               </div>
             </div>
             {connection.connected ? (
@@ -161,7 +166,7 @@ export default function DeviceSettings() {
               <button
                 className="sf-button sf-button-sm"
                 onClick={() => connect(connection.provider)}
-                disabled={busy === connection.provider}
+                disabled={busy === connection.provider || !connection.available}
               >
                 <FiLink /> {t("devices.connect")}
               </button>

@@ -74,11 +74,22 @@ and StrongFish deliberately does not reach in and do it for you.
 
 ## For whoever runs the server
 
-The integration is off until an operator configures it. It needs an OAuth
-client in a Google Cloud project with the Google Health API enabled, and
-`<your API URL>/v1/devices/google-health/callback` registered as an authorized
-redirect URI. Set `SF_GOOGLE_HEALTH_CLIENT_ID` and
-`SF_GOOGLE_HEALTH_CLIENT_SECRET`, and the section appears.
+It reuses the OAuth client that already signs people in with Google -
+`SF_OIDC_GOOGLE_CLIENT_ID` and `SF_OIDC_GOOGLE_CLIENT_SECRET`. There is no
+second pair of credentials: it is the same Google Cloud project, and one OAuth
+client asks for different permissions per request - an identity when somebody
+signs in, activity when they connect a watch.
+
+So two things have to be true of that project:
+
+1. The **Google Health API** is enabled on it.
+2. `<your API URL>/v1/devices/google-health/callback` is one of the client's
+   authorized redirect URIs. Signing in and connecting a watch come back to
+   different routes, so adding this one is a step of its own.
+
+With Google sign-in not configured at all, the section still appears on the
+settings screen, marked as not enabled here - a member can see the feature
+exists rather than wondering.
 
 One thing to plan for: until Google verifies the OAuth client, it is capped at
 **100 users**, who each have to be added to the project's test-user list by

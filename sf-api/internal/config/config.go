@@ -34,24 +34,27 @@ type Config struct {
 	OIDCKeycloakClientID     string
 	OIDCKeycloakClientSecret string
 	OIDCKeycloakGroups       []string
-	// The Google Health integration: where a member's steps come from now
-	// that the Fitbit Web API is switched off. The three URLs are overridable
-	// so the flow can be pointed somewhere else while developing; left blank
-	// they are Google's own.
-	GoogleHealthClientID     string
-	GoogleHealthClientSecret string
-	GoogleHealthAuthURL      string
-	GoogleHealthTokenURL     string
-	GoogleHealthAPIURL       string
-	CWCloudAPIURL            string
-	CWCloudAPIKey            string
-	CWCloudContactFormID     string
-	EmailFrom                string
-	ConfirmationEmailTTL     time.Duration
-	ActivationMode           string
-	MobileURLPattern         string
-	MaxVideoSize             int64
-	MaxAudioSize             int64
+	// The Google Health integration - where a member's steps come from now
+	// that the Fitbit Web API is switched off - reuses the Google OIDC client
+	// above rather than asking for a second one. It is the same Google Cloud
+	// project either way, and one OAuth client can ask for different scopes
+	// per request: signing in asks for an identity, connecting a watch asks to
+	// read activity.
+	//
+	// These three URLs are overridable so the flow can be pointed somewhere
+	// else while developing; left blank they are Google's own.
+	GoogleHealthAuthURL  string
+	GoogleHealthTokenURL string
+	GoogleHealthAPIURL   string
+	CWCloudAPIURL        string
+	CWCloudAPIKey        string
+	CWCloudContactFormID string
+	EmailFrom            string
+	ConfirmationEmailTTL time.Duration
+	ActivationMode       string
+	MobileURLPattern     string
+	MaxVideoSize         int64
+	MaxAudioSize         int64
 	// OTELEndpoint is the single collector traces, logs and metrics are all
 	// pushed to. Blank disables export - logs still go to stdout/stderr, and
 	// /v1/metrics still serves, so a deployment with no collector is fully
@@ -179,8 +182,6 @@ func Load() Config {
 		OIDCKeycloakClientID:     os.Getenv("SF_OIDC_KEYCLOAK_CLIENT_ID"),
 		OIDCKeycloakClientSecret: os.Getenv("SF_OIDC_KEYCLOAK_CLIENT_SECRET"),
 		OIDCKeycloakGroups:       utils.SplitList(os.Getenv("SF_OIDC_KEYCLOAK_GROUPS")),
-		GoogleHealthClientID:     os.Getenv("SF_GOOGLE_HEALTH_CLIENT_ID"),
-		GoogleHealthClientSecret: os.Getenv("SF_GOOGLE_HEALTH_CLIENT_SECRET"),
 		GoogleHealthAuthURL:      os.Getenv("SF_GOOGLE_HEALTH_AUTH_URL"),
 		GoogleHealthTokenURL:     os.Getenv("SF_GOOGLE_HEALTH_TOKEN_URL"),
 		GoogleHealthAPIURL:       os.Getenv("SF_GOOGLE_HEALTH_API_URL"),
