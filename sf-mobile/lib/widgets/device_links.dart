@@ -27,6 +27,17 @@ Color stepTone(BuildContext context, int steps) {
   return colors.success;
 }
 
+/// Material 3 sizes a button for one sitting alone on a row. These share a
+/// row with a two-line label on a phone, where the default padding is what
+/// pushes them off the edge.
+final ButtonStyle _compactButton = ButtonStyle(
+  padding: WidgetStatePropertyAll(const EdgeInsets.symmetric(horizontal: 12)),
+  visualDensity: VisualDensity.compact,
+  // The tap target is deliberately left alone. What overflows is horizontal,
+  // and shrinking the target would trade a layout problem for a button that
+  // is harder to hit - under the 48dp everything else in the app respects.
+);
+
 /// A member's connected health accounts, and what they counted.
 ///
 /// Steps are read, never stored: StrongFish is not a step tracker, and a copy
@@ -42,7 +53,6 @@ class DeviceLinksSection extends ConsumerStatefulWidget {
 class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with WidgetsBindingObserver {
   List<DeviceConnection>? _connections;
   String _busy = '';
-  bool _awaitingConsent = false;
 
   @override
   void initState() {
@@ -57,16 +67,17 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     super.dispose();
   }
 
-  /// Consent happens in the system browser, so the app finds out it worked by
-  /// being brought back to the front. Only after a consent was actually
-  /// started: reloading on every resume would re-fetch the list every time the
-  /// member glanced at a notification.
+  /// Consent happens in the browser and finishes on the server, so the app
+  /// only finds out by asking again.
+  ///
+  /// Every resume, not just the one after a consent was started: whether the
+  /// app is even backgrounded depends on how the browser opened - an in-app
+  /// sheet never backgrounds it, and a flag set before leaving is then still
+  /// set when nothing happened. The list is one small request; asking for it
+  /// whenever the member comes back is cheaper than being wrong about it.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _awaitingConsent) {
-      _awaitingConsent = false;
-      _load();
-    }
+    if (state == AppLifecycleState.resumed) _load();
   }
 
   Future<void> _load() async {
@@ -82,10 +93,8 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     setState(() => _busy = provider);
     try {
       final url = await ref.read(apiProvider).deviceAuthorizeUrl(provider);
-      _awaitingConsent = true;
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } catch (error) {
-      _awaitingConsent = false;
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
@@ -123,8 +132,17 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(t('devices.title'), style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
+          Row(children: [
+            Expanded(
+              child: Text(t('devices.title'), style: Theme.of(context).textTheme.titleMedium),
+            ),
+            IconButton(
+              onPressed: _load,
+              tooltip: t('common.refresh'),
+              icon: const Icon(Icons.refresh, size: 20),
+              visualDensity: VisualDensity.compact,
+            ),
+          ]),
           Text(t('devices.subtitle'), style: Theme.of(context).textTheme.bodySmall),
           for (final connection in connections) ...[
             const SizedBox(height: 14),
@@ -151,6 +169,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
               else if (connection.connected)
                 TextButton.icon(
                   onPressed: () => _disconnect(connection.provider),
+                  style: _compactButton,
                   icon: const Icon(Icons.link_off, size: 18),
                   label: Text(t('devices.disconnect')),
                 )
@@ -160,6 +179,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   // credentials for it: there is nothing to consent to.
                   onPressed:
                       connection.available ? () => _connect(connection.provider) : null,
+                  style: _compactButton,
                   icon: const Icon(Icons.link, size: 18),
                   label: Text(t('devices.connect')),
                 ),
@@ -249,7 +269,9 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
         ),
       if (series != null) ...[
         const SizedBox(height: 12),
-        Row(children: [
+        // A Wrap, not a Row: "4 093 000" beside "45 477" is wider than a
+        // narrow phone, and a Row would overflow rather than fold.
+        Wrap(spacing: 24, runSpacing: 8, children: [
           _Figure(
             label: t('devices.total'),
             value: series.total,
@@ -280,16 +302,13 @@ class _Figure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsetsDirectional.only(end: 22),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-        Text(
-          _grouped(value),
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(color: tone),
-        ),
-      ]),
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: Theme.of(context).textTheme.bodySmall),
+      Text(
+        _grouped(value),
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(color: tone),
+      ),
+    ]);
   }
 }
 

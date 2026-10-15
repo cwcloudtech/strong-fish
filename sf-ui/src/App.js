@@ -27,6 +27,7 @@ import Login from "./pages/Login";
 import Messages from "./pages/dashboard/Messages";
 import OidcCallback from "./pages/OidcCallback";
 import OneRms from "./pages/dashboard/OneRms";
+import Steps from "./pages/dashboard/Steps";
 import ProgramDetail from "./pages/dashboard/ProgramDetail";
 import PublicPost from "./pages/PublicPost";
 import PublicProgram from "./pages/PublicProgram";
@@ -170,6 +171,7 @@ function AppRoutes() {
               <Route path="training" element={<Training />} />
               <Route path="training/:assignmentId" element={<TrainingSession />} />
               <Route path="one-rms" element={<OneRms />} />
+              <Route path="steps" element={<Steps />} />
               <Route path="clubs" element={<Clubs />} />
               <Route path="clubs/:clubId" element={<ClubDetail />} />
               <Route path="clubs/:clubId/programs/:programId" element={<ProgramDetail />} />

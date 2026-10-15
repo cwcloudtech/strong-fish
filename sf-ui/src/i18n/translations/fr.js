@@ -50,6 +50,7 @@ const fr = {
     feed: "Actualités",
     training: "Mon entraînement",
     oneRms: "Mes 1RM",
+    steps: "Pas",
     clubs: "Clubs",
     exercises: "Exercices",
     profile: "Profil",

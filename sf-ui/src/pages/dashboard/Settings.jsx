@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import DeviceSettings from "../../components/settings/DeviceSettings";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { FiArrowDown, FiArrowUp, FiEdit2, FiPlus, FiSave, FiTrash2, FiUsers } from "react-icons/fi";
@@ -322,7 +321,6 @@ export default function Settings() {
       </form>
 
       <MfaSettings />
-      <DeviceSettings />
       <StorageSettings />
     </div>
   );

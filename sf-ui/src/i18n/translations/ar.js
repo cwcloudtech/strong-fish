@@ -61,6 +61,7 @@ const ar = {
     feed: "المستجدات",
     training: "تدريبي",
     oneRms: "أرقامي القصوى (1RM)",
+    steps: "الخطوات",
     clubs: "الأندية",
     exercises: "التمارين",
     profile: "الملف الشخصي",
