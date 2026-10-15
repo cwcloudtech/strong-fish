@@ -73,7 +73,7 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 	for _, provider := range h.providers {
 		connection := models.DeviceConnection{
 			Provider:  provider.Name(),
-			Available: true,
+			Available: provider.Enabled(),
 			Connected: linked[provider.Name()],
 		}
 		if connection.Connected {
@@ -99,6 +99,11 @@ func (h *DeviceHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 
 	provider, ok := h.provider(w, r)
 	if !ok {
+		return
+	}
+	if !provider.Enabled() {
+		writeError(w, http.StatusNotImplemented,
+			"This integration is not enabled on this server", CodeDeviceUnavailable)
 		return
 	}
 
@@ -241,6 +246,12 @@ func (h *DeviceHandler) Steps(w http.ResponseWriter, r *http.Request) {
 
 	provider, ok := h.provider(w, r)
 	if !ok {
+		return
+	}
+
+	if !provider.Enabled() {
+		writeError(w, http.StatusNotImplemented,
+			"This integration is not enabled on this server", CodeDeviceUnavailable)
 		return
 	}
 

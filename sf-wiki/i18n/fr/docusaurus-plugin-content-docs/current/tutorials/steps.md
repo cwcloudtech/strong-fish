@@ -77,11 +77,23 @@ et StrongFish se garde délibérément d'aller le faire à votre place.
 
 ## Pour qui administre le serveur
 
-L'intégration est inactive tant qu'un opérateur ne l'a pas configurée. Il faut
-un client OAuth dans un projet Google Cloud avec l'API Google Health activée,
-et `<URL de votre API>/v1/devices/google-health/callback` déclaré comme URI de
-redirection autorisée. Renseignez `SF_GOOGLE_HEALTH_CLIENT_ID` et
-`SF_GOOGLE_HEALTH_CLIENT_SECRET`, et la section apparaît.
+Elle réutilise le client OAuth qui sert déjà à la connexion Google —
+`SF_OIDC_GOOGLE_CLIENT_ID` et `SF_OIDC_GOOGLE_CLIENT_SECRET`. Pas de second
+jeu d'identifiants : c'est le même projet Google Cloud, et un client OAuth
+demande des permissions différentes selon la requête — une identité quand
+quelqu'un se connecte, l'activité quand il relie une montre.
+
+Deux choses doivent donc être vraies de ce projet :
+
+1. L'**API Google Health** y est activée.
+2. `<URL de votre API>/v1/devices/google-health/callback` figure parmi les URI
+   de redirection autorisées du client. La connexion et le lien d'une montre
+   reviennent sur des routes différentes : ajouter celle-ci est une étape à
+   part entière.
+
+Si la connexion Google n'est pas configurée du tout, la section apparaît quand
+même dans les paramètres, signalée comme non activée ici — le membre voit que
+la fonctionnalité existe plutôt que de se demander.
 
 Un point à anticiper : tant que Google n'a pas vérifié le client OAuth, il est
 plafonné à **100 utilisateurs**, à ajouter un par un dans la liste des testeurs

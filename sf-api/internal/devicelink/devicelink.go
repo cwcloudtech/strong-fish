@@ -50,6 +50,11 @@ type Provider interface {
 	// Name is the stable identifier: the {provider} path segment, and the
 	// value stored in device_links.provider.
 	Name() string
+	// Enabled is whether the operator gave this integration the credentials
+	// it needs. A provider is registered either way - a member is told it
+	// exists and is switched off here, rather than being shown nothing and
+	// left to wonder whether the feature is real.
+	Enabled() bool
 	// MaxRangeDays is the longest span of days it will return at once, which
 	// is what bounds the views the app offers.
 	MaxRangeDays() int
