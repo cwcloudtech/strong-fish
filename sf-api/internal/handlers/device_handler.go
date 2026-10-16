@@ -246,9 +246,12 @@ func (h *DeviceHandler) Disconnect(w http.ResponseWriter, r *http.Request) {
 // returns in one call, so it is the longest view that can exist without the
 // app quietly making several requests and stitching them together.
 var stepRanges = map[string]int{
-	"24h":   1,
-	"48h":   2,
-	"week":  7,
+	"24h":  1,
+	"48h":  2,
+	"week": 7,
+	// A fortnight is the widest view where both measures are whole: it is
+	// exactly as far back as the provider will go for heart rate.
+	"14d":   14,
 	"month": 30,
 	"90d":   90,
 }
@@ -306,6 +309,17 @@ func (h *DeviceHandler) HeartRate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Shortened rather than refused. The provider reaches back a fortnight
+	// for beats and three months for steps, and refusing the wider views
+	// would cost the member the one number that is still true on them - what
+	// their heart was doing most recently. The response says it was
+	// shortened, so a client can show that number without drawing a chart
+	// captioned with a range it does not cover.
+	clamped := false
+	if limit := provider.MaxHeartRateDays(); days > limit {
+		days, clamped = limit, true
+	}
+
 	accessToken, err := h.freshToken(r, provider, link)
 	if err != nil {
 		h.writeProviderError(w, err, provider.Name())
@@ -324,6 +338,7 @@ func (h *DeviceHandler) HeartRate(w http.ResponseWriter, r *http.Request) {
 	series := models.HeartSeries{
 		Provider: provider.Name(),
 		Range:    rangeName,
+		Clamped:  clamped,
 		From:     start.Format("2006-01-02"),
 		To:       end.Format("2006-01-02"),
 		Days:     make([]models.HeartDay, 0, len(counts)),

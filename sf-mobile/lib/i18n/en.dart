@@ -57,7 +57,7 @@ const Map<String, dynamic> en = {
     'feed': 'Feed',
     'training': 'My training',
     'oneRms': 'My 1RMs',
-    'steps': 'Steps',
+    'healthData': 'Health data',
     'clubs': 'Clubs',
     'exercises': 'Exercises',
     'profile': 'Profile',
@@ -75,6 +75,7 @@ const Map<String, dynamic> en = {
     'downloadAppScan': 'Scan this with your phone to download the app.',
     'collapseSidebar': 'Collapse the menu',
     'expandSidebar': 'Expand the menu',
+    'steps': 'Steps',
   },
   'auth': {
     'welcomeBack': 'Welcome back',
@@ -556,6 +557,9 @@ const Map<String, dynamic> en = {
     'averageBpm': 'Average heart rate',
     'peakBpm': 'Highest heart rate',
     'noHeartRate': 'No heart rate recorded over this range.',
+    'heartRangeTooWide': 'Heart rate only goes back 14 days, so this longer view shows steps alone. The last reading is above.',
+    'latestBpm': 'Last heart rate',
+    'bpm': 'bpm',
     'zone': {
       'light': 'Light',
       'moderate': 'Moderate',
@@ -569,6 +573,7 @@ const Map<String, dynamic> en = {
       '24h': 'Last 24h',
       '48h': 'Last 48h',
       'week': 'Last week',
+      '14d': 'Last 14 days',
       'month': 'Last month',
       '90d': 'Last 90 days',
     },
@@ -677,6 +682,7 @@ const Map<String, dynamic> en = {
     'contactRateLimited': 'You have sent too many messages. Please try again later.',
     'contactMessageTooShort': 'Your message is too short - please tell us a little more.',
     'contactGibberish': 'Your message was flagged as spam. Please rewrite it.',
+    'deviceRangeTooWide': 'Heart rate is not available over a range this wide.',
     'uploadInterrupted': 'The upload stopped before it finished. The video is probably too large - check the limit on your storage screen.',
   },
   'about': {

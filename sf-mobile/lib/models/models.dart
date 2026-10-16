@@ -343,12 +343,18 @@ class HeartSeries {
   final int averageBpm;
   final int peakBpm;
 
+  /// The provider would not reach as far back as was asked - heart rate stops
+  /// at a fortnight where steps go back three months. The days are real, they
+  /// just cover less than the question did.
+  final bool clamped;
+
   const HeartSeries({
     this.provider = '',
     this.range = '',
     this.days = const [],
     this.averageBpm = 0,
     this.peakBpm = 0,
+    this.clamped = false,
   });
 
   factory HeartSeries.fromJson(Map<String, dynamic> json) => HeartSeries(
@@ -359,6 +365,7 @@ class HeartSeries {
             .toList(),
         averageBpm: _toInt(json['averageBpm']),
         peakBpm: _toInt(json['peakBpm']),
+        clamped: json['clamped'] == true,
       );
 }
 

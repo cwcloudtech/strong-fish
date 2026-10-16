@@ -104,4 +104,10 @@ type HeartSeries struct {
 	// reading; PeakBPM the highest single reading in the range.
 	AverageBPM int `json:"averageBpm"`
 	PeakBPM    int `json:"peakBpm"`
+	// Clamped says the provider would not reach as far back as was asked -
+	// heart rate stops at a fortnight where steps go back three months. The
+	// days returned are real, they just cover less than the question did,
+	// which is why a client shows the latest reading from them but not a
+	// chart that would be captioned with the wrong range.
+	Clamped bool `json:"clamped"`
 }

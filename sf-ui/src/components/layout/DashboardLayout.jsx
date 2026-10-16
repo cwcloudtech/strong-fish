@@ -83,7 +83,7 @@ export default function DashboardLayout({ children }) {
     // are "the block I am running", one written by a coach and one by them.
     { to: "/dashboard/programs", label: t("nav.myPrograms"), icon: <FiFileText /> },
     { to: "/dashboard/one-rms", label: t("nav.oneRms"), icon: <FiAward /> },
-    { to: "/dashboard/steps", label: t("nav.steps"), icon: <FiHeart /> },
+    { to: "/dashboard/steps", label: t("nav.healthData"), icon: <FiHeart /> },
     { to: "/strength", label: t("nav.strength"), icon: <FiTrendingUp /> },
     { to: "/dashboard/clubs", label: t("nav.clubs"), icon: <FiUsers /> },
     { to: "/dashboard/events", label: t("nav.events"), icon: <FiCalendar /> },

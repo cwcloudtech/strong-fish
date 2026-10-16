@@ -57,7 +57,7 @@ const Map<String, dynamic> ar = {
     'feed': 'المستجدات',
     'training': 'تدريبي',
     'oneRms': 'أرقامي القصوى (1RM)',
-    'steps': 'الخطوات',
+    'healthData': 'بيانات الصحة',
     'clubs': 'الأندية',
     'exercises': 'التمارين',
     'profile': 'الملف الشخصي',
@@ -75,6 +75,7 @@ const Map<String, dynamic> ar = {
     'downloadAppScan': 'امسح هذا الرمز بهاتفك لتحميل التطبيق.',
     'collapseSidebar': 'طيّ القائمة',
     'expandSidebar': 'توسيع القائمة',
+    'steps': 'الخطوات',
   },
   'auth': {
     'welcomeBack': 'أهلاً بعودتك',
@@ -556,6 +557,9 @@ const Map<String, dynamic> ar = {
     'averageBpm': 'متوسط معدل ضربات القلب',
     'peakBpm': 'أعلى معدل لضربات القلب',
     'noHeartRate': 'لم تُسجَّل أي ضربات قلب في هذه الفترة.',
+    'heartRangeTooWide': 'لا تعود بيانات نبض القلب إلى أبعد من 14 يوماً، لذا تعرض هذه الفترة الأطول الخطوات فقط. آخر قراءة في الأعلى.',
+    'latestBpm': 'آخر نبض',
+    'bpm': 'نبضة/د',
     'zone': {
       'light': 'خفيفة',
       'moderate': 'متوسطة',
@@ -569,6 +573,7 @@ const Map<String, dynamic> ar = {
       '24h': 'آخر 24 ساعة',
       '48h': 'آخر 48 ساعة',
       'week': 'آخر أسبوع',
+      '14d': 'آخر 14 يوماً',
       'month': 'آخر شهر',
       '90d': 'آخر 90 يوماً',
     },
@@ -677,6 +682,7 @@ const Map<String, dynamic> ar = {
     'contactRateLimited': 'أرسلت رسائل كثيرة. حاول لاحقاً.',
     'contactMessageTooShort': 'رسالتك قصيرة جداً - أخبرنا أكثر قليلاً.',
     'contactGibberish': 'صُنّفت رسالتك كرسالة مزعجة. أعد صياغتها.',
+    'deviceRangeTooWide': 'نبض القلب غير متاح على فترة بهذا الاتساع.',
     'uploadInterrupted': 'توقّف الرفع قبل اكتماله. الفيديو على الأرجح كبير جدًا — راجع الحد في شاشة التخزين.',
   },
   'about': {
