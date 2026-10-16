@@ -101,6 +101,8 @@ export const devices = {
   // the clients cannot disagree about what "a month" means.
   steps: (provider, range) =>
     body(client.get(`/users/me/devices/${provider}/steps`, { params: { range } })),
+  heartRate: (provider, range) =>
+    body(client.get(`/users/me/devices/${provider}/heart-rate`, { params: { range } })),
 };
 
 export const programs = {

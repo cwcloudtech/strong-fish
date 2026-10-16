@@ -174,7 +174,7 @@ export default function DeviceLinks() {
             )}
           </div>
 
-          {connection.connected ? <StepPanel provider={connection.provider} /> : null}
+          {connection.connected ? <DataPanel provider={connection.provider} /> : null}
         </div>
       ))}
     </div>
@@ -189,10 +189,11 @@ export default function DeviceLinks() {
  * offered, so there is nothing to be gained by asking for more than what is
  * being looked at.
  */
-function StepPanel({ provider }) {
+function DataPanel({ provider }) {
   const { t } = useI18n();
   const [range, setRange] = useState("week");
   const [series, setSeries] = useState(null);
+  const [heart, setHeart] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -200,10 +201,19 @@ function StepPanel({ provider }) {
     setLoading(true);
     setError(null);
     try {
-      setSeries(await devicesApi.steps(provider, range));
+      // Fetched together: they are the same days of the same range, and two
+      // panels that could disagree about which week they are showing would
+      // be worse than one that is briefly empty.
+      const [steps, rate] = await Promise.all([
+        devicesApi.steps(provider, range),
+        devicesApi.heartRate(provider, range),
+      ]);
+      setSeries(steps);
+      setHeart(rate);
     } catch (err) {
       setError(err);
       setSeries(null);
+      setHeart(null);
     } finally {
       setLoading(false);
     }
@@ -278,6 +288,8 @@ function StepPanel({ provider }) {
             ))}
           </div>
 
+          {heart ? <HeartSection heart={heart} t={t} /> : null}
+
           {/* The same numbers, readable: the bars are decoration, and a member
               using a screen reader is owed the counts themselves. */}
           <details style={{ marginTop: "0.5rem" }}>
@@ -299,6 +311,59 @@ function StepPanel({ provider }) {
           </details>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Heart rate over the same days, each one coloured by the hardest zone it
+ * reached.
+ *
+ * The zones are the provider's own four bands, not thresholds worked out here
+ * from a birthday: a zone depends on somebody's maximum heart rate, and
+ * guessing it would put a confident colour on a number that had not earned it.
+ */
+function HeartSection({ heart, t }) {
+  const days = heart.days.filter((day) => day.known);
+  if (days.length === 0) {
+    return <p className="sf-muted" style={{ marginTop: "0.8rem" }}>{t("devices.noHeartRate")}</p>;
+  }
+
+  const peak = Math.max(1, ...days.map((day) => day.max || day.avg));
+
+  return (
+    <div style={{ marginTop: "1.1rem" }}>
+      <div className="sf-row" style={{ gap: "1.4rem", flexWrap: "wrap" }}>
+        <div>
+          <div className="sf-muted">{t("devices.averageBpm")}</div>
+          <strong className="sf-steps-figure">{heart.averageBpm}</strong>
+        </div>
+        <div>
+          <div className="sf-muted">{t("devices.peakBpm")}</div>
+          <strong className="sf-steps-figure">{heart.peakBpm}</strong>
+        </div>
+      </div>
+
+      <div className="sf-steps-chart" aria-hidden="true">
+        {heart.days.map((day) => (
+          <div
+            key={day.date}
+            className={`sf-steps-bar sf-zone-${day.known ? day.zone : "none"}`}
+            style={{ height: `${Math.round(((day.max || day.avg) / peak) * 100)}%` }}
+            title={`${day.date}: ${day.avg} bpm (${t(`devices.zone.${day.zone}`)})`}
+          />
+        ))}
+      </div>
+
+      {/* What the colours mean, since four bands of colour explain nothing on
+          their own. */}
+      <div className="sf-row" style={{ gap: "0.9rem", flexWrap: "wrap", marginTop: "0.4rem" }}>
+        {["light", "moderate", "vigorous", "peak"].map((zone) => (
+          <span key={zone} className="sf-muted sf-zone-key">
+            <i className={`sf-zone-dot sf-zone-${zone}`} /> {t(`devices.zone.${zone}`)}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

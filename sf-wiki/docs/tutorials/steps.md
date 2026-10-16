@@ -80,17 +80,36 @@ second pair of credentials: it is the same Google Cloud project, and one OAuth
 client asks for different permissions per request - an identity when somebody
 signs in, activity when they connect a watch.
 
-So two things have to be true of that project:
+Four things have to be true of that project. The old single "OAuth consent
+screen" page no longer exists - it is now three pages under **Google Auth
+Platform**, which is why these are given as direct links.
 
-1. The **Google Health API** is enabled on it.
-2. `<your API URL>/v1/devices/google-health/callback` is one of the client's
-   authorized redirect URIs. Signing in and connecting a watch come back to
-   different routes, so adding this one is a step of its own.
+1. The **Google Health API** is enabled:
+   [API Library](https://console.cloud.google.com/apis/library/health.googleapis.com).
+2. `<your API URL>/v1/devices/google-health/callback` is one of the OAuth
+   client's authorized redirect URIs:
+   [Credentials](https://console.cloud.google.com/apis/credentials). Signing in
+   and connecting a watch come back to different routes, so adding this one is
+   a step of its own.
+3. The Google Health scope is listed on
+   [Data Access](https://console.cloud.google.com/auth/scopes) - *Add or remove
+   scopes*, search for Google Health API.
+4. Whoever is testing is on the test-user list:
+   [Audience](https://console.cloud.google.com/auth/audience), where
+   *Publishing status* reads **Testing** and *User type* **External**. Add each
+   address under **Test users**.
 
-With Google sign-in not configured at all, the section still appears on the
-settings screen, marked as not enabled here - a member can see the feature
-exists rather than wondering.
+With Google sign-in not configured at all, the section still appears, marked as
+not enabled here - a member can see the feature exists rather than wondering.
 
-One thing to plan for: until Google verifies the OAuth client, it is capped at
-**100 users**, who each have to be added to the project's test-user list by
-hand.
+Two things to plan for while the app is in Testing:
+
+- It is capped at **100 test users**, each added by hand.
+- A test user's authorization **expires seven days after they consent**, so the
+  connection drops weekly until the app is published. StrongFish says so
+  plainly - "the connection has expired, connect the account again" - rather
+  than showing an empty chart.
+
+Both limits go away once the app is published and verified. In a Google
+Workspace organization, an admin marking the app **Trusted** lifts them for
+that organization's own users.

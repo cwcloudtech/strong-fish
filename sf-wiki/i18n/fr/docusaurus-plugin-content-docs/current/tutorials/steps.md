@@ -83,18 +83,37 @@ jeu d'identifiants : c'est le même projet Google Cloud, et un client OAuth
 demande des permissions différentes selon la requête — une identité quand
 quelqu'un se connecte, l'activité quand il relie une montre.
 
-Deux choses doivent donc être vraies de ce projet :
+Quatre choses doivent être vraies de ce projet. L'ancienne page unique « OAuth
+consent screen » n'existe plus : elle est éclatée en trois pages sous **Google
+Auth Platform**, d'où les liens directs ci-dessous.
 
-1. L'**API Google Health** y est activée.
+1. L'**API Google Health** y est activée :
+   [bibliothèque d'API](https://console.cloud.google.com/apis/library/health.googleapis.com).
 2. `<URL de votre API>/v1/devices/google-health/callback` figure parmi les URI
-   de redirection autorisées du client. La connexion et le lien d'une montre
-   reviennent sur des routes différentes : ajouter celle-ci est une étape à
-   part entière.
+   de redirection autorisées du client OAuth :
+   [Identifiants](https://console.cloud.google.com/apis/credentials). La
+   connexion et le lien d'une montre reviennent sur des routes différentes :
+   ajouter celle-ci est une étape à part entière.
+3. Le scope Google Health est déclaré dans
+   [Data Access](https://console.cloud.google.com/auth/scopes) — *Add or remove
+   scopes*, puis chercher Google Health API.
+4. Les personnes qui testent sont dans la liste des testeurs :
+   [Audience](https://console.cloud.google.com/auth/audience), où *Publishing
+   status* indique **Testing** et *User type* **External**. Ajoutez chaque
+   adresse sous **Test users**.
 
 Si la connexion Google n'est pas configurée du tout, la section apparaît quand
-même dans les paramètres, signalée comme non activée ici — le membre voit que
-la fonctionnalité existe plutôt que de se demander.
+même, signalée comme non activée ici — le membre voit que la fonctionnalité
+existe plutôt que de se demander.
 
-Un point à anticiper : tant que Google n'a pas vérifié le client OAuth, il est
-plafonné à **100 utilisateurs**, à ajouter un par un dans la liste des testeurs
-du projet.
+Deux points à anticiper tant que l'app est en Testing :
+
+- Elle est plafonnée à **100 testeurs**, ajoutés un par un.
+- L'autorisation d'un testeur **expire sept jours après son consentement** : la
+  connexion saute donc chaque semaine jusqu'à la publication. StrongFish le dit
+  clairement — « la connexion a expiré, reconnectez le compte » — plutôt que
+  d'afficher un graphique vide.
+
+Les deux limites disparaissent une fois l'app publiée et validée. Dans une
+organisation Google Workspace, un administrateur qui marque l'app **Trusted**
+les lève pour les utilisateurs de son organisation.

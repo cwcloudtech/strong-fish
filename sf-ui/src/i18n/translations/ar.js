@@ -546,6 +546,15 @@ const ar = {
     total: "إجمالي الخطوات",
     dailyAverage: "المعدل لكل 24 ساعة",
     perDay: "يوماً بيوم",
+    averageBpm: "متوسط معدل ضربات القلب",
+    peakBpm: "أعلى معدل لضربات القلب",
+    noHeartRate: "لم تُسجَّل أي ضربات قلب في هذه الفترة.",
+    zone: {
+      light: "خفيفة",
+      moderate: "متوسطة",
+      vigorous: "عالية",
+      peak: "قصوى",
+    },
     provider: {
       "google-health": "Google Health ‏(Fitbit، Pixel Watch)",
     },

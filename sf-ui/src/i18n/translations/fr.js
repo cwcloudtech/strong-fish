@@ -549,6 +549,15 @@ const fr = {
     total: "Pas au total",
     dailyAverage: "Moyenne par 24h",
     perDay: "Jour par jour",
+    averageBpm: "Fréquence cardiaque moyenne",
+    peakBpm: "Fréquence cardiaque maximale",
+    noHeartRate: "Aucune fréquence cardiaque enregistrée sur cette période.",
+    zone: {
+      light: "Légère",
+      moderate: "Modérée",
+      vigorous: "Intense",
+      peak: "Maximale",
+    },
     provider: {
       "google-health": "Google Health (Fitbit, Pixel Watch)",
     },

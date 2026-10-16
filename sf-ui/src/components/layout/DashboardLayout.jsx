@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { FiActivity, FiAward, FiBarChart2, FiBookOpen, FiCalendar, FiChevronLeft, FiChevronRight, FiFileText, FiInfo, FiKey, FiLogOut, FiMail, FiMenu, FiMessageSquare, FiMoon, FiSearch, FiShield, FiSun, FiTrendingUp, FiUser, FiUserPlus, FiUsers, FiWatch } from "react-icons/fi";
+import { FiActivity, FiAward, FiBarChart2, FiBookOpen, FiCalendar, FiChevronLeft, FiChevronRight, FiFileText, FiHeart, FiInfo, FiKey, FiLogOut, FiMail, FiMenu, FiMessageSquare, FiMoon, FiSearch, FiShield, FiSun, FiTrendingUp, FiUser, FiUserPlus, FiUsers } from "react-icons/fi";
 
 import { admin, invitations as invitationsApi, messages as messagesApi } from "../../api/services";
 import Avatar from "../common/Avatar";
@@ -83,7 +83,7 @@ export default function DashboardLayout({ children }) {
     // are "the block I am running", one written by a coach and one by them.
     { to: "/dashboard/programs", label: t("nav.myPrograms"), icon: <FiFileText /> },
     { to: "/dashboard/one-rms", label: t("nav.oneRms"), icon: <FiAward /> },
-    { to: "/dashboard/steps", label: t("nav.steps"), icon: <FiWatch /> },
+    { to: "/dashboard/steps", label: t("nav.steps"), icon: <FiHeart /> },
     { to: "/strength", label: t("nav.strength"), icon: <FiTrendingUp /> },
     { to: "/dashboard/clubs", label: t("nav.clubs"), icon: <FiUsers /> },
     { to: "/dashboard/events", label: t("nav.events"), icon: <FiCalendar /> },

@@ -538,6 +538,15 @@ const en = {
     total: "Total steps",
     dailyAverage: "Average per 24h",
     perDay: "Day by day",
+    averageBpm: "Average heart rate",
+    peakBpm: "Highest heart rate",
+    noHeartRate: "No heart rate recorded over this range.",
+    zone: {
+      light: "Light",
+      moderate: "Moderate",
+      vigorous: "Vigorous",
+      peak: "Peak",
+    },
     provider: {
       "google-health": "Google Health (Fitbit, Pixel Watch)",
     },

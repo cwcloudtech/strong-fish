@@ -33,10 +33,17 @@ import (
 // Provider is the name this link is stored under (see the health_links table).
 const Provider = "google-health"
 
-// Scope is the one permission asked for: the family that carries steps, read
-// only. Asking for more would be asking a member to hand over sleep and
-// weight to an app that shows neither.
-const Scope = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly"
+// Scope is what consent asks for, read only.
+//
+// Two families, because Google splits them where the screen does not: steps
+// and the heart rate zones earned by training are "activity and fitness",
+// while the beats per minute behind them are a "health metric". Showing a BPM
+// coloured by its zone needs one of each.
+//
+// Nothing beyond that. A member handing over sleep or weight to an app that
+// displays neither would be giving away more than it asked them for.
+const Scope = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly " +
+	"https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"
 
 // MaxRollupDays is the longest window the API accepts in one steps roll-up,
 // and so the longest view there is. The widest the app offers is exactly this,
@@ -319,6 +326,105 @@ func (c *Client) DailySteps(ctx context.Context, accessToken string, start, end 
 	return days, nil
 }
 
+type heartRollupResponse struct {
+	RollupDataPoints []struct {
+		CivilStartTime civilDateTime `json:"civilStartTime"`
+		HeartRate      *struct {
+			BeatsPerMinuteAvg float64 `json:"beatsPerMinuteAvg"`
+			BeatsPerMinuteMax float64 `json:"beatsPerMinuteMax"`
+			BeatsPerMinuteMin float64 `json:"beatsPerMinuteMin"`
+		} `json:"heartRate"`
+		TimeInHeartRateZone *struct {
+			TimeInHeartRateZones []struct {
+				HeartRateZone string `json:"heartRateZone"`
+				Duration      string `json:"duration"`
+			} `json:"timeInHeartRateZones"`
+		} `json:"timeInHeartRateZone"`
+	} `json:"rollupDataPoints"`
+}
+
+// zoneRank orders the provider's bands so "the hardest one reached" is a
+// comparison rather than a special case per zone.
+var zoneRank = map[string]int{
+	"LIGHT":    1,
+	"MODERATE": 2,
+	"VIGOROUS": 3,
+	"PEAK":     4,
+}
+
+var zoneNames = map[string]string{
+	"LIGHT":    devicelink.ZoneLight,
+	"MODERATE": devicelink.ZoneModerate,
+	"VIGOROUS": devicelink.ZoneVigorous,
+	"PEAK":     devicelink.ZonePeak,
+}
+
+// DailyHeartRate returns one entry per day from start up to and including end.
+//
+// Two reads, because Google keeps the beats and the zones in different data
+// types - and in different scopes. The zones are what colour the number: they
+// are the provider's own bands, computed against the member's own maximum
+// heart rate, which is not something to re-derive here from a birthday.
+func (c *Client) DailyHeartRate(ctx context.Context, accessToken string, start, end time.Time) ([]devicelink.DayHeart, error) {
+	start = truncateDay(start)
+	end = truncateDay(end)
+	if end.Before(start) {
+		return nil, nil
+	}
+	if earliest := end.AddDate(0, 0, -(MaxRollupDays - 1)); start.Before(earliest) {
+		start = earliest
+	}
+
+	days := map[string]*devicelink.DayHeart{}
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		key := day.Format("2006-01-02")
+		days[key] = &devicelink.DayHeart{Date: key, Zone: devicelink.ZoneLight}
+	}
+
+	for _, dataType := range []string{"heart-rate", "time-in-heart-rate-zone"} {
+		var body rollupRequest
+		body.Range.Start = civilDateTime{Date: dateOf(start)}
+		body.Range.End = civilDateTime{Date: dateOf(end.AddDate(0, 0, 1))}
+		body.WindowSizeDays = 1
+
+		var parsed heartRollupResponse
+		if err := c.call(ctx, http.MethodPost,
+			"/v4/users/me/dataTypes/"+dataType+"/dataPoints:dailyRollUp", accessToken, body, &parsed); err != nil {
+			return nil, err
+		}
+
+		for _, point := range parsed.RollupDataPoints {
+			date := point.CivilStartTime.Date
+			day, ok := days[fmt.Sprintf("%04d-%02d-%02d", date.Year, date.Month, date.Day)]
+			if !ok {
+				continue
+			}
+			if rate := point.HeartRate; rate != nil {
+				day.Avg, day.Max, day.Min = rate.BeatsPerMinuteAvg, rate.BeatsPerMinuteMax, rate.BeatsPerMinuteMin
+				day.Known = day.Avg > 0 || day.Max > 0
+			}
+			if zones := point.TimeInHeartRateZone; zones != nil {
+				for _, zone := range zones.TimeInHeartRateZones {
+					// A zone listed with no time in it is not a zone reached.
+					if zone.Duration == "" || strings.HasPrefix(zone.Duration, "0s") {
+						continue
+					}
+					if name, known := zoneNames[zone.HeartRateZone]; known &&
+						zoneRank[zone.HeartRateZone] > zoneRank[strings.ToUpper(day.Zone)] {
+						day.Zone = name
+					}
+				}
+			}
+		}
+	}
+
+	ordered := []devicelink.DayHeart{}
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		ordered = append(ordered, *days[day.Format("2006-01-02")])
+	}
+	return ordered, nil
+}
+
 type apiError struct {
 	Error struct {
 		Code    int    `json:"code"`
@@ -366,6 +472,12 @@ func (c *Client) call(ctx context.Context, method, path, accessToken string, bod
 			strings.Contains(failure.Error.Message, "ACCOUNT_NOT_LINKED"):
 			return devicelink.ErrNotLinked
 		case resp.StatusCode == http.StatusUnauthorized:
+			return devicelink.ErrReauthorize
+		case strings.Contains(failure.Error.Status, "MISSING_OAUTH_SCOPE"),
+			strings.Contains(failure.Error.Message, "MISSING_OAUTH_SCOPE"):
+			// A link made before this app asked for a scope it now needs.
+			// The member has to consent again, which is what ErrReauthorize
+			// already tells them to do.
 			return devicelink.ErrReauthorize
 		}
 		// SERVICE_DISABLED here means the Google Health API is not enabled on

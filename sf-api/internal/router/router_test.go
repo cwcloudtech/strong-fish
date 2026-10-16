@@ -97,6 +97,7 @@ var routes = []struct{ method, path string }{
 	{"GET", "/v1/users/me/devices"},
 	{"GET", "/v1/users/me/devices/google-health/authorize"},
 	{"GET", "/v1/users/me/devices/google-health/steps"},
+	{"GET", "/v1/users/me/devices/google-health/heart-rate"},
 	{"DELETE", "/v1/users/me/devices/google-health"},
 	{"GET", "/v1/devices/google-health/callback"},
 	{"POST", "/v1/users/me/api-keys"},

@@ -74,3 +74,34 @@ type StepSeries struct {
 	// walk, not days that did not happen.
 	DailyAverage int64 `json:"dailyAverage"`
 }
+
+// HeartDay is one day's heart rate, and the hardest zone reached that day.
+type HeartDay struct {
+	Date string `json:"date"`
+	Avg  int    `json:"avg"`
+	Max  int    `json:"max"`
+	Min  int    `json:"min"`
+	// Zone is one of light, moderate, vigorous, peak - the provider's own
+	// four bands, which is what the colour on screen reads from.
+	Zone string `json:"zone"`
+	// Known separates "the watch was off" from "a resting day": both would
+	// otherwise be a row of zeroes.
+	Known bool `json:"known"`
+}
+
+// HeartSeries is a range of days of heart rate.
+//
+// The averages skip the days with no reading at all. A night without the watch
+// is not a day at zero beats per minute, and letting it count would drag a
+// week's average down by a quarter for no reason a member could see.
+type HeartSeries struct {
+	Provider string     `json:"provider"`
+	Range    string     `json:"range"`
+	From     string     `json:"from"`
+	To       string     `json:"to"`
+	Days     []HeartDay `json:"days"`
+	// AverageBPM is the mean of the daily averages over the days with a
+	// reading; PeakBPM the highest single reading in the range.
+	AverageBPM int `json:"averageBpm"`
+	PeakBPM    int `json:"peakBpm"`
+}
