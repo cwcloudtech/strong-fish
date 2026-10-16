@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { FiLink, FiRefreshCw, FiSlash } from "react-icons/fi";
 
 import { devices as devicesApi } from "../../api/services";
+import ExportMenu from "../programs/ExportMenu";
+import downloadBlob from "../../utils/downloadBlob";
 import { ErrorMessage, Spinner } from "../common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -190,8 +192,9 @@ export default function DeviceLinks() {
  * being looked at.
  */
 function DataPanel({ provider }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [range, setRange] = useState("week");
+  const [exporting, setExporting] = useState(false);
   const [series, setSeries] = useState(null);
   const [heart, setHeart] = useState(null);
   const [heartError, setHeartError] = useState(null);
@@ -226,6 +229,18 @@ function DataPanel({ provider }) {
     load();
   }, [load]);
 
+  const exportAs = async (format) => {
+    setExporting(true);
+    try {
+      const blob = await devicesApi.export(provider, { format, range, locale });
+      downloadBlob(blob, `health-${series?.to || range}.${format}`);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const peak = Math.max(1, ...(series?.days || []).map((day) => day.steps));
 
   // The most recent day the watch actually recorded - "last" rather than
@@ -253,6 +268,15 @@ function DataPanel({ provider }) {
         >
           <FiRefreshCw />
         </button>
+        {/* Exports what is on screen: the range picked above, not some other
+            window the member would have to go and set again. */}
+        <ExportMenu
+          onExport={exportAs}
+          busy={exporting}
+          size="sf-button-sm"
+          formats={["png", "pdf"]}
+          label={t("devices.export")}
+        />
       </div>
 
       <ErrorMessage error={error} />

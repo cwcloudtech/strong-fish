@@ -212,6 +212,8 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Delete("/{provider}", h.Device.Disconnect)
 					r.Get("/{provider}/steps", h.Device.Steps)
 					r.Get("/{provider}/heart-rate", h.Device.HeartRate)
+					r.Get("/{provider}/export.png", h.Device.Export)
+					r.Get("/{provider}/export.pdf", h.Device.Export)
 				})
 
 				// The invitations waiting for this account's address. They are

@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -12,9 +14,12 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"strong-fish-api/internal/devicelink"
+	"strong-fish-api/internal/healthsheet"
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/oidc"
+	"strong-fish-api/internal/programpdf"
+	"strong-fish-api/internal/programpng"
 	"strong-fish-api/internal/store"
 	"strong-fish-api/internal/utils"
 )
@@ -28,19 +33,33 @@ import (
 // range becomes dates, what the client is told when a grant has lapsed - is
 // the same whoever is counting the steps.
 type DeviceHandler struct {
-	providers  []devicelink.Provider
-	links      *store.DeviceLinkStore
+	providers []devicelink.Provider
+	links     *store.DeviceLinkStore
+	// users is only for naming an export after the member it belongs to: a
+	// picture of somebody's week that travels without their name on it is one
+	// nobody can place a fortnight later.
+	users      *store.UserStore
 	jwtSecret  string
 	apiBaseURL string
 	uiBaseURL  string
 }
 
 func NewDeviceHandler(providers []devicelink.Provider, links *store.DeviceLinkStore,
-	jwtSecret, apiBaseURL, uiBaseURL string) *DeviceHandler {
+	users *store.UserStore, jwtSecret, apiBaseURL, uiBaseURL string) *DeviceHandler {
 	return &DeviceHandler{
-		providers: providers, links: links, jwtSecret: jwtSecret,
+		providers: providers, links: links, users: users, jwtSecret: jwtSecret,
 		apiBaseURL: apiBaseURL, uiBaseURL: uiBaseURL,
 	}
+}
+
+// memberName is who the export belongs to, or blank when that cannot be
+// resolved - a missing name is a title the sheet does without, not a failure.
+func (h *DeviceHandler) memberName(ctx context.Context, userID string) string {
+	user, err := h.users.FindByID(ctx, userID)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(user.Name + " " + user.Surname)
 }
 
 // redirectURI is both where the provider sends the browser back and what is
@@ -366,6 +385,113 @@ func (h *DeviceHandler) HeartRate(w http.ResponseWriter, r *http.Request) {
 		series.AverageBPM = total / known
 	}
 	writeJSON(w, http.StatusOK, series)
+}
+
+// Export renders a member's health data as a picture or a PDF.
+//
+// The same two formats the programs offer, and for the same two reasons: an
+// image is what gets pasted into a conversation, a PDF is what gets kept. The
+// rows are built once, here, so the two documents cannot disagree.
+func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	provider, link, days, _, ok := h.readable(w, r, userID)
+	if !ok {
+		return
+	}
+
+	accessToken, err := h.freshToken(r, provider, link)
+	if err != nil {
+		h.writeProviderError(w, err, provider.Name())
+		return
+	}
+
+	end := time.Now().UTC()
+	start := end.AddDate(0, 0, -(days - 1))
+
+	counts, err := provider.DailySteps(r.Context(), accessToken, start, end)
+	if err != nil {
+		h.writeProviderError(w, err, provider.Name())
+		return
+	}
+	steps := models.StepSeries{From: start.Format("2006-01-02"), To: end.Format("2006-01-02")}
+	for _, count := range counts {
+		steps.Days = append(steps.Days, models.StepDay{Date: count.Date, Steps: count.Steps})
+		steps.Total += count.Steps
+	}
+	if len(steps.Days) > 0 {
+		steps.DailyAverage = steps.Total / int64(len(steps.Days))
+	}
+
+	// Heart rate is optional on purpose. It reaches back a fortnight against
+	// the steps' three months, and a provider that will not answer for this
+	// range must not cost the member the export they asked for.
+	var heart *models.HeartSeries
+	heartDays := days
+	if limit := provider.MaxHeartRateDays(); heartDays > limit {
+		heartDays = limit
+	}
+	if readings, err := provider.DailyHeartRate(r.Context(), accessToken,
+		end.AddDate(0, 0, -(heartDays-1)), end); err == nil {
+		series := models.HeartSeries{}
+		total, known := 0, 0
+		for _, reading := range readings {
+			day := models.HeartDay{
+				Date: reading.Date, Avg: int(math.Round(reading.Avg)),
+				Max: int(math.Round(reading.Max)), Min: int(math.Round(reading.Min)),
+				Zone: reading.Zone, Known: reading.Known,
+			}
+			series.Days = append(series.Days, day)
+			if day.Known {
+				total += day.Avg
+				known++
+			}
+			if day.Max > series.PeakBPM {
+				series.PeakBPM = day.Max
+			}
+		}
+		if known > 0 {
+			series.AverageBPM = total / known
+		}
+		heart = &series
+	} else {
+		slog.Warn("health export: heart rate unavailable, exporting steps alone",
+			"provider", provider.Name(), "error", err)
+	}
+
+	locale := sheetLocale(r)
+	withHeart := heart != nil && heart.AverageBPM > 0
+	if !withHeart {
+		heart = nil
+	}
+
+	title := healthsheet.Title(h.memberName(r.Context(), userID), locale)
+	subtitle := healthsheet.Subtitle(steps, heart, locale)
+	columns := healthsheet.Columns(locale, withHeart)
+	rows := healthsheet.Lines(steps, heart, locale)
+	footer := h.uiBaseURL
+
+	var (
+		body  []byte
+		media string
+	)
+	if exportFormat(r) == formatPNG {
+		body, err = programpng.RenderTable(title, subtitle, columns, rows, footer)
+		media = mediaPNG
+	} else {
+		body, err = programpdf.RenderTable(title, subtitle, columns, rows, footer)
+		media = mediaPDF
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error(), CodeInternal)
+		return
+	}
+
+	w.Header().Set("Content-Type", media)
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf("attachment; filename=%q", sheetFileName("health-"+steps.To, exportFormat(r))))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
 }
 
 // readable resolves everything a read of a member's data needs: the provider,

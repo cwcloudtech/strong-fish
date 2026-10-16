@@ -91,6 +91,50 @@ func Render(program models.Program, days []models.ProgramDay, options Options) (
 	return buf.Bytes(), nil
 }
 
+// RenderTable lays one titled table out as a PDF.
+//
+// The program renderer above is this with a block's worth of structure on top;
+// anything that is simply rows - a member's health data, say - needs only
+// this. Portrait, because a handful of columns fits and a printed sheet that
+// comes out sideways is one nobody files.
+func RenderTable(title, subtitle string, columns []programsheet.Column,
+	rows []programsheet.Line, footer string) ([]byte, error) {
+	pdf := fpdf.New("P", "pt", "A4", "")
+	pdf.SetMargins(36, 40, 36)
+	pdf.SetAutoPageBreak(true, 40)
+
+	translate := pdf.UnicodeTranslatorFromDescriptor("")
+
+	if footer != "" {
+		pdf.SetFooterFunc(func() {
+			pdf.SetY(-24)
+			pdf.SetFont("Helvetica", "I", 7)
+			pdf.SetTextColor(170, 170, 170)
+			pdf.CellFormat(0, 10, translate(footer), "", 0, "C", false, 0, "")
+			pdf.SetTextColor(0, 0, 0)
+		})
+	}
+
+	pdf.AddPage()
+	pdf.SetFont("Helvetica", "B", titleSizePt)
+	pdf.CellFormat(0, 20, translate(title), "", 1, "L", false, 0, "")
+	if subtitle != "" {
+		pdf.SetFont("Helvetica", "", fontSizePt)
+		pdf.SetTextColor(110, 110, 110)
+		pdf.MultiCell(0, 12, translate(subtitle), "", "L", false)
+		pdf.SetTextColor(0, 0, 0)
+	}
+	pdf.Ln(8)
+
+	drawTable(pdf, translate, columns, rows)
+
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 func drawWeekHeader(pdf *fpdf.Fpdf, translate func(string) string, program models.Program,
 	number int, options Options) {
 	pdf.SetFont("Helvetica", "B", titleSizePt)

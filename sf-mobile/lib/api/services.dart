@@ -392,6 +392,26 @@ class SfApi {
     return StepSeries.fromJson(_map(response.data));
   }
 
+  /// Downloads the health view as a picture or a PDF, and returns where it
+  /// was saved. [format] is the route's own extension, so the file that
+  /// arrives is named the way its contents are.
+  Future<String> downloadHealth(
+    String provider, {
+    required String directory,
+    required String fileName,
+    String format = 'png',
+    String range = 'week',
+    String locale = 'en',
+  }) async {
+    final path = '$directory/$fileName';
+    await client.dio.download(
+      '/users/me/devices/$provider/export.$format',
+      path,
+      queryParameters: {'range': range, 'locale': locale},
+    );
+    return path;
+  }
+
   /// The same days of the same range, as heart rate.
   Future<HeartSeries> deviceHeartRate(String provider, String range) async {
     final response = await client.dio.get(

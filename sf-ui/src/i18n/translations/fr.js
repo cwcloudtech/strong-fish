@@ -554,6 +554,7 @@ const fr = {
     noHeartRate: "Aucune fréquence cardiaque enregistrée sur cette période.",
     heartRangeTooWide: "La fréquence cardiaque ne remonte qu'à 14 jours : cette vue plus large n'affiche que les pas. La dernière mesure est ci-dessus.",
     latestBpm: "Dernière fréquence",
+    export: "Exporter cette vue",
     bpm: "bpm",
     zone: {
       light: "Légère",

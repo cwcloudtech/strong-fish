@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
+import 'export_menu.dart';
 
 /// The windows the API offers, in the order they widen.
 const _ranges = ['24h', '48h', 'week', '14d', 'month', '90d'];
@@ -222,6 +224,7 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
   HeartSeries? _heart;
   String _error = '';
   bool _loading = false;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -260,6 +263,32 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
     }
   }
 
+  /// Saved to the app's own documents directory rather than a shared one: it
+  /// needs no permission, and the file is a copy of something the server can
+  /// render again at any time.
+  Future<void> _export(ExportFormat format) async {
+    setState(() => _exporting = true);
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final path = await ref.read(apiProvider).downloadHealth(
+            widget.provider,
+            directory: directory.path,
+            fileName: 'health-$_range.${format.extension}',
+            format: format.extension,
+            range: _range,
+            locale: ref.read(localeProvider),
+          );
+      if (mounted) await openExported(context, ref, path);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
@@ -275,23 +304,35 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 10),
-      SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(children: [
-          for (final range in _ranges)
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: ChoiceChip(
-                selected: _range == range,
-                label: Text(t('devices.range.$range')),
-                onSelected: (_) {
-                  setState(() => _range = range);
-                  _load();
-                },
-              ),
-            ),
-        ]),
-      ),
+      Row(children: [
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              for (final range in _ranges)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    selected: _range == range,
+                    label: Text(t('devices.range.$range')),
+                    onSelected: (_) {
+                      setState(() => _range = range);
+                      _load();
+                    },
+                  ),
+                ),
+            ]),
+          ),
+        ),
+        // Exports what is on screen: the range picked beside it, not some
+        // other window the member would have to go and set again.
+        SfExportButton(
+          onExport: _export,
+          busy: _exporting,
+          tooltip: t('devices.export'),
+          formats: const [ExportFormat.png, ExportFormat.pdf],
+        ),
+      ]),
       if (_loading && series == null)
         const Padding(
           padding: EdgeInsets.all(16),

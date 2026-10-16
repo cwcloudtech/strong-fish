@@ -21,8 +21,13 @@ import { useI18n } from "../../i18n/I18nContext";
  * prints and takes to the gym, the XLSX is what an athlete fills in on a
  * laptop and mails back, and the image is what either of them pastes into a
  * conversation - one picture, no attachment to open.
+ *
+ * formats narrows the list for a screen that does not have all three - health
+ * data is a picture or a printout, never a spreadsheet to fill in.
  */
-export default function ExportMenu({ onExport, busy = false, label, size = "" }) {
+const ALL_FORMATS = ["pdf", "xlsx", "png"];
+
+export default function ExportMenu({ onExport, busy = false, label, size = "", formats = ALL_FORMATS }) {
   const { t } = useI18n();
   const hint = busy ? t("programs.exporting") : label || t("programs.export");
 
@@ -36,30 +41,36 @@ export default function ExportMenu({ onExport, busy = false, label, size = "" })
       >
         {(close) => (
           <>
-            <MenuItem
-              onClick={() => {
-                onExport("pdf");
-                close();
-              }}
-            >
-              <FiFileText /> {t("programs.exportPdf")}
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                onExport("xlsx");
-                close();
-              }}
-            >
-              <FiGrid /> {t("programs.exportXlsx")}
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                onExport("png");
-                close();
-              }}
-            >
-              <FiImage /> {t("programs.exportPng")}
-            </MenuItem>
+            {formats.includes("pdf") ? (
+              <MenuItem
+                onClick={() => {
+                  onExport("pdf");
+                  close();
+                }}
+              >
+                <FiFileText /> {t("programs.exportPdf")}
+              </MenuItem>
+            ) : null}
+            {formats.includes("xlsx") ? (
+              <MenuItem
+                onClick={() => {
+                  onExport("xlsx");
+                  close();
+                }}
+              >
+                <FiGrid /> {t("programs.exportXlsx")}
+              </MenuItem>
+            ) : null}
+            {formats.includes("png") ? (
+              <MenuItem
+                onClick={() => {
+                  onExport("png");
+                  close();
+                }}
+              >
+                <FiImage /> {t("programs.exportPng")}
+              </MenuItem>
+            ) : null}
           </>
         )}
       </MenuDropdown>
