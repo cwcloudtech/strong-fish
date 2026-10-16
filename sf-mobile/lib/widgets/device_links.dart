@@ -7,10 +7,10 @@ import '../providers/providers.dart';
 import '../theme.dart';
 
 /// The windows the API offers, in the order they widen.
-const _ranges = ['24h', '48h', 'week', 'month', '90d'];
+const _ranges = ['24h', '48h', 'week', '14d', 'month', '90d'];
 
 /// Ranges wide enough for a daily average to mean anything.
-const _averaged = {'week', 'month', '90d'};
+const _averaged = {'week', '14d', 'month', '90d'};
 
 /// How a day's count reads at a glance, on the usual walking scale.
 ///
@@ -234,29 +234,27 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
       _loading = true;
       _error = '';
     });
+    // Apart, deliberately. The provider reaches back ninety days for steps
+    // and only fourteen for heart rate, so one of the two is expected to be
+    // thinner on the wider views - and a single failed call must never blank
+    // the steps the member came for.
+    final api = ref.read(apiProvider);
     try {
-      // Together: they are the same days of the same range, and two panels
-      // that could disagree about which week they show would be worse than
-      // one that is briefly empty.
-      final api = ref.read(apiProvider);
-      final results = await Future.wait([
-        api.deviceSteps(widget.provider, _range),
-        api.deviceHeartRate(widget.provider, _range),
-      ]);
-      if (mounted) {
-        setState(() {
-          _series = results[0] as StepSeries;
-          _heart = results[1] as HeartSeries;
-        });
-      }
+      final steps = await api.deviceSteps(widget.provider, _range);
+      if (mounted) setState(() => _series = steps);
     } catch (error) {
       if (mounted) {
         setState(() {
           _series = null;
-          _heart = null;
           _error = ref.read(tErrorProvider)(error);
         });
       }
+    }
+    try {
+      final heart = await api.deviceHeartRate(widget.provider, _range);
+      if (mounted) setState(() => _heart = heart);
+    } catch (_) {
+      if (mounted) setState(() => _heart = null);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -266,6 +264,14 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
     final series = _series;
+    // The most recent day the watch actually recorded - "last" rather than
+    // "today", because today's reading only exists once it has been synced.
+    // Null when there is none: a fallback day would read as a heart rate of
+    // zero, which is a worse answer than no answer.
+    HeartDay? latest;
+    for (final day in _heart?.days ?? const <HeartDay>[]) {
+      if (day.known) latest = day;
+    }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 10),
@@ -314,10 +320,25 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
               value: series.dailyAverage,
               tone: stepTone(context, series.dailyAverage),
             ),
+          if (latest != null)
+            _Figure(
+              label: t('devices.latestBpm'),
+              value: latest.avg,
+              tone: zoneTone(context, latest.zone),
+            ),
         ]),
         const SizedBox(height: 12),
         _StepBars(days: series.days),
-        if (_heart != null) _HeartSection(heart: _heart!),
+        // A shortened range keeps its latest reading - that number is still
+        // true - but not a chart that would be captioned with the range it
+        // does not cover.
+        if (_heart != null && !_heart!.clamped) _HeartSection(heart: _heart!),
+        if (_heart?.clamped == true)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(t('devices.heartRangeTooWide'),
+                style: Theme.of(context).textTheme.bodySmall),
+          ),
       ],
     ]);
   }

@@ -51,6 +51,12 @@ const Scope = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness
 // the product does not have.
 const MaxRollupDays = 90
 
+// MaxHeartRollupDays is the same thing for heart rate, where Google's limit is
+// far shorter - fourteen days, against ninety for steps. It is not a detail
+// that can be papered over: asking for a month of beats per minute is refused
+// outright, which is why the longer views show steps alone.
+const MaxHeartRollupDays = 14
+
 // Config is what an operator sets. The three URLs are configurable so the flow
 // can be pointed at a stand-in during development; in production they are left
 // at their defaults.
@@ -102,6 +108,9 @@ func (c *Client) Name() string { return Provider }
 // MaxRangeDays is Google's own cap on a steps roll-up, and therefore the
 // widest view the app can offer.
 func (c *Client) MaxRangeDays() int { return MaxRollupDays }
+
+// MaxHeartRateDays is the same for heart rate, which Google caps far shorter.
+func (c *Client) MaxHeartRateDays() int { return MaxHeartRollupDays }
 
 // CheckAccount confirms the Google account that just consented has a Google
 // Health profile behind it, and returns the id it is known by there.
@@ -371,7 +380,7 @@ func (c *Client) DailyHeartRate(ctx context.Context, accessToken string, start, 
 	if end.Before(start) {
 		return nil, nil
 	}
-	if earliest := end.AddDate(0, 0, -(MaxRollupDays - 1)); start.Before(earliest) {
+	if earliest := end.AddDate(0, 0, -(MaxHeartRollupDays - 1)); start.Before(earliest) {
 		start = earliest
 	}
 

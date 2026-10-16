@@ -7,10 +7,10 @@ import { ErrorMessage, Spinner } from "../common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
 /** The windows the API offers, in the order they widen. */
-const RANGES = ["24h", "48h", "week", "month", "90d"];
+const RANGES = ["24h", "48h", "week", "14d", "month", "90d"];
 
 /** Ranges wide enough for a daily average to mean anything. */
-const AVERAGED = new Set(["week", "month", "90d"]);
+const AVERAGED = new Set(["week", "14d", "month", "90d"]);
 
 /**
  * How a day's count reads at a glance, on the usual walking scale.
@@ -194,26 +194,29 @@ function DataPanel({ provider }) {
   const [range, setRange] = useState("week");
   const [series, setSeries] = useState(null);
   const [heart, setHeart] = useState(null);
+  const [heartError, setHeartError] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // Apart, deliberately. The provider reaches back ninety days for steps
+    // and only fourteen for heart rate, so one of the two is expected to be
+    // missing on the wider views - and a single failed call must never blank
+    // the steps the member came for.
     try {
-      // Fetched together: they are the same days of the same range, and two
-      // panels that could disagree about which week they are showing would
-      // be worse than one that is briefly empty.
-      const [steps, rate] = await Promise.all([
-        devicesApi.steps(provider, range),
-        devicesApi.heartRate(provider, range),
-      ]);
-      setSeries(steps);
-      setHeart(rate);
+      setSeries(await devicesApi.steps(provider, range));
     } catch (err) {
       setError(err);
       setSeries(null);
+    }
+    try {
+      setHeart(await devicesApi.heartRate(provider, range));
+      setHeartError(null);
+    } catch (err) {
       setHeart(null);
+      setHeartError(err);
     } finally {
       setLoading(false);
     }
@@ -224,6 +227,10 @@ function DataPanel({ provider }) {
   }, [load]);
 
   const peak = Math.max(1, ...(series?.days || []).map((day) => day.steps));
+
+  // The most recent day the watch actually recorded - "last" rather than
+  // "today", because today's reading only exists once it has been synced.
+  const latest = [...(heart?.days || [])].reverse().find((day) => day.known) || null;
 
   return (
     <div style={{ marginTop: "0.8rem" }}>
@@ -273,6 +280,15 @@ function DataPanel({ provider }) {
                 </strong>
               </div>
             ) : null}
+            {latest ? (
+              <div>
+                <div className="sf-muted">{t("devices.latestBpm")}</div>
+                <strong className={`sf-steps-figure sf-zone-${latest.zone}`}>
+                  {latest.avg}
+                  <span className="sf-muted" style={{ fontSize: "0.8rem" }}> {t("devices.bpm")}</span>
+                </strong>
+              </div>
+            ) : null}
           </div>
 
           {/* A bar per day, drawn with a div rather than a chart library: one
@@ -288,7 +304,15 @@ function DataPanel({ provider }) {
             ))}
           </div>
 
-          {heart ? <HeartSection heart={heart} t={t} /> : null}
+          {heart && !heart.clamped ? <HeartSection heart={heart} t={t} /> : null}
+          {heart?.clamped ? (
+            <p className="sf-muted" style={{ marginTop: "0.8rem" }}>
+              {t("devices.heartRangeTooWide")}
+            </p>
+          ) : null}
+          {!heart && heartError ? (
+            <p className="sf-muted" style={{ marginTop: "0.8rem" }}>{t("devices.noHeartRate")}</p>
+          ) : null}
 
           {/* The same numbers, readable: the bars are decoration, and a member
               using a screen reader is owed the counts themselves. */}

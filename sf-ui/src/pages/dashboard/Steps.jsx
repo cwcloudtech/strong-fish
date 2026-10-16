@@ -15,7 +15,7 @@ export default function Steps() {
   return (
     <div className="sf-page">
       <div className="sf-page-header">
-        <h1 className="sf-title">{t("devices.title")}</h1>
+        <h1 className="sf-title">{t("nav.healthData")}</h1>
       </div>
       <DeviceLinks />
     </div>

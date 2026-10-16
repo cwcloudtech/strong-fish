@@ -84,6 +84,10 @@ type Provider interface {
 	// MaxRangeDays is the longest span of days it will return at once, which
 	// is what bounds the views the app offers.
 	MaxRangeDays() int
+	// MaxHeartRateDays is the same for heart rate, which providers cap much
+	// shorter than steps - a separate number because a view that is fine for
+	// one is refused for the other.
+	MaxHeartRateDays() int
 
 	AuthorizationURL(redirectURI, state string) string
 	Exchange(ctx context.Context, code, redirectURI string) (Token, error)
