@@ -103,6 +103,15 @@ export const devices = {
     body(client.get(`/users/me/devices/${provider}/steps`, { params: { range } })),
   heartRate: (provider, range) =>
     body(client.get(`/users/me/devices/${provider}/heart-rate`, { params: { range } })),
+  // format is "pdf" or "png": the route's own extension, so the file that
+  // arrives is named the way its contents are.
+  export: (provider, { format = "png", range, locale } = {}) =>
+    client
+      .get(`/users/me/devices/${provider}/export.${format}`, {
+        params: { ...(range ? { range } : {}), ...(locale ? { locale } : {}) },
+        responseType: "blob",
+      })
+      .then((response) => response.data),
 };
 
 export const programs = {

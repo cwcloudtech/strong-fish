@@ -15,7 +15,7 @@ import (
 	"bytes"
 	"image"
 	"image/color"
-	"image/draw"
+	imagedraw "image/draw"
 	"image/png"
 	"strings"
 
@@ -88,8 +88,56 @@ func Render(program models.Program, days []models.ProgramDay, options Options) (
 	layout(measure, program, days, options)
 
 	img := image.NewRGBA(image.Rect(0, 0, canvasWidth, measure.y+padding))
-	draw.Draw(img, img.Bounds(), &image.Uniform{colPaper}, image.Point{}, draw.Src)
+	imagedraw.Draw(img, img.Bounds(), &image.Uniform{colPaper}, image.Point{}, imagedraw.Src)
 	layout(&canvas{faces: faces, width: canvasWidth, img: img}, program, days, options)
+
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// RenderTable draws one titled table as a picture.
+//
+// The program renderer below is this with a block's worth of structure on top;
+// anything that is simply rows - a member's health data, say - needs only
+// this. Kept in the same package because it is the same canvas: a second
+// implementation of "draw a table into a PNG" would drift in its padding and
+// its zebra within a release.
+func RenderTable(title, subtitle string, columns []programsheet.Column,
+	rows []programsheet.Line, footer string) ([]byte, error) {
+	faces, err := loadFaces()
+	if err != nil {
+		return nil, err
+	}
+
+	draw := func(c *canvas) {
+		c.y = padding
+		c.text(padding, title, c.faces.title, colText)
+		c.y += titleSize + 10
+		if subtitle != "" {
+			c.text(padding, subtitle, c.faces.sub, colMuted)
+			c.y += subSize + 8
+		}
+		c.y += 14
+		c.table(columns, rows)
+		if footer != "" {
+			c.y += 16
+			c.text(padding, footer, c.faces.footer, colMuted)
+			c.y += footerSize
+		}
+	}
+
+	// Measured first, drawn second - the same two passes Render makes, and
+	// for the same reason: the height is not known until the cells have been
+	// wrapped.
+	measure := &canvas{faces: faces, width: width, dry: true}
+	draw(measure)
+
+	img := image.NewRGBA(image.Rect(0, 0, width, measure.y+padding))
+	imagedraw.Draw(img, img.Bounds(), &image.Uniform{colPaper}, image.Point{}, imagedraw.Src)
+	draw(&canvas{faces: faces, width: width, img: img})
 
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
@@ -184,7 +232,7 @@ func (c *canvas) fill(r image.Rectangle, col color.Color) {
 	if c.dry {
 		return
 	}
-	draw.Draw(c.img, r, &image.Uniform{col}, image.Point{}, draw.Src)
+	imagedraw.Draw(c.img, r, &image.Uniform{col}, image.Point{}, imagedraw.Src)
 }
 
 // table draws the sheet's rows, headings included.

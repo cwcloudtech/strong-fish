@@ -171,7 +171,7 @@ func main() {
 		Calendar: handlers.NewCalendarHandler(userStore, eventStore, clubStore, cfg.APIBaseURL),
 		Search:   handlers.NewSearchHandler(userStore, clubStore, profileHandler),
 		Strength: strengthHandler,
-		Device: handlers.NewDeviceHandler(devices, deviceLinkStore, cfg.JWTSecret,
+		Device: handlers.NewDeviceHandler(devices, deviceLinkStore, userStore, cfg.JWTSecret,
 			cfg.APIBaseURL, cfg.UIBaseURL),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),

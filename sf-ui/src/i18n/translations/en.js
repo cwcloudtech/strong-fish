@@ -543,6 +543,7 @@ const en = {
     noHeartRate: "No heart rate recorded over this range.",
     heartRangeTooWide: "Heart rate only goes back 14 days, so this longer view shows steps alone. The last reading is above.",
     latestBpm: "Last heart rate",
+    export: "Export this view",
     bpm: "bpm",
     zone: {
       light: "Light",

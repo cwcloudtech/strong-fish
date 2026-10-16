@@ -20,6 +20,18 @@ enum ExportFormat {
   final String extension;
 }
 
+const _icons = {
+  ExportFormat.pdf: Icons.picture_as_pdf_outlined,
+  ExportFormat.xlsx: Icons.grid_on_outlined,
+  ExportFormat.png: Icons.image_outlined,
+};
+
+const _labels = {
+  ExportFormat.pdf: 'programs.exportPdf',
+  ExportFormat.xlsx: 'programs.exportXlsx',
+  ExportFormat.png: 'programs.exportPng',
+};
+
 /// "Export" opening the formats.
 ///
 /// A menu rather than a row of buttons: exporting happens rarely, and the
@@ -31,12 +43,17 @@ class SfExportButton extends ConsumerWidget {
   final String? tooltip;
   final IconData icon;
 
+  /// Narrows the list for a screen that does not have all three - health data
+  /// is a picture or a printout, never a spreadsheet to fill in.
+  final List<ExportFormat> formats;
+
   const SfExportButton({
     super.key,
     required this.onExport,
     this.busy = false,
     this.tooltip,
     this.icon = Icons.download_outlined,
+    this.formats = ExportFormat.values,
   });
 
   @override
@@ -55,30 +72,15 @@ class SfExportButton extends ConsumerWidget {
       tooltip: tooltip ?? t('programs.export'),
       onSelected: onExport,
       itemBuilder: (context) => [
-        PopupMenuItem(
-          value: ExportFormat.pdf,
-          child: Row(children: [
-            const Icon(Icons.picture_as_pdf_outlined, size: 18),
-            const SizedBox(width: 10),
-            Text(t('programs.exportPdf')),
-          ]),
-        ),
-        PopupMenuItem(
-          value: ExportFormat.xlsx,
-          child: Row(children: [
-            const Icon(Icons.grid_on_outlined, size: 18),
-            const SizedBox(width: 10),
-            Text(t('programs.exportXlsx')),
-          ]),
-        ),
-        PopupMenuItem(
-          value: ExportFormat.png,
-          child: Row(children: [
-            const Icon(Icons.image_outlined, size: 18),
-            const SizedBox(width: 10),
-            Text(t('programs.exportPng')),
-          ]),
-        ),
+        for (final format in formats)
+          PopupMenuItem(
+            value: format,
+            child: Row(children: [
+              Icon(_icons[format], size: 18),
+              const SizedBox(width: 10),
+              Text(t(_labels[format]!)),
+            ]),
+          ),
       ],
     );
   }
