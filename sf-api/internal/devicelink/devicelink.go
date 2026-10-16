@@ -40,6 +40,32 @@ type DayCount struct {
 	Steps int64
 }
 
+// Heart rate zones, lowest effort first. These are the provider's own four
+// bands rather than thresholds invented here: a zone depends on a person's
+// maximum heart rate, which is theirs to know, not ours to guess from a
+// birthday that may not even be filled in.
+const (
+	ZoneLight    = "light"
+	ZoneModerate = "moderate"
+	ZoneVigorous = "vigorous"
+	ZonePeak     = "peak"
+)
+
+// DayHeart is one day's heart rate.
+//
+// Zone is the hardest band the member actually reached that day, which is what
+// makes a number worth colouring: an average of 62 says little, an average of
+// 62 on a day that peaked into the vigorous band says what kind of day it was.
+// A day spent entirely at rest reports ZoneLight.
+type DayHeart struct {
+	Date  string
+	Avg   float64
+	Max   float64
+	Min   float64
+	Zone  string
+	Known bool
+}
+
 // Provider is everything the handlers need of an integration.
 //
 // Deliberately small: start a consent, finish one, renew a grant, and read
@@ -70,6 +96,9 @@ type Provider interface {
 
 	// DailySteps returns one entry per day from start to end inclusive.
 	DailySteps(ctx context.Context, accessToken string, start, end time.Time) ([]DayCount, error)
+
+	// DailyHeartRate returns one entry per day over the same span.
+	DailyHeartRate(ctx context.Context, accessToken string, start, end time.Time) ([]DayHeart, error)
 }
 
 // Find returns the configured provider with this name.

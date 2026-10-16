@@ -19,6 +19,21 @@ const _averaged = {'week', 'month', '90d'};
 /// which is the opposite of what colouring it is for. The same four bands as
 /// the web app, so a member looking at both sees the same colour for the same
 /// day.
+/// Heart rate zones, the provider's own four bands. Blue is the lowest effort
+/// and red the highest, the order every heart rate chart uses - the colours
+/// are read before the labels are. Same values as the web app.
+const _zoneColors = {
+  'light': Color(0xFF3B82F6),
+  'moderate': Color(0xFFEAB308),
+  'vigorous': Color(0xFFF97316),
+  'peak': Color(0xFFDC2626),
+};
+
+Color zoneTone(BuildContext context, String zone, {bool known = true}) {
+  if (!known) return AppColors.of(context).border;
+  return _zoneColors[zone] ?? _zoneColors['light']!;
+}
+
 Color stepTone(BuildContext context, int steps) {
   final colors = AppColors.of(context);
   if (steps < 6000) return colors.danger;
@@ -204,6 +219,7 @@ class _StepPanel extends ConsumerStatefulWidget {
 class _StepPanelState extends ConsumerState<_StepPanel> {
   String _range = 'week';
   StepSeries? _series;
+  HeartSeries? _heart;
   String _error = '';
   bool _loading = false;
 
@@ -219,12 +235,25 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
       _error = '';
     });
     try {
-      final series = await ref.read(apiProvider).deviceSteps(widget.provider, _range);
-      if (mounted) setState(() => _series = series);
+      // Together: they are the same days of the same range, and two panels
+      // that could disagree about which week they show would be worse than
+      // one that is briefly empty.
+      final api = ref.read(apiProvider);
+      final results = await Future.wait([
+        api.deviceSteps(widget.provider, _range),
+        api.deviceHeartRate(widget.provider, _range),
+      ]);
+      if (mounted) {
+        setState(() {
+          _series = results[0] as StepSeries;
+          _heart = results[1] as HeartSeries;
+        });
+      }
     } catch (error) {
       if (mounted) {
         setState(() {
           _series = null;
+          _heart = null;
           _error = ref.read(tErrorProvider)(error);
         });
       }
@@ -288,6 +317,7 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
         ]),
         const SizedBox(height: 12),
         _StepBars(days: series.days),
+        if (_heart != null) _HeartSection(heart: _heart!),
       ],
     ]);
   }
@@ -371,4 +401,84 @@ String _grouped(int value) {
     buffer.write(digits[i]);
   }
   return buffer.toString();
+}
+
+/// Heart rate over the same days, each one coloured by the hardest zone it
+/// reached.
+///
+/// The zones are the provider's own four bands, not thresholds worked out here
+/// from a birthday: a zone depends on somebody's maximum heart rate, and
+/// guessing it would put a confident colour on a number that had not earned
+/// it.
+class _HeartSection extends ConsumerWidget {
+  final HeartSeries heart;
+  const _HeartSection({required this.heart});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(tProvider);
+    final known = heart.days.where((day) => day.known).toList();
+    if (known.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: Text(t('devices.noHeartRate'), style: Theme.of(context).textTheme.bodySmall),
+      );
+    }
+
+    final peak = known
+        .map((day) => day.max > 0 ? day.max : day.avg)
+        .fold<int>(1, (a, b) => a > b ? a : b);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 16),
+      Wrap(spacing: 24, runSpacing: 8, children: [
+        _Figure(label: t('devices.averageBpm'), value: heart.averageBpm),
+        _Figure(label: t('devices.peakBpm'), value: heart.peakBpm),
+      ]),
+      const SizedBox(height: 12),
+      Container(
+        height: 90,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: AppColors.of(context).backgroundMuted,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          for (final day in heart.days)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1),
+                child: Tooltip(
+                  message: '${day.date}: ${day.avg} bpm (${t('devices.zone.${day.zone}')})',
+                  child: Container(
+                    height: (82 * (day.max > 0 ? day.max : day.avg) / peak).clamp(2, 82).toDouble(),
+                    decoration: BoxDecoration(
+                      color: zoneTone(context, day.zone, known: day.known),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ]),
+      ),
+      // What the colours mean, since four bands explain nothing on their own.
+      const SizedBox(height: 6),
+      Wrap(spacing: 12, runSpacing: 4, children: [
+        for (final zone in const ['light', 'moderate', 'vigorous', 'peak'])
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: zoneTone(context, zone),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(t('devices.zone.$zone'), style: Theme.of(context).textTheme.bodySmall),
+          ]),
+      ]),
+    ]);
+  }
 }

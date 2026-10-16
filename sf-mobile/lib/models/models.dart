@@ -301,6 +301,67 @@ class StepDay {
       );
 }
 
+/// One day's heart rate, and the hardest zone it reached.
+class HeartDay {
+  final String date;
+  final int avg;
+  final int max;
+  final int min;
+
+  /// One of light, moderate, vigorous, peak - the provider's own four bands,
+  /// which is what the colour reads from.
+  final String zone;
+
+  /// Separates "the watch was off" from "a resting day": both would otherwise
+  /// be a row of zeroes.
+  final bool known;
+
+  const HeartDay({
+    this.date = '',
+    this.avg = 0,
+    this.max = 0,
+    this.min = 0,
+    this.zone = 'light',
+    this.known = false,
+  });
+
+  factory HeartDay.fromJson(Map<String, dynamic> json) => HeartDay(
+        date: _toString(json['date']),
+        avg: _toInt(json['avg']),
+        max: _toInt(json['max']),
+        min: _toInt(json['min']),
+        zone: _toString(json['zone'], 'light'),
+        known: json['known'] == true,
+      );
+}
+
+/// A range of days of heart rate.
+class HeartSeries {
+  final String provider;
+  final String range;
+  final List<HeartDay> days;
+  final int averageBpm;
+  final int peakBpm;
+
+  const HeartSeries({
+    this.provider = '',
+    this.range = '',
+    this.days = const [],
+    this.averageBpm = 0,
+    this.peakBpm = 0,
+  });
+
+  factory HeartSeries.fromJson(Map<String, dynamic> json) => HeartSeries(
+        provider: _toString(json['provider']),
+        range: _toString(json['range']),
+        days: (json['days'] as List? ?? [])
+            .map((item) => HeartDay.fromJson(Map<String, dynamic>.from(item as Map)))
+            .toList(),
+        averageBpm: _toInt(json['averageBpm']),
+        peakBpm: _toInt(json['peakBpm']),
+      );
+}
+
 /// A range of days and what to say about it.
 ///
 /// The average comes from the API rather than being worked out here, so the

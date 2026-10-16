@@ -392,6 +392,15 @@ class SfApi {
     return StepSeries.fromJson(_map(response.data));
   }
 
+  /// The same days of the same range, as heart rate.
+  Future<HeartSeries> deviceHeartRate(String provider, String range) async {
+    final response = await client.dio.get(
+      '/users/me/devices/$provider/heart-rate',
+      queryParameters: {'range': range},
+    );
+    return HeartSeries.fromJson(_map(response.data));
+  }
+
   // --- administration (superadmin only) ---
 
   Future<Map<String, dynamic>> adminStats() async =>

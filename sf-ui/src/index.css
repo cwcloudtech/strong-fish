@@ -565,6 +565,24 @@ button {
 .sf-steps-high { --sf-steps-tone: var(--sf-success); }
 
 .sf-steps-bar { background-color: var(--sf-steps-tone, var(--sf-primary)); }
+
+/* Heart rate zones, the provider's own four bands. Blue is the lowest effort
+   and red the highest, which is the order every heart rate chart uses - the
+   colours are read before the labels are. */
+.sf-zone-light { --sf-steps-tone: #3b82f6; }
+.sf-zone-moderate { --sf-steps-tone: #eab308; }
+.sf-zone-vigorous { --sf-steps-tone: #f97316; }
+.sf-zone-peak { --sf-steps-tone: #dc2626; }
+/* A day the watch recorded nothing: not a zone, and not zero beats either. */
+.sf-zone-none { --sf-steps-tone: var(--sf-border); }
+
+.sf-zone-key { display: inline-flex; align-items: center; gap: 5px; }
+.sf-zone-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background-color: var(--sf-steps-tone);
+}
 .sf-steps-figure {
   font-size: 1.3rem;
   color: var(--sf-steps-tone, var(--sf-text));

@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -256,40 +257,10 @@ var stepRanges = map[string]int{
 func (h *DeviceHandler) Steps(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
-	provider, ok := h.provider(w, r)
+	provider, link, days, rangeName, ok := h.readable(w, r, userID)
 	if !ok {
 		return
 	}
-
-	if !provider.Enabled() {
-		writeError(w, http.StatusNotImplemented,
-			"This integration is not enabled on this server", CodeDeviceUnavailable)
-		return
-	}
-
-	rangeName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("range")))
-	if rangeName == "" {
-		rangeName = "week"
-	}
-	days, known := stepRanges[rangeName]
-	if !known {
-		writeError(w, http.StatusBadRequest, "Unknown range", CodeInvalidRange)
-		return
-	}
-	if max := provider.MaxRangeDays(); days > max {
-		days = max
-	}
-
-	link, err := h.links.Find(r.Context(), userID, provider.Name())
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "No account connected", CodeDeviceNotConnected)
-			return
-		}
-		writeStoreError(w, err)
-		return
-	}
-
 	accessToken, err := h.freshToken(r, provider, link)
 	if err != nil {
 		h.writeProviderError(w, err, provider.Name())
@@ -323,6 +294,103 @@ func (h *DeviceHandler) Steps(w http.ResponseWriter, r *http.Request) {
 		series.DailyAverage = series.Total / int64(len(series.Days))
 	}
 	writeJSON(w, http.StatusOK, series)
+}
+
+// HeartRate returns a member's daily heart rate for one of the named ranges,
+// with the zone each day reached.
+func (h *DeviceHandler) HeartRate(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	provider, link, days, rangeName, ok := h.readable(w, r, userID)
+	if !ok {
+		return
+	}
+
+	accessToken, err := h.freshToken(r, provider, link)
+	if err != nil {
+		h.writeProviderError(w, err, provider.Name())
+		return
+	}
+
+	end := time.Now().UTC()
+	start := end.AddDate(0, 0, -(days - 1))
+
+	counts, err := provider.DailyHeartRate(r.Context(), accessToken, start, end)
+	if err != nil {
+		h.writeProviderError(w, err, provider.Name())
+		return
+	}
+
+	series := models.HeartSeries{
+		Provider: provider.Name(),
+		Range:    rangeName,
+		From:     start.Format("2006-01-02"),
+		To:       end.Format("2006-01-02"),
+		Days:     make([]models.HeartDay, 0, len(counts)),
+	}
+	total, known := 0, 0
+	for _, count := range counts {
+		day := models.HeartDay{
+			Date:  count.Date,
+			Avg:   int(math.Round(count.Avg)),
+			Max:   int(math.Round(count.Max)),
+			Min:   int(math.Round(count.Min)),
+			Zone:  count.Zone,
+			Known: count.Known,
+		}
+		series.Days = append(series.Days, day)
+		if day.Known {
+			total += day.Avg
+			known++
+		}
+		if day.Max > series.PeakBPM {
+			series.PeakBPM = day.Max
+		}
+	}
+	if known > 0 {
+		series.AverageBPM = total / known
+	}
+	writeJSON(w, http.StatusOK, series)
+}
+
+// readable resolves everything a read of a member's data needs: the provider,
+// their link to it, and how many days were asked for. Shared by the two reads
+// so they cannot drift on what a range means or on who may ask.
+func (h *DeviceHandler) readable(w http.ResponseWriter, r *http.Request, userID string) (
+	devicelink.Provider, models.DeviceLink, int, string, bool) {
+	provider, ok := h.provider(w, r)
+	if !ok {
+		return nil, models.DeviceLink{}, 0, "", false
+	}
+	if !provider.Enabled() {
+		writeError(w, http.StatusNotImplemented,
+			"This integration is not enabled on this server", CodeDeviceUnavailable)
+		return nil, models.DeviceLink{}, 0, "", false
+	}
+
+	rangeName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("range")))
+	if rangeName == "" {
+		rangeName = "week"
+	}
+	days, known := stepRanges[rangeName]
+	if !known {
+		writeError(w, http.StatusBadRequest, "Unknown range", CodeInvalidRange)
+		return nil, models.DeviceLink{}, 0, "", false
+	}
+	if max := provider.MaxRangeDays(); days > max {
+		days = max
+	}
+
+	link, err := h.links.Find(r.Context(), userID, provider.Name())
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "No account connected", CodeDeviceNotConnected)
+			return nil, models.DeviceLink{}, 0, "", false
+		}
+		writeStoreError(w, err)
+		return nil, models.DeviceLink{}, 0, "", false
+	}
+	return provider, link, days, rangeName, true
 }
 
 // freshToken renews the stored grant when it has lapsed, and writes the new
