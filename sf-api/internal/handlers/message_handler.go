@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"strong-fish-api/internal/email"
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/store"
@@ -33,11 +35,16 @@ type MessageHandler struct {
 	users        *store.UserStore
 	maxImageSize int64
 	profile      *ProfileHandler
+	mailer       *email.Sender
+	uiBaseURL    string
 }
 
 func NewMessageHandler(messages *store.MessageStore, users *store.UserStore, profile *ProfileHandler,
-	maxImageSize int64) *MessageHandler {
-	return &MessageHandler{messages: messages, users: users, profile: profile, maxImageSize: maxImageSize}
+	mailer *email.Sender, maxImageSize int64, uiBaseURL string) *MessageHandler {
+	return &MessageHandler{
+		messages: messages, users: users, profile: profile, mailer: mailer,
+		maxImageSize: maxImageSize, uiBaseURL: uiBaseURL,
+	}
 }
 
 func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +199,8 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 
 	// Re-checked on every send, not just when the thread was opened: somebody
 	// may have blocked the sender, or narrowed their profile, since.
-	if _, ok := h.canReach(w, r, callerID, otherID); !ok {
+	recipient, ok := h.canReach(w, r, callerID, otherID)
+	if !ok {
 		return
 	}
 
@@ -211,8 +219,57 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 	message.Mine = true
 	message.Deletable = true
+	h.notify(recipient, message)
 	writeJSON(w, http.StatusCreated, message)
 }
+
+// notify emails the recipient that somebody wrote to them.
+//
+// In its own goroutine with its own context: the mail API is a third party
+// with a fifteen-second timeout, and a member pressing send in a conversation
+// should not wait on it - nor should their message fail to be delivered
+// because somebody else's mail server is slow. The request's context is
+// deliberately not used, because it is cancelled the moment the response is
+// written.
+//
+// The sender's name is the one the store already resolved, which is the name
+// the recipient sees in the thread: a member writing anonymously is announced
+// by their username here too, not by the name they chose to hide.
+func (h *MessageHandler) notify(recipient models.User, message models.Message) {
+	if h.mailer == nil || utils.IsBlank(recipient.Email) {
+		return
+	}
+
+	notification := email.MessageNotification{
+		SenderName:  strings.TrimSpace(message.Sender.Name + " " + message.Sender.Surname),
+		Content:     models.Preview(message.Content, message.Audio, len(message.Pictures)),
+		AppURL:      h.uiBaseURL,
+		MessagesURL: h.uiBaseURL + "/dashboard/messages",
+	}
+	// A voice message is one the API stored; a video is whatever the sender
+	// pasted, which may be one of ours or somebody else's link entirely.
+	notification.AudioURL = message.Audio
+	for _, link := range message.Links {
+		switch mediaKindOf(link) {
+		case mediaKindAudio:
+			if utils.IsBlank(notification.AudioURL) {
+				notification.AudioURL = link
+			}
+		case mediaKindVideo:
+			notification.VideoURL = link
+		}
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), notifyTimeout)
+		defer cancel()
+		h.mailer.SendChatMessage(ctx, recipient.Email, recipient.Locale, notification)
+	}()
+}
+
+// notifyTimeout bounds the background send. Longer than the mail client's own
+// timeout, so it is the HTTP call that gives up rather than this.
+const notifyTimeout = 30 * time.Second
 
 // --- blocks ---
 

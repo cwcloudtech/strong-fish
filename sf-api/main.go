@@ -175,7 +175,7 @@ func main() {
 			cfg.APIBaseURL, cfg.UIBaseURL),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),
-		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, cfg.MaxImageSize),
+		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, mailer, cfg.MaxImageSize, cfg.UIBaseURL),
 	}, userStore, clubStore, router.Options{
 		JWTSecret:          cfg.JWTSecret,
 		ApiKeys:            apiKeyStore,
