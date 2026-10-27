@@ -61,6 +61,49 @@ func (h *MediaHandler) mediaURL(storageID, key, extension string) string {
 		base64.RawURLEncoding.EncodeToString([]byte(key)), extension)
 }
 
+// Media kinds, as the key of an uploaded object spells them (see mediaKey).
+const (
+	mediaKindAudio = "voice"
+	mediaKindVideo = "video"
+)
+
+// mediaKindOf says whether a URL points at one of this API's own voice
+// recordings or videos, and "" for anything else.
+//
+// It reads the object key, not the extension, for the reason the web player
+// does: .webm is both a video container and the one a browser records voice
+// into, so the name cannot tell them apart and guessing wrong labels somebody's
+// voice note a video. The key does say - mediaKey writes one folder per kind -
+// and the URL carries it base64url-encoded.
+func mediaKindOf(mediaURL string) string {
+	parsed, err := url.Parse(mediaURL)
+	if err != nil {
+		return utils.EMPTY
+	}
+	parts := strings.FieldsFunc(parsed.Path, func(r rune) bool { return r == '/' })
+	// .../v1/media/{storageID}/{base64url(key)}{ext}
+	if len(parts) < 4 || parts[len(parts)-4] != "v1" || parts[len(parts)-3] != "media" {
+		return utils.EMPTY
+	}
+
+	object := parts[len(parts)-1]
+	if dot := strings.LastIndex(object, "."); dot > 0 {
+		object = object[:dot]
+	}
+	key, err := base64.RawURLEncoding.DecodeString(object)
+	if err != nil {
+		return utils.EMPTY
+	}
+
+	switch {
+	case strings.Contains(string(key), "/"+mediaKindAudio+"/"):
+		return mediaKindAudio
+	case strings.Contains(string(key), "/"+mediaKindVideo+"/"):
+		return mediaKindVideo
+	}
+	return utils.EMPTY
+}
+
 // mediaRequest is one addressed object, taken apart.
 type mediaRequest struct {
 	storageID string

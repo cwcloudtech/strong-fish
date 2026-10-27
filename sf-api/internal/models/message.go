@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Conversation is the thread between two members.
 //
@@ -46,6 +49,25 @@ type Message struct {
 	Deletable bool       `json:"deletable"`
 	ReadAt    *time.Time `json:"readAt,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`
+}
+
+// Preview is what a message says when it has no text: a thread list cannot
+// show an empty line, and neither can an email quoting it.
+//
+// Here rather than beside either caller, because the thread list and the
+// notification describe the same message - if each had its own idea of what a
+// voice note looks like, a member would see one thing in the app and another
+// in their inbox.
+func Preview(content, audio string, pictures int) string {
+	switch {
+	case strings.TrimSpace(content) != "":
+		return content
+	case strings.TrimSpace(audio) != "":
+		return "\U0001F3A4"
+	case pictures > 0:
+		return "\U0001F5BC"
+	}
+	return ""
 }
 
 // Block is one member's decision to stop hearing from another.

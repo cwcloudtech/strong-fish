@@ -11,7 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"strong-fish-api/internal/models"
-	"strong-fish-api/internal/utils"
 )
 
 type MessageStore struct {
@@ -204,16 +203,7 @@ type messageData struct {
 // instead - a blank line in the conversation list would read as a message that
 // failed to send.
 func previewOf(f MessageFields) string {
-	if utils.IsNotBlank(f.Content) {
-		return f.Content
-	}
-	if utils.IsNotBlank(f.Audio) {
-		return "\U0001F3A4"
-	}
-	if len(f.Pictures) > 0 {
-		return "\U0001F5BC"
-	}
-	return ""
+	return models.Preview(f.Content, f.Audio, len(f.Pictures))
 }
 
 // MessageFields is one message as its sender composed it.

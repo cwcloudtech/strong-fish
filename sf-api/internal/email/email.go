@@ -20,8 +20,10 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	texttemplate "text/template"
 	"time"
 
+	"strong-fish-api/internal/markdown"
 	"strong-fish-api/internal/templates"
 	"strong-fish-api/internal/utils"
 )
@@ -290,4 +292,61 @@ func (s *Sender) SendCoachRejected(ctx context.Context, to, locale, motive strin
 			`<p>Vous pouvez continuer à utiliser strong-fish en tant qu'athlète.</p>`,
 	))
 	s.deliver(ctx, to, subject, body, "coach rejected")
+}
+
+// MessageNotification is what a chat notification needs to say.
+//
+// Every field is a value the template interpolates; nothing here is HTML. The
+// message's own text in particular arrives exactly as the member typed it and
+// is escaped on the way into the document (see markdown.HTML), which is what
+// keeps a message containing a tag a message rather than markup.
+type MessageNotification struct {
+	SenderName  string
+	Content     string
+	AppURL      string
+	MessagesURL string
+	// AudioURL and VideoURL are empty unless the message carried one. The
+	// template decides what to call them, so the words are translated with
+	// the rest of it rather than in Go.
+	AudioURL string
+	VideoURL string
+}
+
+// SendChatMessage tells a member somebody wrote to them.
+//
+// The body is a markdown template, one file per language (see
+// templates.MessageEmail): the wording of this email is the thing most likely
+// to be edited by somebody who is not changing code, and a .md file is
+// something a translator can open.
+func (s *Sender) SendChatMessage(ctx context.Context, to, locale string, data MessageNotification) {
+	document, err := renderMarkdown(templates.MessageEmail(locale), data)
+	if err != nil {
+		slog.Error("chat notification template failed", "error", err)
+		return
+	}
+
+	subject, body := markdown.Split(document)
+	if utils.IsBlank(subject) {
+		// A template edited into having no heading still sends, rather than
+		// silently dropping the member's notification over a formatting slip.
+		subject = localized(locale, "You have a new message on StrongFish",
+			"Vous avez un nouveau message sur StrongFish")
+	}
+	s.deliver(ctx, to, subject, template.HTML(markdown.HTML(body)), "chat message")
+}
+
+// renderMarkdown fills a template in with text/template, not html/template:
+// what comes out is markdown, and escaping it as HTML here would turn an
+// apostrophe in somebody's name into &#39; inside the document before the
+// renderer ever saw it. The escaping happens once, in markdown.HTML.
+func renderMarkdown(document string, data any) (string, error) {
+	parsed, err := texttemplate.New("markdown").Parse(document)
+	if err != nil {
+		return utils.EMPTY, err
+	}
+	var buf bytes.Buffer
+	if err := parsed.Execute(&buf, data); err != nil {
+		return utils.EMPTY, err
+	}
+	return buf.String(), nil
 }
