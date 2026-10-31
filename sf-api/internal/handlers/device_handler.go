@@ -558,6 +558,7 @@ func bodyComposition(provider string, measures []devicelink.BodyMeasure) models.
 	for _, measure := range measures {
 		result.Measures = append(result.Measures, models.BodyMeasure{
 			Type: measure.Type, Value: measure.Value, Unit: measure.Unit, TakenAt: measure.TakenAt,
+			Adjusted: measure.Adjusted,
 		})
 	}
 	return result

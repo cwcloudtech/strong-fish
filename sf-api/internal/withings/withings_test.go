@@ -94,6 +94,41 @@ func TestLatestBodyCompositionKeepsTheNewestOfEach(t *testing.T) {
 	}
 }
 
+func TestAthleteModeAdjustment(t *testing.T) {
+	measures := adjustForAthleteMode([]devicelink.BodyMeasure{
+		{Type: devicelink.MeasureWeight, Value: 80},
+		{Type: devicelink.MeasureFatRatio, Value: 12},
+		{Type: devicelink.MeasureFatMass, Value: 9.6},
+		{Type: devicelink.MeasureFatFreeMass, Value: 70.4},
+		{Type: devicelink.MeasureMuscleMass, Value: 66.9},
+		{Type: devicelink.MeasureBoneMass, Value: 3.5},
+	})
+	want := map[string]float64{
+		devicelink.MeasureFatRatio:    17,
+		devicelink.MeasureFatMass:     13.6,
+		devicelink.MeasureFatFreeMass: 66.4,
+		devicelink.MeasureMuscleMass:  62.9,
+	}
+	for _, measure := range measures {
+		expected, adjusted := want[measure.Type]
+		switch {
+		case !adjusted && measure.Adjusted != nil:
+			t.Errorf("%s should not be adjusted, got %v", measure.Type, *measure.Adjusted)
+		case adjusted && (measure.Adjusted == nil || *measure.Adjusted != expected):
+			t.Errorf("%s: got %v, want %v", measure.Type, measure.Adjusted, expected)
+		}
+	}
+
+	// No weight: the ratio still moves, the kilograms cannot.
+	alone := adjustForAthleteMode([]devicelink.BodyMeasure{
+		{Type: devicelink.MeasureFatRatio, Value: 12},
+		{Type: devicelink.MeasureFatMass, Value: 9.6},
+	})
+	if alone[0].Adjusted == nil || *alone[0].Adjusted != 17 || alone[1].Adjusted != nil {
+		t.Errorf("without weight: %+v", alone)
+	}
+}
+
 func TestDailyActivity(t *testing.T) {
 	client := stub(t, func(action string, w http.ResponseWriter, _ *http.Request) {
 		if action != "getactivity" {

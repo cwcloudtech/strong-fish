@@ -35,8 +35,8 @@ func sample(days int) (models.StepSeries, *models.HeartSeries, *models.BodyCompo
 	steps.DailyAverage = steps.Total / int64(len(steps.Days))
 	body := &models.BodyComposition{Provider: "withings", Measures: []models.BodyMeasure{
 		{Type: devicelink.MeasureWeight, Value: 82.4, Unit: "kg", TakenAt: end},
-		{Type: devicelink.MeasureFatRatio, Value: 17.9, Unit: "%", TakenAt: end},
-		{Type: devicelink.MeasureMuscleMass, Value: 64.2, Unit: "kg", TakenAt: end},
+		{Type: devicelink.MeasureFatRatio, Value: 17.9, Unit: "%", TakenAt: end, Adjusted: ptr(22.9)},
+		{Type: devicelink.MeasureMuscleMass, Value: 64.2, Unit: "kg", TakenAt: end, Adjusted: ptr(60.1)},
 		{Type: devicelink.MeasureBMI, Value: 24.6, Unit: "kg/m2", TakenAt: end},
 	}}
 	return steps, heart, body
@@ -71,6 +71,19 @@ func TestExportRenders(t *testing.T) {
 		}
 		_ = os.WriteFile(filepath.Join(out, fmt.Sprintf("health-%d.png", days)), image, 0o644)
 		_ = os.WriteFile(filepath.Join(out, fmt.Sprintf("health-%d.pdf", days)), document, 0o644)
+	}
+}
+
+func ptr(value float64) *float64 { return &value }
+
+func TestBodySectionShowsTheAdjustedValue(t *testing.T) {
+	_, _, body := sample(7)
+	rows := BodySection(*body, "en").Rows
+	if got := rows[0].Cells[1]; got != "82.4 kg" {
+		t.Errorf("weight: got %q", got)
+	}
+	if got := rows[1].Cells[1]; got != "17.9 % (~ 22.9 %)" {
+		t.Errorf("fat ratio: got %q", got)
 	}
 }
 
