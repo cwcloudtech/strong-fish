@@ -414,7 +414,54 @@ func (c *Client) LatestBodyComposition(ctx context.Context, accessToken string) 
 			}
 		}
 	}
-	return results, nil
+	return adjustForAthleteMode(results), nil
+}
+
+// AthleteFatOffset is how many points of body fat a Withings scale is taken
+// to miss in athlete mode, the setting for people who train more than eight
+// hours a week. Withings publishes no such figure: it is the order of the gap
+// members report against a DEXA scan, and is shown as an estimate beside the
+// measured value, never in place of it.
+const AthleteFatOffset = 5.0
+
+// adjustForAthleteMode adds to each fat and lean measure what it would read
+// with AthleteFatOffset more points of fat: the fat ratio goes up by the
+// offset, the fat mass by that share of the weight, and the fat-free and
+// muscle masses down by the same kilograms, so the masses still add up.
+//
+// Applied to every member, because whether athlete mode is on is a setting of
+// the scale's user profile that the public API does not expose: no getmeas
+// field, measure attribute or user call carries it. A member in the standard
+// mode simply reads the adjusted figure as the upper end of the estimate.
+//
+// The kilograms need the weight; without one only the ratio is adjusted.
+func adjustForAthleteMode(measures []devicelink.BodyMeasure) []devicelink.BodyMeasure {
+	weight := 0.0
+	for _, measure := range measures {
+		if measure.Type == devicelink.MeasureWeight {
+			weight = measure.Value
+		}
+	}
+	shift := weight * AthleteFatOffset / 100
+
+	for i, measure := range measures {
+		adjusted := 0.0
+		switch {
+		case measure.Type == devicelink.MeasureFatRatio:
+			adjusted = math.Min(measure.Value+AthleteFatOffset, 100)
+		case weight <= 0:
+			continue
+		case measure.Type == devicelink.MeasureFatMass:
+			adjusted = measure.Value + shift
+		case measure.Type == devicelink.MeasureFatFreeMass, measure.Type == devicelink.MeasureMuscleMass:
+			adjusted = math.Max(measure.Value-shift, 0)
+		default:
+			continue
+		}
+		adjusted = math.Round(adjusted*10) / 10
+		measures[i].Adjusted = &adjusted
+	}
+	return measures
 }
 
 type measureBody struct {

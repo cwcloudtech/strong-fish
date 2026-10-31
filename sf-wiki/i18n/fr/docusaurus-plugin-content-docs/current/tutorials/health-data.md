@@ -93,6 +93,21 @@ Avec Withings connecté, un panneau **Composition corporelle** affiche la derni�
 
 Une mesure que votre balance ne prend pas n'apparaît simplement pas. Chacune a sa propre date, car une balance ne prend pas toutes les mesures à chaque fois - la masse grasse, par exemple, ne se lit que pieds nus.
 
+#### Estimation du mode athlète
+
+Le **mode athlète** de Withings, prévu pour les personnes qui s'entraînent plus de huit heures par semaine, a tendance à sous-estimer la masse grasse. À côté des mesures de masse grasse et de masse maigre, le panneau affiche donc entre parenthèses ce qu'elles seraient avec **5 points de masse grasse en plus** :
+
+```
+Masse grasse (%)   12 % (~ 17 %)
+Masse grasse       9.6 kg (~ 13.6 kg)
+Masse maigre       70.4 kg (~ 66.4 kg)
+Masse musculaire   66.9 kg (~ 62.9 kg)
+```
+
+Les kilos bougent de 5 % de votre poids, pour que masse grasse et masse maigre en fassent toujours la somme. Le poids, la masse osseuse, l'eau corporelle, la graisse viscérale, le métabolisme et l'IMC restent tels que mesurés.
+
+Withings n'indique pas aux autres applications si le mode athlète est activé : l'estimation est donc toujours affichée. C'est une approximation, pas une correction publiée par Withings : si votre balance est en mode standard, lisez-la comme le haut de la fourchette.
+
 ## Export
 
 **Exporter cette vue** enregistre ce qui est à l'écran en PNG ou en PDF : les pas et la fréquence cardiaque tracés en histogrammes, aux couleurs de l'écran, suivis d'un tableau de votre dernière composition corporelle quand Withings est connecté.

@@ -561,6 +561,7 @@ const fr = {
       title: "Composition corporelle",
       empty: "Aucune mesure de votre balance pour l'instant.",
       takenOn: "Mesuré le {{date}}",
+      adjustedHint: "Les valeurs après ~ sont des estimations avec 5 points de masse grasse en plus, le mode athlète de Withings ayant tendance à la sous-estimer. L'application ne peut pas savoir si ce mode est activé : elles sont donc toujours affichées.",
       measure: {
         weight: "Poids",
         bmi: "IMC",

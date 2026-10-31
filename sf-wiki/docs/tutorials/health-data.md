@@ -94,6 +94,21 @@ With Withings connected, a **Body composition** panel shows the latest value of 
 
 A measure your scale does not take simply does not appear. Each one has its own date because a scale does not take every measure every time - fat, for instance, is only read barefoot.
 
+#### Athlete mode estimate
+
+Withings' **athlete mode**, meant for people who train more than eight hours a week, tends to under-estimate body fat. Next to the fat and lean measures, the panel therefore shows in brackets what they would be with **5 more points of body fat**:
+
+```
+Body fat     12 % (~ 17 %)
+Fat mass     9.6 kg (~ 13.6 kg)
+Fat-free mass 70.4 kg (~ 66.4 kg)
+Muscle mass  66.9 kg (~ 62.9 kg)
+```
+
+The kilograms move by 5 % of your weight, so fat and fat-free mass still add up to it. Weight, bone mass, body water, visceral fat, metabolic rate and BMI are left as measured.
+
+Withings does not tell other apps whether athlete mode is on, so the estimate is always shown. It is an approximation, not a correction published by Withings: if your scale is in standard mode, read it as the upper end of the range.
+
 ## Exporting
 
 **Export this view** saves what is on screen as a PNG or a PDF: steps and heart rate drawn as histograms, coloured like the screen, followed by a table of your latest body composition when Withings is connected.
