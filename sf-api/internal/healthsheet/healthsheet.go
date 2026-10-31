@@ -116,9 +116,9 @@ func HeartSection(heart models.HeartSeries, locale string) programsheet.Section 
 func BodySection(body models.BodyComposition, locale string) programsheet.Section {
 	rows := make([]programsheet.Line, 0, len(body.Measures))
 	for _, measure := range body.Measures {
-		value := withUnit(measure.Value, measure.Unit)
-		if measure.Adjusted != nil {
-			value += " (~ " + withUnit(*measure.Adjusted, measure.Unit) + ")"
+		value := strconv.FormatFloat(measure.Value, 'f', -1, 64)
+		if unit := displayUnit(measure.Unit); unit != "" {
+			value += " " + unit
 		}
 		rows = append(rows, programsheet.Line{Cells: []string{
 			programsheet.Heading(locale, "bc."+measure.Type),
@@ -135,15 +135,6 @@ func BodySection(body models.BodyComposition, locale string) programsheet.Sectio
 		},
 		Rows: rows,
 	}
-}
-
-// withUnit is a measure's value as printed, unit and all: 72.45 kg.
-func withUnit(value float64, unit string) string {
-	text := strconv.FormatFloat(value, 'f', -1, 64)
-	if unit := displayUnit(unit); unit != "" {
-		text += " " + unit
-	}
-	return text
 }
 
 // displayUnit is the unit as printed. Squared metres are spelt out by the API

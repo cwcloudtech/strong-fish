@@ -495,14 +495,6 @@ function BodyCompositionPanel({ provider }) {
                     {measure.unit === "kg/m2" ? "kg/m²" : measure.unit}
                   </span>
                 ) : null}
-                {measure.adjusted != null ? (
-                  <span className="sf-muted" style={{ fontSize: "0.8rem" }} title={t("devices.bodyComposition.adjustedHint")}>
-                    {" (~ "}
-                    {measure.adjusted.toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                    {measure.unit ? ` ${measure.unit}` : ""}
-                    {")"}
-                  </span>
-                ) : null}
               </strong>
               <div className="sf-muted" style={{ fontSize: "0.75rem" }}>
                 {t("devices.bodyComposition.takenOn", { date: (measure.takenAt || "").slice(0, 10) })}
@@ -510,11 +502,6 @@ function BodyCompositionPanel({ provider }) {
             </div>
           ))}
         </div>
-      ) : null}
-      {data && data.measures.some((measure) => measure.adjusted != null) ? (
-        <p className="sf-muted" style={{ fontSize: "0.75rem" }}>
-          {t("devices.bodyComposition.adjustedHint")}
-        </p>
       ) : null}
     </div>
   );

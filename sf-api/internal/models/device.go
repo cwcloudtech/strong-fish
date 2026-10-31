@@ -128,10 +128,6 @@ type BodyMeasure struct {
 	// Unit is kg, %, kcal, kg/m2, or blank for an index.
 	Unit    string    `json:"unit"`
 	TakenAt time.Time `json:"takenAt"`
-	// Adjusted is the same measure corrected for the fat a scale's athlete
-	// mode is known to miss, printed as "value (~ adjusted)". Absent for a
-	// measure the correction leaves alone: weight, bone, BMI and the like.
-	Adjusted *float64 `json:"adjusted,omitempty"`
 }
 
 // BodyComposition is the latest of every measure a member's scale has taken,
