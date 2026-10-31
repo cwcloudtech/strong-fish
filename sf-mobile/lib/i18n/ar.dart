@@ -545,7 +545,7 @@ const Map<String, dynamic> ar = {
   },
   'devices': {
     'title': 'الأجهزة المتصلة',
-    'subtitle': 'اقرأ الخطوات التي أحصتها ساعتك بالفعل. لا يُكتب شيء في المقابل، ولا يُخزَّن شيء هنا.',
+    'subtitle': 'اقرأ ما قاسته ساعتك وميزانك بالفعل. لا يُكتب شيء في المقابل، ولا يُخزَّن شيء هنا.',
     'connect': 'ربط',
     'disconnect': 'إلغاء الربط',
     'notConnected': 'غير مرتبط.',
@@ -561,6 +561,24 @@ const Map<String, dynamic> ar = {
     'latestBpm': 'آخر نبض',
     'export': 'تصدير هذه الفترة',
     'bpm': 'نبضة/د',
+    'activityFrom': 'الخطوات ونبض القلب المعروضة مصدرها {{provider}}.',
+    'bodyComposition': {
+      'title': 'تركيب الجسم',
+      'empty': 'لا توجد قياسات من ميزانك بعد.',
+      'takenOn': 'قيس في {{date}}',
+      'measure': {
+        'weight': 'الوزن',
+        'bmi': 'مؤشر كتلة الجسم',
+        'fatRatio': 'نسبة الدهون',
+        'fatMass': 'كتلة الدهون',
+        'fatFreeMass': 'الكتلة الخالية من الدهون',
+        'muscleMass': 'الكتلة العضلية',
+        'hydration': 'ماء الجسم',
+        'boneMass': 'كتلة العظام',
+        'visceralFat': 'الدهون الحشوية',
+        'basalMetabolicRate': 'معدل الأيض الأساسي',
+      },
+    },
     'zone': {
       'light': 'خفيفة',
       'moderate': 'متوسطة',
@@ -569,6 +587,7 @@ const Map<String, dynamic> ar = {
     },
     'provider': {
       'google-health': 'Google Health ‏(Fitbit، Pixel Watch)',
+      'withings': 'Withings',
     },
     'range': {
       '24h': 'آخر 24 ساعة',
@@ -585,8 +604,8 @@ const Map<String, dynamic> ar = {
       'invalid_state': 'انتهت صلاحية هذا الرابط. ابدأ من جديد.',
       'missing_code': 'لم يُرجع المزوّد أي تفويض. حاول مجدداً.',
       'unavailable': 'هذا التكامل غير مفعّل على هذا الخادم.',
-      'exchange_failed': 'رفضت Google الاتصال. إن كنت تدير هذا الخادم، فالسبب في سجلاته.',
-      'account_failed': 'تم تسجيل دخولك، لكن تعذّرت قراءة نشاطك. إن كنت تدير هذا الخادم، فتحقق من تفعيل واجهة Google Health على المشروع - والسبب في السجلات.',
+      'exchange_failed': 'رفض المزوّد الاتصال. إن كنت تدير هذا الخادم، فالسبب في سجلاته.',
+      'account_failed': 'تم تسجيل دخولك، لكن تعذّرت قراءة بياناتك. إن كنت تدير هذا الخادم، فتحقق من تفعيل واجهة المزوّد لهذا التطبيق - والسبب في السجلات.',
       'store_failed': 'تعذّر حفظ الاتصال. حاول مجدداً.',
     },
   },

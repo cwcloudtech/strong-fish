@@ -15,10 +15,12 @@ package programpdf
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/go-pdf/fpdf"
 
 	"strong-fish-api/internal/models"
+	"strong-fish-api/internal/programpng"
 	"strong-fish-api/internal/programsheet"
 )
 
@@ -91,14 +93,13 @@ func Render(program models.Program, days []models.ProgramDay, options Options) (
 	return buf.Bytes(), nil
 }
 
-// RenderTable lays one titled table out as a PDF.
+// RenderTables lays titled tables out as a PDF, one after the other.
 //
 // The program renderer above is this with a block's worth of structure on top;
 // anything that is simply rows - a member's health data, say - needs only
 // this. Portrait, because a handful of columns fits and a printed sheet that
 // comes out sideways is one nobody files.
-func RenderTable(title, subtitle string, columns []programsheet.Column,
-	rows []programsheet.Line, footer string) ([]byte, error) {
+func RenderTables(title, subtitle string, sections []programsheet.Section, footer string) ([]byte, error) {
 	pdf := fpdf.New("P", "pt", "A4", "")
 	pdf.SetMargins(36, 40, 36)
 	pdf.SetAutoPageBreak(true, 40)
@@ -126,7 +127,23 @@ func RenderTable(title, subtitle string, columns []programsheet.Column,
 	}
 	pdf.Ln(8)
 
-	drawTable(pdf, translate, columns, rows)
+	for i, section := range sections {
+		if i > 0 {
+			pdf.Ln(14)
+		}
+		if section.Heading != "" {
+			pdf.SetFont("Helvetica", "B", daySizePt)
+			pdf.CellFormat(0, 16, translate(section.Heading), "", 1, "L", false, 0, "")
+			pdf.Ln(4)
+		}
+		if section.Chart != nil {
+			if err := placeChart(pdf, *section.Chart, i); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		drawTable(pdf, translate, section.Columns, section.Rows)
+	}
 
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {
@@ -184,4 +201,45 @@ func drawDay(pdf *fpdf.Fpdf, translate func(string) string, day models.ProgramDa
 	rows := programsheet.Lines(sets, options.Feedback, options.Locale)
 
 	drawTable(pdf, translate, programsheet.Columns(options.Locale, options.Feedback), rows)
+}
+
+// chartPixels is how wide a chart is rasterized before being scaled to the
+// page. Narrower than the PNG export on purpose: the chart's text is sized in
+// pixels, and the wider the picture the smaller that text lands on paper -
+// at this width a label prints at about 8pt, and solid bars stay sharp.
+const chartPixels = 960
+
+// placeChart embeds a histogram as an image, drawn by the PNG renderer.
+//
+// The same way cwclock puts its daily bars in a report: fpdf has no charting
+// of its own, and drawing the bars twice - once in points, once in pixels -
+// would be two charts that disagree about where a label goes. One drawing,
+// placed at the page's full width.
+func placeChart(pdf *fpdf.Fpdf, chart programsheet.Chart, index int) error {
+	data, err := programpng.ChartPNG(chart, chartPixels)
+	if err != nil {
+		return err
+	}
+
+	left, _, right, bottom := pdf.GetMargins()
+	pageWidth, pageHeight := pdf.GetPageSize()
+	width := pageWidth - left - right
+
+	key := fmt.Sprintf("health-chart-%d", index)
+	options := fpdf.ImageOptions{ImageType: "PNG"}
+	info := pdf.RegisterImageOptionsReader(key, options, bytes.NewReader(data))
+	if info == nil || info.Width() <= 0 {
+		return pdf.Error()
+	}
+	height := width * info.Height() / info.Width()
+
+	// A chart is never split across pages: half a histogram on each is two
+	// charts, neither of which reads.
+	if pdf.GetY()+height > pageHeight-bottom {
+		pdf.AddPage()
+	}
+	y := pdf.GetY()
+	pdf.ImageOptions(key, left, y, width, height, false, options, 0, "")
+	pdf.SetY(y + height)
+	return nil
 }

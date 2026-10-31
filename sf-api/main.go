@@ -25,6 +25,7 @@ import (
 	"strong-fish-api/internal/store"
 	"strong-fish-api/internal/telemetry"
 	"strong-fish-api/internal/utils"
+	"strong-fish-api/internal/withings"
 )
 
 // shutdownTimeout bounds how long the exporters get to flush what they have
@@ -123,6 +124,15 @@ func main() {
 		APIBaseURL:   cfg.GoogleHealthAPIURL,
 	})
 	devices = append(devices, googleHealth)
+	// After Google Health on purpose: the order is the priority for steps and
+	// heart rate (see devicelink.ActivitySource), and a member with both
+	// connected is shown their watch's numbers rather than the scale app's.
+	devices = append(devices, withings.New(withings.Config{
+		ClientID:     cfg.WithingsClientID,
+		ClientSecret: cfg.WithingsClientSecret,
+		AuthURL:      cfg.WithingsAuthURL,
+		APIBaseURL:   cfg.WithingsAPIURL,
+	}))
 
 	strengthHandler := handlers.NewStrengthHandler(exerciseStore, userStore)
 	profileHandler := handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore).

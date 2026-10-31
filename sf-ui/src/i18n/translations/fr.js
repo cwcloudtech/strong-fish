@@ -540,7 +540,7 @@ const fr = {
   },
   devices: {
     title: "Appareils connectés",
-    subtitle: "Lisez les pas que votre montre a déjà comptés. Rien n'est écrit en retour, et rien n'est stocké ici.",
+    subtitle: "Lisez ce que votre montre et votre balance ont déjà mesuré. Rien n'est écrit en retour, et rien n'est stocké ici.",
     connect: "Connecter",
     disconnect: "Déconnecter",
     notConnected: "Non connecté.",
@@ -556,6 +556,24 @@ const fr = {
     latestBpm: "Dernière fréquence",
     export: "Exporter cette vue",
     bpm: "bpm",
+    activityFrom: "Les pas et la fréquence cardiaque affichés viennent de {{provider}}.",
+    bodyComposition: {
+      title: "Composition corporelle",
+      empty: "Aucune mesure de votre balance pour l'instant.",
+      takenOn: "Mesuré le {{date}}",
+      measure: {
+        weight: "Poids",
+        bmi: "IMC",
+        fatRatio: "Masse grasse (%)",
+        fatMass: "Masse grasse",
+        fatFreeMass: "Masse maigre",
+        muscleMass: "Masse musculaire",
+        hydration: "Eau corporelle",
+        boneMass: "Masse osseuse",
+        visceralFat: "Graisse viscérale",
+        basalMetabolicRate: "Métabolisme de base",
+      },
+    },
     zone: {
       light: "Légère",
       moderate: "Modérée",
@@ -564,6 +582,7 @@ const fr = {
     },
     provider: {
       "google-health": "Google Health (Fitbit, Pixel Watch)",
+      withings: "Withings",
     },
     range: {
       "24h": "Dernières 24h",
@@ -580,8 +599,8 @@ const fr = {
       invalid_state: "Ce lien avait expiré. Recommencez.",
       missing_code: "Le fournisseur n'a renvoyé aucune autorisation. Réessayez.",
       unavailable: "Cette intégration n'est pas activée sur ce serveur.",
-      exchange_failed: "Google a refusé la connexion. Si vous administrez ce serveur, la raison est dans ses logs.",
-      account_failed: "Vous êtes authentifié, mais votre activité n'a pas pu être lue. Si vous administrez ce serveur, vérifiez que l'API Google Health est activée sur le projet - la raison est dans les logs.",
+      exchange_failed: "Le fournisseur a refusé la connexion. Si vous administrez ce serveur, la raison est dans ses logs.",
+      account_failed: "Vous êtes authentifié, mais vos données n'ont pas pu être lues. Si vous administrez ce serveur, vérifiez que l'API du fournisseur est activée pour cette application - la raison est dans les logs.",
       store_failed: "La connexion n'a pas pu être enregistrée. Réessayez.",
     },
   },

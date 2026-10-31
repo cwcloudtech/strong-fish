@@ -14,6 +14,7 @@ package programsheet
 
 import (
 	"fmt"
+	"image/color"
 	"sort"
 	"strings"
 
@@ -122,6 +123,46 @@ func Row(set models.ProgramSet, feedback bool, locale string) []string {
 type Line struct {
 	Cells []string
 	Done  bool
+}
+
+// Section is one titled part of a sheet that has several - the health
+// export's steps, then its heart rate, then the latest body composition.
+// Heading may be blank for a sheet whose title already says what it is.
+//
+// A section is either a table (Columns and Rows) or, when Chart is set, a
+// histogram. Days of numbers read as a shape - which week was idle, which day
+// peaked - and a column of ninety figures hides exactly that.
+type Section struct {
+	Heading string
+	Columns []Column
+	Rows    []Line
+	Chart   *Chart
+}
+
+// Chart is a histogram: one bar per entry, oldest first, each in its own
+// colour, with the legend that says what the colours mean.
+type Chart struct {
+	Bars   []Bar
+	Legend []LegendEntry
+}
+
+// Bar is one day of a histogram.
+type Bar struct {
+	// Label goes under the bar - a short date. The renderer thins the labels
+	// out when there are too many bars for all of them to fit.
+	Label string
+	// Value is the bar's height, against the tallest bar in the chart.
+	Value float64
+	// Caption is printed above the bar when there is room - the figure
+	// itself, so a short range can be read without an axis.
+	Caption string
+	Color   color.RGBA
+}
+
+// LegendEntry is one colour of a chart and what it means.
+type LegendEntry struct {
+	Label string
+	Color color.RGBA
 }
 
 // Lines is a session's sets as rows, in the order they are performed.

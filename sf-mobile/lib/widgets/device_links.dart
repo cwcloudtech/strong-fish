@@ -144,6 +144,10 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     // the operator has not configured still appears, switched off: a blank
     // space leaves a member wondering whether the feature exists.
     if (connections == null || connections.isEmpty) return const SizedBox.shrink();
+    String? activitySource;
+    for (final connection in connections) {
+      if (connection.activitySource) activitySource = connection.provider;
+    }
 
     return Card(
       child: Padding(
@@ -201,7 +205,23 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   label: Text(t('devices.connect')),
                 ),
             ]),
-            if (connection.connected) _StepPanel(provider: connection.provider),
+            // Steps and heart rate from one provider only, the one the API
+            // picked: two devices' worth of steps side by side would be two
+            // answers to the same question.
+            if (connection.activitySource) _StepPanel(provider: connection.provider),
+            if (connection.connected &&
+                !connection.activitySource &&
+                activitySource != null &&
+                connection.can('activity'))
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  t('devices.activityFrom', {'provider': t('devices.provider.$activitySource')}),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            if (connection.connected && connection.can('body-composition'))
+              _BodyCompositionPanel(provider: connection.provider),
           ],
         ]),
       ),
@@ -543,4 +563,124 @@ class _HeartSection extends ConsumerWidget {
       ]),
     ]);
   }
+}
+
+/// The latest reading of every measure the member's scale takes.
+///
+/// No chart and no range: this is "where am I now". Each measure carries its
+/// own date, because a scale does not take every measure every time, and a
+/// value from last month should say so.
+class _BodyCompositionPanel extends ConsumerStatefulWidget {
+  final String provider;
+  const _BodyCompositionPanel({required this.provider});
+
+  @override
+  ConsumerState<_BodyCompositionPanel> createState() => _BodyCompositionPanelState();
+}
+
+class _BodyCompositionPanelState extends ConsumerState<_BodyCompositionPanel> {
+  List<BodyMeasure>? _measures;
+  String _error = '';
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+    try {
+      final measures = await ref.read(apiProvider).deviceBodyComposition(widget.provider);
+      if (mounted) setState(() => _measures = measures);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _measures = null;
+          _error = ref.read(tErrorProvider)(error);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final measures = _measures;
+    final small = Theme.of(context).textTheme.bodySmall;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 14),
+      Row(children: [
+        Expanded(
+          child: Text(t('devices.bodyComposition.title'),
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        IconButton(
+          onPressed: _loading ? null : _load,
+          tooltip: t('common.refresh'),
+          icon: const Icon(Icons.refresh, size: 20),
+          visualDensity: VisualDensity.compact,
+        ),
+      ]),
+      if (_loading && measures == null)
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      if (_error.isNotEmpty)
+        Text(_error, style: TextStyle(color: AppColors.of(context).danger)),
+      if (measures != null && measures.isEmpty)
+        Text(t('devices.bodyComposition.empty'), style: small),
+      if (measures != null && measures.isNotEmpty)
+        // A Wrap of fixed-width tiles, so a narrow phone shows two per row and
+        // a tablet as many as fit.
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final measure in measures)
+            Container(
+              width: 150,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.of(context).border),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(t('devices.bodyComposition.measure.${measure.type}'), style: small),
+                Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: _decimal(measure.value)),
+                    if (measure.unit.isNotEmpty)
+                      TextSpan(
+                        text: ' ${measure.unit == 'kg/m2' ? 'kg/m²' : measure.unit}',
+                        style: small,
+                      ),
+                  ]),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                if (measure.takenAt != null)
+                  Text(
+                    t('devices.bodyComposition.takenOn', {
+                      'date': measure.takenAt!.toIso8601String().substring(0, 10),
+                    }),
+                    style: small?.copyWith(fontSize: 11),
+                  ),
+              ]),
+            ),
+        ]),
+    ]);
+  }
+}
+
+/// One decimal at most, and none when the value is whole: 72.5 kg, 1650 kcal.
+String _decimal(double value) {
+  final rounded = (value * 10).round() / 10;
+  return rounded == rounded.truncateToDouble()
+      ? _grouped(rounded.toInt())
+      : rounded.toStringAsFixed(1);
 }

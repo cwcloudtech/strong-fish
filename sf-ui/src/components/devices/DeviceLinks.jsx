@@ -125,6 +125,8 @@ export default function DeviceLinks() {
   // leaves a member wondering whether the feature exists.
   if (connections.length === 0) return null;
 
+  const activitySource = connections.find((connection) => connection.activitySource)?.provider;
+
   return (
     <div className="sf-card">
       <p className="sf-muted" style={{ marginTop: 0 }}>{t("devices.subtitle")}</p>
@@ -176,7 +178,19 @@ export default function DeviceLinks() {
             )}
           </div>
 
-          {connection.connected ? <DataPanel provider={connection.provider} /> : null}
+          {/* Steps and heart rate from one provider only, the one the API
+              picked: two watches' worth of steps side by side would be two
+              answers to the same question. */}
+          {connection.activitySource ? <DataPanel provider={connection.provider} /> : null}
+          {connection.connected && !connection.activitySource && activitySource
+          && connection.capabilities?.includes("activity") ? (
+            <p className="sf-muted" style={{ marginTop: "0.5rem" }}>
+              {t("devices.activityFrom", { provider: t(`devices.provider.${activitySource}`) })}
+            </p>
+          ) : null}
+          {connection.connected && connection.capabilities?.includes("body-composition") ? (
+            <BodyCompositionPanel provider={connection.provider} />
+          ) : null}
         </div>
       ))}
     </div>
@@ -412,6 +426,83 @@ function HeartSection({ heart, t }) {
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The latest reading of every measure the member's scale takes.
+ *
+ * No chart and no range: this is "where am I now". Each measure carries its
+ * own date, because a scale does not take every measure every time - fat is
+ * only read barefoot - and a value from last month should say so.
+ */
+function BodyCompositionPanel({ provider }) {
+  const { t } = useI18n();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await devicesApi.bodyComposition(provider));
+    } catch (err) {
+      setError(err);
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [provider]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return (
+    <div style={{ marginTop: "1rem" }}>
+      <div className="sf-row" style={{ gap: "0.3rem" }}>
+        <strong>{t("devices.bodyComposition.title")}</strong>
+        <button
+          className="sf-button sf-button-ghost sf-button-sm"
+          onClick={load}
+          disabled={loading}
+          aria-label={t("common.refresh")}
+          title={t("common.refresh")}
+        >
+          <FiRefreshCw />
+        </button>
+      </div>
+
+      <ErrorMessage error={error} />
+      {loading && !data ? <Spinner /> : null}
+
+      {data && data.measures.length === 0 ? (
+        <p className="sf-muted">{t("devices.bodyComposition.empty")}</p>
+      ) : null}
+
+      {data && data.measures.length > 0 ? (
+        <div className="sf-body-grid">
+          {data.measures.map((measure) => (
+            <div key={measure.type} className="sf-body-tile">
+              <div className="sf-muted">{t(`devices.bodyComposition.measure.${measure.type}`)}</div>
+              <strong className="sf-steps-figure">
+                {measure.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                {measure.unit ? (
+                  <span className="sf-muted" style={{ fontSize: "0.8rem" }}>
+                    {" "}
+                    {measure.unit === "kg/m2" ? "kg/m²" : measure.unit}
+                  </span>
+                ) : null}
+              </strong>
+              <div className="sf-muted" style={{ fontSize: "0.75rem" }}>
+                {t("devices.bodyComposition.takenOn", { date: (measure.takenAt || "").slice(0, 10) })}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
