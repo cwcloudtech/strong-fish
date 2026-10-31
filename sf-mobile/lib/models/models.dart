@@ -316,18 +316,13 @@ class BodyMeasure {
   final String unit;
   final DateTime? takenAt;
 
-  /// The value corrected for the fat a scale's athlete mode misses, shown as
-  /// "value (~ adjusted)". Null for a measure the correction leaves alone.
-  final double? adjusted;
-
-  const BodyMeasure({this.type = '', this.value = 0, this.unit = '', this.takenAt, this.adjusted});
+  const BodyMeasure({this.type = '', this.value = 0, this.unit = '', this.takenAt});
 
   factory BodyMeasure.fromJson(Map<String, dynamic> json) => BodyMeasure(
         type: _toString(json['type']),
         value: _toDouble(json['value']),
         unit: _toString(json['unit']),
         takenAt: json['takenAt'] == null ? null : _toDate(json['takenAt']),
-        adjusted: json['adjusted'] == null ? null : _toDouble(json['adjusted']),
       );
 }
 

@@ -185,10 +185,6 @@ type BodyMeasure struct {
 	// Unit is "kg", "%", "kcal", "kg/m2", or blank for an index with none.
 	Unit    string
 	TakenAt time.Time
-	// Adjusted is the value corrected for a scale that reads too little fat,
-	// shown beside the measured one rather than instead of it. Nil for a
-	// measure the correction does not touch.
-	Adjusted *float64
 }
 
 // Find returns the configured provider with this name.

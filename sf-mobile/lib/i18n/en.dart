@@ -566,7 +566,6 @@ const Map<String, dynamic> en = {
       'title': 'Body composition',
       'empty': 'No measurement from your scale yet.',
       'takenOn': 'Measured on {{date}}',
-      'adjustedHint': 'Values after ~ are estimates with 5 points more body fat, since Withings\' athlete mode tends to under-estimate it. The app cannot tell whether that mode is on, so they are always shown.',
       'measure': {
         'weight': 'Weight',
         'bmi': 'BMI',

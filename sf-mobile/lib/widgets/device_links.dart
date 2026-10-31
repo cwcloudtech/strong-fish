@@ -660,12 +660,6 @@ class _BodyCompositionPanelState extends ConsumerState<_BodyCompositionPanel> {
                         text: ' ${measure.unit == 'kg/m2' ? 'kg/m²' : measure.unit}',
                         style: small,
                       ),
-                    if (measure.adjusted != null)
-                      TextSpan(
-                        text: ' (~ ${_decimal(measure.adjusted!)}'
-                            '${measure.unit.isNotEmpty ? ' ${measure.unit}' : ''})',
-                        style: small,
-                      ),
                   ]),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
@@ -679,11 +673,6 @@ class _BodyCompositionPanelState extends ConsumerState<_BodyCompositionPanel> {
               ]),
             ),
         ]),
-      if (measures != null && measures.any((measure) => measure.adjusted != null))
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(t('devices.bodyComposition.adjustedHint'), style: small?.copyWith(fontSize: 11)),
-        ),
     ]);
   }
 }
