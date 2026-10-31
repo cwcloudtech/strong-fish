@@ -2685,3 +2685,16 @@ a.sf-thread-who:hover strong { color: var(--sf-primary); text-decoration: underl
   padding: 6px 10px;
   font-size: 0.85rem;
 }
+
+/* Body composition: one tile per measure, as many per row as fit. */
+.sf-body-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+.sf-body-tile {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--sf-border);
+  border-radius: 8px;
+}

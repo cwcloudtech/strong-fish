@@ -46,6 +46,13 @@ type Config struct {
 	GoogleHealthAuthURL  string
 	GoogleHealthTokenURL string
 	GoogleHealthAPIURL   string
+	// Withings - body composition from its scales, and steps and heart rate
+	// from its watches - has its own OAuth client, created in the Withings
+	// developer dashboard. The two URLs are only for development.
+	WithingsClientID     string
+	WithingsClientSecret string
+	WithingsAuthURL      string
+	WithingsAPIURL       string
 	CWCloudAPIURL        string
 	CWCloudAPIKey        string
 	CWCloudContactFormID string
@@ -185,6 +192,10 @@ func Load() Config {
 		GoogleHealthAuthURL:      os.Getenv("SF_GOOGLE_HEALTH_AUTH_URL"),
 		GoogleHealthTokenURL:     os.Getenv("SF_GOOGLE_HEALTH_TOKEN_URL"),
 		GoogleHealthAPIURL:       os.Getenv("SF_GOOGLE_HEALTH_API_URL"),
+		WithingsClientID:         os.Getenv("SF_WITHINGS_CLIENT_ID"),
+		WithingsClientSecret:     os.Getenv("SF_WITHINGS_CLIENT_SECRET"),
+		WithingsAuthURL:          os.Getenv("SF_WITHINGS_AUTH_URL"),
+		WithingsAPIURL:           os.Getenv("SF_WITHINGS_API_URL"),
 		CWCloudAPIURL:            utils.GetBaseUrlFromEnvWithFallback("CWCLOUD_API_URL", "https://api.cwcloud.tech"),
 		CWCloudAPIKey:            os.Getenv("CWCLOUD_API_KEY"),
 		CWCloudContactFormID:     os.Getenv("CWCLOUD_CONTACT_FORM_ID"),

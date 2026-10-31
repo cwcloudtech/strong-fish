@@ -103,6 +103,9 @@ export const devices = {
     body(client.get(`/users/me/devices/${provider}/steps`, { params: { range } })),
   heartRate: (provider, range) =>
     body(client.get(`/users/me/devices/${provider}/heart-rate`, { params: { range } })),
+  // The latest reading of each measure the scale takes; no range, since the
+  // panel is "where am I now".
+  bodyComposition: (provider) => body(client.get(`/users/me/devices/${provider}/body-composition`)),
   // format is "pdf" or "png": the route's own extension, so the file that
   // arrives is named the way its contents are.
   export: (provider, { format = "png", range, locale } = {}) =>

@@ -89,12 +89,16 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 		linked[provider] = true
 	}
 
+	source := devicelink.ActivitySource(h.providers, linked)
+
 	results := make([]models.DeviceConnection, 0, len(h.providers))
 	for _, provider := range h.providers {
 		connection := models.DeviceConnection{
-			Provider:  provider.Name(),
-			Available: provider.Enabled(),
-			Connected: linked[provider.Name()],
+			Provider:       provider.Name(),
+			Available:      provider.Enabled(),
+			Connected:      linked[provider.Name()],
+			Capabilities:   devicelink.Capabilities(provider),
+			ActivitySource: provider.Name() == source,
 		}
 		if connection.Connected {
 			if link, err := h.links.Find(r.Context(), userID, provider.Name()); err == nil {
@@ -216,6 +220,9 @@ func (h *DeviceHandler) Callback(w http.ResponseWriter, r *http.Request) {
 			"provider", providerName, "error", err)
 		h.finish(w, r, providerName, "account_failed")
 		return
+	}
+	if utils.IsBlank(externalID) {
+		externalID = token.UserID
 	}
 
 	if _, err := h.links.Save(r.Context(), models.DeviceLink{
@@ -460,15 +467,13 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 	}
 
 	locale := sheetLocale(r)
-	withHeart := heart != nil && heart.AverageBPM > 0
-	if !withHeart {
+	if heart != nil && heart.AverageBPM == 0 {
 		heart = nil
 	}
 
 	title := healthsheet.Title(h.memberName(r.Context(), userID), locale)
 	subtitle := healthsheet.Subtitle(steps, heart, locale)
-	columns := healthsheet.Columns(locale, withHeart)
-	rows := healthsheet.Lines(steps, heart, locale)
+	sections := healthsheet.Sections(steps, heart, h.exportBodyComposition(r, userID), locale)
 	footer := h.uiBaseURL
 
 	var (
@@ -476,10 +481,10 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 		media string
 	)
 	if exportFormat(r) == formatPNG {
-		body, err = programpng.RenderTable(title, subtitle, columns, rows, footer)
+		body, err = programpng.RenderTables(title, subtitle, sections, footer)
 		media = mediaPNG
 	} else {
-		body, err = programpdf.RenderTable(title, subtitle, columns, rows, footer)
+		body, err = programpdf.RenderTables(title, subtitle, sections, footer)
 		media = mediaPDF
 	}
 	if err != nil {
@@ -494,13 +499,123 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
+// BodyComposition returns the latest reading of every measure the member's
+// scale has taken.
+//
+// No range: the panel is "where am I now", and the date on each measure says
+// how current that is - a scale that measures fat but was last stepped on
+// with bare feet a month ago says so, rather than being averaged away.
+func (h *DeviceHandler) BodyComposition(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	found, ok := h.provider(w, r)
+	if !ok {
+		return
+	}
+	reader, ok := found.(devicelink.BodyCompositionReader)
+	if !ok {
+		writeError(w, http.StatusNotFound, "This provider has no body composition data", CodeNotFound)
+		return
+	}
+	if !found.Enabled() {
+		writeError(w, http.StatusNotImplemented,
+			"This integration is not enabled on this server", CodeDeviceUnavailable)
+		return
+	}
+
+	link, err := h.links.Find(r.Context(), userID, found.Name())
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "No account connected", CodeDeviceNotConnected)
+			return
+		}
+		writeStoreError(w, err)
+		return
+	}
+
+	accessToken, err := h.freshToken(r, found, link)
+	if err != nil {
+		h.writeProviderError(w, err, found.Name())
+		return
+	}
+
+	measures, err := reader.LatestBodyComposition(r.Context(), accessToken)
+	if err != nil {
+		h.writeProviderError(w, err, found.Name())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, bodyComposition(found.Name(), measures))
+}
+
+// bodyComposition is a provider's measures in the shape the clients and the
+// export read.
+func bodyComposition(provider string, measures []devicelink.BodyMeasure) models.BodyComposition {
+	result := models.BodyComposition{
+		Provider: provider,
+		Measures: make([]models.BodyMeasure, 0, len(measures)),
+	}
+	for _, measure := range measures {
+		result.Measures = append(result.Measures, models.BodyMeasure{
+			Type: measure.Type, Value: measure.Value, Unit: measure.Unit, TakenAt: measure.TakenAt,
+		})
+	}
+	return result
+}
+
+// exportBodyComposition is the latest body composition for an export, from
+// whichever connected provider has a scale behind it - not necessarily the
+// one the export was asked of: steps from Google Health and weight from
+// Withings belong on the same sheet, because they are the same member.
+//
+// Optional, like the heart rate: a scale that cannot be read right now must
+// not cost the member the export of their steps.
+func (h *DeviceHandler) exportBodyComposition(r *http.Request, userID string) *models.BodyComposition {
+	connected, err := h.links.ListProviders(r.Context(), userID)
+	if err != nil {
+		return nil
+	}
+	for _, name := range connected {
+		found, ok := devicelink.Find(h.providers, name)
+		if !ok || !found.Enabled() {
+			continue
+		}
+		reader, ok := found.(devicelink.BodyCompositionReader)
+		if !ok {
+			continue
+		}
+		link, err := h.links.Find(r.Context(), userID, name)
+		if err != nil {
+			continue
+		}
+		accessToken, err := h.freshToken(r, found, link)
+		if err != nil {
+			slog.Warn("health export: body composition unavailable", "provider", name, "error", err)
+			continue
+		}
+		measures, err := reader.LatestBodyComposition(r.Context(), accessToken)
+		if err != nil {
+			slog.Warn("health export: body composition unavailable", "provider", name, "error", err)
+			continue
+		}
+		result := bodyComposition(name, measures)
+		return &result
+	}
+	return nil
+}
+
 // readable resolves everything a read of a member's data needs: the provider,
 // their link to it, and how many days were asked for. Shared by the two reads
 // so they cannot drift on what a range means or on who may ask.
 func (h *DeviceHandler) readable(w http.ResponseWriter, r *http.Request, userID string) (
-	devicelink.Provider, models.DeviceLink, int, string, bool) {
-	provider, ok := h.provider(w, r)
+	devicelink.ActivityProvider, models.DeviceLink, int, string, bool) {
+	found, ok := h.provider(w, r)
 	if !ok {
+		return nil, models.DeviceLink{}, 0, "", false
+	}
+	provider, ok := found.(devicelink.ActivityProvider)
+	if !ok {
+		writeError(w, http.StatusNotFound, "This provider has no activity data", CodeNotFound)
 		return nil, models.DeviceLink{}, 0, "", false
 	}
 	if !provider.Enabled() {

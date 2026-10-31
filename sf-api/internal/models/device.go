@@ -49,6 +49,13 @@ type DeviceConnection struct {
 	// ConnectedAt is when the member linked it, for the "connected since"
 	// line. Zero when they have not.
 	ConnectedAt *time.Time `json:"connectedAt,omitempty"`
+	// Capabilities is what the provider can be read for: "activity" (steps
+	// and heart rate), "body-composition", or both.
+	Capabilities []string `json:"capabilities"`
+	// ActivitySource marks the one connected provider whose steps and heart
+	// rate are shown. Decided here so the web app and the phone cannot pick
+	// differently when a member has connected more than one.
+	ActivitySource bool `json:"activitySource"`
 }
 
 // StepDay is one day's step count.
@@ -110,4 +117,23 @@ type HeartSeries struct {
 	// which is why a client shows the latest reading from them but not a
 	// chart that would be captioned with the wrong range.
 	Clamped bool `json:"clamped"`
+}
+
+// BodyMeasure is the latest reading of one body composition measure.
+type BodyMeasure struct {
+	// Type is weight, bmi, fatRatio, fatMass, fatFreeMass, muscleMass,
+	// hydration, boneMass, visceralFat or basalMetabolicRate.
+	Type  string  `json:"type"`
+	Value float64 `json:"value"`
+	// Unit is kg, %, kcal, kg/m2, or blank for an index.
+	Unit    string    `json:"unit"`
+	TakenAt time.Time `json:"takenAt"`
+}
+
+// BodyComposition is the latest of every measure a member's scale has taken,
+// in the order a panel lists them. A measure their scale does not take is
+// absent, not zero.
+type BodyComposition struct {
+	Provider string        `json:"provider"`
+	Measures []BodyMeasure `json:"measures"`
 }

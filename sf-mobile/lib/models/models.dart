@@ -273,18 +273,56 @@ class DeviceConnection {
   final bool connected;
   final DateTime? connectedAt;
 
+  /// What the provider can be read for: `activity`, `body-composition`, or
+  /// both.
+  final List<String> capabilities;
+
+  /// Whether this is the one provider whose steps and heart rate are shown.
+  /// The server decides, so the phone and the web app cannot disagree when a
+  /// member has connected more than one.
+  final bool activitySource;
+
   const DeviceConnection({
     required this.provider,
     this.available = false,
     this.connected = false,
     this.connectedAt,
+    this.capabilities = const [],
+    this.activitySource = false,
   });
+
+  bool can(String capability) => capabilities.contains(capability);
 
   factory DeviceConnection.fromJson(Map<String, dynamic> json) => DeviceConnection(
         provider: _toString(json['provider']),
         available: json['available'] == true,
         connected: json['connected'] == true,
         connectedAt: json['connectedAt'] == null ? null : _toDate(json['connectedAt']),
+        capabilities: json['capabilities'] is List
+            ? (json['capabilities'] as List).map((item) => item.toString()).toList()
+            : const [],
+        activitySource: json['activitySource'] == true,
+      );
+}
+
+/// The latest reading of one body composition measure.
+class BodyMeasure {
+  /// weight, bmi, fatRatio, fatMass, fatFreeMass, muscleMass, hydration,
+  /// boneMass, visceralFat or basalMetabolicRate.
+  final String type;
+  final double value;
+
+  /// kg, %, kcal, kg/m2, or blank for an index.
+  final String unit;
+  final DateTime? takenAt;
+
+  const BodyMeasure({this.type = '', this.value = 0, this.unit = '', this.takenAt});
+
+  factory BodyMeasure.fromJson(Map<String, dynamic> json) => BodyMeasure(
+        type: _toString(json['type']),
+        value: _toDouble(json['value']),
+        unit: _toString(json['unit']),
+        takenAt: json['takenAt'] == null ? null : _toDate(json['takenAt']),
       );
 }
 

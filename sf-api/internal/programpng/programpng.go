@@ -98,15 +98,14 @@ func Render(program models.Program, days []models.ProgramDay, options Options) (
 	return buf.Bytes(), nil
 }
 
-// RenderTable draws one titled table as a picture.
+// RenderTables draws titled tables as one picture, one after the other.
 //
 // The program renderer below is this with a block's worth of structure on top;
 // anything that is simply rows - a member's health data, say - needs only
 // this. Kept in the same package because it is the same canvas: a second
 // implementation of "draw a table into a PNG" would drift in its padding and
 // its zebra within a release.
-func RenderTable(title, subtitle string, columns []programsheet.Column,
-	rows []programsheet.Line, footer string) ([]byte, error) {
+func RenderTables(title, subtitle string, sections []programsheet.Section, footer string) ([]byte, error) {
 	faces, err := loadFaces()
 	if err != nil {
 		return nil, err
@@ -121,7 +120,20 @@ func RenderTable(title, subtitle string, columns []programsheet.Column,
 			c.y += subSize + 8
 		}
 		c.y += 14
-		c.table(columns, rows)
+		for i, section := range sections {
+			if i > 0 {
+				c.y += 28
+			}
+			if section.Heading != "" {
+				c.text(padding, section.Heading, c.faces.day, colText)
+				c.y += daySize + 10
+			}
+			if section.Chart != nil {
+				c.chart(padding, c.width-padding*2, *section.Chart)
+			} else {
+				c.table(section.Columns, section.Rows)
+			}
+		}
 		if footer != "" {
 			c.y += 16
 			c.text(padding, footer, c.faces.footer, colMuted)

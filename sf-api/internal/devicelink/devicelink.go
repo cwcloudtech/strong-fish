@@ -1,11 +1,12 @@
-// Package devicelink is the seam between the app and whatever counts a
-// member's steps for them.
+// Package devicelink is the seam between the app and whatever measures a
+// member for them: the steps a watch counted, what a scale weighed.
 //
-// There is one provider behind it today - Google Health, which is where Fitbit
-// data arrives now that the Fitbit Web API is switched off on 30 October 2026.
-// The seam exists because that sentence has been true of a different service
-// before, and will be again: a provider here is four methods and a name, and
-// adding one touches this file and nothing in the handlers.
+// Two providers sit behind it today - Google Health, which is where Fitbit
+// data arrives now that the Fitbit Web API is switched off on 30 October 2026,
+// and Withings for its scales. The seam exists because the first of those
+// sentences has been true of a different service before, and will be again: a
+// provider here is a handful of methods and a name, plus a reader for each
+// kind of data it has.
 package devicelink
 
 import (
@@ -32,6 +33,9 @@ type Token struct {
 	RefreshToken string
 	ExpiresAt    time.Time
 	Scope        string
+	// UserID is who the provider knows the member as, for a provider that
+	// says so in the token response itself rather than behind an API call.
+	UserID string
 }
 
 // DayCount is one day's steps, as a provider reports them.
@@ -66,12 +70,13 @@ type DayHeart struct {
 	Known bool
 }
 
-// Provider is everything the handlers need of an integration.
+// Provider is everything the handlers need of an integration to connect it.
 //
-// Deliberately small: start a consent, finish one, renew a grant, and read
-// days of steps. A provider that needs more than this is one whose difference
-// belongs in its own package, not in a wider interface every other provider
-// then has to implement emptily.
+// Deliberately small: start a consent, finish one, renew a grant. What can be
+// read once connected is a separate interface per kind of data, because the
+// integrations do not overlap - a watch counts steps, a scale weighs - and a
+// provider made to implement readers for data it never has would only answer
+// every one of them with an error.
 type Provider interface {
 	// Name is the stable identifier: the {provider} path segment, and the
 	// value stored in device_links.provider.
@@ -81,6 +86,20 @@ type Provider interface {
 	// exists and is switched off here, rather than being shown nothing and
 	// left to wonder whether the feature is real.
 	Enabled() bool
+
+	AuthorizationURL(redirectURI, state string) string
+	Exchange(ctx context.Context, code, redirectURI string) (Token, error)
+	Refresh(ctx context.Context, refreshToken string) (Token, error)
+
+	// CheckAccount confirms a fresh grant can actually read anything, so a
+	// member learns at the moment of connecting rather than at the first empty
+	// chart. It returns the id the provider knows them by, or blank when the
+	// token exchange already said (see Token.UserID).
+	CheckAccount(ctx context.Context, accessToken string) (string, error)
+}
+
+// ActivityReader is a provider that counts steps and heart rate.
+type ActivityReader interface {
 	// MaxRangeDays is the longest span of days it will return at once, which
 	// is what bounds the views the app offers.
 	MaxRangeDays() int
@@ -89,20 +108,83 @@ type Provider interface {
 	// one is refused for the other.
 	MaxHeartRateDays() int
 
-	AuthorizationURL(redirectURI, state string) string
-	Exchange(ctx context.Context, code, redirectURI string) (Token, error)
-	Refresh(ctx context.Context, refreshToken string) (Token, error)
-
-	// CheckAccount confirms a fresh grant can actually read anything, so a
-	// member learns at the moment of connecting rather than at the first empty
-	// chart. It returns the id the provider knows them by.
-	CheckAccount(ctx context.Context, accessToken string) (string, error)
-
 	// DailySteps returns one entry per day from start to end inclusive.
 	DailySteps(ctx context.Context, accessToken string, start, end time.Time) ([]DayCount, error)
 
 	// DailyHeartRate returns one entry per day over the same span.
 	DailyHeartRate(ctx context.Context, accessToken string, start, end time.Time) ([]DayHeart, error)
+}
+
+// ActivityProvider is a provider that can be read for activity.
+type ActivityProvider interface {
+	Provider
+	ActivityReader
+}
+
+// BodyCompositionReader is a provider with a scale behind it.
+type BodyCompositionReader interface {
+	// LatestBodyComposition returns the most recent reading of each measure
+	// the member's scale has ever taken, one entry per measure. A measure the
+	// scale does not take is absent rather than zero.
+	LatestBodyComposition(ctx context.Context, accessToken string) ([]BodyMeasure, error)
+}
+
+// What a provider can be read for, as the clients are told.
+const (
+	CapabilityActivity        = "activity"
+	CapabilityBodyComposition = "body-composition"
+)
+
+// Capabilities lists what this provider can be read for, so a client draws
+// the panels that have something behind them and no others.
+func Capabilities(provider Provider) []string {
+	capabilities := []string{}
+	if _, ok := provider.(ActivityReader); ok {
+		capabilities = append(capabilities, CapabilityActivity)
+	}
+	if _, ok := provider.(BodyCompositionReader); ok {
+		capabilities = append(capabilities, CapabilityBodyComposition)
+	}
+	return capabilities
+}
+
+// ActivitySource picks, among the providers a member connected, the one whose
+// steps and heart rate are shown - the first in registration order that can be
+// read for activity. The order is the priority: a member with both a watch on
+// Google Health and a Withings scale that counts steps from the phone in their
+// pocket sees the watch's numbers, and the scale's only when it is all they
+// have connected.
+func ActivitySource(providers []Provider, connected map[string]bool) string {
+	for _, provider := range providers {
+		if _, ok := provider.(ActivityReader); ok && connected[provider.Name()] && provider.Enabled() {
+			return provider.Name()
+		}
+	}
+	return ""
+}
+
+// Body composition measures. Names rather than the provider's numeric codes,
+// so the clients translate a word and never learn a vendor's numbering.
+const (
+	MeasureWeight             = "weight"
+	MeasureBMI                = "bmi"
+	MeasureFatRatio           = "fatRatio"
+	MeasureFatMass            = "fatMass"
+	MeasureFatFreeMass        = "fatFreeMass"
+	MeasureMuscleMass         = "muscleMass"
+	MeasureHydration          = "hydration"
+	MeasureBoneMass           = "boneMass"
+	MeasureVisceralFat        = "visceralFat"
+	MeasureBasalMetabolicRate = "basalMetabolicRate"
+)
+
+// BodyMeasure is one measure as last taken.
+type BodyMeasure struct {
+	Type  string
+	Value float64
+	// Unit is "kg", "%", "kcal", "kg/m2", or blank for an index with none.
+	Unit    string
+	TakenAt time.Time
 }
 
 // Find returns the configured provider with this name.

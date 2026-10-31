@@ -421,6 +421,14 @@ class SfApi {
     return HeartSeries.fromJson(_map(response.data));
   }
 
+  /// The latest reading of each measure the member's scale takes.
+  Future<List<BodyMeasure>> deviceBodyComposition(String provider) async {
+    final response = await client.dio.get('/users/me/devices/$provider/body-composition');
+    final measures = _map(response.data)['measures'];
+    if (measures is! List) return const [];
+    return measures.map((item) => BodyMeasure.fromJson(_map(item))).toList();
+  }
+
   // --- administration (superadmin only) ---
 
   Future<Map<String, dynamic>> adminStats() async =>

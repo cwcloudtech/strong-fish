@@ -9,6 +9,7 @@ package healthsheet
 
 import (
 	"fmt"
+	"image/color"
 	"strconv"
 	"strings"
 
@@ -17,66 +18,141 @@ import (
 	"strong-fish-api/internal/programsheet"
 )
 
-// Columns is the sheet's layout: a day per row, steps beside the heart rate
-// recorded on it.
-//
-// The date gets the width because it is the only cell that is not a number.
-// Zone is a word rather than a colour: an export is printed, forwarded and
-// screenshotted, and a colour is the first thing to be lost on the way.
-func Columns(locale string, heart bool) []programsheet.Column {
-	columns := []programsheet.Column{
-		{Header: programsheet.Heading(locale, "date"), Weight: 1.6},
-		{Header: programsheet.Heading(locale, "steps"), Weight: 1.2},
+// The colours of the app's own screens, so a member reads the export the way
+// they read the page: four walking bands for steps, and the provider's four
+// heart rate zones from blue to red.
+var (
+	stepsLow  = color.RGBA{220, 38, 38, 255}
+	stepsFair = color.RGBA{217, 119, 6, 255}
+	stepsGood = color.RGBA{101, 195, 122, 255}
+	stepsHigh = color.RGBA{22, 163, 74, 255}
+
+	zoneColors = map[string]color.RGBA{
+		devicelink.ZoneLight:    {59, 130, 246, 255},
+		devicelink.ZoneModerate: {234, 179, 8, 255},
+		devicelink.ZoneVigorous: {249, 115, 22, 255},
+		devicelink.ZonePeak:     {220, 38, 38, 255},
 	}
-	if !heart {
-		return columns
+)
+
+// StepTone is the band a day's count falls in - the same thresholds as the
+// app's bars.
+func StepTone(steps int64) color.RGBA {
+	switch {
+	case steps < 6000:
+		return stepsLow
+	case steps < 10000:
+		return stepsFair
+	case steps < 15000:
+		return stepsGood
 	}
-	return append(columns,
-		programsheet.Column{Header: programsheet.Heading(locale, "heartAvg"), Weight: 1.0},
-		programsheet.Column{Header: programsheet.Heading(locale, "heartMax"), Weight: 1.0},
-		programsheet.Column{Header: programsheet.Heading(locale, "zone"), Weight: 1.2},
-	)
+	return stepsHigh
 }
 
-// Lines is the range as rows, oldest first, with a totals row at the end.
-//
-// A day the watch recorded nothing leaves its heart cells empty rather than
-// printing zero: nobody's heart beat zero times, and a nought in that column
-// would be read as a measurement.
-func Lines(steps models.StepSeries, heart *models.HeartSeries, locale string) []programsheet.Line {
-	byDate := map[string]models.HeartDay{}
+// Sections is the whole export: steps, then heart rate when there is any,
+// then the latest body composition when a scale is connected.
+func Sections(steps models.StepSeries, heart *models.HeartSeries,
+	body *models.BodyComposition, locale string) []programsheet.Section {
+	sections := []programsheet.Section{StepsSection(steps, locale)}
 	if heart != nil {
-		for _, day := range heart.Days {
-			byDate[day.Date] = day
-		}
+		sections = append(sections, HeartSection(*heart, locale))
 	}
-	withHeart := heart != nil
+	if body != nil && len(body.Measures) > 0 {
+		sections = append(sections, BodySection(*body, locale))
+	}
+	return sections
+}
 
-	lines := make([]programsheet.Line, 0, len(steps.Days)+1)
+// StepsSection is a histogram of the range, a bar a day coloured by its band.
+func StepsSection(steps models.StepSeries, locale string) programsheet.Section {
+	chart := &programsheet.Chart{
+		Legend: []programsheet.LegendEntry{
+			{Label: programsheet.Heading(locale, "stepsLow"), Color: stepsLow},
+			{Label: programsheet.Heading(locale, "stepsFair"), Color: stepsFair},
+			{Label: programsheet.Heading(locale, "stepsGood"), Color: stepsGood},
+			{Label: programsheet.Heading(locale, "stepsHigh"), Color: stepsHigh},
+		},
+	}
 	for _, day := range steps.Days {
-		cells := []string{day.Date, formatInt(day.Steps)}
-		if withHeart {
-			reading, known := byDate[day.Date]
-			if known && reading.Known {
-				cells = append(cells,
-					strconv.Itoa(reading.Avg),
-					strconv.Itoa(reading.Max),
-					ZoneLabel(locale, reading.Zone))
-			} else {
-				cells = append(cells, "", "", "")
-			}
-		}
-		lines = append(lines, programsheet.Line{Cells: cells})
+		chart.Bars = append(chart.Bars, programsheet.Bar{
+			Label:   shortDate(day.Date),
+			Value:   float64(day.Steps),
+			Caption: formatInt(day.Steps),
+			Color:   StepTone(day.Steps),
+		})
 	}
+	return programsheet.Section{Heading: programsheet.Heading(locale, "stepsChart"), Chart: chart}
+}
 
-	// The totals row is marked Done so the renderers tint it: it is the line
-	// somebody looks for first, and in a table of ninety days it would
-	// otherwise be the one that disappears.
-	totals := []string{programsheet.Heading(locale, "totals"), formatInt(steps.Total)}
-	if withHeart {
-		totals = append(totals, strconv.Itoa(heart.AverageBPM), strconv.Itoa(heart.PeakBPM), "")
+// HeartSection is a histogram of the days with heart rate: each bar as tall as
+// the day's highest reading, captioned with its average, coloured by the
+// hardest zone reached. A day the watch recorded nothing is a flat sliver -
+// nobody's heart beat zero times, and a bar there would be read as one.
+func HeartSection(heart models.HeartSeries, locale string) programsheet.Section {
+	chart := &programsheet.Chart{}
+	for _, zone := range []string{devicelink.ZoneLight, devicelink.ZoneModerate,
+		devicelink.ZoneVigorous, devicelink.ZonePeak} {
+		chart.Legend = append(chart.Legend,
+			programsheet.LegendEntry{Label: ZoneLabel(locale, zone), Color: zoneColors[zone]})
 	}
-	return append(lines, programsheet.Line{Cells: totals, Done: true})
+	for _, day := range heart.Days {
+		bar := programsheet.Bar{Label: shortDate(day.Date)}
+		if day.Known {
+			bar.Value = float64(day.Max)
+			if bar.Value == 0 {
+				bar.Value = float64(day.Avg)
+			}
+			bar.Caption = strconv.Itoa(day.Avg)
+			bar.Color = zoneColors[day.Zone]
+		}
+		chart.Bars = append(chart.Bars, bar)
+	}
+	return programsheet.Section{Heading: programsheet.Heading(locale, "heartChart"), Chart: chart}
+}
+
+// BodySection is the latest reading of each measure, as a table: one value per
+// measure is a list, not a series, and a bar chart of kilograms beside
+// percentages beside kilocalories would compare things that do not compare.
+func BodySection(body models.BodyComposition, locale string) programsheet.Section {
+	rows := make([]programsheet.Line, 0, len(body.Measures))
+	for _, measure := range body.Measures {
+		value := strconv.FormatFloat(measure.Value, 'f', -1, 64)
+		if unit := displayUnit(measure.Unit); unit != "" {
+			value += " " + unit
+		}
+		rows = append(rows, programsheet.Line{Cells: []string{
+			programsheet.Heading(locale, "bc."+measure.Type),
+			value,
+			measure.TakenAt.Format("2006-01-02"),
+		}})
+	}
+	return programsheet.Section{
+		Heading: programsheet.Heading(locale, "bodyComposition"),
+		Columns: []programsheet.Column{
+			{Header: programsheet.Heading(locale, "measure"), Weight: 1.8},
+			{Header: programsheet.Heading(locale, "value"), Weight: 1.2},
+			{Header: programsheet.Heading(locale, "measuredOn"), Weight: 1.2},
+		},
+		Rows: rows,
+	}
+}
+
+// displayUnit is the unit as printed. Squared metres are spelt out by the API
+// so a client is never handed a character it cannot encode.
+func displayUnit(unit string) string {
+	if unit == "kg/m2" {
+		return "kg/m²"
+	}
+	return unit
+}
+
+// shortDate is the label under a bar: day and month, which is all the room a
+// bar of a ninety-day range has.
+func shortDate(date string) string {
+	if len(date) == len("2006-01-02") {
+		return date[8:10] + "/" + date[5:7]
+	}
+	return date
 }
 
 // Title is what the sheet is called: whose data, over what.
