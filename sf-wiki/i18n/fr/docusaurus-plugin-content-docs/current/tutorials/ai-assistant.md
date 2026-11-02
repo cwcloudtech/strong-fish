@@ -65,7 +65,17 @@ Il est **inactif tant que la séance n'est pas terminée** - tous les sets enreg
 
 Ce que le modèle reçoit, c'est la feuille de séance elle-même, le document que vous pouvez exporter : la prescription à gauche et ce que vous avez réellement fait à droite - répétitions, charge, RPE ressenti, 1RM estimé, et **votre propre commentaire sur chaque série**. Les séances déjà terminées du bloc l'accompagnent, pour que l'analyse puisse dire si vous progressez, stagnez ou dérivez, au lieu de décrire un jour isolé.
 
-La réponse est **conservée** : elle coûte de l'argent, deux demandes donnent deux lectures différentes de la même séance, et vous devez pouvoir y revenir en mars. La supprimer est la façon d'en demander une nouvelle.
+La réponse est **conservée** : elle coûte de l'argent, deux demandes donnent deux lectures différentes de la même séance, et vous devez pouvoir y revenir en mars.
+
+Vous pouvez en demander **autant que vous voulez** : les analyses s'ajoutent
+les unes aux autres au lieu de se remplacer - un deuxième avis d'un plus gros
+modèle, ou l'analyse de votre coach à côté de la vôtre. Chacune indique
+en dessous quelle souscription l'a produite et quand (« Généré par ma clé
+Mistral le 19 octobre 2026 »), ce qui permet de les distinguer quand elles ne
+disent pas la même chose.
+
+Supprimer une analyse demande confirmation : elle a coûté de l'argent et ne
+revient pas - il faudrait en redemander une.
 
 ### Votre coach la voit
 

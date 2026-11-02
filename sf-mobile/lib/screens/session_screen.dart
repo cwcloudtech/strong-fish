@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/export_menu.dart';
 import '../widgets/ai_ask_button.dart';
+import '../widgets/long_date.dart';
 import '../widgets/markdown_text.dart';
 
 /// One assigned program, session by session - the screen a member actually uses
@@ -117,7 +118,7 @@ class SessionScreen extends ConsumerWidget {
                       day: day,
                       assignmentId: assignmentId,
                       programName: data.assignment.programName,
-                      feedback: data.feedback[day.id],
+                      feedback: data.feedback[day.id] ?? const [],
                       connections: connections,
                       initiallyExpanded: week == _weeksOf(data.days).first && day == week.days.first,
                     ),
@@ -223,8 +224,8 @@ class _DayCard extends ConsumerWidget {
   final ProgramDay day;
   final String assignmentId;
   final String programName;
-  /// What the AI already said about this session, when it has been asked.
-  final SessionFeedback? feedback;
+  /// Every reading of this session, newest first.
+  final List<SessionFeedback> feedback;
   /// The subscriptions the caller may spend, so the reading button can ask
   /// which one pays when there is more than one.
   final List<AiConnection> connections;
@@ -334,7 +335,7 @@ class _SessionFeedback extends ConsumerStatefulWidget {
   final String assignmentId;
   final String dayId;
   final bool ready;
-  final SessionFeedback? feedback;
+  final List<SessionFeedback> feedback;
   final List<AiConnection> connections;
 
   const _SessionFeedback({
@@ -368,6 +369,29 @@ class _SessionFeedbackState extends ConsumerState<_SessionFeedback> {
     }
   }
 
+  /// Deleting a reading asks first: it cost money, and it does not come back.
+  Future<void> _confirmDelete(SessionFeedback reading) async {
+    final t = ref.read(tProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t('ai.deleteFeedback')),
+        content: Text(t('ai.deleteFeedbackConfirm')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false), child: Text(t('common.cancel'))),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true), child: Text(t('common.delete'))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await _run(() => ref
+        .read(apiProvider)
+        .deleteSessionFeedback(widget.assignmentId, widget.dayId, reading.id));
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
@@ -393,48 +417,60 @@ class _SessionFeedbackState extends ConsumerState<_SessionFeedback> {
             child: Text(t('session.aiFeedback'),
                 style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
-          if (feedback != null)
-            IconButton(
-              onPressed: _busy
-                  ? null
-                  : () => _run(() => ref
-                      .read(apiProvider)
-                      .deleteSessionFeedback(widget.assignmentId, widget.dayId)),
-              tooltip: t('session.aiFeedbackDelete'),
-              icon: const Icon(Icons.delete_outline, size: 20),
-              visualDensity: VisualDensity.compact,
-            ),
-        ]),
-        if (feedback != null) ...[
-          const SizedBox(height: 6),
-          MarkdownText(feedback.content),
-          const SizedBox(height: 6),
-          Text(
-            t('session.aiFeedbackBy', {
-              'name': feedback.authorName,
-              'model': feedback.model.isEmpty ? feedback.provider : feedback.model,
-            }),
-            style: small,
+          // Still offered with readings already there: a second opinion from
+          // a bigger model, or a coach's reading beside their athlete's, are
+          // things to add rather than things to replace.
+          AiAskButton(
+            connections: widget.connections,
+            busy: _busy,
+            disabled: !widget.ready,
+            label: feedback.isEmpty ? t('session.aiFeedback') : t('session.aiFeedbackAgain'),
+            tooltip:
+                widget.ready ? t('session.aiFeedbackHelp') : t('session.aiFeedbackLocked'),
+            onAsk: (connectionId) => _run(() async => ref
+                .read(apiProvider)
+                .generateSessionFeedback(widget.assignmentId, widget.dayId, locale,
+                    connectionId: connectionId)),
           ),
-        ] else ...[
+        ]),
+        if (feedback.isEmpty && !widget.ready) ...[
           const SizedBox(height: 6),
-          if (!widget.ready) Text(t('session.aiFeedbackLocked'), style: small),
+          Text(t('session.aiFeedbackLocked'), style: small),
+        ],
+        for (final reading in feedback) ...[
           const SizedBox(height: 8),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: AiAskButton(
-              connections: widget.connections,
-              busy: _busy,
-              disabled: !widget.ready,
-              label: t('session.aiFeedback'),
-              tooltip: widget.ready
-                  ? t('session.aiFeedbackHelp')
-                  : t('session.aiFeedbackLocked'),
-              onAsk: (connectionId) => _run(() async => ref
-                  .read(apiProvider)
-                  .generateSessionFeedback(widget.assignmentId, widget.dayId, locale,
-                      connectionId: connectionId)),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: colors.surface,
+              border: Border.all(color: colors.border),
+              borderRadius: BorderRadius.circular(8),
             ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: MarkdownText(reading.content)),
+                IconButton(
+                  onPressed: _busy ? null : () => _confirmDelete(reading),
+                  tooltip: t('ai.deleteFeedback'),
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ]),
+              // Who generated it and when, in the corner of the reading it
+              // belongs to: with several on one session, that is how two
+              // that disagree are told apart.
+              Align(
+                alignment: AlignmentDirectional.centerEnd,
+                child: Text(
+                  t('ai.generatedBy', {
+                    'connection': reading.credited,
+                    'date': longDate(locale, reading.createdAt),
+                  }),
+                  style: small?.copyWith(fontStyle: FontStyle.italic),
+                ),
+              ),
+            ]),
           ),
         ],
         if (_error.isNotEmpty)

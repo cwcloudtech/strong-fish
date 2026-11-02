@@ -244,7 +244,7 @@ var routes = []struct{ method, path string }{
 	{"PUT", "/v1/training/as-1/days/day-1/log"},
 	{"GET", "/v1/training/as-1/days/day-1/feedback"},
 	{"POST", "/v1/training/as-1/days/day-1/feedback"},
-	{"DELETE", "/v1/training/as-1/days/day-1/feedback"},
+	{"DELETE", "/v1/training/as-1/days/day-1/feedback/fb-1"},
 	{"GET", "/v1/training/as-1/export.pdf"},
 	{"GET", "/v1/training/as-1/export.xlsx"},
 	{"GET", "/v1/training/as-1/export.png"},

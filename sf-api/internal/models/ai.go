@@ -135,11 +135,14 @@ type SessionFeedback struct {
 	AuthorName   string `json:"authorName,omitempty"`
 	Content      string `json:"content"`
 	// Provider and Model say what produced it, so a reading from a small
-	// local model is not later mistaken for one from a large hosted one.
-	Provider  string    `json:"provider,omitempty"`
-	Model     string    `json:"model,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	// local model is not later mistaken for one from a large hosted one, and
+	// Connection names the subscription that paid - what the credit line
+	// under the reading says.
+	Provider   string    `json:"provider,omitempty"`
+	Model      string    `json:"model,omitempty"`
+	Connection string    `json:"connection,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 // AIConversation is a thread of questions and answers.
@@ -211,10 +214,11 @@ type HealthFeedback struct {
 	ID string `json:"id"`
 	// Source is the device account it was read from - google_health,
 	// withings - as against Provider, which is the AI vendor.
-	Source   string `json:"source"`
-	Content  string `json:"content"`
-	Provider string `json:"provider,omitempty"`
-	Model    string `json:"model,omitempty"`
+	Source     string `json:"source"`
+	Content    string `json:"content"`
+	Provider   string `json:"provider,omitempty"`
+	Model      string `json:"model,omitempty"`
+	Connection string `json:"connection,omitempty"`
 	// Days is how long a window it read, so a fortnight's reading is not
 	// mistaken for a quarter's.
 	Days      int       `json:"days,omitempty"`

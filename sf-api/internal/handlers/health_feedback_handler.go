@@ -153,6 +153,7 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 	saved, err := h.ai.connections.SaveHealthFeedback(r.Context(), userID, models.HealthFeedback{
 		Source: provider.Name(), Content: answer.Message,
 		Provider: connection.Provider, Model: answer.Model, Days: days,
+		Connection: connection.Name,
 	})
 	if err != nil {
 		writeStoreError(w, err)

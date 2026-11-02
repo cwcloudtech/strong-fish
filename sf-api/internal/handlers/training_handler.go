@@ -55,11 +55,12 @@ type assignmentResponse struct {
 	Program       models.Program      `json:"program"`
 	Days          []models.ProgramDay `json:"days"`
 	MissingOneRMs []models.Exercise   `json:"missingOneRms"`
-	// Feedback is what the AI already said about these sessions, by day id.
+	// Feedback is what the AI already said about these sessions, by day id,
+	// newest first - a session can be read as many times as somebody asks.
 	// Sent with the block rather than fetched per session: a screen drawing
 	// twelve weeks would otherwise ask forty times to find the three readings
 	// that exist.
-	Feedback map[string]models.SessionFeedback `json:"feedback,omitempty"`
+	Feedback map[string][]models.SessionFeedback `json:"feedback,omitempty"`
 }
 
 // authorizeAssignment loads an assignment the caller is allowed to see: their

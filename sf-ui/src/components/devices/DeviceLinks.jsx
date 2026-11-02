@@ -6,6 +6,8 @@ import ReactMarkdown from "react-markdown";
 import { ai as aiApi, devices as devicesApi } from "../../api/services";
 import ExportMenu from "../programs/ExportMenu";
 import downloadBlob from "../../utils/downloadBlob";
+import longDate from "../../utils/longDate";
+import { ConfirmModal } from "../common/Modal";
 import AskButton from "../ai/AskButton";
 import useToastError from "../../utils/useToast";
 import { ErrorMessage, Spinner } from "../common/Feedback";
@@ -218,13 +220,16 @@ export default function DeviceLinks() {
  * you ask for another.
  */
 function HealthFeedbackPanel({ provider }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const toastError = useToastError();
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
   // The subscriptions this member may spend, so the button can ask which one
   // pays when there is more than one.
   const [connections, setConnections] = useState([]);
+  // Held until the member confirms: a reading cost money, and the next one
+  // cannot be asked for until tomorrow.
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
     // 404 is the ordinary case - nobody has asked yet - so it is not an error
@@ -290,10 +295,10 @@ function HealthFeedbackPanel({ provider }) {
             <button
               type="button"
               className="sf-button-ghost sf-button-sm"
-              onClick={remove}
+              onClick={() => setRemoving(true)}
               disabled={busy}
-              aria-label={t("common.delete")}
-              title={t("common.delete")}
+              aria-label={t("ai.deleteFeedback")}
+              title={t("ai.deleteFeedback")}
             >
               <FiTrash2 />
             </button>
@@ -306,16 +311,31 @@ function HealthFeedbackPanel({ provider }) {
           <div className="sf-bubble-markdown">
             <ReactMarkdown>{feedback.content}</ReactMarkdown>
           </div>
-          <p className="sf-muted" style={{ fontSize: "0.78rem", marginBottom: 0 }}>
-            {t("devices.aiFeedbackMeta", {
-              days: feedback.days,
-              date: new Date(feedback.updatedAt).toLocaleDateString(),
+          <p className="sf-ai-credit">
+            {t("ai.generatedBy", {
+              connection: feedback.connection || feedback.model || feedback.provider || "",
+              date: longDate(locale, feedback.updatedAt),
             })}
+            {feedback.days ? ` · ${t("devices.aiFeedbackWindow", { days: feedback.days })}` : ""}
           </p>
         </>
       ) : (
         <p className="sf-muted" style={{ margin: 0 }}>{t("devices.aiFeedbackEmpty")}</p>
       )}
+
+      {removing ? (
+        <ConfirmModal
+          title={t("ai.deleteFeedback")}
+          message={t("ai.deleteFeedbackConfirm")}
+          confirmLabel={t("common.delete")}
+          busy={busy}
+          onClose={() => setRemoving(false)}
+          onConfirm={() => {
+            setRemoving(false);
+            remove();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

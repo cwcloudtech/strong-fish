@@ -567,8 +567,9 @@ class SfApi {
       ))
           .data));
 
-  Future<void> deleteSessionFeedback(String assignmentId, String dayId) async {
-    await client.dio.delete('/training/$assignmentId/days/$dayId/feedback');
+  /// One reading, by its own id: a session holds as many as were asked for.
+  Future<void> deleteSessionFeedback(String assignmentId, String dayId, String feedbackId) async {
+    await client.dio.delete('/training/$assignmentId/days/$dayId/feedback/$feedbackId');
   }
 
   // --- administration (superadmin only) ---

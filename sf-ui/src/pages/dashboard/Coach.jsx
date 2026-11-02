@@ -9,6 +9,7 @@ import Select from "../../components/common/Select";
 import useToastError from "../../utils/useToast";
 import { connectionLabel } from "../../components/ai/AskButton";
 import ShareButtons from "../../components/common/ShareButtons";
+import { ConfirmModal } from "../../components/common/Modal";
 import downloadBlob from "../../utils/downloadBlob";
 import toastOptions from "../../utils/toastOptions";
 import { ai as aiApi } from "../../api/services";
@@ -40,6 +41,9 @@ export default function Coach() {
   const [picked, setPicked] = useState([]);
   const [exporting, setExporting] = useState(false);
   const [renaming, setRenaming] = useState(null);
+  // What the member asked to delete, held until they confirm. A conversation
+  // is the answers they paid for; it does not go on one click.
+  const [removing, setRemoving] = useState(null);
   const bottom = useRef(null);
 
   const loadList = useCallback(async () => {
@@ -179,8 +183,6 @@ export default function Coach() {
   };
 
   const clearAll = async () => {
-    // eslint-disable-next-line no-restricted-globals
-    if (!window.confirm(t("ai.clearAllConfirm"))) return;
     try {
       const { deleted } = await aiApi.clearAll();
       setCurrent(null);
@@ -241,6 +243,24 @@ export default function Coach() {
         </div>
       ) : null}
 
+      {/* One dialog for both: deleting one conversation and deleting the
+          history are the same act at two scales, and they should read the
+          same way. */}
+      {removing ? (
+        <ConfirmModal
+          title={removing === "all" ? t("ai.clearAll") : t("common.delete")}
+          message={removing === "all" ? t("ai.clearAllConfirm") : t("ai.deleteConversationConfirm")}
+          confirmLabel={t("common.delete")}
+          onClose={() => setRemoving(null)}
+          onConfirm={() => {
+            const target = removing;
+            setRemoving(null);
+            if (target === "all") clearAll();
+            else remove(target.id);
+          }}
+        />
+      ) : null}
+
       <div className="sf-messages">
         <div>
           <div className="sf-messages-list">
@@ -275,7 +295,7 @@ export default function Coach() {
                   <button
                     type="button"
                     className="sf-button-ghost sf-button-sm"
-                    onClick={() => remove(conversation.id)}
+                    onClick={() => setRemoving(conversation)}
                     aria-label={t("common.delete")}
                     title={t("common.delete")}
                   >
@@ -296,7 +316,11 @@ export default function Coach() {
               >
                 <FiTrash2 /> {t("ai.deletePicked", { count: picked.length })}
               </button>
-              <button type="button" className="sf-button-ghost sf-button-sm" onClick={clearAll}>
+              <button
+                type="button"
+                className="sf-button-ghost sf-button-sm"
+                onClick={() => setRemoving("all")}
+              >
                 {t("ai.clearAll")}
               </button>
             </div>

@@ -34,11 +34,11 @@ type Options struct {
 	// Feedback adds what the member actually did beside what was prescribed:
 	// the sheet a lifter sends their coach at the end of a week.
 	Feedback bool
-	// Readings is what the AI said about a session, by day id, for the
-	// sessions that have been read. Printed under the table it is about: a
-	// reading of a week that is filed separately from the week is a reading
-	// nobody reads again.
-	Readings map[string]string
+	// Readings is what the AI said about a session, by day id - one entry per
+	// reading, since a session may be read more than once. Printed under the
+	// table they are about: a reading filed separately from the week it
+	// concerns is a reading nobody reads again.
+	Readings map[string][]string
 }
 
 // Column is one column: its heading, and its share of the width relative to
@@ -362,8 +362,22 @@ func ReadingOf(options Options, dayID string) []string {
 	if len(options.Readings) == 0 {
 		return nil
 	}
-	return PlainLines(options.Readings[dayID])
+
+	lines := []string{}
+	for _, reading := range options.Readings[dayID] {
+		// A rule between them, because two readings of the same session run
+		// together read as one that contradicts itself.
+		if len(lines) > 0 {
+			lines = append(lines, readingSeparator)
+		}
+		lines = append(lines, PlainLines(reading)...)
+	}
+	return lines
 }
+
+// readingSeparator is what sits between two readings of one session. A row of
+// dashes rather than a blank line: every renderer here drops empty lines.
+const readingSeparator = "---"
 
 // PlainLines strips a markdown answer down to what it says, one line per line.
 //
