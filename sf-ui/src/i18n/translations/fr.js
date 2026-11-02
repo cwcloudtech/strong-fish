@@ -895,6 +895,8 @@ const fr = {
     sharedSubtitle: "Une conversation partagée depuis StrongFish.",
   },
   storage: {
+    clearConfirm: "Supprimer ce stockage ? Les fichiers déjà déposés restent où ils sont, mais l'application ne pourra plus les lire.",
+    serviceAccountPaste: "Colle le contenu du fichier de clé JSON.",
     noTargets: "Aucun stockage configuré.",
     addTarget: "Ajouter un stockage",
     orderHelp: "Un envoi est déposé dans chaque destination. Le lien de la publication vient de la première.",

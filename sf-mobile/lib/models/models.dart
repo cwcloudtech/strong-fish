@@ -1496,21 +1496,140 @@ class AiProvider {
       );
 }
 
-/// One line of a connection's access list, as its owner reads it.
-class AiGrant {
+/// One line of an access list, as the owner reads it.
+///
+/// The same shape for a storage and for an AI connection, because it is the
+/// same arrangement: somebody holds a credential and decides who else may
+/// spend it. Only the roles differ, and those are the caller's to read.
+class AccessGrant {
   final String userId;
   final String name;
   final String handle;
   final String role;
 
-  const AiGrant({this.userId = '', this.name = '', this.handle = '', this.role = ''});
+  const AccessGrant({this.userId = '', this.name = '', this.handle = '', this.role = ''});
 
-  factory AiGrant.fromJson(Map<String, dynamic> json) => AiGrant(
+  factory AccessGrant.fromJson(Map<String, dynamic> json) => AccessGrant(
         userId: _toString(json['userId']),
         name: _toString(json['name']),
         handle: _toString(json['handle']),
         role: _toString(json['role']),
       );
+}
+
+/// What a credential reads as once it is stored: the API never sends a secret
+/// back, and echoing this marker on save means "leave the stored one alone".
+const secretSet = '__set__';
+
+/// Where a member's videos and voice messages are written.
+///
+/// An upload goes to every one of their targets; the link in the post comes
+/// from the first, which is why the order is a setting rather than a display
+/// preference.
+class Storage {
+  final String id;
+  final String ownerId;
+  final StorageConnection connection;
+  final int position;
+
+  /// The caller's own role on it: owner, writer or reader.
+  final String role;
+  final String ownerName;
+
+  const Storage({
+    this.id = '',
+    this.ownerId = '',
+    this.connection = const StorageConnection(),
+    this.position = 0,
+    this.role = '',
+    this.ownerName = '',
+  });
+
+  factory Storage.fromJson(Map<String, dynamic> json) => Storage(
+        id: _toString(json['id']),
+        ownerId: _toString(json['ownerId']),
+        connection: StorageConnection.fromJson(
+            json['connection'] is Map<String, dynamic> ? json['connection'] : const {}),
+        position: _toInt(json['position']),
+        role: _toString(json['role']),
+        ownerName: _toString(json['ownerName']),
+      );
+}
+
+/// One target's settings: a bucket, or a Drive folder.
+class StorageConnection {
+  final String type;
+  final String endpoint;
+  final String bucketName;
+  final String region;
+  final String accessKey;
+
+  /// Secrets come back as [secretSet] and are never readable. Sending the
+  /// marker back keeps what is stored.
+  final String secretKey;
+  final String serviceAccountBase64;
+  final String folderId;
+  final String path;
+  final String publicBaseUrl;
+
+  /// Whether the bucket refuses public objects - in which case StrongFish
+  /// serves its files itself, to readers it has checked.
+  final bool private;
+
+  const StorageConnection({
+    this.type = 's3',
+    this.endpoint = '',
+    this.bucketName = '',
+    this.region = '',
+    this.accessKey = '',
+    this.secretKey = '',
+    this.serviceAccountBase64 = '',
+    this.folderId = '',
+    this.path = '',
+    this.publicBaseUrl = '',
+    this.private = false,
+  });
+
+  factory StorageConnection.fromJson(Map<String, dynamic> json) => StorageConnection(
+        type: _toString(json['type'], 's3'),
+        endpoint: _toString(json['endpoint']),
+        bucketName: _toString(json['bucketName']),
+        region: _toString(json['region']),
+        accessKey: _toString(json['accessKey']),
+        secretKey: _toString(json['secretKey']),
+        serviceAccountBase64: _toString(json['serviceAccountBase64']),
+        folderId: _toString(json['folderId']),
+        path: _toString(json['path']),
+        publicBaseUrl: _toString(json['publicBaseUrl']),
+        private: json['private'] == true,
+      );
+
+  bool get isDrive => type == 'google_drive';
+
+  /// Whether a credential is already stored, so a form can offer to replace
+  /// it rather than showing a field that would wipe it.
+  bool get hasSecret => secretKey == secretSet || serviceAccountBase64 == secretSet;
+
+  Map<String, dynamic> toJson() => {
+        'type': type,
+        'endpoint': endpoint,
+        'bucketName': bucketName,
+        'region': region,
+        'accessKey': accessKey,
+        'secretKey': secretKey,
+        'serviceAccountBase64': serviceAccountBase64,
+        'folderId': folderId,
+        'path': path,
+        'publicBaseUrl': publicBaseUrl,
+        'private': private,
+      };
+
+  /// One target in a line: enough to tell two buckets apart.
+  String get summary => [
+        if (isDrive) folderId else bucketName,
+        if (isDrive) '' else endpoint,
+        path,
+      ].where((part) => part.isNotEmpty).join(' · ');
 }
 
 /// One question and the answer it got.

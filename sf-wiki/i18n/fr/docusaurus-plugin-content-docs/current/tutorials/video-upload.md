@@ -21,6 +21,12 @@ encore disponible sur votre compte.
 
 Configurez-le une fois et il couvre les trois usages : vidéos dans les publications, vidéos dans les messages, et messages vocaux.
 
+Il se configure dans **Paramètres → Stockage des vidéos** sur le web, ou dans
+**Profil** sur le téléphone : même liste, mêmes champs, même partage. Une
+seule différence : sur le web, la clé de compte de service Google se
+sélectionne comme le fichier JSON fourni par Google, tandis que sur le
+téléphone vous en collez le contenu.
+
 ## Option 1 : un bucket compatible S3
 
 Fonctionne avec AWS S3, MinIO, Scaleway, DigitalOcean Spaces — tout ce qui est compatible avec l'API S3 (object storage).

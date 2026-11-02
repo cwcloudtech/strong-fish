@@ -14,6 +14,10 @@ class SfApi {
 
   Map<String, dynamic> _map(dynamic data) => data is Map<String, dynamic> ? data : const {};
 
+  /// A JSON number read back as an int, whatever shape it arrived in.
+  int _int(dynamic value) =>
+      value is num ? value.toInt() : int.tryParse('${value ?? ''}') ?? 0;
+
   List<Map<String, dynamic>> _list(dynamic data) =>
       (data as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 
@@ -446,6 +450,60 @@ class SfApi {
     await client.dio.delete('/users/me/devices/$provider/feedback');
   }
 
+  // --- video storage ---
+
+  /// The member's own targets, in the order that decides where a posted link
+  /// points, with the size one upload may be.
+  Future<({List<Storage> storages, int maxSize})> storages() async {
+    final data = _map((await client.dio.get('/users/me/storages')).data);
+    final list = data['storages'];
+    return (
+      storages: (list is List ? list : const [])
+          .whereType<Map<String, dynamic>>()
+          .map(Storage.fromJson)
+          .toList(),
+      maxSize: _int(data['maxSize']),
+    );
+  }
+
+  Future<void> addStorage(Map<String, dynamic> connection) async {
+    await client.dio.post('/users/me/storages', data: connection);
+  }
+
+  Future<void> setStorage(String storageId, Map<String, dynamic> connection) async {
+    await client.dio.put('/users/me/storages/$storageId', data: connection);
+  }
+
+  Future<void> deleteStorage(String storageId) async {
+    await client.dio.delete('/users/me/storages/$storageId');
+  }
+
+  /// Which target is first decides where a posted link points, so the order
+  /// is sent as a whole list.
+  Future<void> reorderStorages(List<String> storageIds) async {
+    await client.dio.put('/users/me/storages/order', data: {'storageIds': storageIds});
+  }
+
+  Future<List<AccessGrant>> storageShares(String storageId) async {
+    final response = await client.dio.get('/users/me/storages/$storageId/shares');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => AccessGrant.fromJson(_map(item))).toList();
+  }
+
+  /// [role] is "reader" (may play what is in it) or "writer" (may upload too).
+  Future<List<AccessGrant>> shareStorage(String storageId, String userId, String role) async {
+    final response = await client.dio
+        .post('/users/me/storages/$storageId/shares', data: {'userId': userId, 'role': role});
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => AccessGrant.fromJson(_map(item))).toList();
+  }
+
+  Future<void> unshareStorage(String storageId, String userId) async {
+    await client.dio.delete('/users/me/storages/$storageId/shares/$userId');
+  }
+
   // --- the AI assistant ---
 
   /// The member's own connections, and the ones others shared with them.
@@ -486,21 +544,21 @@ class SfApi {
   }
 
   /// Who else may spend one of my connections.
-  Future<List<AiGrant>> aiShares(String connectionId) async {
+  Future<List<AccessGrant>> aiShares(String connectionId) async {
     final response = await client.dio.get('/users/me/ai-connections/$connectionId/shares');
     final data = response.data;
     if (data is! List) return const [];
-    return data.map((item) => AiGrant.fromJson(_map(item))).toList();
+    return data.map((item) => AccessGrant.fromJson(_map(item))).toList();
   }
 
-  Future<List<AiGrant>> shareAiConnection(String connectionId, String userId) async {
+  Future<List<AccessGrant>> shareAiConnection(String connectionId, String userId) async {
     final response = await client.dio.post(
       '/users/me/ai-connections/$connectionId/shares',
       data: {'userId': userId, 'role': 'user'},
     );
     final data = response.data;
     if (data is! List) return const [];
-    return data.map((item) => AiGrant.fromJson(_map(item))).toList();
+    return data.map((item) => AccessGrant.fromJson(_map(item))).toList();
   }
 
   Future<void> unshareAiConnection(String connectionId, String userId) async {

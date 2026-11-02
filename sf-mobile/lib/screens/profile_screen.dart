@@ -14,6 +14,7 @@ import '../widgets/common.dart';
 import '../widgets/profile_badges.dart';
 import '../widgets/social_share.dart';
 import '../widgets/socials.dart';
+import '../widgets/storage_connections.dart';
 import 'public_profile_screen.dart';
 
 /// The connected user's own profile and settings: their bests, their public
@@ -210,6 +211,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
         // The models this account can ask, and who else may spend them.
         const AiConnectionsSection(),
+
+        // Where its videos and voice messages go. The same card, because it
+        // is the same arrangement: a credential of the member's own, lent to
+        // whoever they choose, in an order that decides which one leads.
+        const StorageConnectionsSection(),
 
         // Where else to find this lifter. The fields are generated from the
         // same table as the links, so a network added there appears in both.
@@ -558,7 +564,7 @@ class _MeasuresFormState extends ConsumerState<_MeasuresForm> {
             ? null
             : IconButton(
                 onPressed: () => setState(() => _birthdate = ''),
-                tooltip: t('common.clear'),
+                tooltip: t('common.clearSelection'),
                 icon: const Icon(Icons.close, size: 20),
               ),
         onTap: _pickBirthdate,

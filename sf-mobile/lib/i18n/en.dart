@@ -901,6 +901,8 @@ const Map<String, dynamic> en = {
     },
   },
   'storage': {
+    'clearConfirm': 'Remove this storage? The files already in it stay where they are, but the app will not be able to read them.',
+    'serviceAccountPaste': 'Paste the contents of the JSON key file.',
     'noTargets': 'No storage configured yet.',
     'addTarget': 'Add a storage',
     'orderHelp': 'An upload goes to every target. The link in the post comes from the first one.',
