@@ -4,6 +4,7 @@ const fr = {
     tagline: "Application de powerlifting",
   },
   common: {
+    cm: "cm",
     retry: "Recharger",
     create: "Créer",
     copy: "Copier",
@@ -114,6 +115,8 @@ const fr = {
     accountCreated: "Bienvenue sur StrongFish : votre compte est prêt.",
   },
   profile: {
+    measures: "À propos de toi",
+    height: "Taille",
     title: "Profil public",
     gender: "Genre",
     genderMale: "Homme",
@@ -593,10 +596,6 @@ const fr = {
       vigorous: "Intense",
       peak: "Maximale",
     },
-    provider: {
-      "google-health": "Google Health (Fitbit, Pixel Watch)",
-      withings: "Withings",
-    },
     range: {
       "24h": "Dernières 24h",
       "48h": "Dernières 48h",
@@ -618,6 +617,7 @@ const fr = {
     },
   },
   errors: {
+    invalidHeight: "Saisis une taille en centimètres.",
     aiNotConfigured: "Connecte d'abord un fournisseur d'IA dans tes paramètres.",
     aiRefused: "Ton fournisseur d'IA a refusé la requête. Vérifie la clé, le modèle et ton quota.",
     invalidAiProvider: "Choisis un fournisseur d'IA.",
@@ -825,20 +825,18 @@ const fr = {
     failed: "La mise à jour n'a pas pu être téléchargée ou installée. Veuillez réessayer plus tard.",
   },
   ai: {
+    connection: "Connexion IA",
+    askWith: "Demander avec",
+    modelHelp: "Choisis un modèle de ton fournisseur, ou saisis n'importe quel nom qu'il propose.",
+    defaultConnection: "Par défaut",
     title: "Connexions IA",
     subtitle:
       "Connecte un modèle pour lui poser des questions sur ton entraînement. C'est ton compte et ta clé - et tu peux la prêter à d'autres membres, comme un stockage.",
     noConnections: "Aucune IA connectée pour l'instant.",
     addConnection: "Ajouter une connexion",
     name: "Nom",
-    namePlaceholder: "Ma clé Mistral",
+    namePlaceholder: "Ma clé {{provider}}",
     providerLabel: "Fournisseur",
-    provider: {
-      openai: "OpenAI",
-      mistral: "Mistral",
-      anthropic: "Anthropic (Claude)",
-      gemini: "Google Gemini",
-    },
     baseUrl: "Adresse",
     baseUrlHelp:
       "Où partent les requêtes. Change-la pour viser ta propre passerelle : un LiteLLM, un Ollama, un compte OpenRouter.",

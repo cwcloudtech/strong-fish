@@ -111,7 +111,10 @@ func (h *TrainingHandler) GenerateSessionFeedback(w http.ResponseWriter, r *http
 	}
 	sheet := feedbackSheet(program, subject, earlierSessions(days, subject), locale)
 
-	answer, ok := h.ai.ask(w, r, callerID, "session", ai.Request{
+	// Which subscription pays, when the caller has more than one.
+	connectionID := r.URL.Query().Get("connectionId")
+
+	answer, ok := h.ai.ask(w, r, callerID, connectionID, "session", ai.Request{
 		// Both skills: how a coach answers at all, then what a session review
 		// specifically is. Kept apart so the common half is edited once. The
 		// language is pinned here because nothing in a session table tells the
@@ -126,7 +129,7 @@ func (h *TrainingHandler) GenerateSessionFeedback(w http.ResponseWriter, r *http
 		return
 	}
 
-	connection, _ := h.aiStore.Usable(r.Context(), callerID)
+	connection, _ := h.ai.usable(r, callerID, connectionID)
 	stored, err := h.aiStore.SaveFeedback(r.Context(), models.SessionFeedback{
 		AssignmentID: assignment.ID, DayID: dayID, AuthorID: callerID,
 		Content: answer.Message, Provider: connection.Provider, Model: answer.Model,
@@ -236,13 +239,13 @@ func feedbackSheet(program models.Program, subject models.ProgramDay,
 		sections = append(sections, programsheet.Section{
 			Heading: sessionHeading(day, locale),
 			Columns: columns,
-			Rows:    programsheet.Lines(day.Sets, true, locale),
+			Rows:    aiLines(day.Sets, locale),
 		})
 	}
 	sections = append(sections, programsheet.Section{
 		Heading: sessionHeading(subject, locale),
 		Columns: columns,
-		Rows:    programsheet.Lines(subject.Sets, true, locale),
+		Rows:    aiLines(subject.Sets, locale),
 	})
 
 	// English framing, like the skill it arrives with: it says which table is

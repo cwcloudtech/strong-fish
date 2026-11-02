@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
+import 'ai_ask_button.dart';
 import 'export_menu.dart';
 import 'markdown_text.dart';
 
@@ -591,6 +592,9 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
   HealthFeedback? _feedback;
   String _error = '';
   bool _busy = false;
+  // The subscriptions this member may spend, so the button can ask which one
+  // pays when there is more than one.
+  List<AiConnection> _connections = const [];
 
   @override
   void initState() {
@@ -607,15 +611,24 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
     } catch (_) {
       if (mounted) setState(() => _feedback = null);
     }
+    try {
+      final connections = await ref.read(apiProvider).aiConnections();
+      if (mounted) setState(() => _connections = connections);
+    } catch (_) {
+      // The button still works with none listed: it then asks with the
+      // member's default, and the API says so if there isn't one.
+    }
   }
 
-  Future<void> _generate() async {
+  Future<void> _generate(String connectionId) async {
     setState(() {
       _busy = true;
       _error = '';
     });
     try {
-      final feedback = await ref.read(apiProvider).generateHealthFeedback(widget.provider);
+      final feedback = await ref
+          .read(apiProvider)
+          .generateHealthFeedback(widget.provider, connectionId: connectionId);
       if (mounted) setState(() => _feedback = feedback);
     } catch (error) {
       if (!mounted) return;
@@ -698,22 +711,16 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
             child: Text(_error, style: TextStyle(color: colors.danger)),
           ),
         const SizedBox(height: 8),
-        Tooltip(
-          message: waiting
+        AiAskButton(
+          connections: _connections,
+          busy: _busy,
+          disabled: waiting,
+          label: feedback == null ? t('devices.aiFeedbackAsk') : t('devices.aiFeedbackAgain'),
+          tooltip: waiting
               ? t('devices.aiFeedbackNext',
                   {'date': feedback!.nextAt.toLocal().toString().split('.').first})
               : t('devices.aiFeedbackHelp'),
-          child: FilledButton.tonalIcon(
-            style: _compactButton,
-            onPressed: _busy || waiting ? null : _generate,
-            icon: _busy
-                ? const SizedBox(
-                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.auto_awesome_outlined, size: 18),
-            label: Text(feedback == null
-                ? t('devices.aiFeedbackAsk')
-                : t('devices.aiFeedbackAgain')),
-          ),
+          onAsk: _generate,
         ),
       ]),
     );

@@ -5,73 +5,43 @@ import (
 	"time"
 )
 
-// The language model providers a connection can point at.
+// The wire formats a provider can speak.
 //
-// A provider is a wire format and a default address, not a vendor lock: the
-// base URL is the member's to change, which is how one of these points at a
-// local LiteLLM, an OpenRouter account or anything else speaking the same
-// protocol. That is why there are three names here and not a dozen - what
-// differs between a dozen services is the URL, not the format.
+// Three cover every provider worth naming, which is why the catalogue stores
+// one of these rather than a vendor: what differs between OpenAI, Mistral,
+// DeepSeek, OpenRouter, a LiteLLM and an Ollama is the address, not the
+// protocol. Only Claude and Gemini need a format of their own.
 const (
-	// AIProviderOpenAI is the OpenAI chat-completions format, which is also
-	// what Mistral, DeepSeek, OpenRouter, Groq, Ollama and LiteLLM speak.
-	AIProviderOpenAI = "openai"
-	// AIProviderMistral is the same format at Mistral's own address, kept
-	// apart so the picker names a service a member recognises.
-	AIProviderMistral = "mistral"
-	// AIProviderAnthropic is Claude's own /messages format.
-	AIProviderAnthropic = "anthropic"
-	// AIProviderGemini is Google's generateContent format.
-	AIProviderGemini = "gemini"
+	AIFormatOpenAI    = "openai"
+	AIFormatAnthropic = "anthropic"
+	AIFormatGemini    = "gemini"
 )
 
-// AIProviders is every provider, in the order a picker lists them.
-var AIProviders = []string{
-	AIProviderOpenAI, AIProviderMistral, AIProviderAnthropic, AIProviderGemini,
-}
-
-// IsValidAIProvider reports whether name is one this build knows how to talk
-// to.
-func IsValidAIProvider(name string) bool {
-	for _, provider := range AIProviders {
-		if provider == name {
-			return true
-		}
-	}
-	return false
-}
-
-// DefaultAIBaseURL is where a provider lives unless the member says otherwise.
-// Offered as a starting point in the form rather than imposed: pointing a
-// connection at a local gateway is the reason the field is editable.
-func DefaultAIBaseURL(provider string) string {
-	switch provider {
-	case AIProviderOpenAI:
-		return "https://api.openai.com/v1"
-	case AIProviderMistral:
-		return "https://api.mistral.ai/v1"
-	case AIProviderAnthropic:
-		return "https://api.anthropic.com/v1"
-	case AIProviderGemini:
-		return "https://generativelanguage.googleapis.com/v1beta"
-	}
-	return ""
-}
-
-// DefaultAIModel is a reasonable model for a provider, so a member who has
-// only pasted a key gets an answer rather than an error about a missing model.
-func DefaultAIModel(provider string) string {
-	switch provider {
-	case AIProviderOpenAI:
-		return "gpt-4o-mini"
-	case AIProviderMistral:
-		return "mistral-small-latest"
-	case AIProviderAnthropic:
-		return "claude-sonnet-4-5"
-	case AIProviderGemini:
-		return "gemini-2.0-flash"
-	}
-	return ""
+// AIProviderInfo is one row of the provider catalogue (see the ai_providers
+// table): where a provider lives, how to talk to it, and what it serves.
+//
+// Data rather than code. A vendor renames a model, an operator points the
+// whole deployment at a gateway, a new OpenAI-compatible service appears -
+// none of that should be a release, and none of it is anything this API has
+// to understand beyond the format.
+type AIProviderInfo struct {
+	Name string `json:"name"`
+	// Label is what a picker shows. Vendor branding, so it is the same in
+	// every language and is not in the dictionaries.
+	Label  string `json:"label"`
+	Format string `json:"format"`
+	// BaseURL and DefaultModel are a starting point offered to the member,
+	// never imposed: pointing a connection at a local gateway is the reason
+	// both fields are editable.
+	BaseURL      string `json:"defaultUrl"`
+	DefaultModel string `json:"defaultModel"`
+	// Models are the names to suggest. A suggestion, never a constraint - a
+	// vendor ships a model the day before this table hears about it, and a
+	// form that refuses it would be a form nobody can use.
+	Models []string `json:"models"`
+	// KeyHint is what this provider's key looks like, for the form's
+	// placeholder - an empty box tells a member nothing about what to paste.
+	KeyHint string `json:"keyHint,omitempty"`
 }
 
 // Roles on a connection.
@@ -97,8 +67,12 @@ type AIConnection struct {
 	// LiteLLM". Blank falls back to the provider's name on screen.
 	Name     string `json:"name,omitempty"`
 	Provider string `json:"provider"`
-	BaseURL  string `json:"baseUrl"`
-	Model    string `json:"model,omitempty"`
+	// Format is the provider's wire protocol, read from the catalogue when a
+	// connection is about to be spent. Blank everywhere else: it is not the
+	// member's to set, and a client has no use for it.
+	Format  string `json:"-"`
+	BaseURL string `json:"baseUrl"`
+	Model   string `json:"model,omitempty"`
 	// Token is write-only. It is set through the form and never sent back:
 	// what a client needs to render is whether one is stored, not what it is.
 	Token string `json:"-"`
@@ -117,7 +91,7 @@ type AIConnection struct {
 // shape check, not a reachability one: the first question is what finds out
 // whether the key actually works.
 func (c AIConnection) Configured() bool {
-	return IsValidAIProvider(c.Provider) &&
+	return strings.TrimSpace(c.Provider) != "" &&
 		strings.TrimSpace(c.BaseURL) != "" &&
 		strings.TrimSpace(c.Token) != ""
 }

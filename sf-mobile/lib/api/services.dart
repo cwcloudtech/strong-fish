@@ -434,8 +434,13 @@ class SfApi {
   Future<HealthFeedback> healthFeedback(String provider) async =>
       HealthFeedback.fromJson(_map((await client.dio.get('/users/me/devices/$provider/feedback')).data));
 
-  Future<HealthFeedback> generateHealthFeedback(String provider) async =>
-      HealthFeedback.fromJson(_map((await client.dio.post('/users/me/devices/$provider/feedback')).data));
+  Future<HealthFeedback> generateHealthFeedback(String provider,
+          {String connectionId = ''}) async =>
+      HealthFeedback.fromJson(_map((await client.dio.post(
+        '/users/me/devices/$provider/feedback',
+        queryParameters: {if (connectionId.isNotEmpty) 'connectionId': connectionId},
+      ))
+          .data));
 
   Future<void> deleteHealthFeedback(String provider) async {
     await client.dio.delete('/users/me/devices/$provider/feedback');
@@ -493,10 +498,14 @@ class SfApi {
 
   /// Asks a question. [conversationId] continues a stored thread; left blank,
   /// the answer starts one and comes back with its id.
-  Future<Map<String, dynamic>> askAi(String message, {String conversationId = ''}) async => _map(
-      (await client.dio.post('/ai/chat', data: {
+  /// [connectionId] says which subscription to spend; left out, the API uses
+  /// the member's default - which is what somebody with one key always wants.
+  Future<Map<String, dynamic>> askAi(String message,
+          {String conversationId = '', String connectionId = ''}) async =>
+      _map((await client.dio.post('/ai/chat', data: {
         'message': message,
         if (conversationId.isNotEmpty) 'conversationId': conversationId,
+        if (connectionId.isNotEmpty) 'connectionId': connectionId,
       }))
           .data);
 
@@ -547,11 +556,14 @@ class SfApi {
   }
 
   /// A reading of one finished session, generated on demand and kept.
-  Future<SessionFeedback> generateSessionFeedback(
-          String assignmentId, String dayId, String locale) async =>
+  Future<SessionFeedback> generateSessionFeedback(String assignmentId, String dayId, String locale,
+          {String connectionId = ''}) async =>
       SessionFeedback.fromJson(_map((await client.dio.post(
         '/training/$assignmentId/days/$dayId/feedback',
-        queryParameters: {'locale': locale},
+        queryParameters: {
+          'locale': locale,
+          if (connectionId.isNotEmpty) 'connectionId': connectionId,
+        },
       ))
           .data));
 

@@ -277,6 +277,7 @@ type updateProfilePayload struct {
 	ProfileVisibility string  `json:"profileVisibility"`
 	Birthdate         string  `json:"birthdate"`
 	Bodyweight        float64 `json:"bodyweight"`
+	Height            float64 `json:"height"`
 	// Gender drives the strength coefficients. Anything but "female" reads as
 	// male, which is the default an account has never been asked about.
 	Gender string `json:"gender"`
@@ -359,11 +360,19 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// A height outside this is a typo - metres entered as "1.8", or an inch
+	// figure - and a profile saying 1 cm is worse than one saying nothing.
+	if p.Height != 0 && (p.Height < 100 || p.Height > 260) {
+		writeError(w, http.StatusBadRequest, "Please enter a height in centimetres", CodeInvalidHeight)
+		return
+	}
+
 	user, err := h.users.UpdateProfile(r.Context(), userID, store.ProfileFields{
 		Name: p.Name, Surname: p.Surname, Username: username, Anonymous: p.Anonymous,
 		Bio: p.Bio, Locale: p.Locale,
 		ProfileVisibility: p.ProfileVisibility, Birthdate: birthdate,
-		Bodyweight: p.Bodyweight, Gender: string(strength.NormalizeGender(p.Gender)),
+		Bodyweight: p.Bodyweight, Height: p.Height,
+		Gender:       string(strength.NormalizeGender(p.Gender)),
 		Socials:      p.Socials,
 		PasswordHash: passwordHash,
 	})

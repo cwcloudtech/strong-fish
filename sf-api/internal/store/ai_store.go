@@ -38,7 +38,7 @@ type aiConnectionData struct {
 const aiConnectionSelect = `
 	SELECT c.id, c.owner_id::text, c.data, c.created_at, c.updated_at`
 
-func scanAIConnection(row pgx.Row, withRole, withOwner bool) (models.AIConnection, error) {
+func scanAIConnection(row pgx.Row, withRole, withOwner, withFormat bool) (models.AIConnection, error) {
 	var connection models.AIConnection
 	var raw []byte
 	targets := []any{&connection.ID, &connection.OwnerID, &raw, &connection.CreatedAt, &connection.UpdatedAt}
@@ -47,6 +47,9 @@ func scanAIConnection(row pgx.Row, withRole, withOwner bool) (models.AIConnectio
 	}
 	if withOwner {
 		targets = append(targets, &connection.OwnerName)
+	}
+	if withFormat {
+		targets = append(targets, &connection.Format)
 	}
 	if err := row.Scan(targets...); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -68,12 +71,76 @@ func scanAIConnection(row pgx.Row, withRole, withOwner bool) (models.AIConnectio
 	return connection, nil
 }
 
+// ListProviders is the catalogue: every provider this deployment knows how to
+// talk to, in the order a picker lists them.
+//
+// Read from the table rather than compiled in, so adding an OpenAI-compatible
+// service, correcting an address or teaching the form a model a vendor
+// shipped yesterday is an INSERT or an UPDATE.
+func (s *AIStore) ListProviders(ctx context.Context) ([]models.AIProviderInfo, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT name, format, base_url, default_model, data
+		FROM ai_providers ORDER BY position, name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	providers := []models.AIProviderInfo{}
+	for rows.Next() {
+		provider, err := scanProvider(rows)
+		if err != nil {
+			return nil, err
+		}
+		providers = append(providers, provider)
+	}
+	return providers, rows.Err()
+}
+
+// FindProvider is one row of it.
+func (s *AIStore) FindProvider(ctx context.Context, name string) (models.AIProviderInfo, error) {
+	return scanProvider(s.pool.QueryRow(ctx, `
+		SELECT name, format, base_url, default_model, data
+		FROM ai_providers WHERE name = $1`, name))
+}
+
+type aiProviderData struct {
+	Label   string   `json:"label,omitempty"`
+	KeyHint string   `json:"keyHint,omitempty"`
+	Models  []string `json:"models,omitempty"`
+}
+
+func scanProvider(row pgx.Row) (models.AIProviderInfo, error) {
+	var provider models.AIProviderInfo
+	var raw []byte
+	if err := row.Scan(&provider.Name, &provider.Format, &provider.BaseURL,
+		&provider.DefaultModel, &raw); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return models.AIProviderInfo{}, ErrNotFound
+		}
+		return models.AIProviderInfo{}, err
+	}
+
+	var data aiProviderData
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &data)
+	}
+	provider.Label, provider.KeyHint, provider.Models = data.Label, data.KeyHint, data.Models
+	if provider.Label == "" {
+		provider.Label = provider.Name
+	}
+	if provider.Models == nil {
+		provider.Models = []string{}
+	}
+	return provider, nil
+}
+
 // FindByID reads one connection, token included. Callers decide who may see
 // what: nothing here checks, because the uses differ - spending a connection
 // needs the token, listing one must never carry it.
 func (s *AIStore) FindByID(ctx context.Context, id string) (models.AIConnection, error) {
 	return scanAIConnection(s.pool.QueryRow(ctx,
-		aiConnectionSelect+` FROM ai_connections c WHERE c.id = $1`, id), false, false)
+		aiConnectionSelect+` FROM ai_connections c WHERE c.id = $1`, id), false, false, false)
 }
 
 // ListFor is every connection a member may spend: their own, and the ones
@@ -94,7 +161,7 @@ func (s *AIStore) ListFor(ctx context.Context, userID string) ([]models.AIConnec
 
 	connections := []models.AIConnection{}
 	for rows.Next() {
-		connection, err := scanAIConnection(rows, true, true)
+		connection, err := scanAIConnection(rows, true, true, false)
 		if err != nil {
 			return nil, err
 		}
@@ -124,19 +191,40 @@ func (s *AIStore) RoleFor(ctx context.Context, connectionID, userID string) (str
 	return role, nil
 }
 
-// Usable picks the connection a member's questions go through: their own
-// first, then one shared with them.
+// usableFrom is the join behind both pickers: a connection the member may
+// spend, with the wire format of the provider it points at.
 //
-// Chosen here rather than asked of the member on every question. Somebody with
-// one key should never have to pick it, and somebody using their coach's
-// should not have to understand whose it is to ask something.
+// The format comes from the catalogue rather than from the connection,
+// because it is a property of the provider and not of anybody's key - and an
+// operator correcting a row should correct it for every connection at once.
+const usableFrom = `
+	FROM ai_connections c
+	LEFT JOIN ai_providers p ON p.name = c.data->>'provider'
+	LEFT JOIN ai_connection_acl a ON a.connection_id = c.id AND a.user_id::text = $1`
+
+// Usable picks the connection a member's questions go through when they did
+// not say: their own first, then one shared with them.
+//
+// A default rather than a prompt. Somebody with one key should never have to
+// pick it, and somebody using their coach's should not have to understand
+// whose it is to ask a question.
 func (s *AIStore) Usable(ctx context.Context, userID string) (models.AIConnection, error) {
-	return scanAIConnection(s.pool.QueryRow(ctx, aiConnectionSelect+`
-		FROM ai_connections c
-		LEFT JOIN ai_connection_acl a ON a.connection_id = c.id AND a.user_id::text = $1
+	return scanAIConnection(s.pool.QueryRow(ctx, aiConnectionSelect+`, coalesce(p.format, '')`+
+		usableFrom+`
 		WHERE c.owner_id::text = $1 OR a.user_id::text = $1
 		ORDER BY (c.owner_id::text = $1) DESC, c.created_at
-		LIMIT 1`, userID), false, false)
+		LIMIT 1`, userID), false, false, true)
+}
+
+// UsableByID is the one the member asked for, if they may spend it.
+//
+// Scoped in the statement rather than checked after: a question put through
+// somebody else's key must not be a matter of which check ran first.
+func (s *AIStore) UsableByID(ctx context.Context, userID, connectionID string) (models.AIConnection, error) {
+	return scanAIConnection(s.pool.QueryRow(ctx, aiConnectionSelect+`, coalesce(p.format, '')`+
+		usableFrom+`
+		WHERE c.id = $2 AND (c.owner_id::text = $1 OR a.user_id::text = $1)`,
+		userID, connectionID), false, false, true)
 }
 
 // Create stores a new connection for ownerID.
@@ -150,7 +238,7 @@ func (s *AIStore) Create(ctx context.Context, ownerID string, connection models.
 	}
 	return scanAIConnection(s.pool.QueryRow(ctx, `
 		INSERT INTO ai_connections (owner_id, data) VALUES ($1, $2)
-		RETURNING id, owner_id::text, data, created_at, updated_at`, ownerID, data), false, false)
+		RETURNING id, owner_id::text, data, created_at, updated_at`, ownerID, data), false, false, false)
 }
 
 // Update replaces a connection's settings.
@@ -178,7 +266,7 @@ func (s *AIStore) Update(ctx context.Context, id string, connection models.AICon
 		FROM ai_connections c
 		WHERE ai_connections.id = $1 AND c.id = $1
 		RETURNING ai_connections.id, ai_connections.owner_id::text, ai_connections.data,
-		          ai_connections.created_at, ai_connections.updated_at`, id, data, token), false, false)
+		          ai_connections.created_at, ai_connections.updated_at`, id, data, token), false, false, false)
 }
 
 func (s *AIStore) Delete(ctx context.Context, id string) error {

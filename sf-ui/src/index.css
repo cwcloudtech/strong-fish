@@ -1291,6 +1291,44 @@ button {
 .sf-bubble-markdown ul,
 .sf-bubble-markdown ol { margin: 0 0 0.6rem; padding-left: 1.1rem; }
 .sf-bubble-markdown li { margin-bottom: 0.2rem; }
+/* A text field with suggestions under it (see AutocompleteInput): the list is
+   a convenience, not the set of valid answers, so it hangs below the field
+   rather than replacing it with a picker. */
+.sf-autocomplete { position: relative; }
+
+.sf-autocomplete-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background-color: var(--sf-surface);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  box-shadow: var(--sf-shadow);
+}
+
+.sf-autocomplete-option {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: calc(var(--sf-radius) - 4px);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sf-autocomplete-option:hover { background-color: var(--sf-bg-alt); }
+.sf-autocomplete-option.is-current { color: var(--sf-primary); font-weight: 600; }
+
 /* The AI's reading of a session, under the table it is about: set apart with
    a tinted panel, because it is a commentary on the week rather than part of
    the prescription. */

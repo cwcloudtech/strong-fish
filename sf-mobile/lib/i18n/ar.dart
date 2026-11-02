@@ -10,6 +10,7 @@ const Map<String, dynamic> ar = {
     'tagline': 'تطبيق رفع الأثقال',
   },
   'common': {
+    'cm': 'سم',
     'retry': 'إعادة التحميل',
     'create': 'إنشاء',
     'copy': 'نسخ',
@@ -121,6 +122,8 @@ const Map<String, dynamic> ar = {
     'accountCreated': 'أهلًا بك في StrongFish، حسابك جاهز.',
   },
   'profile': {
+    'measures': 'عنك',
+    'height': 'الطول',
     'title': 'الملف الشخصي العام',
     'gender': 'الجنس',
     'genderMale': 'ذكر',
@@ -598,10 +601,6 @@ const Map<String, dynamic> ar = {
       'vigorous': 'عالية',
       'peak': 'قصوى',
     },
-    'provider': {
-      'google-health': 'Google Health ‏(Fitbit، Pixel Watch)',
-      'withings': 'Withings',
-    },
     'range': {
       '24h': 'آخر 24 ساعة',
       '48h': 'آخر 48 ساعة',
@@ -621,8 +620,12 @@ const Map<String, dynamic> ar = {
       'account_failed': 'تم تسجيل دخولك، لكن تعذّرت قراءة بياناتك. إن كنت تدير هذا الخادم، فتحقق من تفعيل واجهة المزوّد لهذا التطبيق - والسبب في السجلات.',
       'store_failed': 'تعذّر حفظ الاتصال. حاول مجدداً.',
     },
+    'provider': {
+      'withings': 'Withings',
+    },
   },
   'errors': {
+    'invalidHeight': 'أدخل الطول بالسنتيمتر.',
     'aiNotConfigured': 'اربط مزوّد ذكاء اصطناعي في الإعدادات أولاً.',
     'aiRefused': 'رفض مزوّد الذكاء الاصطناعي الطلب. تحقق من المفتاح والنموذج والحصة.',
     'invalidAiProvider': 'اختر مزوّد ذكاء اصطناعي.',
@@ -827,19 +830,17 @@ const Map<String, dynamic> ar = {
     'storeManaged': 'تصل التحديثات عبر App Store',
   },
   'ai': {
+    'connection': 'اتصال الذكاء الاصطناعي',
+    'askWith': 'اسأل عبر',
+    'modelHelp': 'اختر نموذجاً من مزوّدك، أو اكتب أي اسم يقدّمه.',
+    'defaultConnection': 'الافتراضي',
     'title': 'اتصالات الذكاء الاصطناعي',
     'subtitle': 'اربط نموذجاً لتسأله عن تدريبك. الحساب حسابك والمفتاح مفتاحك - ويمكنك إعارته لأعضاء آخرين، كما تعير مساحة تخزين.',
     'noConnections': 'لا يوجد ذكاء اصطناعي مرتبط بعد.',
     'addConnection': 'إضافة اتصال',
     'name': 'الاسم',
-    'namePlaceholder': 'مفتاح Mistral الخاص بي',
+    'namePlaceholder': 'مفتاح {{provider}} الخاص بي',
     'providerLabel': 'المزوّد',
-    'provider': {
-      'openai': 'OpenAI',
-      'mistral': 'Mistral',
-      'anthropic': 'Anthropic (Claude)',
-      'gemini': 'Google Gemini',
-    },
     'baseUrl': 'العنوان',
     'baseUrlHelp': 'إلى أين تذهب الطلبات. غيّره ليشير إلى بوابتك الخاصة: LiteLLM أو Ollama أو حساب OpenRouter.',
     'model': 'النموذج',
@@ -886,6 +887,12 @@ const Map<String, dynamic> ar = {
     'placeholder': 'اطرح سؤالاً...',
     'send': 'إرسال',
     'sharedSubtitle': 'محادثة مشارَكة من StrongFish.',
+    'provider': {
+      'openai': 'OpenAI',
+      'mistral': 'Mistral',
+      'anthropic': 'Anthropic (Claude)',
+      'gemini': 'Google Gemini',
+    },
   },
   'storage': {
     'noTargets': 'لا تخزين مُعدّ بعد.',

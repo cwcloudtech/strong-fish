@@ -316,6 +316,13 @@ final aiConversationsProvider = FutureProvider<List<AiConversation>>((ref) async
   return ref.watch(apiProvider).aiConversations();
 });
 
+/// The provider catalogue: addresses, default models and the models worth
+/// suggesting. Served by the API from a table, so the form follows an
+/// operator's row rather than a release.
+final aiProvidersProvider = FutureProvider<List<AiProvider>>((ref) async {
+  return ref.watch(apiProvider).aiProviders();
+});
+
 /// The connections they may spend: their own, and the ones shared with them.
 final aiConnectionsProvider = FutureProvider<List<AiConnection>>((ref) async {
   ref.watch(sessionProvider.select((session) => session.user?.id));

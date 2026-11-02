@@ -89,6 +89,11 @@ type User struct {
 	// Bodyweight, in kg, shown on the public profile next to the member's
 	// bests. Zero means "not stated".
 	Bodyweight float64 `json:"bodyweight,omitempty"`
+	// Height, in centimetres. Not a powerlifting number - nothing is computed
+	// from it - but it is context for whoever is reading the training, the
+	// coach and the AI alike: the same 200 kg deadlift is a different lift on
+	// a 160 cm frame and on a 195 cm one. Zero means "not stated".
+	Height float64 `json:"height,omitempty"`
 	// Socials are the accounts the member chose to show, stored as names on
 	// their service rather than as URLs (see socials.go).
 	Socials Socials `json:"socials,omitempty"`
@@ -171,6 +176,7 @@ type UserMeResponse struct {
 	CoachRequest CoachRequest `json:"coachRequest,omitempty"`
 	Gender       string       `json:"gender,omitempty"`
 	Bodyweight   float64      `json:"bodyweight,omitempty"`
+	Height       float64      `json:"height,omitempty"`
 	// Socials, likewise, is the form's own view of what it will edit.
 	Socials    Socials   `json:"socials"`
 	MFAEnabled bool      `json:"mfaEnabled"`

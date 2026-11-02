@@ -76,6 +76,11 @@ class User {
   final String birthdate;
   final double bodyweight;
 
+  /// Height in centimetres, 0 when not stated. Nothing is computed from it -
+  /// no coefficient uses it - but it is context for whoever reads the
+  /// training, the coach and the AI alike.
+  final double height;
+
   /// Which set of strength coefficients applies: 'male' or 'female'.
   /// Powerlifting fits DOTS, Wilks and IPF GL separately, and there is no
   /// unisex variant of any of them. Male is the default.
@@ -101,6 +106,7 @@ class User {
     this.profileVisibility = 'private',
     this.birthdate = '',
     this.bodyweight = 0,
+    this.height = 0,
     this.gender = 'male',
     this.socials = const {},
     this.mfaEnabled = false,
@@ -122,6 +128,7 @@ class User {
         profileVisibility: _toString(json['profileVisibility'], 'private'),
         birthdate: _toString(json['birthdate']),
         bodyweight: _toDouble(json['bodyweight']),
+        height: _toDouble(json['height']),
         gender: _toString(json['gender'], 'male'),
         socials: _toLabels(json['socials']),
         mfaEnabled: json['mfaEnabled'] == true,
@@ -1447,20 +1454,42 @@ class AiConnection {
       );
 }
 
-/// A provider this build knows how to talk to, with what it defaults to - so
-/// the form fills itself in as the member picks, rather than making them look
-/// the values up.
+/// One row of the server's provider catalogue: where a provider lives, what
+/// it serves, and what its key looks like.
+///
+/// The form fills itself in from this as the member picks, and its
+/// placeholders are that provider's own values rather than a fixed example of
+/// somebody else's. The label is vendor branding, the same in every language,
+/// which is why it comes from the server and not from the dictionaries.
 class AiProvider {
   final String name;
+  final String label;
   final String defaultUrl;
   final String defaultModel;
 
-  const AiProvider({this.name = '', this.defaultUrl = '', this.defaultModel = ''});
+  /// Models to suggest, best first. A suggestion, never a constraint: the
+  /// API takes whatever is typed.
+  final List<String> models;
+
+  /// What this provider's key looks like, for the field's placeholder.
+  final String keyHint;
+
+  const AiProvider({
+    this.name = '',
+    this.label = '',
+    this.defaultUrl = '',
+    this.defaultModel = '',
+    this.models = const [],
+    this.keyHint = '',
+  });
 
   factory AiProvider.fromJson(Map<String, dynamic> json) => AiProvider(
         name: _toString(json['name']),
+        label: _toString(json['label'], _toString(json['name'])),
         defaultUrl: _toString(json['defaultUrl']),
         defaultModel: _toString(json['defaultModel']),
+        models: (json['models'] as List? ?? const []).map(_toString).toList(),
+        keyHint: _toString(json['keyHint']),
       );
 }
 

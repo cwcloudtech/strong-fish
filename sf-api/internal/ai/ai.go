@@ -161,14 +161,15 @@ func (c *Client) Ask(ctx context.Context, connection models.AIConnection, reques
 		request.MaxTokens = defaultMaxTokens
 	}
 	model := strings.TrimSpace(connection.Model)
-	if model == "" {
-		model = models.DefaultAIModel(connection.Provider)
-	}
 
-	switch connection.Provider {
-	case models.AIProviderAnthropic:
+	// The format comes from the provider catalogue (see the ai_providers
+	// table), so a new OpenAI-compatible service is a row rather than a case
+	// here. An unknown one is assumed to speak that format, which is what a
+	// gateway almost always does.
+	switch connection.Format {
+	case models.AIFormatAnthropic:
 		return c.askAnthropic(ctx, connection, model, request)
-	case models.AIProviderGemini:
+	case models.AIFormatGemini:
 		return c.askGemini(ctx, connection, model, request)
 	default:
 		return c.askOpenAI(ctx, connection, model, request)

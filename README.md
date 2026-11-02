@@ -36,11 +36,12 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   in their text with a player - no separate link field to keep in step. Videos
   can be uploaded to the member's own bucket (see [Video uploads](#video-uploads)).
 * **An AI assistant, on your own key.** Connect an account at OpenAI, Mistral,
-  Anthropic or Gemini - with the address editable, so it can point at a local
-  LiteLLM or an Ollama - and lend it to other members the way you lend a
-  storage. It answers as a coach in a kept, shareable chat, reads a finished
-  session against the ones before it, and reads ninety days of health data once
-  a day. What it is told lives in markdown skills on the server
+  Anthropic, Gemini, OpenRouter or DeepSeek - with the address editable, so it
+  can point at a local LiteLLM or an Ollama - and lend it to other members the
+  way you lend a storage. It answers as a coach in a kept, shareable chat, with
+  your own maxes, block and last day of health data in front of it; it reads a
+  finished session against the ones before it, and reads ninety days of health
+  data once a day. What it is told lives in markdown skills on the server
   (see [The AI assistant](#the-ai-assistant)).
 * **A calendar.** Meets, club sessions and camps, subscribable from Outlook or
   Google Calendar (see [The calendar](#the-calendar)).
@@ -628,12 +629,31 @@ provider and the API spends it on their behalf, which is why the connections
 are shaped on storages down to the sharing: an account holds a credential and
 decides who else may use it.
 
-A connection is a provider (the wire format: OpenAI's `/chat/completions`,
-Anthropic's `/messages`, Gemini's `generateContent`), an **editable** base URL,
-a model and a key. The URL is the point of the shape - picking Anthropic and
-aiming it at a LiteLLM on the next machine is a supported arrangement, not a
-workaround. The key is write-only: it is stored in the connection's JSONB and
-never sent back, and a client is told `hasToken` instead.
+A connection is a provider, an **editable** base URL, a model and a key. The
+URL is the point of the shape - picking Anthropic and aiming it at a LiteLLM on
+the next machine is a supported arrangement, not a workaround. The key is
+write-only: it is stored in the connection's JSONB and never sent back, and a
+client is told `hasToken` instead.
+
+The providers themselves are a **table**, not a switch statement
+(`ai_providers`, seeded by `V18`): a name, the wire format it speaks, its
+address, its default model, the models worth suggesting and what its key looks
+like. Six rows ship - OpenAI, Mistral, Anthropic, Gemini, OpenRouter and
+DeepSeek, the ones [cwclock](https://gitlab.cwcloud.tech/oss/cwclock) speaks to
+- and adding a seventh OpenAI-compatible service is an `INSERT`, with nothing
+to write in Go. Three wire formats cover all of them: OpenAI's
+`/chat/completions`, Anthropic's `/messages`, Gemini's `generateContent`.
+
+What the table says about models is a **suggestion, never a constraint**. The
+form autocompletes from it and takes anything the member types: a vendor ships
+a model the day before the table hears about it, and an app that refuses it is
+the reason somebody cannot use their own subscription.
+
+A member with more than one connection - their own and their coach's - is
+asked **which one pays** wherever the model is spent: a picker above the chat,
+and a menu on the reading buttons. One connection is never a choice: the API
+takes a blank `connectionId` as "the member's default", and the clients draw
+no control at all.
 
 Sharing grants one role, `user`: the right to spend the connection and nothing
 else. A coach buying one key for a roster is the arrangement this exists for,
@@ -644,9 +664,14 @@ exports are (`internal/programsheet`), as markdown (`internal/programmd`):
 
 | Feature | What it is shown | Kept |
 | --- | --- | --- |
-| The coach chat | The thread so far, bounded to the last turns | Every exchange, as a conversation |
+| The coach chat | The thread so far, bounded to the last turns, plus the member's file: age, bodyweight, height, every 1RM, the block they are running and their last 24 hours of health data | Every exchange, as a conversation |
 | A session reading | The session's own feedback sheet - prescription, what was done, RPE, e1RM, the athlete's comments - plus the earlier sessions of the block | One per assignment and day |
 | A health reading | The member's health sheet: up to 90 days of steps and heart rate, and the latest body composition | One per member and source, replaced |
+
+The member's file is rebuilt on every question rather than quoted into the
+thread: a max named in January would still be being read in March, after the
+figure it describes had moved. It is a system-prompt section, because it is
+not something the member said.
 
 The instructions are embedded markdown files
 (`internal/templates/*.skill.md`), not Go string literals: how a coach should

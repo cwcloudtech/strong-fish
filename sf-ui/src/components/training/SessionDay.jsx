@@ -3,8 +3,8 @@ import { FiCheck, FiChevronDown, FiChevronRight, FiCpu, FiEdit2, FiTrash2, FiX }
 import ReactMarkdown from "react-markdown";
 
 import SetLogForm from "./SetLogForm";
+import AskButton from "../ai/AskButton";
 import Select from "../common/Select";
-import Tooltip from "../common/Tooltip";
 import { formatReps } from "../../utils/setFormat";
 import { useI18n } from "../../i18n/I18nContext";
 import { sessionTitle } from "../../utils/sessionTitle";
@@ -66,6 +66,7 @@ export default function SessionDay({
   onGenerateFeedback,
   onDeleteFeedback,
   feedbackBusy = false,
+  aiConnections = [],
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
@@ -338,17 +339,22 @@ export default function SessionDay({
               })}
             </tbody>
           </table>
-
-          {onGenerateFeedback ? (
-            <SessionFeedback
-              ready={allDone}
-              feedback={feedback}
-              busy={feedbackBusy}
-              onGenerate={() => onGenerateFeedback(day)}
-              onDelete={() => onDeleteFeedback(day)}
-            />
-          ) : null}
         </div>
+      ) : null}
+
+      {/* Outside the table's wrapper, which scrolls horizontally and
+          therefore clips: a menu opened inside it is drawn behind its own
+          edge. It is a commentary on the session rather than part of its
+          table anyway. */}
+      {open && onGenerateFeedback ? (
+        <SessionFeedback
+          ready={allDone}
+          feedback={feedback}
+          busy={feedbackBusy}
+          connections={aiConnections}
+          onGenerate={(connectionId) => onGenerateFeedback(day, connectionId)}
+          onDelete={() => onDeleteFeedback(day)}
+        />
       ) : null}
     </div>
   );
@@ -366,7 +372,7 @@ export default function SessionDay({
  * Once asked for, it is kept - by the member, by their coach, and in the
  * exports. Deleting it is how you ask for another one.
  */
-function SessionFeedback({ ready, feedback, busy, onGenerate, onDelete }) {
+function SessionFeedback({ ready, feedback, busy, connections, onGenerate, onDelete }) {
   const { t } = useI18n();
 
   if (feedback) {
@@ -402,17 +408,16 @@ function SessionFeedback({ ready, feedback, busy, onGenerate, onDelete }) {
 
   return (
     <div className="sf-ai-feedback">
-      <Tooltip label={ready ? t("session.aiFeedbackHelp") : t("session.aiFeedbackLocked")}>
-        <button
-          type="button"
-          className="sf-button sf-button-secondary sf-button-sm"
-          onClick={onGenerate}
-          disabled={!ready || busy}
-        >
-          {busy ? <span className="sf-button-spinner" aria-hidden="true" /> : <FiCpu />}{" "}
-          {t("session.aiFeedback")}
-        </button>
-      </Tooltip>
+      {/* With more than one subscription the button asks which one pays -
+          a coach's key beside your own is a choice, not a detail. */}
+      <AskButton
+        connections={connections}
+        onAsk={onGenerate}
+        busy={busy}
+        disabled={!ready}
+        label={t("session.aiFeedback")}
+        tooltip={ready ? t("session.aiFeedbackHelp") : t("session.aiFeedbackLocked")}
+      />
       {!ready ? <span className="sf-muted">{t("session.aiFeedbackLocked")}</span> : null}
     </div>
   );

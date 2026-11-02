@@ -151,7 +151,15 @@ func main() {
 	}
 	defer shutdown(observability.Shutdown, "metrics")
 
-	aiHandler := handlers.NewAIHandler(aiStore, userStore, cfg.UIBaseURL)
+	aiHandler := handlers.NewAIHandler(aiStore, userStore, cfg.UIBaseURL).
+		WithMemberContext(oneRMStore, programStore, programHandler)
+	// The two know each other: the device screens ask the model for a reading
+	// of the last ninety days, and the chat is told what the last day looked
+	// like. Wired here rather than in a constructor, because neither can be
+	// built with the other already in hand.
+	deviceHandler := handlers.NewDeviceHandler(devices, deviceLinkStore, userStore, cfg.JWTSecret,
+		cfg.APIBaseURL, cfg.UIBaseURL, aiHandler)
+	aiHandler.WithHealth(deviceHandler.LastDay)
 
 	api := router.New(router.Handlers{
 		User: handlers.NewUserHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.MaxImageSize,
@@ -185,8 +193,7 @@ func main() {
 		Search:   handlers.NewSearchHandler(userStore, clubStore, profileHandler),
 		Strength: strengthHandler,
 		AI:       aiHandler,
-		Device: handlers.NewDeviceHandler(devices, deviceLinkStore, userStore, cfg.JWTSecret,
-			cfg.APIBaseURL, cfg.UIBaseURL, aiHandler),
+		Device:   deviceHandler,
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),
 		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, mailer, cfg.MaxImageSize, cfg.UIBaseURL),

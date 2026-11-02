@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { FiEdit2, FiPlus, FiTrash2, FiUsers } from "react-icons/fi";
 
+import AutocompleteInput from "../common/AutocompleteInput";
 import MultiSelect from "../common/MultiSelect";
 import Select from "../common/Select";
 import toastOptions from "../../utils/toastOptions";
 import { ai as aiApi, search as searchApi } from "../../api/services";
+import useToastError from "../../utils/useToast";
 import { ErrorMessage } from "../common/Feedback";
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
@@ -21,6 +23,7 @@ import { useI18n } from "../../i18n/I18nContext";
 export default function AiConnections() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const toastError = useToastError();
   const [connections, setConnections] = useState(null);
   const [providers, setProviders] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -53,7 +56,7 @@ export default function AiConnections() {
       if (message) toast.success(message, toastOptions);
       setEditing(null);
     } catch (err) {
-      toast.error(err?.response?.data?.message || t("errors.generic"), toastOptions);
+      toastError(err);
     } finally {
       setBusy(false);
     }
@@ -73,13 +76,17 @@ export default function AiConnections() {
             // re-shared, so it is listed with its owner's name and no
             // controls at all.
             const mine = connection.ownerId === user?.id;
+            // The vendor's own name, from the provider catalogue: it is
+            // branding rather than a translated string, and a copy of it in
+            // three dictionaries would be a second list to keep in step.
+            const label = providerLabel(providers, connection.provider);
             return (
               <li className="sf-list-item" key={connection.id} style={{ flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <strong>{connection.name || t(`ai.provider.${connection.provider}`)}</strong>
+                  <strong>{connection.name || label}</strong>
                   <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
                     {[
-                      t(`ai.provider.${connection.provider}`),
+                      label,
                       connection.model,
                       mine ? null : t("ai.sharedBy", { name: connection.ownerName }),
                     ]
@@ -175,14 +182,22 @@ export default function AiConnections() {
  */
 function AiConnectionForm({ connection, providers, busy, onCancel, onSubmit }) {
   const { t } = useI18n();
+  // The random half of the suggested name, minted once for this form: it must
+  // not change under the member while they look at it, and two connections to
+  // the same model have to be tellable apart.
+  const [suffix] = useState(randomSuffix);
   const [form, setForm] = useState({
     name: connection?.name || "",
-    provider: connection?.provider || "mistral",
+    provider: connection?.provider || providers[0]?.name || "",
     baseUrl: connection?.baseUrl || "",
     model: connection?.model || "",
     token: "",
   });
 
+  // Everything the form shows about a provider - its address, its models, what
+  // its key looks like - comes from this row. The placeholders change with the
+  // picker because they are that provider's own values, not a fixed example of
+  // somebody else's.
   const defaults = providers.find((provider) => provider.name === form.provider);
 
   const set = (field) => (event) =>
@@ -204,13 +219,19 @@ function AiConnectionForm({ connection, providers, busy, onCancel, onSubmit }) {
       };
     });
 
+  // What the name field offers, and what a blank one becomes: the model it
+  // points at, plus the suffix. The API fills a blank name exactly this way,
+  // so what the placeholder promised is what gets saved.
+  const model = form.model.trim() || defaults?.defaultModel || "";
+  const suggestedName = model ? `${model}-${suffix}` : "";
+
   const submit = (event) => {
     event.preventDefault();
     onSubmit({
-      name: form.name.trim(),
+      name: form.name.trim() || suggestedName,
       provider: form.provider,
       baseUrl: form.baseUrl.trim() || defaults?.defaultUrl || "",
-      model: form.model.trim() || defaults?.defaultModel || "",
+      model,
       token: form.token.trim(),
     });
   };
@@ -220,14 +241,17 @@ function AiConnectionForm({ connection, providers, busy, onCancel, onSubmit }) {
       <div className="sf-row" style={{ gap: "0.6rem", flexWrap: "wrap" }}>
         <div className="sf-field" style={{ flex: 1, minWidth: 180 }}>
           <label className="sf-label">{t("ai.name")}</label>
-          <input className="sf-input" value={form.name} onChange={set("name")} placeholder={t("ai.namePlaceholder")} />
+          <input
+            className="sf-input"
+            value={form.name}
+            onChange={set("name")}
+            placeholder={suggestedName || t("ai.namePlaceholder", { provider: defaults?.label || form.provider })}
+          />
         </div>
         <div className="sf-field" style={{ flex: 1, minWidth: 180 }}>
           <label className="sf-label">{t("ai.providerLabel")}</label>
           <Select
-            options={(providers.length ? providers.map((provider) => provider.name) : [form.provider]).map(
-              (name) => ({ value: name, label: t(`ai.provider.${name}`) })
-            )}
+            options={providers.map((provider) => ({ value: provider.name, label: provider.label }))}
             value={form.provider}
             onChange={setProvider}
           />
@@ -247,12 +271,16 @@ function AiConnectionForm({ connection, providers, busy, onCancel, onSubmit }) {
         </div>
         <div className="sf-field" style={{ flex: 1, minWidth: 180 }}>
           <label className="sf-label">{t("ai.model")}</label>
-          <input
-            className="sf-input"
+          {/* Suggestions, not a list of permitted values: a provider ships a
+              model the day before the catalogue hears about it, and the API
+              takes whatever is typed. */}
+          <AutocompleteInput
             value={form.model}
-            onChange={set("model")}
+            onChange={(model) => setForm((current) => ({ ...current, model }))}
+            options={defaults?.models || []}
             placeholder={defaults?.defaultModel || ""}
           />
+          <p className="sf-muted" style={{ fontSize: "0.8rem" }}>{t("ai.modelHelp")}</p>
         </div>
       </div>
 
@@ -264,7 +292,7 @@ function AiConnectionForm({ connection, providers, busy, onCancel, onSubmit }) {
           autoComplete="off"
           value={form.token}
           onChange={set("token")}
-          placeholder={connection?.hasToken ? t("ai.tokenSet") : ""}
+          placeholder={connection?.hasToken ? t("ai.tokenSet") : defaults?.keyHint || ""}
         />
         <p className="sf-muted" style={{ fontSize: "0.8rem" }}>
           {connection?.hasToken ? t("ai.tokenKeep") : t("ai.tokenHelp")}
@@ -286,6 +314,7 @@ function AiConnectionForm({ connection, providers, busy, onCancel, onSubmit }) {
 /** Who else may put questions through this connection. */
 function AiShares({ connectionId }) {
   const { t } = useI18n();
+  const toastError = useToastError();
   const [grants, setGrants] = useState(null);
   const [userIds, setUserIds] = useState([]);
   const [members, setMembers] = useState([]);
@@ -314,7 +343,7 @@ function AiShares({ connectionId }) {
       setUserIds([]);
       toast.success(t("ai.shared"), toastOptions);
     } catch (err) {
-      setError(err);
+      toastError(err);
     } finally {
       setBusy(false);
     }
@@ -326,7 +355,7 @@ function AiShares({ connectionId }) {
       await aiApi.unshare(connectionId, userId);
       setGrants(await aiApi.shares(connectionId));
     } catch (err) {
-      setError(err);
+      toastError(err);
     } finally {
       setBusy(false);
     }
@@ -387,4 +416,35 @@ function AiShares({ connectionId }) {
       <ErrorMessage error={error} />
     </div>
   );
+}
+
+/**
+ * A provider's display name, from the catalogue the server serves.
+ *
+ * Falls back to the stored name for a connection whose provider has since
+ * been taken out of the table: it still works, and showing "deepseek" is
+ * better than showing nothing.
+ */
+export function providerLabel(providers, name) {
+  return providers.find((provider) => provider.name === name)?.label || name;
+}
+
+/**
+ * Eight random characters, the tail of a connection's suggested name.
+ *
+ * Not an id and not a secret - it exists so "claude-sonnet-5-5" twice over
+ * reads as two different connections in a menu.
+ */
+function randomSuffix() {
+  const bytes = new Uint8Array(4);
+  // crypto is there in every browser this app supports; the fallback is for
+  // a test renderer, where a readable name matters more than randomness.
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }

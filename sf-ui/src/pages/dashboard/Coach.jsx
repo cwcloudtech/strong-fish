@@ -5,11 +5,14 @@ import ReactMarkdown from "react-markdown";
 import { FiCheck, FiEdit2, FiLink, FiPlus, FiSend, FiTrash2, FiX } from "react-icons/fi";
 
 import ExportMenu from "../../components/programs/ExportMenu";
+import Select from "../../components/common/Select";
+import useToastError from "../../utils/useToast";
+import { connectionLabel } from "../../components/ai/AskButton";
 import ShareButtons from "../../components/common/ShareButtons";
 import downloadBlob from "../../utils/downloadBlob";
 import toastOptions from "../../utils/toastOptions";
 import { ai as aiApi } from "../../api/services";
-import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
+import { EmptyState, Spinner } from "../../components/common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
 /**
@@ -22,11 +25,17 @@ import { useI18n } from "../../i18n/I18nContext";
  */
 export default function Coach() {
   const { t } = useI18n();
+  const toastError = useToastError();
   const [conversations, setConversations] = useState(null);
   const [current, setCurrent] = useState(null);
   const [question, setQuestion] = useState("");
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState(null);
+  // The subscriptions this member may spend, and which one the next question
+  // goes through. A picker only matters to somebody with more than one - a
+  // coach's key beside their own - so with one it is simply not drawn.
+  const [connections, setConnections] = useState([]);
+  const [connectionId, setConnectionId] = useState("");
   // Which threads the member has ticked, for deleting several at once.
   const [picked, setPicked] = useState([]);
   const [exporting, setExporting] = useState(false);
@@ -43,6 +52,13 @@ export default function Coach() {
 
   useEffect(() => {
     loadList();
+    aiApi
+      .connections()
+      .then((list) => {
+        setConnections(list);
+        setConnectionId(list[0]?.id || "");
+      })
+      .catch(() => setConnections([]));
   }, [loadList]);
 
   // The newest turn, every time one arrives: a thread that answers below the
@@ -56,7 +72,7 @@ export default function Coach() {
     try {
       setCurrent(await aiApi.conversation(conversationId));
     } catch (err) {
-      setError(err);
+      toastError(err);
     }
   };
 
@@ -77,11 +93,15 @@ export default function Coach() {
     setQuestion("");
 
     try {
-      const answer = await aiApi.ask(text, current?.id);
+      const answer = await aiApi.ask(text, current?.id, connectionId);
       setCurrent(await aiApi.conversation(answer.conversationId));
       loadList();
     } catch (err) {
-      setError(err);
+      // Only the "nothing connected yet" case stays on the page: it is a
+      // state rather than an incident, and it carries the link that fixes
+      // it. Everything else is a toast, so it is not said twice.
+      setError(err?.response?.data?.i18n_code === "errors.aiNotConfigured" ? err : null);
+      toastError(err);
       // The question goes back in the box rather than being lost with the
       // turn that never happened.
       setQuestion(text);
@@ -100,7 +120,7 @@ export default function Coach() {
       setCurrent(await aiApi.rename(current.id, title.trim()));
       loadList();
     } catch (err) {
-      setError(err);
+      toastError(err);
     }
   };
 
@@ -109,7 +129,7 @@ export default function Coach() {
       setCurrent(await aiApi.publish(current.id));
       loadList();
     } catch (err) {
-      setError(err);
+      toastError(err);
     }
   };
 
@@ -119,7 +139,7 @@ export default function Coach() {
       setCurrent({ ...current, shared: false, shareToken: "", shareUrl: "" });
       loadList();
     } catch (err) {
-      setError(err);
+      toastError(err);
     }
   };
 
@@ -129,7 +149,7 @@ export default function Coach() {
       const blob = await aiApi.exportConversation(current.id, format);
       downloadBlob(blob, `${(current.title || "conversation").replace(/[^\w-]+/g, "-")}.${format}`);
     } catch (err) {
-      setError(err);
+      toastError(err);
     } finally {
       setExporting(false);
     }
@@ -142,7 +162,7 @@ export default function Coach() {
       setPicked((ids) => ids.filter((id) => id !== conversationId));
       loadList();
     } catch (err) {
-      setError(err);
+      toastError(err);
     }
   };
 
@@ -154,7 +174,7 @@ export default function Coach() {
       loadList();
       toast.success(t("ai.deletedCount", { count: deleted }), toastOptions);
     } catch (err) {
-      setError(err);
+      toastError(err);
     }
   };
 
@@ -168,7 +188,7 @@ export default function Coach() {
       loadList();
       toast.success(t("ai.deletedCount", { count: deleted }), toastOptions);
     } catch (err) {
-      setError(err);
+      toastError(err);
     }
   };
 
@@ -186,14 +206,31 @@ export default function Coach() {
           <h1>{t("ai.coachTitle")}</h1>
           <p className="sf-subtitle">{t("ai.coachSubtitle")}</p>
         </div>
-        <button type="button" className="sf-button" onClick={() => setCurrent(null)}>
-          <FiPlus /> {t("ai.newConversation")}
-        </button>
+        <div className="sf-row" style={{ gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          {/* Which subscription the next question is spent on. Drawn only
+              when there is a choice to make. */}
+          {connections.length > 1 ? (
+            <div style={{ minWidth: 200 }}>
+              <Select
+                options={connections.map((connection) => ({
+                  value: connection.id,
+                  label: connectionLabel(connection, t),
+                }))}
+                value={connectionId}
+                onChange={setConnectionId}
+                placeholder={t("ai.connection")}
+              />
+            </div>
+          ) : null}
+          <button type="button" className="sf-button" onClick={() => setCurrent(null)}>
+            <FiPlus /> {t("ai.newConversation")}
+          </button>
+        </div>
       </div>
 
       {/* Nothing connected: the page is useless until it is, and the member
           is one click from the screen that fixes it. */}
-      {error?.response?.data?.i18n_code === "errors.aiNotConfigured" ? (
+      {error ? (
         <div className="sf-notice sf-notice-warning">
           <div className="sf-row-between">
             <span>{t("errors.aiNotConfigured")}</span>
@@ -202,9 +239,7 @@ export default function Coach() {
             </Link>
           </div>
         </div>
-      ) : (
-        <ErrorMessage error={error} />
-      )}
+      ) : null}
 
       <div className="sf-messages">
         <div>

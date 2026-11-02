@@ -8,6 +8,7 @@ import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/export_menu.dart';
+import '../widgets/ai_ask_button.dart';
 import '../widgets/markdown_text.dart';
 
 /// One assigned program, session by session - the screen a member actually uses
@@ -26,6 +27,10 @@ class SessionScreen extends ConsumerWidget {
     final t = ref.watch(tProvider);
     final locale = ref.watch(localeProvider);
     final detail = ref.watch(assignmentProvider(assignmentId));
+    // The subscriptions the caller may spend. Empty while they load, and
+    // empty for a member with none - the reading button then asks with the
+    // default and the API answers 428 if there isn't one.
+    final connections = ref.watch(aiConnectionsProvider).valueOrNull ?? const <AiConnection>[];
 
     return Scaffold(
       appBar: AppBar(
@@ -113,6 +118,7 @@ class SessionScreen extends ConsumerWidget {
                       assignmentId: assignmentId,
                       programName: data.assignment.programName,
                       feedback: data.feedback[day.id],
+                      connections: connections,
                       initiallyExpanded: week == _weeksOf(data.days).first && day == week.days.first,
                     ),
                 ],
@@ -219,6 +225,9 @@ class _DayCard extends ConsumerWidget {
   final String programName;
   /// What the AI already said about this session, when it has been asked.
   final SessionFeedback? feedback;
+  /// The subscriptions the caller may spend, so the reading button can ask
+  /// which one pays when there is more than one.
+  final List<AiConnection> connections;
   final bool initiallyExpanded;
 
   const _DayCard({
@@ -226,6 +235,7 @@ class _DayCard extends ConsumerWidget {
     required this.assignmentId,
     required this.programName,
     required this.feedback,
+    required this.connections,
     required this.initiallyExpanded,
   });
 
@@ -292,6 +302,7 @@ class _DayCard extends ConsumerWidget {
             dayId: day.id,
             ready: allDone,
             feedback: feedback,
+            connections: connections,
           ),
         ],
       ),
@@ -324,12 +335,14 @@ class _SessionFeedback extends ConsumerStatefulWidget {
   final String dayId;
   final bool ready;
   final SessionFeedback? feedback;
+  final List<AiConnection> connections;
 
   const _SessionFeedback({
     required this.assignmentId,
     required this.dayId,
     required this.ready,
     required this.feedback,
+    required this.connections,
   });
 
   @override
@@ -407,17 +420,21 @@ class _SessionFeedbackState extends ConsumerState<_SessionFeedback> {
           const SizedBox(height: 6),
           if (!widget.ready) Text(t('session.aiFeedbackLocked'), style: small),
           const SizedBox(height: 8),
-          FilledButton.tonalIcon(
-            onPressed: widget.ready && !_busy
-                ? () => _run(() async => ref
-                    .read(apiProvider)
-                    .generateSessionFeedback(widget.assignmentId, widget.dayId, locale))
-                : null,
-            icon: _busy
-                ? const SizedBox(
-                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.auto_awesome_outlined, size: 18),
-            label: Text(t('session.aiFeedback')),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: AiAskButton(
+              connections: widget.connections,
+              busy: _busy,
+              disabled: !widget.ready,
+              label: t('session.aiFeedback'),
+              tooltip: widget.ready
+                  ? t('session.aiFeedbackHelp')
+                  : t('session.aiFeedbackLocked'),
+              onAsk: (connectionId) => _run(() async => ref
+                  .read(apiProvider)
+                  .generateSessionFeedback(widget.assignmentId, widget.dayId, locale,
+                      connectionId: connectionId)),
+            ),
           ),
         ],
         if (_error.isNotEmpty)
