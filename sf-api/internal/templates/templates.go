@@ -26,6 +26,23 @@ var messageEmailFR string
 //go:embed message.ar.md
 var messageEmailAR string
 
+// The model's instructions, as markdown skills.
+//
+// Files rather than Go string literals because these are meant to be tuned:
+// how a coach should answer is a judgement that gets revised, and revising it
+// should not mean reading Go. The feedback skill builds on the coaching one -
+// both are sent, the second after the first - so what is common lives in one
+// place and only what is specific to a session review is repeated.
+//
+//go:embed coach.skill.md
+var CoachSkill string
+
+//go:embed feedback.skill.md
+var FeedbackSkill string
+
+//go:embed health.skill.md
+var HealthSkill string
+
 // MessageEmail is the template for a locale, falling back to English for a
 // language nothing has been translated into yet - an email in the wrong
 // language beats no email at all.

@@ -40,6 +40,9 @@ export default function TrainingSession() {
   const [assignment, setAssignment] = useState(null);
   const [error, setError] = useState(null);
   const [exporting, setExporting] = useState(false);
+  // Which session is waiting on the model, so one reading does not grey out
+  // every button on the page.
+  const [reading, setReading] = useState(null);
 
   const load = useCallback(() => {
     training.get(assignmentId).then(setAssignment).catch(setError);
@@ -80,6 +83,34 @@ export default function TrainingSession() {
       setError(err);
     } finally {
       setExporting(false);
+    }
+  };
+
+  // A reading of one finished session, from the caller's own AI connection -
+  // so a coach reviewing their athlete's week pays for it out of their own
+  // subscription, which is what lets one key serve a roster that has none.
+  const generateFeedback = async (day) => {
+    setReading(day.id);
+    setError(null);
+    try {
+      await training.generateFeedback(assignmentId, day.id, locale);
+      load();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setReading(null);
+    }
+  };
+
+  const deleteFeedback = async (day) => {
+    setReading(day.id);
+    try {
+      await training.deleteFeedback(assignmentId, day.id);
+      load();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setReading(null);
     }
   };
 
@@ -164,6 +195,10 @@ export default function TrainingSession() {
               onDayDone={setDayDone}
               onExport={(format) => exportAs(format, week.number, day)}
               exporting={exporting}
+              feedback={assignment.feedback?.[day.id] || null}
+              onGenerateFeedback={generateFeedback}
+              onDeleteFeedback={deleteFeedback}
+              feedbackBusy={reading === day.id}
             />
           ))}
         </section>

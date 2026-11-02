@@ -36,6 +36,7 @@ type Handlers struct {
 	Invitation *handlers.InvitationHandler
 	Message    *handlers.MessageHandler
 	Strength   *handlers.StrengthHandler
+	AI         *handlers.AIHandler
 	Device     *handlers.DeviceHandler
 }
 
@@ -122,6 +123,15 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		r.Post("/strength/score", h.Strength.Score)
 		r.With(middleware.OptionalAuth(o.JWTSecret, o.ApiKeys)).
 			Get("/strength/defaults", h.Strength.Defaults)
+
+		// A conversation its owner shared, read by whoever holds the link -
+		// unauthenticated for the same reason a shared program is: a link
+		// that only works for members is not a shared link. The token is the
+		// whole credential, so it is 32 random bytes, and revoking it takes
+		// effect at once.
+		r.Get("/public/ai/conversations/{token}", h.AI.GetSharedConversation)
+		r.Get("/public/ai/conversations/{token}/export.pdf", h.AI.ExportSharedConversation)
+		r.Get("/public/ai/conversations/{token}/export.png", h.AI.ExportSharedConversation)
 
 		r.Get("/public/programs/{programId}", h.Program.GetPublic)
 		// The same sheet the member's own export produces, without the weights:
@@ -215,6 +225,12 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Get("/{provider}/body-composition", h.Device.BodyComposition)
 					r.Get("/{provider}/export.png", h.Device.Export)
 					r.Get("/{provider}/export.pdf", h.Device.Export)
+					// What the AI made of the last ninety days. Generated on
+					// demand, kept, and askable again once a day - the
+					// numbers underneath move that often at most.
+					r.Get("/{provider}/feedback", h.Device.HealthFeedback)
+					r.Post("/{provider}/feedback", h.Device.GenerateHealthFeedback)
+					r.Delete("/{provider}/feedback", h.Device.DeleteHealthFeedback)
 				})
 
 				// The invitations waiting for this account's address. They are
@@ -250,6 +266,25 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 						r.Get("/shares", h.Storage.ListGrants)
 						r.Post("/shares", h.Storage.Share)
 						r.Delete("/shares/{userId}", h.Storage.Unshare)
+					})
+				})
+
+				// The member's own connections to a language model, shared
+				// the way a storage is: an owner holds the credential and
+				// decides who else may spend it.
+				r.Route("/me/ai-connections", func(r chi.Router) {
+					r.Get("/", h.AI.List)
+					r.Post("/", h.AI.Create)
+
+					r.Route("/{connectionId}", func(r chi.Router) {
+						r.Put("/", h.AI.Update)
+						r.Delete("/", h.AI.Delete)
+						// Reading and writing the list is the owner's alone -
+						// anybody else handing out access would be spending a
+						// key they do not pay for.
+						r.Get("/shares", h.AI.ListGrants)
+						r.Post("/shares", h.AI.Share)
+						r.Delete("/shares/{userId}", h.AI.Unshare)
 					})
 				})
 
@@ -463,6 +498,12 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Delete("/sets/{setId}/log", h.Training.DeleteLog)
 					// A whole session ticked off in one go.
 					r.Put("/days/{dayId}/log", h.Training.SetDayDone)
+					// What the model said about a finished session. Kept, so
+					// it is read rather than regenerated; deleting it is how
+					// a member asks for another.
+					r.Get("/days/{dayId}/feedback", h.Training.SessionFeedback)
+					r.Post("/days/{dayId}/feedback", h.Training.GenerateSessionFeedback)
+					r.Delete("/days/{dayId}/feedback", h.Training.DeleteSessionFeedback)
 					// The block with the member's feedback on it, whole or one
 					// week (?week=N), for them to send their coach - and for
 					// their coach to read away from the app.
@@ -524,6 +565,28 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			// Every storage the caller may upload to: their own, and the ones
 			// shared with them.
 			r.Get("/storages", h.Storage.ListUsable)
+
+			// Asking the model, and the threads of what was asked.
+			r.Post("/ai/chat", h.AI.Chat)
+			r.Get("/ai/providers", h.AI.Providers)
+			r.Route("/ai/conversations", func(r chi.Router) {
+				r.Get("/", h.AI.ListConversations)
+				// Bulk delete as a POST: a body on a DELETE is permitted and
+				// widely dropped, and a clear-history that silently clears
+				// nothing is worse than an unfashionable verb. Registered
+				// before the id route so "delete" is not read as one.
+				r.Post("/delete", h.AI.DeleteConversations)
+				r.Route("/{conversationId}", func(r chi.Router) {
+					r.Get("/", h.AI.GetConversation)
+					r.Put("/", h.AI.RenameConversation)
+					r.Delete("/", h.AI.DeleteConversation)
+					// The link to hand somebody, minted and revoked.
+					r.Post("/share", h.AI.ShareConversation)
+					r.Delete("/share", h.AI.UnshareConversation)
+					r.Get("/export.pdf", h.AI.ExportConversation)
+					r.Get("/export.png", h.AI.ExportConversation)
+				})
+			})
 
 			// Registered as leaves, not as an r.Route subrouter: the calendar
 			// is readable logged out, so "/events" already carries a GET in

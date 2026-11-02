@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { FiActivity, FiAward, FiBarChart2, FiBookOpen, FiCalendar, FiChevronLeft, FiChevronRight, FiFileText, FiHeart, FiInfo, FiKey, FiLogOut, FiMail, FiMenu, FiMessageSquare, FiMoon, FiSearch, FiShield, FiSun, FiTrendingUp, FiUser, FiUserPlus, FiUsers } from "react-icons/fi";
+import { FiActivity, FiAward, FiBarChart2, FiBookOpen, FiCalendar, FiChevronLeft, FiChevronRight, FiCpu, FiFileText, FiHeart, FiInfo, FiKey, FiLogOut, FiMail, FiMenu, FiMessageSquare, FiMoon, FiSearch, FiShield, FiSun, FiTrendingUp, FiUser, FiUserPlus, FiUsers } from "react-icons/fi";
 
 import { admin, invitations as invitationsApi, messages as messagesApi } from "../../api/services";
 import Avatar from "../common/Avatar";
@@ -93,6 +93,7 @@ export default function DashboardLayout({ children }) {
       icon: <FiMessageSquare />,
       count: unreadMessages,
     },
+    { to: "/dashboard/coach", label: t("nav.coach"), icon: <FiCpu /> },
     { to: "/dashboard/search", label: t("nav.search"), icon: <FiSearch /> },
     {
       to: "/dashboard/invitations",

@@ -8,6 +8,7 @@ import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/export_menu.dart';
+import '../widgets/markdown_text.dart';
 
 /// One assigned program, session by session - the screen a member actually uses
 /// in the gym.
@@ -111,6 +112,7 @@ class SessionScreen extends ConsumerWidget {
                       day: day,
                       assignmentId: assignmentId,
                       programName: data.assignment.programName,
+                      feedback: data.feedback[day.id],
                       initiallyExpanded: week == _weeksOf(data.days).first && day == week.days.first,
                     ),
                 ],
@@ -215,12 +217,15 @@ class _DayCard extends ConsumerWidget {
   final ProgramDay day;
   final String assignmentId;
   final String programName;
+  /// What the AI already said about this session, when it has been asked.
+  final SessionFeedback? feedback;
   final bool initiallyExpanded;
 
   const _DayCard({
     required this.day,
     required this.assignmentId,
     required this.programName,
+    required this.feedback,
     required this.initiallyExpanded,
   });
 
@@ -282,6 +287,12 @@ class _DayCard extends ConsumerWidget {
         children: [
           for (final set in day.sets)
             _SetTile(set: set, assignmentId: assignmentId, locale: locale),
+          _SessionFeedback(
+            assignmentId: assignmentId,
+            dayId: day.id,
+            ready: allDone,
+            feedback: feedback,
+          ),
         ],
       ),
     );
@@ -295,6 +306,127 @@ class _DayCard extends ConsumerWidget {
     } catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
     }
+  }
+}
+
+/// What the AI made of the session, and the button that asks for it.
+///
+/// The button is off until every set is logged, the way Strava will not
+/// analyse an activity that is still recording: a reading of three sets out
+/// of eight is a reading of a session that did not happen that way, and a
+/// member would take it for a verdict on their training rather than on an
+/// unfinished record of it.
+///
+/// Once asked for it is kept - by the member, by their coach, and in the
+/// exports. Deleting it is how you ask for another.
+class _SessionFeedback extends ConsumerStatefulWidget {
+  final String assignmentId;
+  final String dayId;
+  final bool ready;
+  final SessionFeedback? feedback;
+
+  const _SessionFeedback({
+    required this.assignmentId,
+    required this.dayId,
+    required this.ready,
+    required this.feedback,
+  });
+
+  @override
+  ConsumerState<_SessionFeedback> createState() => _SessionFeedbackState();
+}
+
+class _SessionFeedbackState extends ConsumerState<_SessionFeedback> {
+  bool _busy = false;
+  String _error = '';
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    try {
+      await action();
+      ref.invalidate(assignmentProvider(widget.assignmentId));
+    } catch (error) {
+      if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final locale = ref.watch(localeProvider);
+    final colors = AppColors.of(context);
+    final small = Theme.of(context).textTheme.bodySmall;
+    final feedback = widget.feedback;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.backgroundMuted,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.auto_awesome_outlined, size: 18, color: colors.textMuted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(t('session.aiFeedback'),
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          if (feedback != null)
+            IconButton(
+              onPressed: _busy
+                  ? null
+                  : () => _run(() => ref
+                      .read(apiProvider)
+                      .deleteSessionFeedback(widget.assignmentId, widget.dayId)),
+              tooltip: t('session.aiFeedbackDelete'),
+              icon: const Icon(Icons.delete_outline, size: 20),
+              visualDensity: VisualDensity.compact,
+            ),
+        ]),
+        if (feedback != null) ...[
+          const SizedBox(height: 6),
+          MarkdownText(feedback.content),
+          const SizedBox(height: 6),
+          Text(
+            t('session.aiFeedbackBy', {
+              'name': feedback.authorName,
+              'model': feedback.model.isEmpty ? feedback.provider : feedback.model,
+            }),
+            style: small,
+          ),
+        ] else ...[
+          const SizedBox(height: 6),
+          if (!widget.ready) Text(t('session.aiFeedbackLocked'), style: small),
+          const SizedBox(height: 8),
+          FilledButton.tonalIcon(
+            onPressed: widget.ready && !_busy
+                ? () => _run(() async => ref
+                    .read(apiProvider)
+                    .generateSessionFeedback(widget.assignmentId, widget.dayId, locale))
+                : null,
+            icon: _busy
+                ? const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.auto_awesome_outlined, size: 18),
+            label: Text(t('session.aiFeedback')),
+          ),
+        ],
+        if (_error.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(_error, style: TextStyle(color: colors.danger)),
+          ),
+      ]),
+    );
   }
 }
 

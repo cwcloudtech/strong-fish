@@ -58,6 +58,14 @@ var labels = map[string]map[string]string{
 		"bc.boneMass":           "Bone mass",
 		"bc.visceralFat":        "Visceral fat",
 		"bc.basalMetabolicRate": "Basal metabolic rate",
+		// The AI assistant's own words: a session reading inside a program
+		// sheet, and a conversation exported on its own.
+		"aiFeedback":   "AI feedback",
+		"aiBy":         "%s, %s",
+		"conversation": "Conversation",
+		"question":     "Question",
+		"answer":       "Answer",
+		"exchange":     "Exchange %d",
 	},
 	"fr": {
 		"date":                  "Date",
@@ -109,6 +117,13 @@ var labels = map[string]map[string]string{
 		"bc.boneMass":           "Masse osseuse",
 		"bc.visceralFat":        "Graisse viscérale",
 		"bc.basalMetabolicRate": "Métabolisme de base",
+		// Les mots de l'assistant IA.
+		"aiFeedback":   "Analyse de l'IA",
+		"aiBy":         "%s, %s",
+		"conversation": "Conversation",
+		"question":     "Question",
+		"answer":       "Réponse",
+		"exchange":     "Échange %d",
 	},
 }
 

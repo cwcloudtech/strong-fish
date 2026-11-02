@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -7,6 +8,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import 'export_menu.dart';
+import 'markdown_text.dart';
 
 /// The windows the API offers, in the order they widen.
 const _ranges = ['24h', '48h', 'week', '14d', 'month', '90d'];
@@ -209,6 +211,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
             // picked: two devices' worth of steps side by side would be two
             // answers to the same question.
             if (connection.activitySource) _StepPanel(provider: connection.provider),
+            if (connection.activitySource) _HealthFeedbackPanel(provider: connection.provider),
             if (connection.connected &&
                 !connection.activitySource &&
                 activitySource != null &&
@@ -570,6 +573,153 @@ class _HeartSection extends ConsumerWidget {
 /// No chart and no range: this is "where am I now". Each measure carries its
 /// own date, because a scale does not take every measure every time, and a
 /// value from last month should say so.
+/// What the AI made of the member's health data.
+///
+/// Ninety days, once a day: the window is wide because the question is a
+/// direction rather than a day, and the wait is a day because that is how
+/// often the numbers underneath move. The button says when it comes back
+/// rather than refusing when pressed.
+class _HealthFeedbackPanel extends ConsumerStatefulWidget {
+  final String provider;
+  const _HealthFeedbackPanel({required this.provider});
+
+  @override
+  ConsumerState<_HealthFeedbackPanel> createState() => _HealthFeedbackPanelState();
+}
+
+class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
+  HealthFeedback? _feedback;
+  String _error = '';
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  /// A 404 is the ordinary case - nobody has asked yet - so it leaves the
+  /// panel empty with a button in it rather than reporting a failure.
+  Future<void> _load() async {
+    try {
+      final feedback = await ref.read(apiProvider).healthFeedback(widget.provider);
+      if (mounted) setState(() => _feedback = feedback);
+    } catch (_) {
+      if (mounted) setState(() => _feedback = null);
+    }
+  }
+
+  Future<void> _generate() async {
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    try {
+      final feedback = await ref.read(apiProvider).generateHealthFeedback(widget.provider);
+      if (mounted) setState(() => _feedback = feedback);
+    } catch (error) {
+      if (!mounted) return;
+      // Too soon: the refusal carries the reading it would not replace, so
+      // the panel shows that rather than an error about it.
+      final body = error is DioException && error.response?.data is Map<String, dynamic>
+          ? error.response!.data as Map<String, dynamic>
+          : const <String, dynamic>{};
+      if (body['i18n_code'] == 'errors.healthFeedbackTooSoon' &&
+          body['feedback'] is Map<String, dynamic>) {
+        setState(() => _feedback =
+            HealthFeedback.fromJson(body['feedback'] as Map<String, dynamic>));
+      }
+      setState(() => _error = ref.read(tErrorProvider)(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiProvider).deleteHealthFeedback(widget.provider);
+      if (mounted) setState(() => _feedback = null);
+    } catch (error) {
+      if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final colors = AppColors.of(context);
+    final small = Theme.of(context).textTheme.bodySmall;
+    final feedback = _feedback;
+    final waiting = feedback?.waiting ?? false;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.backgroundMuted,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Icon(Icons.auto_awesome_outlined, size: 18, color: colors.textMuted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(t('devices.aiFeedback'),
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          if (feedback != null)
+            IconButton(
+              onPressed: _busy ? null : _delete,
+              tooltip: t('common.delete'),
+              icon: const Icon(Icons.delete_outline, size: 20),
+              visualDensity: VisualDensity.compact,
+            ),
+        ]),
+        const SizedBox(height: 6),
+        if (feedback != null) ...[
+          MarkdownText(feedback.content),
+          const SizedBox(height: 6),
+          Text(
+            t('devices.aiFeedbackMeta', {
+              'days': '${feedback.days}',
+              'date': feedback.updatedAt.toLocal().toString().split(' ').first,
+            }),
+            style: small,
+          ),
+        ] else
+          Text(t('devices.aiFeedbackEmpty'), style: small),
+        if (_error.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(_error, style: TextStyle(color: colors.danger)),
+          ),
+        const SizedBox(height: 8),
+        Tooltip(
+          message: waiting
+              ? t('devices.aiFeedbackNext',
+                  {'date': feedback!.nextAt.toLocal().toString().split('.').first})
+              : t('devices.aiFeedbackHelp'),
+          child: FilledButton.tonalIcon(
+            style: _compactButton,
+            onPressed: _busy || waiting ? null : _generate,
+            icon: _busy
+                ? const SizedBox(
+                    width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.auto_awesome_outlined, size: 18),
+            label: Text(feedback == null
+                ? t('devices.aiFeedbackAsk')
+                : t('devices.aiFeedbackAgain')),
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
 class _BodyCompositionPanel extends ConsumerStatefulWidget {
   final String provider;
   const _BodyCompositionPanel({required this.provider});

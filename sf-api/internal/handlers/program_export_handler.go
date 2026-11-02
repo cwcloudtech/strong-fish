@@ -287,10 +287,21 @@ func (h *TrainingHandler) ExportAssignment(w http.ResponseWriter, r *http.Reques
 	}
 	days = narrowDays(days, r.URL.Query().Get("week"), r.URL.Query().Get("day"))
 
+	// What the AI already said about these sessions, printed under them. Read
+	// here rather than generated: an export is not the place to spend
+	// somebody's tokens, and a reading that appears only in the PDF would be
+	// one the member never saw on screen.
+	readings, err := h.aiStore.ReadingsForAssignment(r.Context(), assignment.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
 	writeProgramSheet(w, exportFormat(r), program, days, programsheet.Options{
 		MemberName: h.sets.memberName(r, assignment.UserID),
 		Locale:     sheetLocale(r),
 		Feedback:   true,
+		Readings:   readings,
 		Footer:     fmt.Sprintf("%s - %s", program.Name, h.sets.uiBaseURL),
 	})
 }

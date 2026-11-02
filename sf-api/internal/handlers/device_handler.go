@@ -42,13 +42,18 @@ type DeviceHandler struct {
 	jwtSecret  string
 	apiBaseURL string
 	uiBaseURL  string
+	// ai is borrowed for the one thing this handler asks a model: a reading
+	// of the member's health data. Reused rather than rebuilt so a connection
+	// is resolved, spent and reported on in exactly one place.
+	ai *AIHandler
 }
 
 func NewDeviceHandler(providers []devicelink.Provider, links *store.DeviceLinkStore,
-	users *store.UserStore, jwtSecret, apiBaseURL, uiBaseURL string) *DeviceHandler {
+	users *store.UserStore, jwtSecret, apiBaseURL, uiBaseURL string,
+	aiHandler *AIHandler) *DeviceHandler {
 	return &DeviceHandler{
 		providers: providers, links: links, users: users, jwtSecret: jwtSecret,
-		apiBaseURL: apiBaseURL, uiBaseURL: uiBaseURL,
+		apiBaseURL: apiBaseURL, uiBaseURL: uiBaseURL, ai: aiHandler,
 	}
 }
 
@@ -407,69 +412,13 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := h.freshToken(r, provider, link)
+	steps, heart, err := h.healthSeries(r, provider, link, days)
 	if err != nil {
 		h.writeProviderError(w, err, provider.Name())
 		return
-	}
-
-	end := time.Now().UTC()
-	start := end.AddDate(0, 0, -(days - 1))
-
-	counts, err := provider.DailySteps(r.Context(), accessToken, start, end)
-	if err != nil {
-		h.writeProviderError(w, err, provider.Name())
-		return
-	}
-	steps := models.StepSeries{From: start.Format("2006-01-02"), To: end.Format("2006-01-02")}
-	for _, count := range counts {
-		steps.Days = append(steps.Days, models.StepDay{Date: count.Date, Steps: count.Steps})
-		steps.Total += count.Steps
-	}
-	if len(steps.Days) > 0 {
-		steps.DailyAverage = steps.Total / int64(len(steps.Days))
-	}
-
-	// Heart rate is optional on purpose. It reaches back a fortnight against
-	// the steps' three months, and a provider that will not answer for this
-	// range must not cost the member the export they asked for.
-	var heart *models.HeartSeries
-	heartDays := days
-	if limit := provider.MaxHeartRateDays(); heartDays > limit {
-		heartDays = limit
-	}
-	if readings, err := provider.DailyHeartRate(r.Context(), accessToken,
-		end.AddDate(0, 0, -(heartDays-1)), end); err == nil {
-		series := models.HeartSeries{}
-		total, known := 0, 0
-		for _, reading := range readings {
-			day := models.HeartDay{
-				Date: reading.Date, Avg: int(math.Round(reading.Avg)),
-				Max: int(math.Round(reading.Max)), Min: int(math.Round(reading.Min)),
-				Zone: reading.Zone, Known: reading.Known,
-			}
-			series.Days = append(series.Days, day)
-			if day.Known {
-				total += day.Avg
-				known++
-			}
-			if day.Max > series.PeakBPM {
-				series.PeakBPM = day.Max
-			}
-		}
-		if known > 0 {
-			series.AverageBPM = total / known
-		}
-		heart = &series
-	} else {
-		slog.Warn("health export: heart rate unavailable, exporting steps alone",
-			"provider", provider.Name(), "error", err)
 	}
 
 	locale := sheetLocale(r)
-	if heart != nil && heart.AverageBPM == 0 {
-		heart = nil
-	}
 
 	title := healthsheet.Title(h.memberName(r.Context(), userID), locale)
 	subtitle := healthsheet.Subtitle(steps, heart, locale)
@@ -570,6 +519,73 @@ func bodyComposition(provider string, measures []devicelink.BodyMeasure) models.
 //
 // Optional, like the heart rate: a scale that cannot be read right now must
 // not cost the member the export of their steps.
+// healthSeries is the member's steps and heart rate over the last days, as
+// the export and the AI reading both need them.
+//
+// Heart rate is optional on purpose. It reaches back a fortnight against the
+// steps' three months, and a provider that will not answer for this range
+// must not cost the member the document they asked for. A series with no
+// usable average comes back as nothing at all rather than as a chart of
+// blanks.
+func (h *DeviceHandler) healthSeries(r *http.Request, provider devicelink.ActivityProvider,
+	link models.DeviceLink, days int) (models.StepSeries, *models.HeartSeries, error) {
+	accessToken, err := h.freshToken(r, provider, link)
+	if err != nil {
+		return models.StepSeries{}, nil, err
+	}
+
+	end := time.Now().UTC()
+	start := end.AddDate(0, 0, -(days - 1))
+
+	counts, err := provider.DailySteps(r.Context(), accessToken, start, end)
+	if err != nil {
+		return models.StepSeries{}, nil, err
+	}
+	steps := models.StepSeries{From: start.Format("2006-01-02"), To: end.Format("2006-01-02")}
+	for _, count := range counts {
+		steps.Days = append(steps.Days, models.StepDay{Date: count.Date, Steps: count.Steps})
+		steps.Total += count.Steps
+	}
+	if len(steps.Days) > 0 {
+		steps.DailyAverage = steps.Total / int64(len(steps.Days))
+	}
+
+	heartDays := days
+	if limit := provider.MaxHeartRateDays(); heartDays > limit {
+		heartDays = limit
+	}
+	readings, err := provider.DailyHeartRate(r.Context(), accessToken,
+		end.AddDate(0, 0, -(heartDays-1)), end)
+	if err != nil {
+		slog.Warn("health data: heart rate unavailable, steps alone",
+			"provider", provider.Name(), "error", err)
+		return steps, nil, nil
+	}
+
+	series := models.HeartSeries{}
+	total, known := 0, 0
+	for _, reading := range readings {
+		day := models.HeartDay{
+			Date: reading.Date, Avg: int(math.Round(reading.Avg)),
+			Max: int(math.Round(reading.Max)), Min: int(math.Round(reading.Min)),
+			Zone: reading.Zone, Known: reading.Known,
+		}
+		series.Days = append(series.Days, day)
+		if day.Known {
+			total += day.Avg
+			known++
+		}
+		if day.Max > series.PeakBPM {
+			series.PeakBPM = day.Max
+		}
+	}
+	if known == 0 {
+		return steps, nil, nil
+	}
+	series.AverageBPM = total / known
+	return steps, &series, nil
+}
+
 func (h *DeviceHandler) exportBodyComposition(r *http.Request, userID string) *models.BodyComposition {
 	connected, err := h.links.ListProviders(r.Context(), userID)
 	if err != nil {

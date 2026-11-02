@@ -7,6 +7,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/logo.dart';
 import 'admin_users_screen.dart';
+import 'ai_coach_screen.dart';
 import 'coach_screen.dart';
 import 'events_screen.dart';
 import 'feed_screen.dart';
@@ -57,6 +58,9 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
       // to join them, and it should not read as another inbox.
       (label: t('nav.invitations'), icon: Icons.group_add_outlined, screen: const InvitationsScreen()),
       (label: t('nav.messages'), icon: Icons.chat_bubble_outline, screen: const MessagesScreen()),
+      // The AI coach, beside the messages: both are threads of questions and
+      // answers, and this is the one that answers at three in the morning.
+      (label: t('nav.coach'), icon: Icons.auto_awesome_outlined, screen: const AiCoachScreen()),
       // Only a superadmin has anything to manage, so the tab is inserted
       // rather than always present - the same way the coaching tab is.
       if (isSuperadmin)

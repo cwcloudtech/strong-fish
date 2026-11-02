@@ -34,6 +34,11 @@ type Options struct {
 	// Feedback adds what the member actually did beside what was prescribed:
 	// the sheet a lifter sends their coach at the end of a week.
 	Feedback bool
+	// Readings is what the AI said about a session, by day id, for the
+	// sessions that have been read. Printed under the table it is about: a
+	// reading of a week that is filed separately from the week is a reading
+	// nobody reads again.
+	Readings map[string]string
 }
 
 // Column is one column: its heading, and its share of the width relative to
@@ -349,4 +354,53 @@ func formatKgPtr(value *float64) string {
 		return ""
 	}
 	return formatKg(*value)
+}
+
+// ReadingOf is what the model said about one session, stripped down to lines a
+// renderer can print, or nothing when it was never asked.
+func ReadingOf(options Options, dayID string) []string {
+	if len(options.Readings) == 0 {
+		return nil
+	}
+	return PlainLines(options.Readings[dayID])
+}
+
+// PlainLines strips a markdown answer down to what it says, one line per line.
+//
+// The model answers in markdown and none of the three renderers draws
+// markdown: a spreadsheet cell, a PDF paragraph and a PNG line are all plain
+// text. The line breaks are kept because they carry the shape of the answer -
+// a heading, then its bullets - which is most of what the formatting was
+// doing; the markers themselves would just be noise on paper.
+func PlainLines(text string) []string {
+	lines := []string{}
+	for _, line := range strings.Split(text, "\n") {
+		if plain := plainLine(line); plain != "" {
+			lines = append(lines, plain)
+		}
+	}
+	return lines
+}
+
+func plainLine(line string) string {
+	trimmed := strings.TrimSpace(line)
+
+	switch {
+	case strings.HasPrefix(trimmed, "#"):
+		trimmed = strings.TrimSpace(strings.TrimLeft(trimmed, "#"))
+	case strings.HasPrefix(trimmed, "> "):
+		trimmed = strings.TrimSpace(trimmed[2:])
+	case strings.HasPrefix(trimmed, "* "):
+		// Kept as a bullet rather than flattened: a list that reads as a
+		// paragraph of sentences is a list nobody can scan.
+		trimmed = "- " + strings.TrimSpace(trimmed[2:])
+	}
+
+	// The emphasis markers, longest first so "**" is gone before "*" is
+	// looked for. Underscores are left alone except in pairs: a single one is
+	// more often part of a word than emphasis around it.
+	for _, marker := range []string{"**", "__", "~~", "*", "`"} {
+		trimmed = strings.ReplaceAll(trimmed, marker, "")
+	}
+	return strings.TrimSpace(trimmed)
 }

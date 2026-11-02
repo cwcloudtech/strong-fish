@@ -1,0 +1,467 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../models/models.dart';
+import '../providers/providers.dart';
+import '../theme.dart';
+import 'multi_select.dart';
+
+/// The member's connections to a language model, and who else may spend them.
+///
+/// Deliberately the storage settings over again: an account holds a
+/// credential and decides who else may use it. A coach paying for one key and
+/// letting their athletes ask it questions is the same arrangement as a club
+/// sharing a bucket.
+class AiConnectionsSection extends ConsumerWidget {
+  const AiConnectionsSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(tProvider);
+    final connections = ref.watch(aiConnectionsProvider);
+    final me = ref.watch(sessionProvider).user?.id ?? '';
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(t('ai.title'), style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(t('ai.subtitle'), style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 8),
+          connections.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(12),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            error: (error, _) => Text(ref.read(tErrorProvider)(error),
+                style: TextStyle(color: AppColors.of(context).danger)),
+            data: (list) => Column(children: [
+              if (list.isEmpty)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(t('ai.noConnections'),
+                      style: Theme.of(context).textTheme.bodySmall),
+                ),
+              for (final connection in list)
+                _ConnectionTile(connection: connection, mine: connection.ownerId == me),
+              const SizedBox(height: 8),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: FilledButton.icon(
+                  onPressed: () => _edit(context, ref, null),
+                  icon: const Icon(Icons.add),
+                  label: Text(t('ai.addConnection')),
+                ),
+              ),
+            ]),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Opens the form for a new connection or an existing one, and reloads the
+/// list when something was saved.
+Future<void> _edit(BuildContext context, WidgetRef ref, AiConnection? connection) async {
+  final saved = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) => Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: _ConnectionForm(connection: connection),
+    ),
+  );
+  if (saved == true) ref.invalidate(aiConnectionsProvider);
+}
+
+class _ConnectionTile extends ConsumerWidget {
+  final AiConnection connection;
+  final bool mine;
+
+  const _ConnectionTile({required this.connection, required this.mine});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(tProvider);
+    final provider = t('ai.provider.${connection.provider}');
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(connection.name.isEmpty ? provider : connection.name),
+      subtitle: Text([
+        provider,
+        if (connection.model.isNotEmpty) connection.model,
+        if (!mine) t('ai.sharedBy', {'name': connection.ownerName}),
+      ].join(' · ')),
+      trailing: mine
+          ? Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                onPressed: () => _shares(context, ref, connection),
+                tooltip: t('ai.shares'),
+                icon: const Icon(Icons.group_outlined, size: 20),
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                onPressed: () => _edit(context, ref, connection),
+                tooltip: t('common.edit'),
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                onPressed: () => _delete(context, ref),
+                tooltip: t('ai.clear'),
+                icon: const Icon(Icons.delete_outline, size: 20),
+                visualDensity: VisualDensity.compact,
+              ),
+            ])
+          : Text(t('ai.role.user'), style: Theme.of(context).textTheme.bodySmall),
+    );
+  }
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final t = ref.read(tProvider);
+    try {
+      await ref.read(apiProvider).deleteAiConnection(connection.id);
+      ref.invalidate(aiConnectionsProvider);
+      messenger.showSnackBar(SnackBar(content: Text(t('ai.cleared'))));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+    }
+  }
+
+  Future<void> _shares(BuildContext context, WidgetRef ref, AiConnection connection) =>
+      showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => _SharesSheet(connectionId: connection.id),
+      );
+}
+
+/// The connection form.
+///
+/// The address is a field rather than a constant because that is the point:
+/// picking Anthropic and then aiming it at a LiteLLM on the next machine is
+/// the arrangement this was built for. Picking a provider fills in the
+/// address and the model, so somebody who only has a key is one paste away.
+class _ConnectionForm extends ConsumerStatefulWidget {
+  final AiConnection? connection;
+
+  const _ConnectionForm({required this.connection});
+
+  @override
+  ConsumerState<_ConnectionForm> createState() => _ConnectionFormState();
+}
+
+class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
+  late final TextEditingController _name;
+  late final TextEditingController _baseUrl;
+  late final TextEditingController _model;
+  final _token = TextEditingController();
+  late String _provider;
+  List<AiProvider> _providers = const [];
+  bool _busy = false;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final connection = widget.connection;
+    _name = TextEditingController(text: connection?.name ?? '');
+    _baseUrl = TextEditingController(text: connection?.baseUrl ?? '');
+    _model = TextEditingController(text: connection?.model ?? '');
+    _provider = connection?.provider ?? 'mistral';
+    _loadProviders();
+  }
+
+  /// The defaults the picker fills in. A provider list that cannot be
+  /// fetched leaves the form usable with whatever the member types.
+  Future<void> _loadProviders() async {
+    try {
+      final providers = await ref.read(apiProvider).aiProviders();
+      if (mounted) setState(() => _providers = providers);
+    } catch (_) {
+      // Left empty on purpose.
+    }
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _baseUrl.dispose();
+    _model.dispose();
+    _token.dispose();
+    super.dispose();
+  }
+
+  AiProvider? get _defaults =>
+      _providers.where((provider) => provider.name == _provider).firstOrNull;
+
+  /// Switching provider rewrites the address and the model unless the member
+  /// typed their own: changing vendor and keeping the old vendor's URL is
+  /// never what was meant, but neither is losing a hand-typed gateway.
+  void _pickProvider(String provider) {
+    final previous = _defaults;
+    final next = _providers.where((entry) => entry.name == provider).firstOrNull;
+    setState(() {
+      if (_baseUrl.text.isEmpty || _baseUrl.text == previous?.defaultUrl) {
+        _baseUrl.text = next?.defaultUrl ?? '';
+      }
+      if (_model.text.isEmpty || _model.text == previous?.defaultModel) {
+        _model.text = next?.defaultModel ?? '';
+      }
+      _provider = provider;
+    });
+  }
+
+  Future<void> _save() async {
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    final payload = {
+      'name': _name.text.trim(),
+      'provider': _provider,
+      'baseUrl': _baseUrl.text.trim().isEmpty ? (_defaults?.defaultUrl ?? '') : _baseUrl.text.trim(),
+      'model': _model.text.trim().isEmpty ? (_defaults?.defaultModel ?? '') : _model.text.trim(),
+      'token': _token.text.trim(),
+    };
+    try {
+      final api = ref.read(apiProvider);
+      final existing = widget.connection;
+      if (existing == null) {
+        await api.addAiConnection(payload);
+      } else {
+        await api.setAiConnection(existing.id, payload);
+      }
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (error) {
+      if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final connection = widget.connection;
+    final names = _providers.isEmpty
+        ? [_provider]
+        : [for (final provider in _providers) provider.name];
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: _name,
+            decoration: InputDecoration(
+              labelText: t('ai.name'),
+              hintText: t('ai.namePlaceholder'),
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            initialValue: _provider,
+            decoration: InputDecoration(
+              labelText: t('ai.providerLabel'),
+              border: const OutlineInputBorder(),
+            ),
+            items: [
+              for (final name in names)
+                DropdownMenuItem(value: name, child: Text(t('ai.provider.$name'))),
+            ],
+            onChanged: (value) => value == null ? null : _pickProvider(value),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _baseUrl,
+            keyboardType: TextInputType.url,
+            decoration: InputDecoration(
+              labelText: t('ai.baseUrl'),
+              helperText: t('ai.baseUrlHelp'),
+              helperMaxLines: 3,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _model,
+            decoration: InputDecoration(
+              labelText: t('ai.model'),
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _token,
+            obscureText: true,
+            decoration: InputDecoration(
+              labelText: t('ai.token'),
+              hintText: connection?.hasToken == true ? t('ai.tokenSet') : null,
+              helperText: connection?.hasToken == true ? t('ai.tokenKeep') : t('ai.tokenHelp'),
+              helperMaxLines: 3,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          if (_error.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(_error, style: TextStyle(color: AppColors.of(context).danger)),
+            ),
+          const SizedBox(height: 16),
+          Row(children: [
+            Expanded(
+              child: FilledButton(
+                onPressed: _busy ? null : _save,
+                child: Text(t('common.save')),
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(t('common.cancel')),
+            ),
+          ]),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Who else may put questions through this connection.
+class _SharesSheet extends ConsumerStatefulWidget {
+  final String connectionId;
+
+  const _SharesSheet({required this.connectionId});
+
+  @override
+  ConsumerState<_SharesSheet> createState() => _SharesSheetState();
+}
+
+class _SharesSheetState extends ConsumerState<_SharesSheet> {
+  List<AiGrant> _grants = const [];
+  List<MemberResult> _members = const [];
+  List<String> _picked = const [];
+  bool _busy = false;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final api = ref.read(apiProvider);
+      final grants = await api.aiShares(widget.connectionId);
+      final page = await api.searchMembers();
+      if (mounted) {
+        setState(() {
+          _grants = grants;
+          _members = page.results;
+        });
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
+    }
+  }
+
+  Future<void> _share() async {
+    setState(() {
+      _busy = true;
+      _error = '';
+    });
+    try {
+      // One request per person: granting is rare, and a partial failure then
+      // names who it failed for.
+      for (final userId in _picked) {
+        _grants = await ref.read(apiProvider).shareAiConnection(widget.connectionId, userId);
+      }
+      if (mounted) setState(() => _picked = const []);
+    } catch (error) {
+      if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _revoke(String userId) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiProvider).unshareAiConnection(widget.connectionId, userId);
+      await _load();
+    } catch (error) {
+      if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final shared = _grants.where((grant) => grant.role != 'owner').toList();
+    final granted = {for (final grant in _grants) grant.userId};
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(t('ai.shares'), style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(t('ai.sharesHelp'), style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 8),
+          if (shared.isEmpty)
+            Text(t('ai.noShares'), style: Theme.of(context).textTheme.bodySmall),
+          for (final grant in shared)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(grant.name),
+              subtitle: grant.handle.isEmpty ? null : Text('@${grant.handle}'),
+              trailing: IconButton(
+                onPressed: _busy ? null : () => _revoke(grant.userId),
+                tooltip: t('ai.unshare'),
+                icon: const Icon(Icons.delete_outline, size: 20),
+              ),
+            ),
+          const SizedBox(height: 8),
+          SfMultiSelect(
+            label: t('ai.shareWith'),
+            placeholder: t('ai.pickMembers'),
+            options: [
+              for (final member in _members.where((member) => !granted.contains(member.id)))
+                SelectOption(
+                  value: member.id,
+                  label: '${member.name} ${member.surname}'.trim().isEmpty
+                      ? member.handle
+                      : '${member.name} ${member.surname}'.trim(),
+                ),
+            ],
+            selected: _picked,
+            onChanged: (values) => setState(() => _picked = values),
+            searchHint: t('common.search'),
+            noResults: t('common.noResults'),
+            selectedCount: t('common.selectedCount', {'count': '{{count}}'}),
+            clearLabel: t('common.clear'),
+          ),
+          if (_error.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_error, style: TextStyle(color: AppColors.of(context).danger)),
+            ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: _busy || _picked.isEmpty ? null : _share,
+            child: Text(t('ai.shareAction')),
+          ),
+        ]),
+      ),
+    );
+  }
+}

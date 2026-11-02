@@ -67,6 +67,29 @@ const (
 	// CodeDeviceUnavailable is an integration the operator has not given
 	// credentials to: offered on screen, but switched off here.
 	CodeDeviceUnavailable = "errors.deviceUnavailable"
+	// What can go wrong with a member's own model connection: a provider this
+	// build cannot talk to, an address that is not a URL, a missing key, a
+	// role that is not grantable, nothing connected at all, and the provider
+	// itself saying no.
+	CodeInvalidAIProvider = "errors.invalidAiProvider"
+	CodeInvalidAIBaseURL  = "errors.invalidAiBaseUrl"
+	CodeAIKeyRequired     = "errors.aiKeyRequired"
+	CodeInvalidAIRole     = "errors.invalidAiRole"
+	CodeAINotConfigured   = "errors.aiNotConfigured"
+	CodeAIRefused         = "errors.aiRefused"
+	// CodeConversationTitle is retitling a thread to nothing, and
+	// CodeNothingSelected is a bulk delete that named nothing to delete -
+	// which is refused rather than read as "everything".
+	// CodeHealthFeedbackTooSoon is asking for a new reading of health data
+	// inside the day. Its own code because it is not a failure: the member
+	// has a reading, and is being told when the next one can be had.
+	CodeHealthFeedbackTooSoon = "errors.healthFeedbackTooSoon"
+	CodeConversationTitle     = "errors.conversationTitleRequired"
+	CodeNothingSelected       = "errors.nothingSelected"
+	// CodeSessionIncomplete is asking for a reading of a session that has not
+	// been finished. Deliberately its own code: the member can fix it, by
+	// logging the rest of their sets.
+	CodeSessionIncomplete = "errors.sessionIncomplete"
 	// CodeUpstream is a service strong-fish depends on being unreachable or
 	// answering with something unusable - not the member's doing, and not
 	// something a retry in the same second will fix.
