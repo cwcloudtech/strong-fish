@@ -124,6 +124,11 @@ reading of it is out of date rather than a second opinion. The line
 underneath says which subscription produced the one you are looking at, and
 when.
 
+It goes into the **exported health sheet** too, PDF and picture alike, under
+the charts it is about - as long as it is less than a day old. An older
+reading stays on screen with its date, but is left out of the document, where
+it would read as a comment on numbers it never saw.
+
 ## What the model is told
 
 The instructions are markdown files on the server, not strings buried in the code, so they can be improved without touching the app:

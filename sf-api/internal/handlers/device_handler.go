@@ -423,6 +423,11 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 	title := healthsheet.Title(h.memberName(r.Context(), userID), locale)
 	subtitle := healthsheet.Subtitle(steps, heart, locale)
 	sections := healthsheet.Sections(steps, heart, h.exportBodyComposition(r, userID), locale)
+	// What the AI made of the same data, when it was asked recently enough
+	// to be about this sheet (see recentReading).
+	if reading := h.recentReading(r, userID, provider.Name(), locale); reading != nil {
+		sections = append(sections, *reading)
+	}
 	footer := h.uiBaseURL
 
 	var (

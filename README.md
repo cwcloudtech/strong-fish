@@ -713,6 +713,11 @@ exports are (`internal/programsheet`), as markdown (`internal/programmd`):
 | A session reading | The session's own feedback sheet - prescription, what was done, RPE, e1RM, the athlete's comments - plus the earlier sessions of the block | Every asking, beside the ones before it |
 | A health reading | The member's health sheet: up to 90 days of steps and heart rate, and the latest body composition | One per member and source, replaced |
 
+A session's readings are printed in its block's exports, and a health reading
+in the health sheet's - but only while it is **less than a day old**, because
+that is how long the sheet it describes stays true. An older one is still on
+screen, with its own date on it; it simply does not go into the document.
+
 The member's file is rebuilt on every question rather than quoted into the
 thread: a max named in January would still be being read in March, after the
 figure it describes had moved. It is a system-prompt section, because it is
