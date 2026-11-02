@@ -24,6 +24,11 @@ was fine, the feature is simply not available on your account yet.
 Configure it once and it covers all three: videos in posts, videos in messages,
 and voice messages.
 
+It is set up in **Settings → Video storage** on the web, or in **Profile** on
+the phone - the same list, the same fields, the same sharing. The one
+difference: on the web a Google service-account key is picked as the JSON
+file Google hands out, while on the phone you paste its contents.
+
 ## Option 1: an S3-compatible bucket
 
 Works with AWS S3, MinIO, Scaleway, DigitalOcean Spaces - anything speaking the

@@ -620,6 +620,12 @@ with the secret replaced by a marker; echoing that marker back on save keeps
 the stored secret, which is what lets somebody change their bucket name without
 retyping a key they can no longer read.
 
+Targets are managed from **both clients**: Settings on the web, the profile
+screen on the phone - the same list, order, sharing and fields, built on the
+same endpoints. The phone takes a Drive service-account key as pasted JSON
+and encodes it on save, where the web reads the file Google hands out; the
+stored value is the same base64 either way.
+
 `SF_MAX_VIDEO_SIZE` caps one upload (20MB by default).
 
 ### A media link outlives the storage it names

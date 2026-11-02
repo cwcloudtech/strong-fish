@@ -476,7 +476,7 @@ class _SharesSheet extends ConsumerStatefulWidget {
 }
 
 class _SharesSheetState extends ConsumerState<_SharesSheet> {
-  List<AiGrant> _grants = const [];
+  List<AccessGrant> _grants = const [];
   List<MemberResult> _members = const [];
   List<String> _picked = const [];
   bool _busy = false;
@@ -580,7 +580,7 @@ class _SharesSheetState extends ConsumerState<_SharesSheet> {
             searchHint: t('common.search'),
             noResults: t('common.noResults'),
             selectedCount: t('common.selectedCount', {'count': '{{count}}'}),
-            clearLabel: t('common.clear'),
+            clearLabel: t('common.clearSelection'),
           ),
           if (_error.isNotEmpty)
             Padding(

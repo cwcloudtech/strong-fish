@@ -316,6 +316,14 @@ final aiConversationsProvider = FutureProvider<List<AiConversation>>((ref) async
   return ref.watch(apiProvider).aiConversations();
 });
 
+/// Where the member's videos and voice messages are written: their own
+/// targets, in the order that decides where a posted link points.
+final storagesProvider =
+    FutureProvider<({List<Storage> storages, int maxSize})>((ref) async {
+  ref.watch(sessionProvider.select((session) => session.user?.id));
+  return ref.watch(apiProvider).storages();
+});
+
 /// The provider catalogue: addresses, default models and the models worth
 /// suggesting. Served by the API from a table, so the form follows an
 /// operator's row rather than a release.

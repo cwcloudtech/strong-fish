@@ -890,6 +890,8 @@ const ar = {
     sharedSubtitle: "محادثة مشارَكة من StrongFish.",
   },
   storage: {
+    clearConfirm: "حذف هذا التخزين؟ تبقى الملفات الموجودة فيه مكانها، لكن لن يستطيع التطبيق قراءتها.",
+    serviceAccountPaste: "الصق محتوى ملف مفتاح JSON.",
     noTargets: "لا تخزين مُعدّ بعد.",
     addTarget: "إضافة تخزين",
     orderHelp: "يُرفَع الملف إلى كل الوجهات. ورابط المنشور يأتي من الأولى.",

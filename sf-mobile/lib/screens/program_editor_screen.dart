@@ -727,7 +727,7 @@ class _AssignDialogState extends ConsumerState<_AssignDialog> {
         searchHint: t('common.search'),
         noResults: t('common.noResults'),
         selectedCount: t('common.selectedCount', {'count': '{{count}}'}),
-        clearLabel: t('common.clear'),
+        clearLabel: t('common.clearSelection'),
       ),
       actions: [
         TextButton(
