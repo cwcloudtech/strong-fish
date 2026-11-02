@@ -211,6 +211,29 @@ func (h *AIHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+type aiOrderPayload struct {
+	ConnectionIDs []string `json:"connectionIds"`
+}
+
+// Reorder sets which connection is first - the one a question goes through
+// when nobody picks it, and the first row of every "ask with" menu. A real
+// setting, the way a storage's order is.
+func (h *AIHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	var p aiOrderPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	if err := h.connections.Reorder(r.Context(), userID, p.ConnectionIDs); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	// The list back, in its new order: one answer rather than a 204 and a
+	// second request to find out what happened.
+	h.List(w, r)
+}
+
 func (h *AIHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	owned, ok := h.ownConnection(w, r)
 	if !ok {

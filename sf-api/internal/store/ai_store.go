@@ -153,7 +153,7 @@ func (s *AIStore) ListFor(ctx context.Context, userID string) ([]models.AIConnec
 		JOIN users u ON u.id = c.owner_id
 		LEFT JOIN ai_connection_acl a ON a.connection_id = c.id AND a.user_id::text = $1
 		WHERE c.owner_id::text = $1 OR a.user_id::text = $1
-		ORDER BY (c.owner_id::text = $1) DESC, c.created_at`, userID)
+		ORDER BY (c.owner_id::text = $1) DESC, c.position, c.created_at`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +212,7 @@ func (s *AIStore) Usable(ctx context.Context, userID string) (models.AIConnectio
 	return scanAIConnection(s.pool.QueryRow(ctx, aiConnectionSelect+`, coalesce(p.format, '')`+
 		usableFrom+`
 		WHERE c.owner_id::text = $1 OR a.user_id::text = $1
-		ORDER BY (c.owner_id::text = $1) DESC, c.created_at
+		ORDER BY (c.owner_id::text = $1) DESC, c.position, c.created_at
 		LIMIT 1`, userID), false, false, true)
 }
 
@@ -236,8 +236,11 @@ func (s *AIStore) Create(ctx context.Context, ownerID string, connection models.
 	if err != nil {
 		return models.AIConnection{}, err
 	}
+	// Appended rather than inserted: a key somebody just pasted should not
+	// silently become the one every question goes through.
 	return scanAIConnection(s.pool.QueryRow(ctx, `
-		INSERT INTO ai_connections (owner_id, data) VALUES ($1, $2)
+		INSERT INTO ai_connections (owner_id, data, position)
+		VALUES ($1, $2, coalesce((SELECT max(position) + 1 FROM ai_connections WHERE owner_id = $1), 0))
 		RETURNING id, owner_id::text, data, created_at, updated_at`, ownerID, data), false, false, false)
 }
 
@@ -278,6 +281,54 @@ func (s *AIStore) Delete(ctx context.Context, id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// Reorder sets which connection is first - which is the one a question goes
+// through when nobody picks, and the first row of every "ask with" menu - so
+// it is a real setting rather than a display preference.
+//
+// The same shape as a storage's order, down to the two halves: the ids that
+// were named take the front in the order they were given, and whatever was
+// not named follows, keeping its own. A client that sends a partial list -
+// an older build, a race with a connection added in another tab - reorders
+// what it knows about and leaves the rest alone, rather than dropping it to
+// position zero.
+func (s *AIStore) Reorder(ctx context.Context, ownerID string, ids []string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	position := 0
+	for _, id := range ids {
+		// Scoped to the owner: a list that happens to name somebody else's
+		// connection moves nothing.
+		tag, err := tx.Exec(ctx, `
+			UPDATE ai_connections SET position = $3, updated_at = now()
+			WHERE id = $1 AND owner_id = $2
+		`, id, ownerID, position)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() > 0 {
+			position++
+		}
+	}
+
+	if _, err := tx.Exec(ctx, `
+		WITH rest AS (
+			SELECT id, row_number() OVER (ORDER BY position, created_at) - 1 AS offset
+			FROM ai_connections
+			WHERE owner_id = $1 AND NOT (id = ANY($2::uuid[]))
+		)
+		UPDATE ai_connections c SET position = $3 + rest.offset
+		FROM rest WHERE rest.id = c.id
+	`, ownerID, ids, position); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 // Grant gives somebody else the right to spend this connection.

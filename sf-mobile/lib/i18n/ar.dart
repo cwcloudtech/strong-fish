@@ -552,13 +552,16 @@ const Map<String, dynamic> ar = {
     'noReports': 'لا شيء للإشراف عليه.',
   },
   'devices': {
+    'provider': {
+      'google-health': 'Google Health ‏(Fitbit، Pixel Watch)',
+      'withings': 'Withings',
+    },
     'aiFeedbackWindow': 'على مدى {{days}} يوماً',
     'aiFeedback': 'تحليل الذكاء الاصطناعي',
     'aiFeedbackAsk': 'اطلب التحليل',
     'aiFeedbackAgain': 'اطلب من جديد',
     'aiFeedbackHelp': 'قراءة لآخر 90 يوماً: النشاط ونبض القلب وتكوين الجسم.',
-    'aiFeedbackNext': 'يمكن طلب تحليل جديد في {{date}}.',
-    'aiFeedbackEmpty': 'لا يوجد تحليل بعد. يمكن للذكاء الاصطناعي قراءة آخر 90 يوماً مرة كل يوم.',
+    'aiFeedbackEmpty': 'لا يوجد تحليل بعد. يمكن للذكاء الاصطناعي قراءة آخر 90 يوماً متى شئت.',
     'title': 'الأجهزة المتصلة',
     'subtitle': 'اقرأ ما قاسته ساعتك وميزانك بالفعل. لا يُكتب شيء في المقابل، ولا يُخزَّن شيء هنا.',
     'connect': 'ربط',
@@ -619,9 +622,6 @@ const Map<String, dynamic> ar = {
       'account_failed': 'تم تسجيل دخولك، لكن تعذّرت قراءة بياناتك. إن كنت تدير هذا الخادم، فتحقق من تفعيل واجهة المزوّد لهذا التطبيق - والسبب في السجلات.',
       'store_failed': 'تعذّر حفظ الاتصال. حاول مجدداً.',
     },
-    'provider': {
-      'withings': 'Withings',
-    },
   },
   'errors': {
     'invalidHeight': 'أدخل الطول بالسنتيمتر.',
@@ -634,7 +634,6 @@ const Map<String, dynamic> ar = {
     'sessionIncomplete': 'أكمل الحصة قبل طلب تحليلها.',
     'conversationTitleRequired': 'أعطِ هذه المحادثة عنواناً.',
     'nothingSelected': 'اختر ما تريد حذفه أولاً.',
-    'healthFeedbackTooSoon': 'يمكن طلب تحليل جديد مرة واحدة في اليوم.',
     'generic': 'حدث خطأ ما. حاول مرة أخرى.',
     'nameOrUsername': 'أدخل الاسم واللقب، أو اختر اسم مستخدم.',
     'copyFailed': 'تعذّر النسخ إلى الحافظة.',
@@ -829,6 +828,10 @@ const Map<String, dynamic> ar = {
     'storeManaged': 'تصل التحديثات عبر App Store',
   },
   'ai': {
+    'orderHelp': 'الأول يجيب عندما لا تختار. حرّك اتصالاتك لتحديد أيها.',
+    'first': 'يجيب افتراضياً',
+    'moveUp': 'تحريك لأعلى',
+    'moveDown': 'تحريك لأسفل',
     'generatedBy': 'تم إنشاؤه بواسطة {{connection}} في {{date}}',
     'deleteFeedback': 'حذف هذا التحليل',
     'deleteFeedbackConfirm': 'حذف هذا التحليل؟ لا يمكن استرجاعه - سيلزم طلب تحليل جديد.',

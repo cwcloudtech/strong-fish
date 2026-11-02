@@ -100,6 +100,7 @@ var routes = []struct{ method, path string }{
 	{"GET", "/v1/users/me/api-keys"},
 	{"GET", "/v1/users/me/ai-connections"},
 	{"POST", "/v1/users/me/ai-connections"},
+	{"PUT", "/v1/users/me/ai-connections/order"},
 	{"PUT", "/v1/users/me/ai-connections/ai-1"},
 	{"DELETE", "/v1/users/me/ai-connections/ai-1"},
 	{"GET", "/v1/users/me/ai-connections/ai-1/shares"},

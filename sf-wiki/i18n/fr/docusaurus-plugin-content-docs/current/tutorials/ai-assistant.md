@@ -29,6 +29,17 @@ votre coach vous a prêtée - on vous demande laquelle dépenser : un sélecteur
 au-dessus du chat, et un menu sur chaque bouton IA. L'application ne devine
 jamais quand il y a un choix, et ne demande jamais quand il n'y en a pas.
 
+### Laquelle répond par défaut
+
+Vos connexions forment une liste, et **la première répond** quand vous ne
+choisissez pas - c'est aussi la première ligne du menu de chaque bouton IA.
+Les flèches à côté de chacune la déplacent ; une connexion qu'on vous a
+partagée se range à la fin et reste où son propriétaire l'a mise.
+
+Une connexion que vous venez d'ajouter va en bas de liste : coller une clé ne
+change donc jamais en douce la souscription sur laquelle partent vos
+questions.
+
 ### La prêter à d'autres membres
 
 L'icône de groupe à côté d'une connexion ouvre sa liste d'accès. Les personnes que vous y ajoutez peuvent **poser des questions avec, et rien d'autre** : elles ne voient jamais la clé, ne peuvent pas modifier la connexion ni la repartager. Révoquer prend effet immédiatement.
@@ -108,7 +119,14 @@ Sur l'écran **Données santé**, sous les graphiques, le même bouton lit ce qu
 
 Quatre-vingt-dix jours parce que la question est une direction plutôt qu'une journée : quelles semaines ont été chargées, lesquelles calmes, si les valeurs de repos dérivent.
 
-Elle peut être demandée **une fois par jour**. Les chiffres sous-jacents ne bougent pas plus souvent, et le bouton indique quand la prochaine sera possible au lieu de refuser au moment du clic. L'analyse est remplacée à chaque fois : une ancienne lecture d'une fenêtre glissante est périmée, pas un second document.
+Demandez-la **quand vous voulez** et, comme pour les boutons IA d'une séance,
+c'est le bouton qui vous demande **quelle souscription** la produit lorsque
+vous en avez plusieurs.
+
+Chaque analyse **remplace** la précédente, au lieu de s'empiler comme celles
+d'une séance : ce qu'elle décrit est une fenêtre qui se déplace, donc une
+ancienne lecture est périmée plutôt qu'un second avis. La ligne en dessous
+indique quelle souscription a produit celle que vous lisez, et quand.
 
 ## Ce qui est dit au modèle
 

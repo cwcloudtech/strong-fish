@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"strong-fish-api/internal/ai"
 	"strong-fish-api/internal/devicelink"
@@ -16,20 +15,12 @@ import (
 	"strong-fish-api/internal/templates"
 )
 
-// How long a window the model is shown, and how often it may be asked.
+// How long a window the model is shown.
 //
 // Ninety days because that is both the provider's own ceiling and the span a
 // trend is visible over: a fortnight of steps says what last week was like, a
 // quarter says where somebody is going.
-//
-// A day between readings because the data underneath moves once a day at
-// most. Asking again an hour later spends tokens to be told the same thing,
-// and a button that can be pressed forty times is one somebody will press
-// forty times.
-const (
-	healthFeedbackDays = 90
-	healthFeedbackWait = 24 * time.Hour
-)
+const healthFeedbackDays = 90
 
 // HealthFeedback is the stored reading of the member's health data.
 func (h *DeviceHandler) HealthFeedback(w http.ResponseWriter, r *http.Request) {
@@ -45,12 +36,10 @@ func (h *DeviceHandler) HealthFeedback(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, withNextAt(feedback))
+	writeJSON(w, http.StatusOK, feedback)
 }
 
-// DeleteHealthFeedback removes it. Asking for another one still waits out the
-// day: the rate limit is on the asking, not on what is stored, or deleting
-// would be the way around it.
+// DeleteHealthFeedback removes it.
 func (h *DeviceHandler) DeleteHealthFeedback(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
@@ -66,6 +55,12 @@ func (h *DeviceHandler) DeleteHealthFeedback(w http.ResponseWriter, r *http.Requ
 }
 
 // GenerateHealthFeedback asks the model to read the last ninety days.
+//
+// Asked for as often as the member likes, through whichever subscription they
+// pick on the button. The reading replaces the one before it rather than
+// joining it: the subject is a rolling ninety-day window, so an older reading
+// of it is not a second opinion but a description of a window that has
+// moved.
 //
 // What it is shown is the member's own health sheet, rendered as markdown -
 // the same document the export produces, from the same tables. One
@@ -86,25 +81,6 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 	if !provider.Enabled() {
 		writeError(w, http.StatusNotImplemented,
 			"This integration is not enabled on this server", CodeDeviceUnavailable)
-		return
-	}
-
-	// The wait, before anything is fetched or spent.
-	stored, err := h.ai.connections.FindHealthFeedback(r.Context(), userID, provider.Name())
-	switch {
-	case err == nil:
-		if next := stored.UpdatedAt.Add(healthFeedbackWait); time.Now().Before(next) {
-			// The refusal carries the reading it is refusing to replace, so a
-			// client that asked too early can simply show what it already has.
-			writeJSON(w, http.StatusTooManyRequests, healthFeedbackTooSoon{
-				Message:  "A new reading can be asked for once a day",
-				I18nCode: CodeHealthFeedbackTooSoon,
-				Feedback: withNextAt(stored),
-			})
-			return
-		}
-	case !errors.Is(err, store.ErrNotFound):
-		writeStoreError(w, err)
 		return
 	}
 
@@ -159,23 +135,7 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, withNextAt(saved))
-}
-
-// healthFeedbackTooSoon is the refusal body: an error, plus the reading that
-// already exists.
-type healthFeedbackTooSoon struct {
-	Message  string                `json:"message"`
-	I18nCode string                `json:"i18n_code"`
-	Feedback models.HealthFeedback `json:"feedback"`
-}
-
-// withNextAt fills in when another reading may be asked for, so a client can
-// say "tomorrow at six" rather than only discovering the refusal by pressing
-// the button.
-func withNextAt(feedback models.HealthFeedback) models.HealthFeedback {
-	feedback.NextAt = feedback.UpdatedAt.Add(healthFeedbackWait)
-	return feedback
+	writeJSON(w, http.StatusCreated, saved)
 }
 
 // LastDay is the member's last twenty-four hours of health data, as markdown,

@@ -39,18 +39,30 @@ class AiConnectionsSection extends ConsumerWidget {
             ),
             error: (error, _) => Text(ref.read(tErrorProvider)(error),
                 style: TextStyle(color: AppColors.of(context).danger)),
-            data: (list) => Column(children: [
+            data: (list) {
+              // The member's own, in order. The ones shared with them follow
+              // and have no arrows: the owner decides where those sit.
+              final mine = list.where((connection) => connection.ownerId == me).toList();
+              return Column(children: [
               if (list.isEmpty)
                 Align(
                   alignment: AlignmentDirectional.centerStart,
                   child: Text(t('ai.noConnections'),
                       style: Theme.of(context).textTheme.bodySmall),
                 ),
+              if (mine.length > 1)
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Text(t('ai.orderHelp'), style: Theme.of(context).textTheme.bodySmall),
+                ),
               for (final connection in list)
                 _ConnectionTile(
                   connection: connection,
                   mine: connection.ownerId == me,
                   providers: providers,
+                  position: mine.indexWhere((candidate) => candidate.id == connection.id),
+                  of: mine.length,
+                  onMove: (by) => _move(context, ref, mine, connection.id, by),
                 ),
               const SizedBox(height: 8),
               Align(
@@ -61,11 +73,33 @@ class AiConnectionsSection extends ConsumerWidget {
                   label: Text(t('ai.addConnection')),
                 ),
               ),
-            ]),
+            ]);
+            },
           ),
         ]),
       ),
     );
+  }
+}
+
+/// Moving one is a swap with its neighbour, sent as the whole order: the API
+/// takes a list, so there is one way for the order to be wrong rather than
+/// two.
+Future<void> _move(BuildContext context, WidgetRef ref, List<AiConnection> mine,
+    String connectionId, int by) async {
+  final ids = [for (final connection in mine) connection.id];
+  final from = ids.indexOf(connectionId);
+  final to = from + by;
+  if (from < 0 || to < 0 || to >= ids.length) return;
+
+  final messenger = ScaffoldMessenger.of(context);
+  ids[from] = ids[to];
+  ids[to] = connectionId;
+  try {
+    await ref.read(apiProvider).reorderAiConnections(ids);
+    ref.invalidate(aiConnectionsProvider);
+  } catch (error) {
+    messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
   }
 }
 
@@ -88,10 +122,19 @@ class _ConnectionTile extends ConsumerWidget {
   final bool mine;
   final List<AiProvider> providers;
 
+  /// Where it sits in the member's own order, and how many there are - what
+  /// the arrows need to know when to stop.
+  final int position;
+  final int of;
+  final void Function(int by) onMove;
+
   const _ConnectionTile({
     required this.connection,
     required this.mine,
     required this.providers,
+    required this.position,
+    required this.of,
+    required this.onMove,
   });
 
   @override
@@ -108,10 +151,23 @@ class _ConnectionTile extends ConsumerWidget {
       subtitle: Text([
         provider,
         if (connection.model.isNotEmpty) connection.model,
+        if (mine && position == 0) t('ai.first'),
         if (!mine) t('ai.sharedBy', {'name': connection.ownerName}),
       ].join(' · ')),
       trailing: mine
           ? Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                onPressed: position <= 0 ? null : () => onMove(-1),
+                tooltip: t('ai.moveUp'),
+                icon: const Icon(Icons.arrow_upward, size: 20),
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                onPressed: position < 0 || position >= of - 1 ? null : () => onMove(1),
+                tooltip: t('ai.moveDown'),
+                icon: const Icon(Icons.arrow_downward, size: 20),
+                visualDensity: VisualDensity.compact,
+              ),
               IconButton(
                 onPressed: () => _shares(context, ref, connection),
                 tooltip: t('ai.shares'),

@@ -275,6 +275,10 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 				r.Route("/me/ai-connections", func(r chi.Router) {
 					r.Get("/", h.AI.List)
 					r.Post("/", h.AI.Create)
+					// Which one is first is a real setting - it decides
+					// which subscription answers when nobody picks - so it
+					// has its own endpoint rather than riding on an edit.
+					r.Put("/order", h.AI.Reorder)
 
 					r.Route("/{connectionId}", func(r chi.Router) {
 						r.Put("/", h.AI.Update)

@@ -243,12 +243,6 @@ function HealthFeedbackPanel({ provider }) {
     try {
       setFeedback(await devicesApi.generateHealthFeedback(provider, connectionId));
     } catch (err) {
-      // Too soon: the refusal carries the reading it would not replace, so
-      // the panel shows that rather than losing it.
-      const refused = err?.response?.data;
-      if (refused?.i18n_code === "errors.healthFeedbackTooSoon" && refused.feedback) {
-        setFeedback(refused.feedback);
-      }
       toastError(err);
     } finally {
       setBusy(false);
@@ -267,11 +261,6 @@ function HealthFeedbackPanel({ provider }) {
     }
   };
 
-  // The wait, as the API counts it: the button says when it comes back rather
-  // than refusing when pressed.
-  const nextAt = feedback?.nextAt ? new Date(feedback.nextAt) : null;
-  const waiting = nextAt ? nextAt > new Date() : false;
-
   return (
     <div className="sf-ai-feedback" style={{ marginTop: "0.8rem" }}>
       <div className="sf-row-between">
@@ -279,17 +268,15 @@ function HealthFeedbackPanel({ provider }) {
           <FiCpu /> {t("devices.aiFeedback")}
         </strong>
         <div className="sf-row" style={{ gap: "0.3rem" }}>
+          {/* Asked for as often as the member likes, through whichever
+              subscription they pick: the reading replaces the one before it,
+              since the ninety days it describes have moved on. */}
           <AskButton
             connections={connections}
             onAsk={generate}
             busy={busy}
-            disabled={waiting}
             label={feedback ? t("devices.aiFeedbackAgain") : t("devices.aiFeedbackAsk")}
-            tooltip={
-              waiting
-                ? t("devices.aiFeedbackNext", { date: nextAt.toLocaleString() })
-                : t("devices.aiFeedbackHelp")
-            }
+            tooltip={t("devices.aiFeedbackHelp")}
           />
           {feedback ? (
             <button
