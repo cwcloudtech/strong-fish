@@ -622,6 +622,28 @@ retyping a key they can no longer read.
 
 `SF_MAX_VIDEO_SIZE` caps one upload (20MB by default).
 
+### A media link outlives the storage it names
+
+The address written into a post - `/v1/media/{storageId}/{key}` - names a row
+somebody can delete, while the object it points at stays in the bucket. Since
+the form takes a key rather than editing one, **rotating a key is a delete
+followed by an add**, and that alone used to break every video already posted:
+the id in the link no longer existed, so the API answered "this file is not
+available" for a file that was sitting exactly where it had always been.
+
+So the link's storage is a starting point rather than the answer. When it is
+gone, or when its credentials no longer open the object, the API tries the
+buckets the **uploader has registered now**: the same bucket at the same host
+when the old row is still there to compare against (its key was rotated, and a
+different bucket of theirs would not hold the object anyway), and every S3
+target of theirs when it is not, since one of them is where the file went.
+
+Nothing about who may watch changes - that is still the uploader's profile
+visibility, or an explicit grant on the storage - and no bucket is read that
+the uploader did not register themselves. A member with nothing registered any
+more gets the same "not available" as a deleted object, because to a reader it
+is the same thing.
+
 ## The AI assistant
 
 Nothing here ships a model. A member connects **their own account** at a
