@@ -340,6 +340,14 @@ type chatPayload struct {
 	// ConnectionID is which subscription to spend. Blank is the member's
 	// default - the picker only matters to somebody who has more than one.
 	ConnectionID string `json:"connectionId"`
+	// Model asks that subscription for a particular model, rather than the
+	// one it is configured with: asking a bigger model the same question is
+	// half of what a picker above a chat is for. Blank uses the connection's.
+	//
+	// Not checked against the provider catalogue, for the reason the
+	// connection form does not check it either: those names are suggestions,
+	// and a model released yesterday should work yesterday.
+	Model string `json:"model"`
 }
 
 type chatResponse struct {
@@ -417,6 +425,7 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 			"\n\n" + LanguageRule(locale),
 		Messages:  history,
 		MaxTokens: p.Settings.MaxTokens,
+		Model:     p.Model,
 	})
 	if !ok {
 		return
@@ -438,7 +447,8 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	connection, _ := h.usable(r, userID, p.ConnectionID)
 	if err := h.connections.AppendExchange(r.Context(), conversation.ID, models.AIExchange{
 		Question: question, Answer: answer.Message,
-		Provider: connection.Provider, Model: answer.Model, Usage: answer.Usage,
+		Provider: connection.Provider, Model: answeredWith(answer.Model, p.Model, connection.Model),
+		Connection: connection.Name, Usage: answer.Usage,
 	}); err != nil {
 		writeStoreError(w, err)
 		return
@@ -448,6 +458,22 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		Status: "ok", Message: answer.Message, Usage: answer.Usage, Model: answer.Model,
 		ConversationID: conversation.ID, Title: conversation.Title,
 	})
+}
+
+// answeredWith is which model to record against an answer: the one the
+// provider reported, then the one that was asked for, then the connection's.
+//
+// Three because they disagree: Anthropic echoes the model back, an
+// OpenAI-compatible gateway may answer with its own routing name, and some
+// report nothing at all - and an answer with no model against it is one
+// nobody can tell apart from the next.
+func answeredWith(reported, asked, configured string) string {
+	for _, candidate := range []string{reported, asked, configured} {
+		if strings.TrimSpace(candidate) != "" {
+			return strings.TrimSpace(candidate)
+		}
+	}
+	return ""
 }
 
 // historyOf flattens a stored thread into turns, bounded the same way a

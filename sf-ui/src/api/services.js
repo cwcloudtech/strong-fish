@@ -214,8 +214,10 @@ export const ai = {
   // starts one and comes back with its id.
   // connectionId says which subscription to spend; blank is the member's
   // default, which is what somebody with one key always wants.
-  ask: (message, conversationId, connectionId) =>
-    body(client.post("/ai/chat", { message, conversationId, connectionId })),
+  // model asks that subscription for a particular model rather than the one
+  // it is configured with; blank uses the connection's own.
+  ask: (message, conversationId, connectionId, model) =>
+    body(client.post("/ai/chat", { message, conversationId, connectionId, model })),
 
   conversations: () => body(client.get("/ai/conversations")),
   conversation: (conversationId) => body(client.get(`/ai/conversations/${conversationId}`)),

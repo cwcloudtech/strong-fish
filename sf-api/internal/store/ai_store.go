@@ -551,14 +551,16 @@ func (s *AIStore) conversationBy(ctx context.Context, where string, withToken bo
 			return models.AIConversation{}, err
 		}
 		var meta struct {
-			Provider string         `json:"provider,omitempty"`
-			Model    string         `json:"model,omitempty"`
-			Usage    map[string]any `json:"usage,omitempty"`
+			Provider   string         `json:"provider,omitempty"`
+			Model      string         `json:"model,omitempty"`
+			Connection string         `json:"connection,omitempty"`
+			Usage      map[string]any `json:"usage,omitempty"`
 		}
 		if len(exchangeRaw) > 0 {
 			_ = json.Unmarshal(exchangeRaw, &meta)
 		}
 		exchange.Provider, exchange.Model, exchange.Usage = meta.Provider, meta.Model, meta.Usage
+		exchange.Connection = meta.Connection
 		conversation.Exchanges = append(conversation.Exchanges, exchange)
 	}
 	conversation.Count = len(conversation.Exchanges)
@@ -582,7 +584,8 @@ func (s *AIStore) CreateConversation(ctx context.Context, userID, title string) 
 // just used so the list orders by real activity.
 func (s *AIStore) AppendExchange(ctx context.Context, conversationID string, exchange models.AIExchange) error {
 	data, err := json.Marshal(map[string]any{
-		"provider": exchange.Provider, "model": exchange.Model, "usage": exchange.Usage,
+		"provider": exchange.Provider, "model": exchange.Model,
+		"connection": exchange.Connection, "usage": exchange.Usage,
 	})
 	if err != nil {
 		return err

@@ -68,6 +68,10 @@ type Request struct {
 	// is being asked now.
 	Messages  []models.ChatMessage
 	MaxTokens int
+	// Model overrides the one the connection is set to, for a caller that
+	// picks per question - the chat, where asking a bigger model the same
+	// thing is half of what the picker is for. Blank uses the connection's.
+	Model string
 }
 
 // Response is one answer.
@@ -161,6 +165,9 @@ func (c *Client) Ask(ctx context.Context, connection models.AIConnection, reques
 		request.MaxTokens = defaultMaxTokens
 	}
 	model := strings.TrimSpace(connection.Model)
+	if asked := strings.TrimSpace(request.Model); asked != "" {
+		model = asked
+	}
 
 	// The format comes from the provider catalogue (see the ai_providers
 	// table), so a new OpenAI-compatible service is a row rather than a case

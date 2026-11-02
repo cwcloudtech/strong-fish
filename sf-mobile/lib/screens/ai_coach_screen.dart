@@ -9,6 +9,7 @@ import '../theme.dart';
 import '../widgets/common.dart';
 import '../widgets/ai_ask_button.dart';
 import '../widgets/export_menu.dart';
+import '../widgets/long_date.dart';
 import '../widgets/markdown_text.dart';
 
 /// The member's threads with the AI coach.
@@ -205,9 +206,12 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
   bool _asking = false;
   bool _exporting = false;
   String _error = '';
-  // Which subscription the next question is spent on. The picker is only
-  // drawn when there is a choice to make - one key is never worth a control.
+  // Which subscription the next question is spent on, and which model it is
+  // asked for. The subscription picker is only drawn when there is a choice
+  // to make; the model one as soon as there is a subscription, because the
+  // same question put to a bigger model is half of what it is for.
   String _connectionId = '';
+  String _model = '';
 
   @override
   void initState() {
@@ -257,7 +261,9 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
 
     try {
       final answer = await ref.read(apiProvider).askAi(question,
-          conversationId: _conversation?.id ?? '', connectionId: _connectionId);
+          conversationId: _conversation?.id ?? '',
+          connectionId: _connectionId,
+          model: _model);
       await _load(answer['conversationId']?.toString() ?? _conversation?.id ?? '');
     } catch (error) {
       if (mounted) {
@@ -359,9 +365,12 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
     final conversation = _conversation;
     final exchanges = conversation?.exchanges ?? const <AiExchange>[];
     final connections = ref.watch(aiConnectionsProvider).valueOrNull ?? const <AiConnection>[];
+    final providers = ref.watch(aiProvidersProvider).valueOrNull ?? const <AiProvider>[];
     if (_connectionId.isEmpty && connections.isNotEmpty) {
       _connectionId = connections.first.id;
+      _model = connections.first.model;
     }
+    final models = _modelsFor(connections, providers, _connectionId);
 
     return Scaffold(
       appBar: AppBar(
@@ -390,25 +399,61 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
       body: Column(children: [
         // The subscription this thread's next question is spent on, the way
         // ~/aristochat puts its agent picker above the conversation.
-        if (connections.length > 1)
+        if (connections.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: DropdownButtonFormField<String>(
-              initialValue: _connectionId,
-              decoration: InputDecoration(
-                labelText: t('ai.connection'),
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              items: [
-                for (final connection in connections)
-                  DropdownMenuItem(
-                    value: connection.id,
-                    child: Text(aiConnectionLabel(connection), overflow: TextOverflow.ellipsis),
+            child: Row(children: [
+              if (connections.length > 1)
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _connectionId,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: t('ai.connection'),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: [
+                      for (final connection in connections)
+                        DropdownMenuItem(
+                          value: connection.id,
+                          child:
+                              Text(aiConnectionLabel(connection), overflow: TextOverflow.ellipsis),
+                        ),
+                    ],
+                    // The model moves with the subscription: a model name
+                    // belongs to the provider that serves it, and carrying
+                    // one across would ask Mistral for a Claude.
+                    onChanged: (value) => setState(() {
+                      _connectionId = value ?? '';
+                      _model = connections
+                          .firstWhere((connection) => connection.id == _connectionId,
+                              orElse: () => const AiConnection())
+                          .model;
+                    }),
                   ),
-              ],
-              onChanged: (value) => setState(() => _connectionId = value ?? ''),
-            ),
+                ),
+              if (connections.length > 1) const SizedBox(width: 8),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: models.contains(_model) ? _model : null,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: t('ai.model'),
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: [
+                    for (final name in models)
+                      DropdownMenuItem(
+                        value: name,
+                        child: Text(name, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _model = value ?? ''),
+                ),
+              ),
+            ]),
           ),
         if (_error.isNotEmpty)
           Padding(
@@ -428,7 +473,18 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
                   children: [
                     for (final exchange in exchanges) ...[
                       _Bubble(text: exchange.question, mine: true),
-                      _Bubble(text: exchange.answer, mine: false),
+                      _Bubble(
+                        text: exchange.answer,
+                        mine: false,
+                        // Which model answered, and when: a thread can switch
+                        // model between turns.
+                        credit: exchange.credited.isEmpty
+                            ? ''
+                            : t('ai.generatedBy', {
+                                'connection': exchange.credited,
+                                'date': longDate(ref.watch(localeProvider), exchange.createdAt),
+                              }),
+                      ),
                     ],
                     if (_pending.isNotEmpty) ...[
                       _Bubble(text: _pending, mine: true),
@@ -478,7 +534,11 @@ class _Bubble extends StatelessWidget {
   final String text;
   final bool mine;
 
-  const _Bubble({required this.text, required this.mine});
+  /// What produced the answer and when, under it. Empty on a question, and
+  /// on an answer from before any of this was recorded.
+  final String credit;
+
+  const _Bubble({required this.text, required this.mine, this.credit = ''});
 
   @override
   Widget build(BuildContext context) {
@@ -494,8 +554,45 @@ class _Bubble extends StatelessWidget {
           color: mine ? colors.primaryTint : colors.backgroundMuted,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: mine ? Text(text) : MarkdownText(text),
+        child: mine
+            ? Text(text)
+            : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                MarkdownText(text),
+                if (credit.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    credit,
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(fontStyle: FontStyle.italic, color: colors.textMuted),
+                  ),
+                ],
+              ]),
       ),
     );
   }
+}
+
+/// The models to offer for the picked subscription: its own first, then the
+/// ones its provider is known to serve.
+///
+/// Its own leads because that is what it answers with unless told otherwise,
+/// and it may well be a name the catalogue has never heard of - a gateway's
+/// routing name, a model released last week. A list that dropped it could not
+/// select what is already configured.
+List<String> _modelsFor(
+    List<AiConnection> connections, List<AiProvider> providers, String connectionId) {
+  final connection = connections.isEmpty
+      ? const AiConnection()
+      : connections.firstWhere((candidate) => candidate.id == connectionId,
+          orElse: () => connections.first);
+  final catalogue = providers.firstWhere((provider) => provider.name == connection.provider,
+      orElse: () => const AiProvider());
+
+  return <String>{
+    if (connection.model.isNotEmpty) connection.model,
+    ...catalogue.models,
+  }.toList();
 }

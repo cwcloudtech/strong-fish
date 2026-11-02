@@ -50,6 +50,19 @@ La fiche est reconstruite à chaque question plutôt qu'inscrite dans la
 conversation : un vieux fil ne répond donc jamais avec un maximum que vous
 avez depuis dépassé.
 
+### Quelle IA répond
+
+Au-dessus du fil, deux sélecteurs : **quelle souscription** paie (seulement si
+vous en avez plusieurs) et **quel modèle** elle interroge. La liste des
+modèles est celle de votre fournisseur, et le modèle configuré sur la
+connexion est celui par défaut - poser la même question à un plus gros modèle
+tient donc en un clic, sans seconde souscription à configurer.
+
+Vous pouvez changer en cours de conversation : c'est pourquoi **chaque réponse
+indique ce qui l'a produite et quand**, en petites italiques en dessous :
+*Généré par claude-opus-5-5 le 2 novembre 2026*. La conversation exportée
+porte la même ligne sous chaque réponse.
+
 Chaque échange est conservé : la liste de gauche est votre historique, pas celui de cet onglet. Pour chaque conversation vous pouvez :
 
 - la **renommer** - le titre reprend d'abord votre première question ;
