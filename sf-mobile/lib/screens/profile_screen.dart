@@ -9,6 +9,7 @@ import '../models/models.dart';
 import '../providers/app_update_provider.dart';
 import '../i18n/app_localizations.dart';
 import '../providers/providers.dart';
+import '../widgets/ai_connections.dart';
 import '../widgets/common.dart';
 import '../widgets/profile_badges.dart';
 import '../widgets/social_share.dart';
@@ -205,6 +206,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
           ),
+
+        // The models this account can ask, and who else may spend them.
+        const AiConnectionsSection(),
 
         // Where else to find this lifter. The fields are generated from the
         // same table as the links, so a network added there appears in both.

@@ -1,8 +1,10 @@
 import { Fragment, useState } from "react";
-import { FiCheck, FiChevronDown, FiChevronRight, FiEdit2, FiX } from "react-icons/fi";
+import { FiCheck, FiChevronDown, FiChevronRight, FiCpu, FiEdit2, FiTrash2, FiX } from "react-icons/fi";
+import ReactMarkdown from "react-markdown";
 
 import SetLogForm from "./SetLogForm";
 import Select from "../common/Select";
+import Tooltip from "../common/Tooltip";
 import { formatReps } from "../../utils/setFormat";
 import { useI18n } from "../../i18n/I18nContext";
 import { sessionTitle } from "../../utils/sessionTitle";
@@ -60,6 +62,10 @@ export default function SessionDay({
   onDayDone,
   onExport,
   exporting = false,
+  feedback = null,
+  onGenerateFeedback,
+  onDeleteFeedback,
+  feedbackBusy = false,
 }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(defaultOpen);
@@ -332,8 +338,82 @@ export default function SessionDay({
               })}
             </tbody>
           </table>
+
+          {onGenerateFeedback ? (
+            <SessionFeedback
+              ready={allDone}
+              feedback={feedback}
+              busy={feedbackBusy}
+              onGenerate={() => onGenerateFeedback(day)}
+              onDelete={() => onDeleteFeedback(day)}
+            />
+          ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * What the AI made of the session, and the button that asks for it.
+ *
+ * The button is off until every set is logged, the way Strava will not analyse
+ * an activity that is still recording: a reading of three sets out of eight is
+ * a reading of a session that did not happen that way, and a member would take
+ * it for a verdict on their training rather than on an unfinished record of
+ * it. The tooltip says so, rather than leaving a dead button to puzzle over.
+ *
+ * Once asked for, it is kept - by the member, by their coach, and in the
+ * exports. Deleting it is how you ask for another one.
+ */
+function SessionFeedback({ ready, feedback, busy, onGenerate, onDelete }) {
+  const { t } = useI18n();
+
+  if (feedback) {
+    return (
+      <div className="sf-ai-feedback">
+        <div className="sf-row-between">
+          <strong>
+            <FiCpu /> {t("session.aiFeedback")}
+          </strong>
+          <button
+            type="button"
+            className="sf-button-ghost sf-button-sm"
+            onClick={onDelete}
+            disabled={busy}
+            aria-label={t("session.aiFeedbackDelete")}
+            title={t("session.aiFeedbackDelete")}
+          >
+            <FiTrash2 />
+          </button>
+        </div>
+        <div className="sf-bubble-markdown">
+          <ReactMarkdown>{feedback.content}</ReactMarkdown>
+        </div>
+        <p className="sf-muted" style={{ fontSize: "0.78rem", marginBottom: 0 }}>
+          {t("session.aiFeedbackBy", {
+            name: feedback.authorName,
+            model: feedback.model || feedback.provider || "",
+          })}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sf-ai-feedback">
+      <Tooltip label={ready ? t("session.aiFeedbackHelp") : t("session.aiFeedbackLocked")}>
+        <button
+          type="button"
+          className="sf-button sf-button-secondary sf-button-sm"
+          onClick={onGenerate}
+          disabled={!ready || busy}
+        >
+          {busy ? <span className="sf-button-spinner" aria-hidden="true" /> : <FiCpu />}{" "}
+          {t("session.aiFeedback")}
+        </button>
+      </Tooltip>
+      {!ready ? <span className="sf-muted">{t("session.aiFeedbackLocked")}</span> : null}
     </div>
   );
 }

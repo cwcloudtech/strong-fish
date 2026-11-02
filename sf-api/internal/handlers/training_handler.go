@@ -19,12 +19,22 @@ type TrainingHandler struct {
 	clubs    *store.ClubStore
 	users    *store.UserStore
 	sets     *ProgramHandler
+	// aiStore and ai are for the model's reading of a finished session. The
+	// handler is reused rather than its logic copied: resolving whose
+	// connection pays for a question, and what to say when the provider
+	// refuses, is the same answer here as in the chat.
+	aiStore *store.AIStore
+	ai      *AIHandler
 }
 
 // NewTrainingHandler reuses ProgramHandler's set resolution rather than
 // duplicating it - both views must agree on what a set's load is.
-func NewTrainingHandler(programs *store.ProgramStore, clubs *store.ClubStore, users *store.UserStore, sets *ProgramHandler) *TrainingHandler {
-	return &TrainingHandler{programs: programs, clubs: clubs, users: users, sets: sets}
+func NewTrainingHandler(programs *store.ProgramStore, clubs *store.ClubStore, users *store.UserStore,
+	sets *ProgramHandler, aiStore *store.AIStore, aiHandler *AIHandler) *TrainingHandler {
+	return &TrainingHandler{
+		programs: programs, clubs: clubs, users: users, sets: sets,
+		aiStore: aiStore, ai: aiHandler,
+	}
 }
 
 // ListAssignments returns the programs the caller has been given.
@@ -45,6 +55,11 @@ type assignmentResponse struct {
 	Program       models.Program      `json:"program"`
 	Days          []models.ProgramDay `json:"days"`
 	MissingOneRMs []models.Exercise   `json:"missingOneRms"`
+	// Feedback is what the AI already said about these sessions, by day id.
+	// Sent with the block rather than fetched per session: a screen drawing
+	// twelve weeks would otherwise ask forty times to find the three readings
+	// that exist.
+	Feedback map[string]models.SessionFeedback `json:"feedback,omitempty"`
 }
 
 // authorizeAssignment loads an assignment the caller is allowed to see: their
@@ -123,8 +138,15 @@ func (h *TrainingHandler) Get(w http.ResponseWriter, r *http.Request) {
 		days[i].Sets = byDay[days[i].ID]
 	}
 
+	feedback, err := h.aiStore.FeedbackForAssignment(r.Context(), assignment.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, assignmentResponse{
 		ProgramAssignment: assignment, Program: program, Days: days, MissingOneRMs: missing,
+		Feedback: feedback,
 	})
 }
 

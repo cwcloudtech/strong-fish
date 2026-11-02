@@ -84,6 +84,7 @@ func main() {
 	storageStore := store.NewStorageStore(pool)
 	messageStore := store.NewMessageStore(pool)
 	deviceLinkStore := store.NewDeviceLinkStore(pool)
+	aiStore := store.NewAIStore(pool)
 
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
 	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
@@ -150,6 +151,8 @@ func main() {
 	}
 	defer shutdown(observability.Shutdown, "metrics")
 
+	aiHandler := handlers.NewAIHandler(aiStore, userStore, cfg.UIBaseURL)
+
 	api := router.New(router.Handlers{
 		User: handlers.NewUserHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.MaxImageSize,
 			cfg.ActivationMode, mailer, cfg.APIBaseURL, cfg.UIBaseURL, cfg.ConfirmationEmailTTL),
@@ -159,7 +162,7 @@ func main() {
 		Club:     handlers.NewClubHandler(clubStore, userStore, mailer, cfg.MaxImageSize, cfg.UIBaseURL),
 		Exercise: handlers.NewExerciseHandler(exerciseStore, oneRMStore, userStore),
 		Program:  programHandler,
-		Training: handlers.NewTrainingHandler(programStore, clubStore, userStore, programHandler),
+		Training: handlers.NewTrainingHandler(programStore, clubStore, userStore, programHandler, aiStore, aiHandler),
 		Social: handlers.NewSocialHandler(socialStore, clubStore, userStore, oneRMStore,
 			messageStore, cfg.MaxImageSize),
 		Profile: profileHandler,
@@ -181,8 +184,9 @@ func main() {
 		Calendar: handlers.NewCalendarHandler(userStore, eventStore, clubStore, cfg.APIBaseURL),
 		Search:   handlers.NewSearchHandler(userStore, clubStore, profileHandler),
 		Strength: strengthHandler,
+		AI:       aiHandler,
 		Device: handlers.NewDeviceHandler(devices, deviceLinkStore, userStore, cfg.JWTSecret,
-			cfg.APIBaseURL, cfg.UIBaseURL),
+			cfg.APIBaseURL, cfg.UIBaseURL, aiHandler),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),
 		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, mailer, cfg.MaxImageSize, cfg.UIBaseURL),

@@ -310,6 +310,18 @@ final assignmentProvider =
   return ref.watch(apiProvider).assignment(assignmentId);
 });
 
+/// The member's threads with the AI coach, newest activity first.
+final aiConversationsProvider = FutureProvider<List<AiConversation>>((ref) async {
+  ref.watch(sessionProvider.select((session) => session.user?.id));
+  return ref.watch(apiProvider).aiConversations();
+});
+
+/// The connections they may spend: their own, and the ones shared with them.
+final aiConnectionsProvider = FutureProvider<List<AiConnection>>((ref) async {
+  ref.watch(sessionProvider.select((session) => session.user?.id));
+  return ref.watch(apiProvider).aiConnections();
+});
+
 final conversationsProvider = FutureProvider<List<Conversation>>((ref) async {
   return ref.watch(apiProvider).conversations();
 });

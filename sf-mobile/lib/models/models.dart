@@ -746,11 +746,16 @@ class AssignmentDetail {
   final Assignment assignment;
   final List<ProgramDay> days;
   final List<Exercise> missingOneRms;
+  /// What the AI already said about these sessions, by day id. Sent with the
+  /// block rather than fetched per session, so a twelve-week program does not
+  /// cost forty requests to find the three readings that exist.
+  final Map<String, SessionFeedback> feedback;
 
   const AssignmentDetail({
     required this.assignment,
     this.days = const [],
     this.missingOneRms = const [],
+    this.feedback = const {},
   });
 
   factory AssignmentDetail.fromJson(Map<String, dynamic> json) => AssignmentDetail(
@@ -763,6 +768,11 @@ class AssignmentDetail {
             .whereType<Map<String, dynamic>>()
             .map(Exercise.fromJson)
             .toList(),
+        feedback: {
+          for (final entry in (json['feedback'] as Map? ?? const {}).entries)
+            entry.key.toString():
+                SessionFeedback.fromJson(entry.value is Map<String, dynamic> ? entry.value : const {}),
+        },
       );
 }
 
@@ -1390,4 +1400,216 @@ class Page<T> {
             .toList(),
         totalResults: _toInt(json['totalResults']),
       );
+}
+
+// --- the AI assistant ---
+
+/// One account's connection to a language model.
+///
+/// Shaped on a storage down to the sharing, because it is the same
+/// arrangement: an account holds a credential and decides who else may spend
+/// it. The key itself never leaves the server - [hasToken] is what a form
+/// needs to know, so it can offer to replace one rather than silently wiping
+/// it.
+class AiConnection {
+  final String id;
+  final String ownerId;
+  final String name;
+  final String provider;
+  final String baseUrl;
+  final String model;
+  final bool hasToken;
+  final String role;
+  final String ownerName;
+
+  const AiConnection({
+    this.id = '',
+    this.ownerId = '',
+    this.name = '',
+    this.provider = '',
+    this.baseUrl = '',
+    this.model = '',
+    this.hasToken = false,
+    this.role = '',
+    this.ownerName = '',
+  });
+
+  factory AiConnection.fromJson(Map<String, dynamic> json) => AiConnection(
+        id: _toString(json['id']),
+        ownerId: _toString(json['ownerId']),
+        name: _toString(json['name']),
+        provider: _toString(json['provider']),
+        baseUrl: _toString(json['baseUrl']),
+        model: _toString(json['model']),
+        hasToken: json['hasToken'] == true,
+        role: _toString(json['role']),
+        ownerName: _toString(json['ownerName']),
+      );
+}
+
+/// A provider this build knows how to talk to, with what it defaults to - so
+/// the form fills itself in as the member picks, rather than making them look
+/// the values up.
+class AiProvider {
+  final String name;
+  final String defaultUrl;
+  final String defaultModel;
+
+  const AiProvider({this.name = '', this.defaultUrl = '', this.defaultModel = ''});
+
+  factory AiProvider.fromJson(Map<String, dynamic> json) => AiProvider(
+        name: _toString(json['name']),
+        defaultUrl: _toString(json['defaultUrl']),
+        defaultModel: _toString(json['defaultModel']),
+      );
+}
+
+/// One line of a connection's access list, as its owner reads it.
+class AiGrant {
+  final String userId;
+  final String name;
+  final String handle;
+  final String role;
+
+  const AiGrant({this.userId = '', this.name = '', this.handle = '', this.role = ''});
+
+  factory AiGrant.fromJson(Map<String, dynamic> json) => AiGrant(
+        userId: _toString(json['userId']),
+        name: _toString(json['name']),
+        handle: _toString(json['handle']),
+        role: _toString(json['role']),
+      );
+}
+
+/// One question and the answer it got.
+class AiExchange {
+  final String id;
+  final String question;
+  final String answer;
+  final String provider;
+  final String model;
+  final DateTime createdAt;
+
+  const AiExchange({
+    this.id = '',
+    this.question = '',
+    this.answer = '',
+    this.provider = '',
+    this.model = '',
+    required this.createdAt,
+  });
+
+  factory AiExchange.fromJson(Map<String, dynamic> json) => AiExchange(
+        id: _toString(json['id']),
+        question: _toString(json['question']),
+        answer: _toString(json['answer']),
+        provider: _toString(json['provider']),
+        model: _toString(json['model']),
+        createdAt: _toDate(json['createdAt']),
+      );
+}
+
+/// A thread of exchanges: what the list shows, and what a thread holds.
+class AiConversation {
+  final String id;
+  final String title;
+  final bool shared;
+  final String shareUrl;
+  final int count;
+  final List<AiExchange> exchanges;
+  final DateTime updatedAt;
+
+  const AiConversation({
+    this.id = '',
+    this.title = '',
+    this.shared = false,
+    this.shareUrl = '',
+    this.count = 0,
+    this.exchanges = const [],
+    required this.updatedAt,
+  });
+
+  factory AiConversation.fromJson(Map<String, dynamic> json) => AiConversation(
+        id: _toString(json['id']),
+        title: _toString(json['title']),
+        shared: json['shared'] == true,
+        shareUrl: _toString(json['shareUrl']),
+        count: _toInt(json['count']),
+        exchanges: (json['exchanges'] as List? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(AiExchange.fromJson)
+            .toList(),
+        updatedAt: _toDate(json['updatedAt']),
+      );
+}
+
+/// What the model said about one training session, as stored.
+class SessionFeedback {
+  final String id;
+  final String dayId;
+  final String authorName;
+  final String content;
+  final String provider;
+  final String model;
+  final DateTime updatedAt;
+
+  const SessionFeedback({
+    this.id = '',
+    this.dayId = '',
+    this.authorName = '',
+    this.content = '',
+    this.provider = '',
+    this.model = '',
+    required this.updatedAt,
+  });
+
+  factory SessionFeedback.fromJson(Map<String, dynamic> json) => SessionFeedback(
+        id: _toString(json['id']),
+        dayId: _toString(json['dayId']),
+        authorName: _toString(json['authorName']),
+        content: _toString(json['content']),
+        provider: _toString(json['provider']),
+        model: _toString(json['model']),
+        updatedAt: _toDate(json['updatedAt']),
+      );
+}
+
+/// What the model said about the member's health data.
+///
+/// [nextAt] is when another reading may be asked for: the API rate-limits it
+/// to one a day, and a button that says when it comes back is better than one
+/// that only refuses when pressed.
+class HealthFeedback {
+  final String id;
+  final String source;
+  final String content;
+  final String provider;
+  final String model;
+  final int days;
+  final DateTime updatedAt;
+  final DateTime nextAt;
+
+  const HealthFeedback({
+    this.id = '',
+    this.source = '',
+    this.content = '',
+    this.provider = '',
+    this.model = '',
+    this.days = 0,
+    required this.updatedAt,
+    required this.nextAt,
+  });
+
+  factory HealthFeedback.fromJson(Map<String, dynamic> json) => HealthFeedback(
+        id: _toString(json['id']),
+        source: _toString(json['source']),
+        content: _toString(json['content']),
+        provider: _toString(json['provider']),
+        model: _toString(json['model']),
+        days: _toInt(json['days']),
+        updatedAt: _toDate(json['updatedAt']),
+        nextAt: _toDate(json['nextAt']),
+      );
+
+  bool get waiting => nextAt.isAfter(DateTime.now().toUtc());
 }

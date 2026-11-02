@@ -35,6 +35,13 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   posts are public or club-only, carry inline pictures, and embed the first URL
   in their text with a player - no separate link field to keep in step. Videos
   can be uploaded to the member's own bucket (see [Video uploads](#video-uploads)).
+* **An AI assistant, on your own key.** Connect an account at OpenAI, Mistral,
+  Anthropic or Gemini - with the address editable, so it can point at a local
+  LiteLLM or an Ollama - and lend it to other members the way you lend a
+  storage. It answers as a coach in a kept, shareable chat, reads a finished
+  session against the ones before it, and reads ninety days of health data once
+  a day. What it is told lives in markdown skills on the server
+  (see [The AI assistant](#the-ai-assistant)).
 * **A calendar.** Meets, club sessions and camps, subscribable from Outlook or
   Google Calendar (see [The calendar](#the-calendar)).
 * **Authentication.** Anyone can sign up - as an athlete, or as a coach, which
@@ -555,6 +562,15 @@ metrics through one collector, configured by `SF_OTEL_ENDPOINT` and
   pushed over OTLP when an endpoint is configured. Alongside the Go and process
   collectors there are request counts and durations, and gauges for accounts per
   role, clubs and programs.
+* **AI spend**: `strong_fish_ai_tokens_total` counts what the assistant costs,
+  labelled by `user` (who asked), `subscription` and `owner` (which connection
+  paid, and whose it is - they differ exactly when a lent key is being spent),
+  `provider`, `model`, `feature` (`chat`, `session`, `health`) and `kind`
+  (`input`, `output`, `cached`). Cached input is its own series because a
+  provider charges a fraction for it, and a bill that cannot tell it from
+  fresh input is one nobody can explain. Recorded in one place - the single
+  path every feature's question goes through - so no later caller can spend
+  somebody's tokens uncounted.
 
 The span, the access log line and the metric all use the **resolved chi route
 pattern**, not the raw path. The span has to be opened before the handler chain
@@ -604,6 +620,52 @@ the stored secret, which is what lets somebody change their bucket name without
 retyping a key they can no longer read.
 
 `SF_MAX_VIDEO_SIZE` caps one upload (20MB by default).
+
+## The AI assistant
+
+Nothing here ships a model. A member connects **their own account** at a
+provider and the API spends it on their behalf, which is why the connections
+are shaped on storages down to the sharing: an account holds a credential and
+decides who else may use it.
+
+A connection is a provider (the wire format: OpenAI's `/chat/completions`,
+Anthropic's `/messages`, Gemini's `generateContent`), an **editable** base URL,
+a model and a key. The URL is the point of the shape - picking Anthropic and
+aiming it at a LiteLLM on the next machine is a supported arrangement, not a
+workaround. The key is write-only: it is stored in the connection's JSONB and
+never sent back, and a client is told `hasToken` instead.
+
+Sharing grants one role, `user`: the right to spend the connection and nothing
+else. A coach buying one key for a roster is the arrangement this exists for,
+and a grant can never be edited, re-shared or read back into a key.
+
+Three things ask the model, and all three are rendered from the same tables the
+exports are (`internal/programsheet`), as markdown (`internal/programmd`):
+
+| Feature | What it is shown | Kept |
+| --- | --- | --- |
+| The coach chat | The thread so far, bounded to the last turns | Every exchange, as a conversation |
+| A session reading | The session's own feedback sheet - prescription, what was done, RPE, e1RM, the athlete's comments - plus the earlier sessions of the block | One per assignment and day |
+| A health reading | The member's health sheet: up to 90 days of steps and heart rate, and the latest body composition | One per member and source, replaced |
+
+The instructions are embedded markdown files
+(`internal/templates/*.skill.md`), not Go string literals: how a coach should
+answer is a judgement that gets revised, and revising it should not mean
+reading Go. The common skill is sent first, then the one for the task, then the
+language rule - the answer is always asked for in the **member's configured
+language**, English when nothing is set.
+
+Two refusals are deliberate and have their own codes. A session that is not
+finished cannot be read (`errors.sessionIncomplete`): a reading of three sets
+out of eight would be taken for a verdict on the training rather than on an
+incomplete record of it. A health reading can be asked for once a day
+(`errors.healthFeedbackTooSoon`, which carries the existing reading back), the
+underlying numbers moving that often at most.
+
+Conversations are stored in cwcloud's shape - a titled thread, one row per
+exchange - and can be shared by link. The token is the whole credential, so it
+is 32 random bytes on a partial unique index, the shared read discloses nothing
+about who owns the thread, and revoking it takes effect at once.
 
 ## The calendar
 

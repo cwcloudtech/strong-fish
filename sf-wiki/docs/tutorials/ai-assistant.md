@@ -1,0 +1,84 @@
+---
+id: ai-assistant
+title: AI assistant
+sidebar_position: 7
+---
+
+StrongFish can put your training in front of a language model: a chat that answers as a powerlifting coach, a reading of a session you have just finished, and a reading of the last ninety days of your health data.
+
+It does not come with a model. You connect **your own account** at a provider - the key is yours, the bill is yours - and the app spends it on your behalf. You can also lend your connection to other members, the way you lend a video storage.
+
+## Connecting a model
+
+In **Settings**, under **AI connections**, add one:
+
+| Field | What it is |
+| --- | --- |
+| **Name** | What you call it. "My Mistral key", "the club's gateway". |
+| **Provider** | OpenAI, Mistral, Anthropic (Claude) or Google Gemini. This is the wire format, not a commitment to the vendor. |
+| **Address** | Where the requests go. It is filled in for the provider you pick, and it is **editable** - point it at a LiteLLM, an Ollama, an OpenRouter account, anything that speaks the same protocol. |
+| **Model** | Which model to ask. A sensible one is filled in for you. |
+| **API key** | The key from your provider. It is kept on the server and never sent back to a browser or a phone - once saved, the field offers to replace it rather than showing it. |
+
+One connection is enough. If you have several, the app uses your own first.
+
+### Lending it to other members
+
+The group icon beside a connection opens its access list. Anybody you add there can **ask questions through it, and nothing else**: they never see the key, they cannot edit the connection, and they cannot share it on. Revoking takes effect immediately.
+
+This is how a coach pays for one key and lets a roster of athletes use it.
+
+## The coach chat
+
+**AI coach** in the menu. Ask anything about your lifting - programming, technique, recovery, meet day. The model answers in the language your account is set to.
+
+Every exchange is kept, so the list on the left is your history rather than this tab's. For each conversation you can:
+
+- **rename** it - the title starts as your first question;
+- **share a link** - anybody holding it can read the thread, the way a shared ChatGPT conversation works. Press the link button again to revoke it, and the link stops working at once;
+- **export** it as a PDF or a picture, to keep or to send on;
+- **delete** it - one at a time, several at once with the checkboxes, or the whole history.
+
+## A reading of one session
+
+Open an assigned program, open a session, and the **AI feedback** button sits under its sets.
+
+It is **off until the session is finished** - every set logged. A reading of three sets out of eight is a reading of a session that did not happen that way, and it would be taken for a verdict on your training rather than on an unfinished record of it.
+
+What the model is shown is the session sheet itself, the same document you can export: the prescription on the left, and what you actually did on the right - reps, load, RPE felt, estimated 1RM, and **your own comment on each set**. The sessions already completed earlier in the block go with it, so the reading can say whether you are progressing, holding or drifting rather than describing one day in isolation.
+
+The answer is **kept**: it costs money to produce, asking twice gives two different readings of the same session, and you should be able to come back to it in March. Deleting it is how you ask for a new one.
+
+### Your coach sees it
+
+If the program belongs to a club, the reading is part of the session's record - your coach reads it the way they read your comments.
+
+A coach can also **generate it for you**, from their own AI connection. That is what lets one subscription serve athletes who have none.
+
+### In the exports
+
+A session that has a reading carries it into the **PDF, the spreadsheet and the picture**, printed under the table it is about.
+
+## A reading of your health data
+
+On the **Health data** screen, under the charts, the same button reads what your watch and scale recorded: up to **ninety days** of steps and heart rate, and your latest body composition.
+
+Ninety days because the question is a direction rather than a day - which weeks were busy, which were quiet, whether the resting figures are drifting.
+
+It can be asked for **once a day**. The numbers underneath move that often at most, and the button says when the next one is available rather than refusing when pressed. The reading is replaced each time: an old reading of a rolling window is out of date, not a second record.
+
+## What the model is told
+
+The instructions are markdown files on the server, not strings buried in the code, so they can be improved without touching the app:
+
+| File | What it governs |
+| --- | --- |
+| `coach.skill.md` | How a coach answers at all: the voice, what to do with an RPE, what never to claim. |
+| `feedback.skill.md` | What a session review specifically is. |
+| `health.skill.md` | What a reading of health data specifically is - including that it is not a diagnosis. |
+
+Each is sent with the question, the common one first. The answer is always asked for in the language your account is set to, English when nothing is.
+
+## What it is not
+
+The model is not a doctor and not your coach. It reads what is in front of it - a sheet of sets, a series of step counts - and it says what a well-read coach would say about them. It does not know about the knee you did not log, and it should never be the only reader of your training.

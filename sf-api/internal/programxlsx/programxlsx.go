@@ -193,6 +193,23 @@ func writeWeek(file *excelize.File, sheet string, program models.Program,
 			}
 			row++
 		}
+		// What the AI said about the session, under its table: a reading
+		// filed apart from the week it is about is one nobody reads again.
+		if lines := programsheet.ReadingOf(options, day.ID); len(lines) > 0 {
+			row++
+			if err := writeCell(file, sheet, 1, row,
+				programsheet.Heading(options.Locale, "aiFeedback"), styles.day); err != nil {
+				return err
+			}
+			row++
+			for _, line := range lines {
+				if err := writeCell(file, sheet, 1, row, line, styles.subtitle); err != nil {
+					return err
+				}
+				row++
+			}
+		}
+
 		// A blank line between sessions: without it a week reads as one long
 		// table and the session headings disappear into it.
 		row++

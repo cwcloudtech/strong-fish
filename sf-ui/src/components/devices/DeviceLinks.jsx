@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { FiLink, FiRefreshCw, FiSlash } from "react-icons/fi";
+import { FiCpu, FiLink, FiRefreshCw, FiSlash, FiTrash2 } from "react-icons/fi";
+import ReactMarkdown from "react-markdown";
 
 import { devices as devicesApi } from "../../api/services";
 import ExportMenu from "../programs/ExportMenu";
 import downloadBlob from "../../utils/downloadBlob";
+import Tooltip from "../common/Tooltip";
 import { ErrorMessage, Spinner } from "../common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -181,7 +183,12 @@ export default function DeviceLinks() {
           {/* Steps and heart rate from one provider only, the one the API
               picked: two watches' worth of steps side by side would be two
               answers to the same question. */}
-          {connection.activitySource ? <DataPanel provider={connection.provider} /> : null}
+          {connection.activitySource ? (
+            <>
+              <DataPanel provider={connection.provider} />
+              <HealthFeedbackPanel provider={connection.provider} />
+            </>
+          ) : null}
           {connection.connected && !connection.activitySource && activitySource
           && connection.capabilities?.includes("activity") ? (
             <p className="sf-muted" style={{ marginTop: "0.5rem" }}>
@@ -193,6 +200,127 @@ export default function DeviceLinks() {
           ) : null}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * What the AI made of the member's health data.
+ *
+ * Once a day, over ninety days: the window is wide because the question is a
+ * direction rather than a day, and the wait is a day because that is how
+ * often the numbers underneath move. Asking again an hour later would spend
+ * tokens to be told the same thing.
+ *
+ * Kept until it is replaced. An old reading of a rolling window is out of
+ * date rather than a second record, so there is one, and deleting it is how
+ * you ask for another.
+ */
+function HealthFeedbackPanel({ provider }) {
+  const { t } = useI18n();
+  const [feedback, setFeedback] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    // 404 is the ordinary case - nobody has asked yet - so it is not an error
+    // to report, it is an empty panel with a button in it.
+    devicesApi.healthFeedback(provider).then(setFeedback).catch(() => setFeedback(null));
+  }, [provider]);
+
+  const generate = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setFeedback(await devicesApi.generateHealthFeedback(provider));
+    } catch (err) {
+      // Too soon: the refusal carries the reading it would not replace, so
+      // the panel shows that rather than an error about it.
+      const refused = err?.response?.data;
+      if (refused?.i18n_code === "errors.healthFeedbackTooSoon") {
+        setFeedback(refused.feedback);
+        setError(err);
+      } else {
+        setError(err);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await devicesApi.deleteHealthFeedback(provider);
+      setFeedback(null);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // The wait, as the API counts it: the button says when it comes back rather
+  // than refusing when pressed.
+  const nextAt = feedback?.nextAt ? new Date(feedback.nextAt) : null;
+  const waiting = nextAt ? nextAt > new Date() : false;
+
+  return (
+    <div className="sf-ai-feedback" style={{ marginTop: "0.8rem" }}>
+      <div className="sf-row-between">
+        <strong>
+          <FiCpu /> {t("devices.aiFeedback")}
+        </strong>
+        <div className="sf-row" style={{ gap: "0.3rem" }}>
+          <Tooltip
+            label={
+              waiting
+                ? t("devices.aiFeedbackNext", { date: nextAt.toLocaleString() })
+                : t("devices.aiFeedbackHelp")
+            }
+          >
+            <button
+              type="button"
+              className="sf-button sf-button-secondary sf-button-sm"
+              onClick={generate}
+              disabled={busy || waiting}
+            >
+              {busy ? <span className="sf-button-spinner" aria-hidden="true" /> : <FiCpu />}{" "}
+              {feedback ? t("devices.aiFeedbackAgain") : t("devices.aiFeedbackAsk")}
+            </button>
+          </Tooltip>
+          {feedback ? (
+            <button
+              type="button"
+              className="sf-button-ghost sf-button-sm"
+              onClick={remove}
+              disabled={busy}
+              aria-label={t("common.delete")}
+              title={t("common.delete")}
+            >
+              <FiTrash2 />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <ErrorMessage error={error} />
+
+      {feedback ? (
+        <>
+          <div className="sf-bubble-markdown">
+            <ReactMarkdown>{feedback.content}</ReactMarkdown>
+          </div>
+          <p className="sf-muted" style={{ fontSize: "0.78rem", marginBottom: 0 }}>
+            {t("devices.aiFeedbackMeta", {
+              days: feedback.days,
+              date: new Date(feedback.updatedAt).toLocaleDateString(),
+            })}
+          </p>
+        </>
+      ) : (
+        <p className="sf-muted" style={{ margin: 0 }}>{t("devices.aiFeedbackEmpty")}</p>
+      )}
     </div>
   );
 }

@@ -201,6 +201,32 @@ func drawDay(pdf *fpdf.Fpdf, translate func(string) string, day models.ProgramDa
 	rows := programsheet.Lines(sets, options.Feedback, options.Locale)
 
 	drawTable(pdf, translate, programsheet.Columns(options.Locale, options.Feedback), rows)
+	drawReading(pdf, translate, day, options)
+}
+
+// drawReading prints what the AI said about the session, under the table it is
+// about.
+//
+// Grey and italic, like the subtitle: it is a commentary on the sheet, and a
+// coach reading a printed week should be able to tell at a glance which words
+// are the program and which are a machine's opinion of it.
+func drawReading(pdf *fpdf.Fpdf, translate func(string) string, day models.ProgramDay, options Options) {
+	lines := programsheet.ReadingOf(options, day.ID)
+	if len(lines) == 0 {
+		return
+	}
+
+	pdf.Ln(6)
+	pdf.SetFont("Helvetica", "B", fontSizePt)
+	pdf.CellFormat(0, 12, translate(programsheet.Heading(options.Locale, "aiFeedback")), "", 1, "L", false, 0, "")
+
+	pdf.SetFont("Helvetica", "I", fontSizePt)
+	pdf.SetTextColor(90, 90, 90)
+	for _, line := range lines {
+		pdf.MultiCell(0, 12, translate(line), "", "L", false)
+	}
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetFont("Helvetica", "", fontSizePt)
 }
 
 // chartPixels is how wide a chart is rasterized before being scaled to the

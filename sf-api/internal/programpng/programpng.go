@@ -191,6 +191,7 @@ func layout(c *canvas, program models.Program, days []models.ProgramDay, options
 			c.table(programsheet.Columns(options.Locale, options.Feedback),
 				programsheet.Lines(sets, options.Feedback, options.Locale))
 			c.y += 22
+			c.reading(programsheet.ReadingOf(options, day.ID), options.Locale)
 		}
 		c.y += 10
 	}
@@ -238,6 +239,27 @@ func (c *canvas) text(x int, s string, face font.Face, col color.Color) {
 		Dot: fixed.P(x, c.y+face.Metrics().Ascent.Ceil()),
 	}
 	d.DrawString(s)
+}
+
+// reading writes what the AI said about the session under its table, wrapped
+// to the picture's width. Muted, because it is a commentary on the week rather
+// than part of it.
+func (c *canvas) reading(lines []string, locale string) {
+	if len(lines) == 0 {
+		return
+	}
+
+	c.text(padding, programsheet.Heading(locale, "aiFeedback"), c.faces.cellBold, colText)
+	c.y += lineHeight + 4
+
+	maxWidth := c.width - padding*2
+	for _, line := range lines {
+		for _, wrapped := range wrap(line, c.faces.cell, maxWidth) {
+			c.text(padding, wrapped, c.faces.cell, colMuted)
+			c.y += lineHeight
+		}
+	}
+	c.y += 14
 }
 
 func (c *canvas) fill(r image.Rectangle, col color.Color) {

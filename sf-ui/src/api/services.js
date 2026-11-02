@@ -115,6 +115,11 @@ export const devices = {
         responseType: "blob",
       })
       .then((response) => response.data),
+  // What the AI made of the last ninety days. Kept, and askable again once a
+  // day - the numbers underneath move that often at most.
+  healthFeedback: (provider) => body(client.get(`/users/me/devices/${provider}/feedback`)),
+  generateHealthFeedback: (provider) => body(client.post(`/users/me/devices/${provider}/feedback`)),
+  deleteHealthFeedback: (provider) => body(client.delete(`/users/me/devices/${provider}/feedback`)),
 };
 
 export const programs = {
@@ -181,6 +186,54 @@ export const programs = {
 };
 // --- the member's own training ---
 
+/**
+ * The AI assistant: the connections a member holds to a model, the threads of
+ * what they asked it, and a reading of one training session.
+ *
+ * Connections are shaped on storages down to the sharing, because they are the
+ * same arrangement: an account holds a credential and decides who else may
+ * spend it.
+ */
+export const ai = {
+  providers: () => body(client.get("/ai/providers")),
+  connections: () => body(client.get("/users/me/ai-connections")),
+  addConnection: (payload) => body(client.post("/users/me/ai-connections", payload)),
+  setConnection: (connectionId, payload) =>
+    body(client.put(`/users/me/ai-connections/${connectionId}`, payload)),
+  clearConnection: (connectionId) => body(client.delete(`/users/me/ai-connections/${connectionId}`)),
+  shares: (connectionId) => body(client.get(`/users/me/ai-connections/${connectionId}/shares`)),
+  share: (connectionId, userId) =>
+    body(client.post(`/users/me/ai-connections/${connectionId}/shares`, { userId, role: "user" })),
+  unshare: (connectionId, userId) =>
+    body(client.delete(`/users/me/ai-connections/${connectionId}/shares/${userId}`)),
+
+  // Asking. conversationId continues a stored thread; left out, the answer
+  // starts one and comes back with its id.
+  ask: (message, conversationId) => body(client.post("/ai/chat", { message, conversationId })),
+
+  conversations: () => body(client.get("/ai/conversations")),
+  conversation: (conversationId) => body(client.get(`/ai/conversations/${conversationId}`)),
+  rename: (conversationId, title) => body(client.put(`/ai/conversations/${conversationId}`, { title })),
+  remove: (conversationId) => body(client.delete(`/ai/conversations/${conversationId}`)),
+  // Several at once, or the lot. A POST because a body on a DELETE is widely
+  // dropped on the way.
+  removeMany: (ids) => body(client.post("/ai/conversations/delete", { ids })),
+  clearAll: () => body(client.post("/ai/conversations/delete", { all: true })),
+  // The link to hand somebody, minted and revoked.
+  publish: (conversationId) => body(client.post(`/ai/conversations/${conversationId}/share`)),
+  unpublish: (conversationId) => body(client.delete(`/ai/conversations/${conversationId}/share`)),
+  // A thread read from its link, with no session at all.
+  shared: (token) => body(client.get(`/public/ai/conversations/${token}`)),
+  exportConversation: (conversationId, format = "pdf") =>
+    client
+      .get(`/ai/conversations/${conversationId}/export.${format}`, { responseType: "blob" })
+      .then((response) => response.data),
+  exportShared: (token, format = "pdf") =>
+    client
+      .get(`/public/ai/conversations/${token}/export.${format}`, { responseType: "blob" })
+      .then((response) => response.data),
+};
+
 export const training = {
   list: () => body(client.get("/training")),
   get: (assignmentId) => body(client.get(`/training/${assignmentId}`)),
@@ -198,6 +251,14 @@ export const training = {
         responseType: "blob",
       })
       .then((response) => response.data),
+  // What the AI said about one finished session, generated on demand and
+  // kept. Deleting it is how a member asks for another reading.
+  generateFeedback: (assignmentId, dayId, locale) =>
+    body(client.post(`/training/${assignmentId}/days/${dayId}/feedback`, null, {
+      params: locale ? { locale } : {},
+    })),
+  deleteFeedback: (assignmentId, dayId) =>
+    body(client.delete(`/training/${assignmentId}/days/${dayId}/feedback`)),
 };
 
 // --- social ---

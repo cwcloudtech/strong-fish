@@ -429,6 +429,136 @@ class SfApi {
     return measures.map((item) => BodyMeasure.fromJson(_map(item))).toList();
   }
 
+  /// What the AI made of the last ninety days of health data. A 404 is the
+  /// ordinary "nobody has asked yet", which the caller reads as no reading.
+  Future<HealthFeedback> healthFeedback(String provider) async =>
+      HealthFeedback.fromJson(_map((await client.dio.get('/users/me/devices/$provider/feedback')).data));
+
+  Future<HealthFeedback> generateHealthFeedback(String provider) async =>
+      HealthFeedback.fromJson(_map((await client.dio.post('/users/me/devices/$provider/feedback')).data));
+
+  Future<void> deleteHealthFeedback(String provider) async {
+    await client.dio.delete('/users/me/devices/$provider/feedback');
+  }
+
+  // --- the AI assistant ---
+
+  /// The member's own connections, and the ones others shared with them.
+  Future<List<AiConnection>> aiConnections() async {
+    final response = await client.dio.get('/users/me/ai-connections');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => AiConnection.fromJson(_map(item))).toList();
+  }
+
+  Future<List<AiProvider>> aiProviders() async {
+    final response = await client.dio.get('/ai/providers');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => AiProvider.fromJson(_map(item))).toList();
+  }
+
+  Future<AiConnection> addAiConnection(Map<String, dynamic> payload) async => AiConnection.fromJson(
+      _map((await client.dio.post('/users/me/ai-connections', data: payload)).data));
+
+  Future<AiConnection> setAiConnection(String connectionId, Map<String, dynamic> payload) async =>
+      AiConnection.fromJson(
+          _map((await client.dio.put('/users/me/ai-connections/$connectionId', data: payload)).data));
+
+  Future<void> deleteAiConnection(String connectionId) async {
+    await client.dio.delete('/users/me/ai-connections/$connectionId');
+  }
+
+  /// Who else may spend one of my connections.
+  Future<List<AiGrant>> aiShares(String connectionId) async {
+    final response = await client.dio.get('/users/me/ai-connections/$connectionId/shares');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => AiGrant.fromJson(_map(item))).toList();
+  }
+
+  Future<List<AiGrant>> shareAiConnection(String connectionId, String userId) async {
+    final response = await client.dio.post(
+      '/users/me/ai-connections/$connectionId/shares',
+      data: {'userId': userId, 'role': 'user'},
+    );
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => AiGrant.fromJson(_map(item))).toList();
+  }
+
+  Future<void> unshareAiConnection(String connectionId, String userId) async {
+    await client.dio.delete('/users/me/ai-connections/$connectionId/shares/$userId');
+  }
+
+  /// Asks a question. [conversationId] continues a stored thread; left blank,
+  /// the answer starts one and comes back with its id.
+  Future<Map<String, dynamic>> askAi(String message, {String conversationId = ''}) async => _map(
+      (await client.dio.post('/ai/chat', data: {
+        'message': message,
+        if (conversationId.isNotEmpty) 'conversationId': conversationId,
+      }))
+          .data);
+
+  Future<List<AiConversation>> aiConversations() async {
+    final response = await client.dio.get('/ai/conversations');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => AiConversation.fromJson(_map(item))).toList();
+  }
+
+  Future<AiConversation> aiConversation(String conversationId) async => AiConversation.fromJson(
+      _map((await client.dio.get('/ai/conversations/$conversationId')).data));
+
+  Future<AiConversation> renameAiConversation(String conversationId, String title) async =>
+      AiConversation.fromJson(
+          _map((await client.dio.put('/ai/conversations/$conversationId', data: {'title': title})).data));
+
+  Future<void> deleteAiConversation(String conversationId) async {
+    await client.dio.delete('/ai/conversations/$conversationId');
+  }
+
+  /// Several at once, or the lot. A POST because a body on a DELETE is widely
+  /// dropped on the way.
+  Future<int> deleteAiConversations({List<String> ids = const [], bool all = false}) async {
+    final response = await client.dio.post('/ai/conversations/delete', data: {'ids': ids, 'all': all});
+    final deleted = _map(response.data)['deleted'];
+    return deleted is num ? deleted.toInt() : int.tryParse('$deleted') ?? 0;
+  }
+
+  /// Mints the link anybody can read the thread with, or revokes it.
+  Future<AiConversation> shareAiConversation(String conversationId) async => AiConversation.fromJson(
+      _map((await client.dio.post('/ai/conversations/$conversationId/share')).data));
+
+  Future<void> unshareAiConversation(String conversationId) async {
+    await client.dio.delete('/ai/conversations/$conversationId/share');
+  }
+
+  /// The thread as a document, saved where the caller says.
+  Future<String> downloadConversation(
+    String conversationId, {
+    required String directory,
+    required String fileName,
+    String format = 'pdf',
+  }) async {
+    final path = '$directory/$fileName';
+    await client.dio.download('/ai/conversations/$conversationId/export.$format', path);
+    return path;
+  }
+
+  /// A reading of one finished session, generated on demand and kept.
+  Future<SessionFeedback> generateSessionFeedback(
+          String assignmentId, String dayId, String locale) async =>
+      SessionFeedback.fromJson(_map((await client.dio.post(
+        '/training/$assignmentId/days/$dayId/feedback',
+        queryParameters: {'locale': locale},
+      ))
+          .data));
+
+  Future<void> deleteSessionFeedback(String assignmentId, String dayId) async {
+    await client.dio.delete('/training/$assignmentId/days/$dayId/feedback');
+  }
+
   // --- administration (superadmin only) ---
 
   Future<Map<String, dynamic>> adminStats() async =>

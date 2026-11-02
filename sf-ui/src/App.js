@@ -18,6 +18,7 @@ import ApiKeys from "./pages/dashboard/ApiKeys";
 import ClubDetail from "./pages/dashboard/ClubDetail";
 import Contact from "./pages/Contact";
 import Clubs from "./pages/dashboard/Clubs";
+import Coach from "./pages/dashboard/Coach";
 import Events from "./pages/dashboard/Events";
 import Exercises from "./pages/dashboard/Exercises";
 import Feed from "./pages/dashboard/Feed";
@@ -34,6 +35,7 @@ import PublicProgram from "./pages/PublicProgram";
 import Profile from "./pages/Profile";
 import ResetPassword from "./pages/ResetPassword";
 import Search from "./pages/dashboard/Search";
+import SharedConversation from "./pages/SharedConversation";
 import Settings from "./pages/dashboard/Settings";
 import SignUp from "./pages/SignUp";
 import Training from "./pages/dashboard/Training";
@@ -97,6 +99,17 @@ function AppRoutes() {
               element={
                 <SignedInShell>
                   <PublicProgram />
+                </SignedInShell>
+              }
+            />
+            {/* A conversation its owner shared. Readable with no account, the
+                way a shared ChatGPT thread is: the link is the credential,
+                and it stops working the moment they revoke it. */}
+            <Route
+              path="/shared/conversations/:token"
+              element={
+                <SignedInShell>
+                  <SharedConversation />
                 </SignedInShell>
               }
             />
@@ -182,6 +195,7 @@ function AppRoutes() {
               <Route path="events" element={<Events />} />
               <Route path="invitations" element={<Invitations />} />
               <Route path="messages" element={<Messages />} />
+              <Route path="coach" element={<Coach />} />
               <Route path="blocks" element={<Blocks />} />
               <Route path="search" element={<Search />} />
               <Route path="exercises" element={<Exercises />} />
