@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"strong-fish-api/internal/ai"
 	"strong-fish-api/internal/devicelink"
@@ -11,6 +12,7 @@ import (
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/programmd"
+	"strong-fish-api/internal/programsheet"
 	"strong-fish-api/internal/store"
 	"strong-fish-api/internal/templates"
 )
@@ -21,6 +23,49 @@ import (
 // trend is visible over: a fortnight of steps says what last week was like, a
 // quarter says where somebody is going.
 const healthFeedbackDays = 90
+
+// How recent a reading has to be to travel with an exported sheet.
+//
+// A day, because that is how long the sheet it describes stays true: the
+// numbers move daily, and a reading from last week printed under this week's
+// charts would read as a comment on them. Nothing deletes the older one - it
+// is still on screen, with its own date on it - it simply does not go into
+// the document.
+const healthReadingFresh = 24 * time.Hour
+
+// recentReading is the AI's reading of this member's health data as a section
+// of the exported sheet, or nil when there is none worth printing.
+//
+// Printed rather than generated: an export is not the place to spend
+// somebody's tokens, and a reading that appeared only in the PDF would be one
+// they never saw on screen.
+func (h *DeviceHandler) recentReading(r *http.Request, userID, source, locale string) *programsheet.Section {
+	stored, err := h.ai.connections.FindHealthFeedback(r.Context(), userID, source)
+	if err != nil || time.Since(stored.UpdatedAt) > healthReadingFresh {
+		return nil
+	}
+
+	rows := []programsheet.Line{}
+	for _, line := range programsheet.PlainLines(stored.Content) {
+		rows = append(rows, programsheet.Line{Cells: []string{line}})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	// Which subscription produced it and when, under the reading it belongs
+	// to - the same credit the screen shows.
+	rows = append(rows, programsheet.Line{Cells: []string{
+		programsheet.GeneratedBy(locale, creditName(stored.Connection, stored.Model), stored.UpdatedAt),
+	}})
+
+	// The label is the column's header rather than the section's: every
+	// renderer here draws a heading *and* a header row, and two lines saying
+	// "AI feedback" is one too many.
+	return &programsheet.Section{
+		Columns: []programsheet.Column{{Header: programsheet.Heading(locale, "aiFeedback"), Weight: 1}},
+		Rows:    rows,
+	}
+}
 
 // HealthFeedback is the stored reading of the member's health data.
 func (h *DeviceHandler) HealthFeedback(w http.ResponseWriter, r *http.Request) {

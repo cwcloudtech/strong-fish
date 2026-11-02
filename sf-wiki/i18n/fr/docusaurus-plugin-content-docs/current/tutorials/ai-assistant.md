@@ -128,6 +128,12 @@ d'une séance : ce qu'elle décrit est une fenêtre qui se déplace, donc une
 ancienne lecture est périmée plutôt qu'un second avis. La ligne en dessous
 indique quelle souscription a produit celle que vous lisez, et quand.
 
+Elle part aussi dans l'**export des données santé**, PDF comme image, sous
+les graphiques qu'elle commente - à condition d'avoir moins d'un jour. Une
+analyse plus ancienne reste à l'écran avec sa date, mais n'entre pas dans le
+document, où elle se lirait comme un commentaire de chiffres qu'elle n'a
+jamais vus.
+
 ## Ce qui est dit au modèle
 
 Les instructions sont des fichiers markdown sur le serveur, pas des chaînes enfouies dans le code : elles peuvent être améliorées sans toucher à l'application.
