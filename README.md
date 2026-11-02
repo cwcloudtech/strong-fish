@@ -41,7 +41,7 @@ athlete's own current 1RM, clubs to coach them in, and a training feed.
   way you lend a storage. It answers as a coach in a kept, shareable chat, with
   your own maxes, block and last day of health data in front of it; it reads a
   finished session against the ones before it, and reads ninety days of health
-  data once a day. What it is told lives in markdown skills on the server
+  data. What it is told lives in markdown skills on the server
   (see [The AI assistant](#the-ai-assistant)).
 * **A calendar.** Meets, club sessions and camps, subscribable from Outlook or
   Google Calendar (see [The calendar](#the-calendar)).
@@ -686,6 +686,14 @@ claude-opus-5-5 on November 2nd of 2026* - in the chat and in the exported
 conversation alike, because a thread whose turns came from two models is one
 nobody can read back otherwise.
 
+Connections are **ordered**, like storages and for the same reason: the first
+is the one a question goes through when nobody picks, and the first row of
+every "ask with" menu. `PUT /users/me/ai-connections/order` takes the whole
+list - a partial one moves what it names and leaves the rest where they are -
+and a connection somebody else shared stays where its owner put it. A key
+just pasted is appended rather than inserted: it should not silently become
+the one every question is spent on.
+
 Sharing grants one role, `user`: the right to spend the connection and nothing
 else. A coach buying one key for a roster is the arrangement this exists for,
 and a grant can never be edited, re-shared or read back into a key.
@@ -719,12 +727,15 @@ credit - with two readings on one session, that is how two that disagree are
 told apart - and deleting one asks first, because it cost money and does not
 come back.
 
-Two refusals are deliberate and have their own codes. A session that is not
-finished cannot be read (`errors.sessionIncomplete`): a reading of three sets
+One refusal is deliberate and has its own code: a session that is not finished
+cannot be read (`errors.sessionIncomplete`), because a reading of three sets
 out of eight would be taken for a verdict on the training rather than on an
-incomplete record of it. A health reading can be asked for once a day
-(`errors.healthFeedbackTooSoon`, which carries the existing reading back), the
-underlying numbers moving that often at most.
+incomplete record of it.
+
+A health reading, by contrast, is asked for as often as the member likes and
+**replaces** the one before it - the subject is a rolling ninety-day window,
+so an older reading of it is not a second opinion but a description of a
+window that has moved.
 
 Conversations are stored in cwcloud's shape - a titled thread, one row per
 exchange - and can be shared by link. The token is the whole credential, so it

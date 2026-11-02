@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import { FiEdit2, FiPlus, FiTrash2, FiUsers } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiEdit2, FiPlus, FiTrash2, FiUsers } from "react-icons/fi";
 
 import AutocompleteInput from "../common/AutocompleteInput";
 import MultiSelect from "../common/MultiSelect";
@@ -48,6 +48,23 @@ export default function AiConnections() {
 
   if (!connections) return null;
 
+  // The member's own, in order. The ones shared with them follow in the list
+  // and have no arrows: the owner decides where those sit.
+  const mine = connections.filter((connection) => connection.ownerId === user?.id);
+
+  // Moving one is a swap with its neighbour, sent as the whole order: the
+  // API takes a list, so there is one way for the order to be wrong rather
+  // than two. Only the member's own are moved - a connection somebody shared
+  // with them sits in their list but is not theirs to order.
+  const move = (connectionId, by) => {
+    const ids = mine.map((connection) => connection.id);
+    const from = ids.indexOf(connectionId);
+    const to = from + by;
+    if (from < 0 || to < 0 || to >= ids.length) return;
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    act(() => aiApi.reorderConnections(ids));
+  };
+
   const act = async (run, message) => {
     setBusy(true);
     try {
@@ -70,12 +87,19 @@ export default function AiConnections() {
       {connections.length === 0 ? (
         <p className="sf-muted">{t("ai.noConnections")}</p>
       ) : (
+        <>
+          {mine.length > 1 ? (
+            <p className="sf-muted" style={{ fontSize: "0.85rem" }}>{t("ai.orderHelp")}</p>
+          ) : null}
         <ul className="sf-list">
           {connections.map((connection) => {
             // Shared with me, not mine: it can be spent, never edited or
             // re-shared, so it is listed with its owner's name and no
             // controls at all.
-            const mine = connection.ownerId === user?.id;
+            const own = connection.ownerId === user?.id;
+            // Its place in the member's own order, for the arrows; -1 for a
+            // connection somebody shared with them.
+            const index = mine.findIndex((candidate) => candidate.id === connection.id);
             // The vendor's own name, from the provider catalogue: it is
             // branding rather than a translated string, and a copy of it in
             // three dictionaries would be a second list to keep in step.
@@ -88,15 +112,36 @@ export default function AiConnections() {
                     {[
                       label,
                       connection.model,
-                      mine ? null : t("ai.sharedBy", { name: connection.ownerName }),
+                      own && index === 0 ? t("ai.first") : null,
+                      own ? null : t("ai.sharedBy", { name: connection.ownerName }),
                     ]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>
                 </div>
 
-                {mine ? (
+                {own ? (
                   <div className="sf-row" style={{ gap: "0.25rem" }}>
+                    <button
+                      type="button"
+                      className="sf-button-ghost sf-button-sm"
+                      onClick={() => move(connection.id, -1)}
+                      disabled={busy || index === 0}
+                      aria-label={t("ai.moveUp")}
+                      title={t("ai.moveUp")}
+                    >
+                      <FiArrowUp />
+                    </button>
+                    <button
+                      type="button"
+                      className="sf-button-ghost sf-button-sm"
+                      onClick={() => move(connection.id, 1)}
+                      disabled={busy || index === mine.length - 1}
+                      aria-label={t("ai.moveDown")}
+                      title={t("ai.moveDown")}
+                    >
+                      <FiArrowDown />
+                    </button>
                     <button
                       type="button"
                       className="sf-button-ghost sf-button-sm"
@@ -153,6 +198,7 @@ export default function AiConnections() {
             );
           })}
         </ul>
+        </>
       )}
 
       {editing === "new" ? (

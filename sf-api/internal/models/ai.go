@@ -228,7 +228,4 @@ type HealthFeedback struct {
 	Days      int       `json:"days,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
-	// NextAt is when another reading may be asked for. Sent with the stored
-	// one so a button can say when it comes back rather than only refusing.
-	NextAt time.Time `json:"nextAt,omitempty"`
 }

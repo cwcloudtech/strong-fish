@@ -1646,7 +1646,6 @@ class HealthFeedback {
   final String connection;
   final int days;
   final DateTime updatedAt;
-  final DateTime nextAt;
 
   const HealthFeedback({
     this.id = '',
@@ -1657,7 +1656,6 @@ class HealthFeedback {
     this.connection = '',
     this.days = 0,
     required this.updatedAt,
-    required this.nextAt,
   });
 
   factory HealthFeedback.fromJson(Map<String, dynamic> json) => HealthFeedback(
@@ -1669,10 +1667,7 @@ class HealthFeedback {
         connection: _toString(json['connection']),
         days: _toInt(json['days']),
         updatedAt: _toDate(json['updatedAt']),
-        nextAt: _toDate(json['nextAt']),
       );
-
-  bool get waiting => nextAt.isAfter(DateTime.now().toUtc());
 
   /// What the credit calls whatever produced it.
   String get credited => connection.isNotEmpty ? connection : model;

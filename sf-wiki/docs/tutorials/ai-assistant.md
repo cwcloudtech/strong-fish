@@ -28,6 +28,16 @@ coach lent you - you are asked which one to spend: a picker above the chat,
 and a menu on each AI button. The app never guesses when there is a choice,
 and never asks when there is not.
 
+### Which one answers by default
+
+Your connections are a list, and the **first one answers** when you do not
+pick - it is also the first row of the menu on every AI button. The arrows
+beside each one move it; a connection somebody shared with you sits at the
+end and stays where its owner put it.
+
+A connection you have just added goes to the bottom, so pasting a key never
+quietly changes which subscription your questions are spent on.
+
 ### Lending it to other members
 
 The group icon beside a connection opens its access list. Anybody you add there can **ask questions through it, and nothing else**: they never see the key, they cannot edit the connection, and they cannot share it on. Revoking takes effect immediately.
@@ -104,7 +114,15 @@ On the **Health data** screen, under the charts, the same button reads what your
 
 Ninety days because the question is a direction rather than a day - which weeks were busy, which were quiet, whether the resting figures are drifting.
 
-It can be asked for **once a day**. The numbers underneath move that often at most, and the button says when the next one is available rather than refusing when pressed. The reading is replaced each time: an old reading of a rolling window is out of date, not a second record.
+Ask for it **whenever you like**, and - like the AI buttons on a session -
+the button is where you pick **which subscription** reads it, when you have
+more than one.
+
+Each reading **replaces** the one before it, rather than stacking up as a
+session's do: what it describes is a window that keeps moving, so an older
+reading of it is out of date rather than a second opinion. The line
+underneath says which subscription produced the one you are looking at, and
+when.
 
 ## What the model is told
 

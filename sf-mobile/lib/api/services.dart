@@ -474,6 +474,17 @@ class SfApi {
     await client.dio.delete('/users/me/ai-connections/$connectionId');
   }
 
+  /// Which connection is first decides which subscription answers when
+  /// nobody picks, so the order is sent as a whole list - one way for it to
+  /// be wrong rather than two.
+  Future<List<AiConnection>> reorderAiConnections(List<String> connectionIds) async {
+    final response = await client.dio
+        .put('/users/me/ai-connections/order', data: {'connectionIds': connectionIds});
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => AiConnection.fromJson(_map(item))).toList();
+  }
+
   /// Who else may spend one of my connections.
   Future<List<AiGrant>> aiShares(String connectionId) async {
     final response = await client.dio.get('/users/me/ai-connections/$connectionId/shares');

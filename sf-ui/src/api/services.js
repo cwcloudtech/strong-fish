@@ -204,6 +204,11 @@ export const ai = {
   setConnection: (connectionId, payload) =>
     body(client.put(`/users/me/ai-connections/${connectionId}`, payload)),
   clearConnection: (connectionId) => body(client.delete(`/users/me/ai-connections/${connectionId}`)),
+  // Which one is first decides which subscription answers when nobody picks,
+  // so the order is sent as a whole list - one way for it to be wrong rather
+  // than two.
+  reorderConnections: (connectionIds) =>
+    body(client.put("/users/me/ai-connections/order", { connectionIds })),
   shares: (connectionId) => body(client.get(`/users/me/ai-connections/${connectionId}/shares`)),
   share: (connectionId, userId) =>
     body(client.post(`/users/me/ai-connections/${connectionId}/shares`, { userId, role: "user" })),

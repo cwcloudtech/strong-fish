@@ -80,12 +80,8 @@ const (
 	// CodeConversationTitle is retitling a thread to nothing, and
 	// CodeNothingSelected is a bulk delete that named nothing to delete -
 	// which is refused rather than read as "everything".
-	// CodeHealthFeedbackTooSoon is asking for a new reading of health data
-	// inside the day. Its own code because it is not a failure: the member
-	// has a reading, and is being told when the next one can be had.
-	CodeHealthFeedbackTooSoon = "errors.healthFeedbackTooSoon"
-	CodeConversationTitle     = "errors.conversationTitleRequired"
-	CodeNothingSelected       = "errors.nothingSelected"
+	CodeConversationTitle = "errors.conversationTitleRequired"
+	CodeNothingSelected   = "errors.nothingSelected"
 	// CodeSessionIncomplete is asking for a reading of a session that has not
 	// been finished. Deliberately its own code: the member can fix it, by
 	// logging the rest of their sets.

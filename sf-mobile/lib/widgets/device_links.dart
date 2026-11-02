@@ -688,7 +688,6 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
     final colors = AppColors.of(context);
     final small = Theme.of(context).textTheme.bodySmall;
     final feedback = _feedback;
-    final waiting = feedback?.waiting ?? false;
 
     return Container(
       margin: const EdgeInsets.only(top: 14),
@@ -742,15 +741,14 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
             child: Text(_error, style: TextStyle(color: colors.danger)),
           ),
         const SizedBox(height: 8),
+        // Asked for as often as the member likes, through whichever
+        // subscription they pick: the reading replaces the one before it,
+        // since the ninety days it describes have moved on.
         AiAskButton(
           connections: _connections,
           busy: _busy,
-          disabled: waiting,
           label: feedback == null ? t('devices.aiFeedbackAsk') : t('devices.aiFeedbackAgain'),
-          tooltip: waiting
-              ? t('devices.aiFeedbackNext',
-                  {'date': feedback!.nextAt.toLocal().toString().split('.').first})
-              : t('devices.aiFeedbackHelp'),
+          tooltip: t('devices.aiFeedbackHelp'),
           onAsk: _generate,
         ),
       ]),
