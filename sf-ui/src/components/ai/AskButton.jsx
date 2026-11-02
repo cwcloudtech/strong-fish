@@ -22,9 +22,17 @@ export default function AskButton({
   label,
   tooltip,
   size = "sf-button-sm",
+  // The chat sends with this; a reading asks with it. Same control, same
+  // rule about picking - only the face differs.
+  icon: face = <FiCpu />,
+  className = "sf-button-secondary",
+  align = "start",
+  // "up" for a button at the foot of the screen - the chat's send sits on
+  // the bottom edge, where a menu dropping down lands off it.
+  drop = "down",
 }) {
   const { t } = useI18n();
-  const icon = busy ? <span className="sf-button-spinner" aria-hidden="true" /> : <FiCpu />;
+  const icon = busy ? <span className="sf-button-spinner" aria-hidden="true" /> : face;
 
   if (connections.length > 1) {
     return (
@@ -34,8 +42,9 @@ export default function AskButton({
             {icon} {label}
           </>
         }
-        align="start"
-        triggerClassName={`sf-button sf-button-secondary ${size}`.trim()}
+        align={align}
+        drop={drop}
+        triggerClassName={`sf-button ${className} ${size}`.trim()}
         disabled={disabled || busy}
         title={tooltip}
         ariaLabel={label}
@@ -64,7 +73,7 @@ export default function AskButton({
     <Tooltip label={tooltip}>
       <button
         type="button"
-        className={`sf-button sf-button-secondary ${size}`.trim()}
+        className={`sf-button ${className} ${size}`.trim()}
         onClick={() => onAsk(connections[0]?.id || "")}
         disabled={disabled || busy}
       >

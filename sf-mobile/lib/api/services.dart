@@ -501,12 +501,11 @@ class SfApi {
   /// [connectionId] says which subscription to spend; left out, the API uses
   /// the member's default - which is what somebody with one key always wants.
   Future<Map<String, dynamic>> askAi(String message,
-          {String conversationId = '', String connectionId = '', String model = ''}) async =>
+          {String conversationId = '', String connectionId = ''}) async =>
       _map((await client.dio.post('/ai/chat', data: {
         'message': message,
         if (conversationId.isNotEmpty) 'conversationId': conversationId,
         if (connectionId.isNotEmpty) 'connectionId': connectionId,
-        if (model.isNotEmpty) 'model': model,
       }))
           .data);
 

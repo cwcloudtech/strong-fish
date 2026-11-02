@@ -20,6 +20,10 @@ class AiAskButton extends ConsumerWidget {
   final String label;
   final String? tooltip;
 
+  /// The chat sends with this; a reading asks with it. Same control, same
+  /// rule about picking - only the face differs.
+  final IconData icon;
+
   const AiAskButton({
     super.key,
     required this.connections,
@@ -28,14 +32,15 @@ class AiAskButton extends ConsumerWidget {
     this.busy = false,
     this.disabled = false,
     this.tooltip,
+    this.icon = Icons.auto_awesome_outlined,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(tProvider);
-    final icon = busy
+    final face = busy
         ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-        : const Icon(Icons.auto_awesome_outlined, size: 18);
+        : Icon(icon, size: 18);
     final enabled = !busy && !disabled;
 
     if (connections.length > 1) {
@@ -54,7 +59,7 @@ class AiAskButton extends ConsumerWidget {
         child: AbsorbPointer(
           child: FilledButton.tonalIcon(
             onPressed: enabled ? () {} : null,
-            icon: icon,
+            icon: face,
             label: Text(label),
           ),
         ),
@@ -65,7 +70,7 @@ class AiAskButton extends ConsumerWidget {
       message: tooltip ?? '',
       child: FilledButton.tonalIcon(
         onPressed: enabled ? () => onAsk(connections.isEmpty ? '' : connections.first.id) : null,
-        icon: icon,
+        icon: face,
         label: Text(label),
       ),
     );

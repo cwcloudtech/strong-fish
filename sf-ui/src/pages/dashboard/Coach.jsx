@@ -5,9 +5,8 @@ import ReactMarkdown from "react-markdown";
 import { FiCheck, FiEdit2, FiLink, FiPlus, FiSend, FiTrash2, FiX } from "react-icons/fi";
 
 import ExportMenu from "../../components/programs/ExportMenu";
-import Select from "../../components/common/Select";
 import useToastError from "../../utils/useToast";
-import { connectionLabel } from "../../components/ai/AskButton";
+import AskButton from "../../components/ai/AskButton";
 import ShareButtons from "../../components/common/ShareButtons";
 import { ConfirmModal } from "../../components/common/Modal";
 import downloadBlob from "../../utils/downloadBlob";
@@ -36,13 +35,11 @@ export default function Coach() {
   // The subscriptions this member may spend, and which one the next question
   // goes through. A picker only matters to somebody with more than one - a
   // coach's key beside their own - so with one it is simply not drawn.
+  // Which subscription the next question goes through. Picked at the moment
+  // of sending (see the composer), not kept at the top of the screen: a
+  // thread can run on two keys, so the choice belongs to the message rather
+  // than to the conversation.
   const [connections, setConnections] = useState([]);
-  const [connectionId, setConnectionId] = useState("");
-  // Which model that subscription is asked for. Its own by default; a thread
-  // can switch mid-conversation, which is why each answer says what produced
-  // it.
-  const [providers, setProviders] = useState([]);
-  const [model, setModel] = useState("");
   // Which threads the member has ticked, for deleting several at once.
   const [picked, setPicked] = useState([]);
   const [exporting, setExporting] = useState(false);
@@ -64,23 +61,9 @@ export default function Coach() {
     loadList();
     aiApi
       .connections()
-      .then((list) => {
-        setConnections(list);
-        setConnectionId(list[0]?.id || "");
-        setModel(list[0]?.model || "");
-      })
+      .then(setConnections)
       .catch(() => setConnections([]));
-    // The catalogue, for the models worth offering beside the connection's own.
-    aiApi.providers().then(setProviders).catch(() => setProviders([]));
   }, [loadList]);
-
-  // Picking a subscription moves the model with it: a model name belongs to
-  // the provider that serves it, and carrying one across would ask Mistral
-  // for a Claude.
-  const pickConnection = (id) => {
-    setConnectionId(id);
-    setModel(connections.find((connection) => connection.id === id)?.model || "");
-  };
 
   // The newest turn, every time one arrives: a thread that answers below the
   // fold looks like it did not answer.
@@ -97,8 +80,7 @@ export default function Coach() {
     }
   };
 
-  const ask = async (event) => {
-    event.preventDefault();
+  const ask = async (connectionId) => {
     const text = question.trim();
     if (!text || asking) return;
 
@@ -114,7 +96,7 @@ export default function Coach() {
     setQuestion("");
 
     try {
-      const answer = await aiApi.ask(text, current?.id, connectionId, model);
+      const answer = await aiApi.ask(text, current?.id, connectionId);
       setCurrent(await aiApi.conversation(answer.conversationId));
       loadList();
     } catch (err) {
@@ -225,40 +207,9 @@ export default function Coach() {
           <h1>{t("ai.coachTitle")}</h1>
           <p className="sf-subtitle">{t("ai.coachSubtitle")}</p>
         </div>
-        <div className="sf-row" style={{ gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Which subscription the next question is spent on. Drawn only
-              when there is a choice to make. */}
-          {connections.length > 1 ? (
-            <div style={{ minWidth: 200 }}>
-              <Select
-                options={connections.map((connection) => ({
-                  value: connection.id,
-                  label: connectionLabel(connection, t),
-                }))}
-                value={connectionId}
-                onChange={pickConnection}
-                placeholder={t("ai.connection")}
-              />
-            </div>
-          ) : null}
-          {/* Which model answers. Drawn as soon as there is a subscription,
-              because switching model is a choice even with one key - the
-              same question put to a bigger model is half of what this is
-              for. */}
-          {connections.length > 0 ? (
-            <div style={{ minWidth: 200 }}>
-              <Select
-                options={modelOptions(connections, connectionId, providers, model)}
-                value={model}
-                onChange={setModel}
-                placeholder={t("ai.model")}
-              />
-            </div>
-          ) : null}
-          <button type="button" className="sf-button" onClick={() => setCurrent(null)}>
-            <FiPlus /> {t("ai.newConversation")}
-          </button>
-        </div>
+        <button type="button" className="sf-button" onClick={() => setCurrent(null)}>
+          <FiPlus /> {t("ai.newConversation")}
+        </button>
       </div>
 
       {/* Nothing connected: the page is useless until it is, and the member
@@ -471,7 +422,7 @@ export default function Coach() {
             <div ref={bottom} />
           </div>
 
-          <form className="sf-thread-composer" onSubmit={ask}>
+          <div className="sf-thread-composer">
             <textarea
               className="sf-textarea"
               rows={2}
@@ -481,33 +432,34 @@ export default function Coach() {
               onChange={(event) => setQuestion(event.target.value)}
               onKeyDown={(event) => {
                 // Enter sends, shift+enter makes a line: the convention every
-                // chat has trained people on.
-                if (event.key === "Enter" && !event.shiftKey) ask(event);
+                // chat has trained people on. It sends with the member's
+                // default subscription - the one the menu's first row is.
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  ask(connections[0]?.id || "");
+                }
               }}
             />
-            <button className="sf-button" type="submit" disabled={asking || !question.trim()}>
-              <FiSend /> {t("ai.send")}
-            </button>
-          </form>
+            {/* Send *is* the picker, the way the reading buttons are: with
+                one subscription it simply sends, and with several it opens
+                them by name - so one conversation can run on two keys
+                without a control sitting above the thread all day. */}
+            <AskButton
+              connections={connections}
+              onAsk={ask}
+              busy={asking}
+              disabled={!question.trim()}
+              label={t("ai.send")}
+              tooltip={t("ai.send")}
+              icon={<FiSend />}
+              className=""
+              size=""
+              align="end"
+              drop="up"
+            />
+          </div>
         </div>
       </div>
     </div>
   );
-}
-
-/**
- * The models to offer for the picked subscription: its own first, then the
- * ones its provider is known to serve.
- *
- * Its own leads because that is what it answers with unless told otherwise,
- * and it may well be a name the catalogue has never heard of - somebody's
- * gateway routing name, a model released last week. A list that dropped it
- * would be a list that cannot select what is already configured.
- */
-function modelOptions(connections, connectionId, providers, current) {
-  const connection = connections.find((candidate) => candidate.id === connectionId);
-  const catalogue = providers.find((provider) => provider.name === connection?.provider);
-
-  const names = [connection?.model, current, ...(catalogue?.models || [])].filter(Boolean);
-  return [...new Set(names)].map((name) => ({ value: name, label: name }));
 }

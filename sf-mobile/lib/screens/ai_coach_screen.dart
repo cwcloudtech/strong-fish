@@ -206,12 +206,7 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
   bool _asking = false;
   bool _exporting = false;
   String _error = '';
-  // Which subscription the next question is spent on, and which model it is
-  // asked for. The subscription picker is only drawn when there is a choice
-  // to make; the model one as soon as there is a subscription, because the
-  // same question put to a bigger model is half of what it is for.
-  String _connectionId = '';
-  String _model = '';
+
 
   @override
   void initState() {
@@ -247,7 +242,9 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
     });
   }
 
-  Future<void> _ask() async {
+  /// Sends, through the subscription the member picked on the send button.
+  /// Blank is their default - which is what one subscription always is.
+  Future<void> _ask(String connectionId) async {
     final question = _controller.text.trim();
     if (question.isEmpty || _asking) return;
 
@@ -261,9 +258,7 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
 
     try {
       final answer = await ref.read(apiProvider).askAi(question,
-          conversationId: _conversation?.id ?? '',
-          connectionId: _connectionId,
-          model: _model);
+          conversationId: _conversation?.id ?? '', connectionId: connectionId);
       await _load(answer['conversationId']?.toString() ?? _conversation?.id ?? '');
     } catch (error) {
       if (mounted) {
@@ -365,12 +360,6 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
     final conversation = _conversation;
     final exchanges = conversation?.exchanges ?? const <AiExchange>[];
     final connections = ref.watch(aiConnectionsProvider).valueOrNull ?? const <AiConnection>[];
-    final providers = ref.watch(aiProvidersProvider).valueOrNull ?? const <AiProvider>[];
-    if (_connectionId.isEmpty && connections.isNotEmpty) {
-      _connectionId = connections.first.id;
-      _model = connections.first.model;
-    }
-    final models = _modelsFor(connections, providers, _connectionId);
 
     return Scaffold(
       appBar: AppBar(
@@ -397,64 +386,6 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
         ],
       ),
       body: Column(children: [
-        // The subscription this thread's next question is spent on, the way
-        // ~/aristochat puts its agent picker above the conversation.
-        if (connections.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-            child: Row(children: [
-              if (connections.length > 1)
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    initialValue: _connectionId,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: t('ai.connection'),
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    items: [
-                      for (final connection in connections)
-                        DropdownMenuItem(
-                          value: connection.id,
-                          child:
-                              Text(aiConnectionLabel(connection), overflow: TextOverflow.ellipsis),
-                        ),
-                    ],
-                    // The model moves with the subscription: a model name
-                    // belongs to the provider that serves it, and carrying
-                    // one across would ask Mistral for a Claude.
-                    onChanged: (value) => setState(() {
-                      _connectionId = value ?? '';
-                      _model = connections
-                          .firstWhere((connection) => connection.id == _connectionId,
-                              orElse: () => const AiConnection())
-                          .model;
-                    }),
-                  ),
-                ),
-              if (connections.length > 1) const SizedBox(width: 8),
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: models.contains(_model) ? _model : null,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: t('ai.model'),
-                    border: const OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  items: [
-                    for (final name in models)
-                      DropdownMenuItem(
-                        value: name,
-                        child: Text(name, overflow: TextOverflow.ellipsis),
-                      ),
-                  ],
-                  onChanged: (value) => setState(() => _model = value ?? ''),
-                ),
-              ),
-            ]),
-          ),
         if (_error.isNotEmpty)
           Padding(
             padding: const EdgeInsets.all(12),
@@ -504,7 +435,10 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
                   minLines: 1,
                   maxLines: 4,
                   textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _ask(),
+                  // The keyboard's own send goes through the member's
+                  // default subscription, which is what the menu's first row
+                  // is too.
+                  onSubmitted: (_) => _ask(connections.isEmpty ? '' : connections.first.id),
                   decoration: InputDecoration(
                     hintText: t('ai.placeholder'),
                     border: const OutlineInputBorder(),
@@ -513,12 +447,17 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _asking ? null : _ask,
-                child: _asking
-                    ? const SizedBox(
-                        width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.send),
+              // Send *is* the picker, the way the reading buttons are: with
+              // one subscription it simply sends, and with several it opens
+              // them by name - so one conversation can run on two keys
+              // without a control sitting above the thread all day.
+              AiAskButton(
+                connections: connections,
+                busy: _asking,
+                label: t('ai.send'),
+                tooltip: t('ai.send'),
+                icon: Icons.send,
+                onAsk: _ask,
               ),
             ]),
           ),
@@ -573,26 +512,4 @@ class _Bubble extends StatelessWidget {
       ),
     );
   }
-}
-
-/// The models to offer for the picked subscription: its own first, then the
-/// ones its provider is known to serve.
-///
-/// Its own leads because that is what it answers with unless told otherwise,
-/// and it may well be a name the catalogue has never heard of - a gateway's
-/// routing name, a model released last week. A list that dropped it could not
-/// select what is already configured.
-List<String> _modelsFor(
-    List<AiConnection> connections, List<AiProvider> providers, String connectionId) {
-  final connection = connections.isEmpty
-      ? const AiConnection()
-      : connections.firstWhere((candidate) => candidate.id == connectionId,
-          orElse: () => connections.first);
-  final catalogue = providers.firstWhere((provider) => provider.name == connection.provider,
-      orElse: () => const AiProvider());
-
-  return <String>{
-    if (connection.model.isNotEmpty) connection.model,
-    ...catalogue.models,
-  }.toList();
 }
