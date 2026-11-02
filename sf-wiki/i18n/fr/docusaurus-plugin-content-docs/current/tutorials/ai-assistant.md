@@ -52,16 +52,18 @@ avez depuis dépassé.
 
 ### Quelle IA répond
 
-Au-dessus du fil, deux sélecteurs : **quelle souscription** paie (seulement si
-vous en avez plusieurs) et **quel modèle** elle interroge. La liste des
-modèles est celle de votre fournisseur, et le modèle configuré sur la
-connexion est celui par défaut - poser la même question à un plus gros modèle
-tient donc en un clic, sans seconde souscription à configurer.
+Si vous avez plusieurs souscriptions, **le bouton d'envoi demande laquelle** :
+il les ouvre par leur nom, comme les boutons IA d'une séance. Avec une seule
+souscription, il envoie simplement.
 
-Vous pouvez changer en cours de conversation : c'est pourquoi **chaque réponse
-indique ce qui l'a produite et quand**, en petites italiques en dessous :
-*Généré par claude-opus-5-5 le 2 novembre 2026*. La conversation exportée
-porte la même ligne sous chaque réponse.
+Le choix se fait par message, pas par conversation : un même fil peut tourner
+sur votre clé pour une question et sur celle de votre coach pour la suivante.
+Chaque souscription pointe vers son propre modèle : choisir un nom choisit
+donc le modèle avec.
+
+C'est pourquoi **chaque réponse indique ce qui l'a produite et quand**, en
+petites italiques en dessous : *Généré par claude-opus-5-5 le 2 novembre
+2026*. La conversation exportée porte la même ligne sous chaque réponse.
 
 Chaque échange est conservé : la liste de gauche est votre historique, pas celui de cet onglet. Pour chaque conversation vous pouvez :
 
