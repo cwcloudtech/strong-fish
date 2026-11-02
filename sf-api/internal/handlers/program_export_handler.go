@@ -291,19 +291,41 @@ func (h *TrainingHandler) ExportAssignment(w http.ResponseWriter, r *http.Reques
 	// here rather than generated: an export is not the place to spend
 	// somebody's tokens, and a reading that appears only in the PDF would be
 	// one the member never saw on screen.
-	readings, err := h.aiStore.ReadingsForAssignment(r.Context(), assignment.ID)
+	stored, err := h.aiStore.FeedbackForAssignment(r.Context(), assignment.ID)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
+	locale := sheetLocale(r)
+
+	readings := map[string][]string{}
+	for dayID, feedback := range stored {
+		for _, one := range feedback {
+			// Each reading carries its own credit, because a session can hold
+			// several and "which model said this" is the first thing anybody
+			// asks of two readings that disagree.
+			readings[dayID] = append(readings[dayID], one.Content+"\n\n"+
+				programsheet.GeneratedBy(locale, creditName(one.Connection, one.Model), one.CreatedAt))
+		}
+	}
 
 	writeProgramSheet(w, exportFormat(r), program, days, programsheet.Options{
 		MemberName: h.sets.memberName(r, assignment.UserID),
-		Locale:     sheetLocale(r),
+		Locale:     locale,
 		Feedback:   true,
 		Readings:   readings,
 		Footer:     fmt.Sprintf("%s - %s", program.Name, h.sets.uiBaseURL),
 	})
+}
+
+// creditName is what the credit line calls the thing that produced a reading:
+// the subscription it was spent on, or - for a reading made before those were
+// recorded - the model itself.
+func creditName(connection, model string) string {
+	if utils.IsNotBlank(connection) {
+		return connection
+	}
+	return model
 }
 
 // narrowDays limits a block to one session, or to one week, or leaves it whole

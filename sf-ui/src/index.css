@@ -1346,6 +1346,34 @@ button {
 
 .sf-ai-feedback .sf-bubble-markdown { max-width: none; }
 
+/* One reading of a session, of which there may be several: a card of its own
+   inside the panel, so two that disagree are visibly two answers rather than
+   one long one. */
+.sf-ai-reading {
+  position: relative;
+  padding: var(--sf-spacing-sm);
+  border: 1px solid var(--sf-border);
+  border-radius: var(--sf-radius);
+  background-color: var(--sf-surface);
+}
+
+/* Out of the text's way, in the corner of the reading it removes. */
+.sf-ai-reading-delete {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 4px;
+}
+
+/* What produced the reading and when. Italic and in the bottom corner: it is
+   a signature, not part of what was said. */
+.sf-ai-credit {
+  margin: var(--sf-spacing-xs) 0 0;
+  text-align: end;
+  font-style: italic;
+  font-size: 0.78rem;
+  color: var(--sf-text-muted);
+}
+
 .sf-bubble-markdown code {
   background-color: var(--sf-bg-alt);
   border-radius: 4px;

@@ -665,7 +665,7 @@ exports are (`internal/programsheet`), as markdown (`internal/programmd`):
 | Feature | What it is shown | Kept |
 | --- | --- | --- |
 | The coach chat | The thread so far, bounded to the last turns, plus the member's file: age, bodyweight, height, every 1RM, the block they are running and their last 24 hours of health data | Every exchange, as a conversation |
-| A session reading | The session's own feedback sheet - prescription, what was done, RPE, e1RM, the athlete's comments - plus the earlier sessions of the block | One per assignment and day |
+| A session reading | The session's own feedback sheet - prescription, what was done, RPE, e1RM, the athlete's comments - plus the earlier sessions of the block | Every asking, beside the ones before it |
 | A health reading | The member's health sheet: up to 90 days of steps and heart rate, and the latest body composition | One per member and source, replaced |
 
 The member's file is rebuilt on every question rather than quoted into the
@@ -679,6 +679,14 @@ answer is a judgement that gets revised, and revising it should not mean
 reading Go. The common skill is sent first, then the one for the task, then the
 language rule - the answer is always asked for in the **member's configured
 language**, English when nothing is set.
+
+A session can be read **as many times as somebody asks** (`V19` dropped the
+unique pair): a second opinion from a bigger model, or a coach's reading beside
+their athlete's, are things to add rather than things to replace. Each reading
+carries the subscription that paid for it and the date, printed under it as a
+credit - with two readings on one session, that is how two that disagree are
+told apart - and deleting one asks first, because it cost money and does not
+come back.
 
 Two refusals are deliberate and have their own codes. A session that is not
 finished cannot be read (`errors.sessionIncomplete`): a reading of three sets

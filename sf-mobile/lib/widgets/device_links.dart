@@ -9,6 +9,7 @@ import '../providers/providers.dart';
 import '../theme.dart';
 import 'ai_ask_button.dart';
 import 'export_menu.dart';
+import 'long_date.dart';
 import 'markdown_text.dart';
 
 /// The windows the API offers, in the order they widen.
@@ -648,6 +649,26 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
     }
   }
 
+  /// Deleting a reading asks first: it cost money, and the next one cannot be
+  /// asked for until tomorrow.
+  Future<void> _confirmDelete() async {
+    final t = ref.read(tProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t('ai.deleteFeedback')),
+        content: Text(t('ai.deleteFeedbackConfirm')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false), child: Text(t('common.cancel'))),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true), child: Text(t('common.delete'))),
+        ],
+      ),
+    );
+    if (confirmed == true) await _delete();
+  }
+
   Future<void> _delete() async {
     setState(() => _busy = true);
     try {
@@ -663,6 +684,7 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
+    final locale = ref.watch(localeProvider);
     final colors = AppColors.of(context);
     final small = Theme.of(context).textTheme.bodySmall;
     final feedback = _feedback;
@@ -686,8 +708,8 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
           ),
           if (feedback != null)
             IconButton(
-              onPressed: _busy ? null : _delete,
-              tooltip: t('common.delete'),
+              onPressed: _busy ? null : _confirmDelete,
+              tooltip: t('ai.deleteFeedback'),
               icon: const Icon(Icons.delete_outline, size: 20),
               visualDensity: VisualDensity.compact,
             ),
@@ -696,12 +718,21 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
         if (feedback != null) ...[
           MarkdownText(feedback.content),
           const SizedBox(height: 6),
-          Text(
-            t('devices.aiFeedbackMeta', {
-              'days': '${feedback.days}',
-              'date': feedback.updatedAt.toLocal().toString().split(' ').first,
-            }),
-            style: small,
+          // Who generated it and when, in the corner: a signature rather than
+          // part of what was said.
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: Text(
+              [
+                t('ai.generatedBy', {
+                  'connection': feedback.credited,
+                  'date': longDate(locale, feedback.updatedAt),
+                }),
+                if (feedback.days > 0)
+                  t('devices.aiFeedbackWindow', {'days': '${feedback.days}'}),
+              ].join(' · '),
+              style: small?.copyWith(fontStyle: FontStyle.italic),
+            ),
           ),
         ] else
           Text(t('devices.aiFeedbackEmpty'), style: small),

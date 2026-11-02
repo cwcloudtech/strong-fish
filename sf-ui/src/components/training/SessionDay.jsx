@@ -4,6 +4,8 @@ import ReactMarkdown from "react-markdown";
 
 import SetLogForm from "./SetLogForm";
 import AskButton from "../ai/AskButton";
+import longDate from "../../utils/longDate";
+import { ConfirmModal } from "../common/Modal";
 import Select from "../common/Select";
 import { formatReps } from "../../utils/setFormat";
 import { useI18n } from "../../i18n/I18nContext";
@@ -353,7 +355,7 @@ export default function SessionDay({
           busy={feedbackBusy}
           connections={aiConnections}
           onGenerate={(connectionId) => onGenerateFeedback(day, connectionId)}
-          onDelete={() => onDeleteFeedback(day)}
+          onDelete={onDeleteFeedback}
         />
       ) : null}
     </div>
@@ -373,52 +375,77 @@ export default function SessionDay({
  * exports. Deleting it is how you ask for another one.
  */
 function SessionFeedback({ ready, feedback, busy, connections, onGenerate, onDelete }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  // Which reading the member asked to delete, held until they confirm: a
+  // reading cost money and cannot be brought back, so it does not go on a
+  // single click.
+  const [removing, setRemoving] = useState(null);
 
-  if (feedback) {
-    return (
-      <div className="sf-ai-feedback">
-        <div className="sf-row-between">
-          <strong>
-            <FiCpu /> {t("session.aiFeedback")}
-          </strong>
-          <button
-            type="button"
-            className="sf-button-ghost sf-button-sm"
-            onClick={onDelete}
-            disabled={busy}
-            aria-label={t("session.aiFeedbackDelete")}
-            title={t("session.aiFeedbackDelete")}
-          >
-            <FiTrash2 />
-          </button>
-        </div>
-        <div className="sf-bubble-markdown">
-          <ReactMarkdown>{feedback.content}</ReactMarkdown>
-        </div>
-        <p className="sf-muted" style={{ fontSize: "0.78rem", marginBottom: 0 }}>
-          {t("session.aiFeedbackBy", {
-            name: feedback.authorName,
-            model: feedback.model || feedback.provider || "",
-          })}
-        </p>
-      </div>
-    );
-  }
+  const readings = feedback || [];
 
   return (
     <div className="sf-ai-feedback">
-      {/* With more than one subscription the button asks which one pays -
-          a coach's key beside your own is a choice, not a detail. */}
-      <AskButton
-        connections={connections}
-        onAsk={onGenerate}
-        busy={busy}
-        disabled={!ready}
-        label={t("session.aiFeedback")}
-        tooltip={ready ? t("session.aiFeedbackHelp") : t("session.aiFeedbackLocked")}
-      />
-      {!ready ? <span className="sf-muted">{t("session.aiFeedbackLocked")}</span> : null}
+      <div className="sf-row-between">
+        <strong>
+          <FiCpu /> {t("session.aiFeedback")}
+        </strong>
+        {/* Still offered with readings already there: a second opinion from
+            a bigger model, or a coach's reading beside their athlete's, are
+            things to add rather than things to replace. */}
+        <AskButton
+          connections={connections}
+          onAsk={onGenerate}
+          busy={busy}
+          disabled={!ready}
+          label={readings.length > 0 ? t("session.aiFeedbackAgain") : t("session.aiFeedback")}
+          tooltip={ready ? t("session.aiFeedbackHelp") : t("session.aiFeedbackLocked")}
+        />
+      </div>
+
+      {readings.length === 0 && !ready ? (
+        <span className="sf-muted">{t("session.aiFeedbackLocked")}</span>
+      ) : null}
+
+      {readings.map((reading) => (
+        <div className="sf-ai-reading" key={reading.id}>
+          <button
+            type="button"
+            className="sf-button-ghost sf-button-sm sf-ai-reading-delete"
+            onClick={() => setRemoving(reading)}
+            disabled={busy}
+            aria-label={t("ai.deleteFeedback")}
+            title={t("ai.deleteFeedback")}
+          >
+            <FiTrash2 />
+          </button>
+          <div className="sf-bubble-markdown">
+            <ReactMarkdown>{reading.content}</ReactMarkdown>
+          </div>
+          {/* Who generated it and when, under the reading it belongs to:
+              with several on one session, that is how two that disagree are
+              told apart. */}
+          <p className="sf-ai-credit">
+            {t("ai.generatedBy", {
+              connection: reading.connection || reading.model || reading.provider || "",
+              date: longDate(locale, reading.createdAt),
+            })}
+          </p>
+        </div>
+      ))}
+
+      {removing ? (
+        <ConfirmModal
+          title={t("ai.deleteFeedback")}
+          message={t("ai.deleteFeedbackConfirm")}
+          confirmLabel={t("common.delete")}
+          busy={busy}
+          onClose={() => setRemoving(null)}
+          onConfirm={() => {
+            onDelete(removing);
+            setRemoving(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

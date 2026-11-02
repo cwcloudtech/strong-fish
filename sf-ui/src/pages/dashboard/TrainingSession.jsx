@@ -116,10 +116,10 @@ export default function TrainingSession() {
     }
   };
 
-  const deleteFeedback = async (day) => {
+  const deleteFeedback = async (day, feedback) => {
     setReading(day.id);
     try {
-      await training.deleteFeedback(assignmentId, day.id);
+      await training.deleteFeedback(assignmentId, day.id, feedback.id);
       load();
     } catch (err) {
       toastError(err);
@@ -209,9 +209,9 @@ export default function TrainingSession() {
               onDayDone={setDayDone}
               onExport={(format) => exportAs(format, week.number, day)}
               exporting={exporting}
-              feedback={assignment.feedback?.[day.id] || null}
+              feedback={assignment.feedback?.[day.id] || []}
               onGenerateFeedback={generateFeedback}
-              onDeleteFeedback={deleteFeedback}
+              onDeleteFeedback={(feedback) => deleteFeedback(day, feedback)}
               feedbackBusy={reading === day.id}
               aiConnections={connections}
             />

@@ -43,6 +43,23 @@ class _AiCoachScreenState extends ConsumerState<AiCoachScreen> {
   Future<void> _deletePicked() async {
     final messenger = ScaffoldMessenger.of(context);
     final t = ref.read(tProvider);
+
+    // Asked first, like every other deletion of something the model was paid
+    // to produce.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: Text(t('ai.deleteConversationConfirm')),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false), child: Text(t('common.cancel'))),
+          FilledButton(
+              onPressed: () => Navigator.of(context).pop(true), child: Text(t('common.delete'))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     try {
       final deleted =
           await ref.read(apiProvider).deleteAiConversations(ids: _picked.toList());

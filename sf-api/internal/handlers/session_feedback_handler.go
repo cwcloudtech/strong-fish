@@ -21,7 +21,7 @@ import (
 // looks at is the last few times this lift was trained.
 const feedbackContextSessions = 6
 
-// SessionFeedback returns what the model already said about one session.
+// SessionFeedback returns every reading of one session, newest first.
 //
 // Authorized exactly like the session itself: the member, a manager of the
 // club the program belongs to, or a superadmin. A coach reads their athlete's
@@ -32,7 +32,7 @@ func (h *TrainingHandler) SessionFeedback(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	feedback, err := h.aiStore.FindFeedback(r.Context(), assignment.ID, chi.URLParam(r, "dayId"))
+	feedback, err := h.aiStore.ListFeedback(r.Context(), assignment.ID, chi.URLParam(r, "dayId"))
 	if err != nil {
 		writeStoreError(w, err)
 		return
@@ -40,14 +40,18 @@ func (h *TrainingHandler) SessionFeedback(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, feedback)
 }
 
-// DeleteSessionFeedback removes a reading, which is how a member asks for
-// another one.
+// DeleteSessionFeedback removes one reading.
+//
+// By its own id, because a session may hold several: deleting "the" feedback
+// of a day stopped being a thing that means anything the moment a second one
+// could exist beside it.
 func (h *TrainingHandler) DeleteSessionFeedback(w http.ResponseWriter, r *http.Request) {
 	assignment, ok := h.authorizeAssignment(w, r)
 	if !ok {
 		return
 	}
-	if err := h.aiStore.DeleteFeedback(r.Context(), assignment.ID, chi.URLParam(r, "dayId")); err != nil {
+	if err := h.aiStore.DeleteFeedback(r.Context(), assignment.ID,
+		chi.URLParam(r, "dayId"), chi.URLParam(r, "feedbackId")); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -55,6 +59,10 @@ func (h *TrainingHandler) DeleteSessionFeedback(w http.ResponseWriter, r *http.R
 }
 
 // GenerateSessionFeedback asks the model to read one finished session.
+//
+// Every asking is kept, beside the ones before it: a lifter wanting a second
+// opinion from a bigger model, and a coach adding their own reading next to
+// their athlete's, are both things to keep rather than things to overwrite.
 //
 // The connection spent is the caller's own, not the athlete's: a coach
 // reviewing somebody's week pays for it out of their own subscription, which
@@ -133,6 +141,7 @@ func (h *TrainingHandler) GenerateSessionFeedback(w http.ResponseWriter, r *http
 	stored, err := h.aiStore.SaveFeedback(r.Context(), models.SessionFeedback{
 		AssignmentID: assignment.ID, DayID: dayID, AuthorID: callerID,
 		Content: answer.Message, Provider: connection.Provider, Model: answer.Model,
+		Connection: connection.Name,
 	})
 	if err != nil {
 		writeStoreError(w, err)

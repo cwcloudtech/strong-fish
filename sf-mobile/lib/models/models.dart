@@ -753,10 +753,11 @@ class AssignmentDetail {
   final Assignment assignment;
   final List<ProgramDay> days;
   final List<Exercise> missingOneRms;
-  /// What the AI already said about these sessions, by day id. Sent with the
+  /// What the AI already said about these sessions, by day id, newest first -
+  /// a session can be read as many times as somebody asks. Sent with the
   /// block rather than fetched per session, so a twelve-week program does not
   /// cost forty requests to find the three readings that exist.
-  final Map<String, SessionFeedback> feedback;
+  final Map<String, List<SessionFeedback>> feedback;
 
   const AssignmentDetail({
     required this.assignment,
@@ -777,8 +778,10 @@ class AssignmentDetail {
             .toList(),
         feedback: {
           for (final entry in (json['feedback'] as Map? ?? const {}).entries)
-            entry.key.toString():
-                SessionFeedback.fromJson(entry.value is Map<String, dynamic> ? entry.value : const {}),
+            entry.key.toString(): (entry.value as List? ?? const [])
+                .whereType<Map<String, dynamic>>()
+                .map(SessionFeedback.fromJson)
+                .toList(),
         },
       );
 }
@@ -1580,6 +1583,11 @@ class SessionFeedback {
   final String content;
   final String provider;
   final String model;
+
+  /// The subscription that paid for it, as it was named at the time - what
+  /// the credit line under the reading says.
+  final String connection;
+  final DateTime createdAt;
   final DateTime updatedAt;
 
   const SessionFeedback({
@@ -1589,6 +1597,8 @@ class SessionFeedback {
     this.content = '',
     this.provider = '',
     this.model = '',
+    this.connection = '',
+    required this.createdAt,
     required this.updatedAt,
   });
 
@@ -1599,8 +1609,14 @@ class SessionFeedback {
         content: _toString(json['content']),
         provider: _toString(json['provider']),
         model: _toString(json['model']),
+        connection: _toString(json['connection']),
+        createdAt: _toDate(json['createdAt']),
         updatedAt: _toDate(json['updatedAt']),
       );
+
+  /// What the credit calls whatever produced it: the subscription, or - for a
+  /// reading made before those were recorded - the model itself.
+  String get credited => connection.isNotEmpty ? connection : model;
 }
 
 /// What the model said about the member's health data.
@@ -1614,6 +1630,9 @@ class HealthFeedback {
   final String content;
   final String provider;
   final String model;
+
+  /// The subscription that paid for it (see SessionFeedback.connection).
+  final String connection;
   final int days;
   final DateTime updatedAt;
   final DateTime nextAt;
@@ -1624,6 +1643,7 @@ class HealthFeedback {
     this.content = '',
     this.provider = '',
     this.model = '',
+    this.connection = '',
     this.days = 0,
     required this.updatedAt,
     required this.nextAt,
@@ -1635,10 +1655,14 @@ class HealthFeedback {
         content: _toString(json['content']),
         provider: _toString(json['provider']),
         model: _toString(json['model']),
+        connection: _toString(json['connection']),
         days: _toInt(json['days']),
         updatedAt: _toDate(json['updatedAt']),
         nextAt: _toDate(json['nextAt']),
       );
 
   bool get waiting => nextAt.isAfter(DateTime.now().toUtc());
+
+  /// What the credit calls whatever produced it.
+  String get credited => connection.isNotEmpty ? connection : model;
 }

@@ -503,7 +503,10 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					// a member asks for another.
 					r.Get("/days/{dayId}/feedback", h.Training.SessionFeedback)
 					r.Post("/days/{dayId}/feedback", h.Training.GenerateSessionFeedback)
-					r.Delete("/days/{dayId}/feedback", h.Training.DeleteSessionFeedback)
+					// One reading, by its own id: a session holds as many as
+					// were asked for, so "the" feedback of a day is not a
+					// thing to address.
+					r.Delete("/days/{dayId}/feedback/{feedbackId}", h.Training.DeleteSessionFeedback)
 					// The block with the member's feedback on it, whole or one
 					// week (?week=N), for them to send their coach - and for
 					// their coach to read away from the app.

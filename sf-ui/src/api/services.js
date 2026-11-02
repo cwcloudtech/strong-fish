@@ -263,8 +263,9 @@ export const training = {
     body(client.post(`/training/${assignmentId}/days/${dayId}/feedback`, null, {
       params: { ...(locale ? { locale } : {}), ...(connectionId ? { connectionId } : {}) },
     })),
-  deleteFeedback: (assignmentId, dayId) =>
-    body(client.delete(`/training/${assignmentId}/days/${dayId}/feedback`)),
+  // One reading, by its own id: a session holds as many as were asked for.
+  deleteFeedback: (assignmentId, dayId, feedbackId) =>
+    body(client.delete(`/training/${assignmentId}/days/${dayId}/feedback/${feedbackId}`)),
 };
 
 // --- social ---
