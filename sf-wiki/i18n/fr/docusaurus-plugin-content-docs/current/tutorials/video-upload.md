@@ -125,6 +125,23 @@ Un message vocal stocké sur **Google Drive** se lit dans le lecteur de Drive pl
 
 Une publication lit le son comme elle lit la vidéo : collez le lien d'un fichier audio — un `.mp3`, un `.m4a`, un `.wav`, ou un enregistrement déposé dans votre stockage — et il devient une barre de lecture dans la publication plutôt qu'un simple lien. Les liens vers un fichier d'un stockage privé sont lus au travers de l'application : seuls les membres autorisés peuvent les écouter.
 
+## Changer de clé
+
+Les clés se renouvellent, et le formulaire en demande une nouvelle plutôt que
+de modifier l'ancienne : changer de clé veut donc dire **supprimer le stockage
+puis le rajouter**.
+
+Les vidéos déjà publiées continuent de fonctionner. Leur adresse désigne le
+stockage supprimé, mais l'application cherche le fichier dans les buckets que
+vous avez enregistrés maintenant et le sert depuis celui qui le contient.
+Pointez la nouvelle entrée vers le même bucket et il n'y a rien d'autre à
+faire.
+
+Ce qui casse réellement une vidéo publiée, c'est de sortir le fichier du
+bucket, ou d'enregistrer un autre bucket en espérant y retrouver les anciens
+fichiers. L'application ne lit que les buckets que vous avez enregistrés
+vous-même.
+
 ## En cas de problème
 
 | Ce que vous voyez | Ce que c'est généralement |
@@ -134,4 +151,5 @@ Une publication lit le son comme elle lit la vidéo : collez le lien d'un fichie
 | « Cette vidéo est trop volumineuse » | Au-delà de la limite — l'écran de stockage vous indique laquelle. |
 | « Pas une vidéo lisible par un navigateur » | Réencodez en MP4 (H.264). |
 | La publication affiche une carte de lien, pas un lecteur | L'URL du fichier n'est pas publiquement lisible. Vérifiez la politique du bucket, ou le partage du dossier Drive. |
+| « Ce fichier n'est pas disponible » sur une vidéo qui marchait | Le stockage d'origine a été supprimé et aucun bucket enregistré aujourd'hui ne contient le fichier. Rajoutez le bucket où il se trouve. |
 | Le bouton microphone ne fait rien sur le téléphone | L'autorisation d'enregistrer a été refusée. Accordez-la dans les paramètres de l'application sous Android. |

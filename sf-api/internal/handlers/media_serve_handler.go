@@ -144,11 +144,12 @@ func (h *MediaHandler) SignMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, ok := h.authorizeMedia(w, r, request, callerID)
-	if !ok {
+	// The targets are not used here - the signature is what the streaming
+	// route will act on - but resolving them is what says the object can
+	// still be reached at all, so a link is not minted for one that cannot.
+	if _, ok := h.authorizeMedia(w, r, request, callerID); !ok {
 		return
 	}
-	_ = target
 
 	expires := time.Now().Add(mediaLinkTTL).Unix()
 	signed := fmt.Sprintf("%s/v1/media/%s/%s?expires=%d&viewer=%s&signature=%s",
@@ -178,15 +179,16 @@ func (h *MediaHandler) ServeMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, ok := h.authorizeMedia(w, r, request, viewerID)
+	targets, ok := h.authorizeMedia(w, r, request, viewerID)
 	if !ok {
 		return
 	}
 
-	object, err := target.Download(r.Context(), request.key, r.Header.Get("Range"))
+	object, err := download(r, targets, request.key)
 	if err != nil {
-		// The owner's own store refused this - a deleted object, a rotated key
-		// - so the message is theirs to act on.
+		// Every candidate refused it - a deleted object, a key that is not in
+		// any bucket this member still has - so the message is theirs to act
+		// on.
 		writeError(w, http.StatusBadGateway, err.Error(), CodeStorageDownloadFailed)
 		return
 	}
@@ -249,54 +251,171 @@ func (h *MediaHandler) signMedia(request mediaRequest, viewerID string, expires 
 }
 
 // authorizeMedia decides whether viewerID may read this object, and builds the
-// target to read it with.
+// targets to read it with - the storage the link names, then the ones to fall
+// back to.
 //
 // The order is deliberate: a grant on the storage itself is checked first,
 // because it is explicit - somebody said "you may see what is in here" - and
 // then the uploader's profile visibility, which is the rule everything else
 // about their content follows.
+//
+// # Why there is more than one target
+//
+// A media address is written into a post and stays there for good, while the
+// storage it names is a row a member can delete. Deleting and re-adding the
+// same bucket - which is what rotating a key looks like, since the form takes
+// a new one rather than editing the old - leaves every video already posted
+// pointing at an id that no longer exists, although the objects are still
+// sitting in the bucket.
+//
+// So the link's storage is a starting point rather than the answer: when it
+// is gone, or when its credentials no longer open the object, the uploader's
+// currently registered buckets are tried too. Nothing about who may watch
+// changes - that is decided below, from the uploader's own visibility - and
+// no bucket is read that the uploader did not register themselves.
 func (h *MediaHandler) authorizeMedia(w http.ResponseWriter, r *http.Request,
-	request mediaRequest, viewerID string) (storage.Target, bool) {
+	request mediaRequest, viewerID string) ([]storage.Target, bool) {
+	// A storage that is not there is not an error yet: the object may still
+	// be reachable through whatever its owner registered since.
 	stored, err := h.storages.FindByID(r.Context(), request.storageID)
-	if err != nil {
-		// A storage that is not there reads as a missing object rather than a
-		// missing storage: which ids exist is not a reader's business.
-		writeError(w, http.StatusNotFound, "This file is not available", CodeNotFound)
-		return nil, false
-	}
-	if stored.Conn.Type != models.StorageTypeS3 {
-		// Only buckets are served here. A Drive file is read from Drive, where
-		// the upload shared it - so a media address pointing at a Drive target
-		// is not something this app ever wrote.
-		writeError(w, http.StatusNotFound, "This file is not available", CodeNotFound)
-		return nil, false
-	}
+	linked := err == nil && stored.Conn.Type == models.StorageTypeS3
 
-	if !h.mayReadMedia(r, stored, request.key, viewerID) {
+	if !h.mayReadMedia(r, stored, linked, request.key, viewerID) {
 		// Not "forbidden": the object's existence is not something to confirm
 		// to somebody who may not read it.
 		writeError(w, http.StatusNotFound, "This file is not available", CodeNotFound)
 		return nil, false
 	}
 
-	target, err := storage.New(stored.Conn)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error(), CodeStorageNotConfigured)
+	targets := []storage.Target{}
+	if linked {
+		if target, err := storage.New(stored.Conn); err == nil {
+			targets = append(targets, target)
+		}
+	}
+	for _, candidate := range h.replacementsFor(r, stored, linked, request) {
+		if target, err := storage.New(candidate); err == nil {
+			targets = append(targets, target)
+		}
+	}
+
+	if len(targets) == 0 {
+		// Nothing registered that could hold it - the same answer as an
+		// object that is not there, because to a reader it is the same thing.
+		writeError(w, http.StatusNotFound, "This file is not available", CodeNotFound)
 		return nil, false
 	}
-	return target, true
+	return targets, true
+}
+
+// replacementsFor is where else this object might be: the buckets its
+// uploader has registered now, minus the one the link already names.
+//
+// When the link's storage is still there, only a bucket at the same address
+// is a candidate: its credentials were rotated, and a *different* bucket of
+// the member's would not hold the object anyway. When it is gone there is no
+// address left to compare against, so every S3 target they have is tried -
+// one of them is where the file went, and the others simply will not have the
+// key.
+func (h *MediaHandler) replacementsFor(r *http.Request, stored models.Storage, linked bool,
+	request mediaRequest) []models.StorageConnection {
+	uploaderID := uploaderFromKey(request.key)
+	if utils.IsBlank(uploaderID) {
+		return nil
+	}
+
+	available, err := h.storages.ListFor(r.Context(), uploaderID)
+	if err != nil {
+		return nil
+	}
+
+	candidates := []models.StorageConnection{}
+	for _, candidate := range available {
+		if candidate.ID == request.storageID || candidate.Conn.Type != models.StorageTypeS3 {
+			continue
+		}
+		if !candidate.Conn.Configured() {
+			continue
+		}
+		if linked && !sameBucket(stored.Conn, candidate.Conn) {
+			continue
+		}
+		candidates = append(candidates, candidate.Conn)
+	}
+	return candidates
+}
+
+// sameBucket reports whether two connections point at the same place: the
+// same bucket at the same host.
+//
+// Host rather than the endpoint as typed, so "https://s3.example.com/" and
+// "s3.example.com" are one address; and a bucket named in the host - the
+// virtual-hosted form some providers hand out - is stripped before comparing,
+// so "bucket.s3.example.com" matches "s3.example.com" with that bucket.
+func sameBucket(a, b models.StorageConnection) bool {
+	if !strings.EqualFold(strings.TrimSpace(a.BucketName), strings.TrimSpace(b.BucketName)) {
+		return false
+	}
+	return bucketHost(a) == bucketHost(b)
+}
+
+func bucketHost(conn models.StorageConnection) string {
+	endpoint := strings.TrimSpace(strings.ToLower(conn.Endpoint))
+	if endpoint == "" {
+		return ""
+	}
+	if !strings.Contains(endpoint, "//") {
+		endpoint = "//" + endpoint
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+
+	host := parsed.Host
+	bucket := strings.ToLower(strings.TrimSpace(conn.BucketName))
+	if bucket != "" {
+		host = strings.TrimPrefix(host, bucket+".")
+	}
+	return host
+}
+
+// download reads the object from the first target that has it.
+//
+// A failure is only reported once every candidate has refused: the first one
+// is the storage the link names, and "that id is gone" is not an answer when
+// the file is still in the bucket next door.
+func download(r *http.Request, targets []storage.Target, key string) (*storage.Object, error) {
+	var last error
+	for _, target := range targets {
+		object, err := target.Download(r.Context(), key, r.Header.Get("Range"))
+		if err == nil {
+			return object, nil
+		}
+		last = err
+	}
+	if last == nil {
+		last = fmt.Errorf("no storage holds this object")
+	}
+	return nil, last
 }
 
 // mayReadMedia is the rule itself.
-func (h *MediaHandler) mayReadMedia(r *http.Request, stored models.Storage, key, viewerID string) bool {
+func (h *MediaHandler) mayReadMedia(r *http.Request, stored models.Storage, linked bool,
+	key, viewerID string) bool {
 	if utils.IsBlank(viewerID) {
 		return false
 	}
 
-	// Anybody the storage's owner gave access to - including the owner.
-	if role, err := h.storages.RoleFor(r.Context(), stored.ID, viewerID); err == nil &&
-		models.CanReadStorage(role) {
-		return true
+	// Anybody the storage's owner gave access to - including the owner. Only
+	// when the storage is still there: a grant on a row that has been deleted
+	// is not a grant, and the uploader's own visibility below is then the
+	// only way in.
+	if linked {
+		if role, err := h.storages.RoleFor(r.Context(), stored.ID, viewerID); err == nil &&
+			models.CanReadStorage(role) {
+			return true
+		}
 	}
 
 	// Otherwise it is the uploader's profile that decides. The key carries

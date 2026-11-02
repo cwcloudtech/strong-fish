@@ -145,6 +145,20 @@ A voice message stored in **Google Drive** plays in Drive's own player rather th
 
 A post plays sound the same way it plays video: paste a link to an audio file - an `.mp3`, `.m4a`, `.wav`, or a recording in your own storage - and it becomes a play bar in the post rather than a bare link. Links to files in a private storage are read through the app, so only the members allowed to hear them can.
 
+## Changing your key
+
+Keys get rotated, and the form takes a new one rather than editing the old -
+so changing a key means **removing the storage and adding it again**.
+
+The videos you have already posted keep working. Their addresses name the
+storage you removed, but the app looks for the object in the buckets you have
+registered now and serves it from the one that has it. Point the new entry at
+the same bucket and there is nothing else to do.
+
+What does break a posted video is taking the object out of the bucket, or
+registering a different bucket and expecting the old files to be in it. The
+app only ever reads buckets you registered yourself.
+
 ## Troubleshooting
 
 | What you see | What it usually is |
@@ -154,4 +168,5 @@ A post plays sound the same way it plays video: paste a link to an audio file - 
 | "This video is too large" | Over the size limit - the app tells you what it is on the storage screen. |
 | "Not a video a browser can play" | Re-encode as MP4 (H.264). |
 | The post shows a link card, not a player | The file's URL is not publicly readable. Check the bucket's policy, or the Drive folder's sharing. |
+| "This file is not available" on a video that used to play | The storage it was uploaded to is gone, and no bucket you have registered now holds the object. Add the bucket it is in back. |
 | The microphone button does nothing on the phone | Permission to record was refused. Grant it in Android's app settings. |
