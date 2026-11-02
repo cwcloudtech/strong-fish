@@ -14,13 +14,20 @@ Dans **Paramètres**, sous **Connexions IA**, ajoutez-en une :
 
 | Champ | Ce que c'est |
 | --- | --- |
-| **Nom** | Comme vous l'appelez. « Ma clé Mistral », « la passerelle du club ». |
-| **Fournisseur** | OpenAI, Mistral, Anthropic (Claude) ou Google Gemini. C'est le format d'échange, pas un engagement envers la marque. |
+| **Nom** | Comme vous l'appelez. Laissé vide, il reprend le modèle - `claude-sonnet-5-5-a9bffea3` - ce que le champ propose d'ailleurs pendant que vous tapez. |
+| **Fournisseur** | OpenAI, Mistral, Anthropic (Claude), Google Gemini, OpenRouter ou DeepSeek. C'est le format d'échange, pas un engagement envers la marque. |
 | **Adresse** | Où partent les requêtes. Elle est pré-remplie selon le fournisseur choisi et reste **modifiable** : visez un LiteLLM, un Ollama, un compte OpenRouter, tout ce qui parle le même protocole. |
-| **Modèle** | Quel modèle interroger. Un choix raisonnable est pré-rempli. |
+| **Modèle** | Quel modèle interroger. Le champ suggère ceux que votre fournisseur est connu pour servir et **accepte n'importe quel nom saisi** : un modèle sorti hier fonctionne dès sa sortie. |
 | **Clé d'API** | La clé de votre fournisseur. Elle reste sur le serveur et n'est jamais renvoyée au navigateur ni au téléphone : une fois enregistrée, le champ propose de la remplacer plutôt que de l'afficher. |
 
-Une connexion suffit. Si vous en avez plusieurs, l'application utilise la vôtre en premier.
+Chaque texte d'exemple suit le fournisseur choisi : ce que les champs
+affichent, ce sont l'adresse, le modèle et le format de clé de ce
+fournisseur-là.
+
+Une connexion suffit. **Si vous en avez plusieurs** - la vôtre et celle que
+votre coach vous a prêtée - on vous demande laquelle dépenser : un sélecteur
+au-dessus du chat, et un menu sur chaque bouton IA. L'application ne devine
+jamais quand il y a un choix, et ne demande jamais quand il n'y en a pas.
 
 ### La prêter à d'autres membres
 
@@ -31,6 +38,17 @@ C'est ainsi qu'un coach paie une seule clé et en fait profiter tous ses athlèt
 ## Le chat coach
 
 **Coach IA** dans le menu. Posez vos questions sur votre pratique : programmation, technique, récupération, jour de compétition. Le modèle répond dans la langue configurée sur votre compte.
+
+Il sait déjà qui vous êtes. Chaque question emporte **votre fiche** : âge,
+poids de corps, taille, tous vos 1RM enregistrés, le bloc que vous suivez avec
+tout ce que vous y avez consigné, et ce que votre montre a compté ces
+vingt-quatre dernières heures. « Je squat ce soir ? » est donc répondu au
+regard de la séance de ce soir et des pas d'aujourd'hui, pas en général - et
+les charges évoquées sont les kilos réellement prescrits par votre programme.
+
+La fiche est reconstruite à chaque question plutôt qu'inscrite dans la
+conversation : un vieux fil ne répond donc jamais avec un maximum que vous
+avez depuis dépassé.
 
 Chaque échange est conservé : la liste de gauche est votre historique, pas celui de cet onglet. Pour chaque conversation vous pouvez :
 
@@ -76,6 +94,11 @@ Les instructions sont des fichiers markdown sur le serveur, pas des chaînes enf
 | `coach.skill.md` | Comment un coach répond en général : le ton, quoi faire d'un RPE, ce qu'il ne faut jamais affirmer. |
 | `feedback.skill.md` | Ce qu'est précisément une analyse de séance. |
 | `health.skill.md` | Ce qu'est précisément une lecture de données santé - y compris qu'il ne s'agit pas d'un diagnostic. |
+
+Les fournisseurs eux-mêmes sont une table en base plutôt qu'une liste dans le
+code : un exploitant peut corriger une adresse, ajouter un service compatible
+OpenAI ou apprendre un nouveau nom de modèle au formulaire sans nouvelle
+version.
 
 Chacun est envoyé avec la question, le commun d'abord. La réponse est toujours demandée dans la langue configurée sur votre compte, en anglais à défaut.
 

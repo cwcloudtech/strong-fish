@@ -31,10 +31,35 @@ type AIHandler struct {
 	// uiBaseURL is where a shared conversation is read, and the attribution
 	// line of an exported one.
 	uiBaseURL string
+	// What the chat tells the model about the member before their question:
+	// their maxes, and the block they are in the middle of. Set with
+	// WithMemberContext, because the program handler these come from is built
+	// after this one - and left unset the chat still answers, without them.
+	oneRMs   *store.OneRMStore
+	programs *store.ProgramStore
+	sets     *ProgramHandler
+	// lastDay is the member's last twenty-four hours of health data, as
+	// markdown. A function rather than the device handler itself: that
+	// handler already holds this one, and two pointers at each other is a
+	// knot nobody needs to untie later.
+	lastDay func(*http.Request, string, string) string
 }
 
 func NewAIHandler(connections *store.AIStore, users *store.UserStore, uiBaseURL string) *AIHandler {
 	return &AIHandler{connections: connections, users: users, client: ai.New(), uiBaseURL: uiBaseURL}
+}
+
+// WithMemberContext gives the chat the member's own numbers to answer with.
+func (h *AIHandler) WithMemberContext(oneRMs *store.OneRMStore, programs *store.ProgramStore,
+	sets *ProgramHandler) *AIHandler {
+	h.oneRMs, h.programs, h.sets = oneRMs, programs, sets
+	return h
+}
+
+// WithHealth adds the member's last day of health data to that context.
+func (h *AIHandler) WithHealth(lastDay func(*http.Request, string, string) string) *AIHandler {
+	h.lastDay = lastDay
+	return h
 }
 
 type aiConnectionPayload struct {
@@ -47,19 +72,31 @@ type aiConnectionPayload struct {
 
 // normalize fills in what the member left blank and refuses what cannot work.
 //
-// The URL and the model have defaults because the common case is somebody
-// pasting a key and expecting it to work; they stay editable because pointing
-// a connection at a local gateway is the reason the field exists.
-func (h *AIHandler) normalize(w http.ResponseWriter, p aiConnectionPayload) (models.AIConnection, bool) {
-	provider := strings.ToLower(strings.TrimSpace(p.Provider))
-	if !models.IsValidAIProvider(provider) {
-		writeError(w, http.StatusBadRequest, "Pick a provider", CodeInvalidAIProvider)
+// The URL and the model come from the provider catalogue when the member left
+// them alone, because the common case is somebody pasting a key and expecting
+// it to work; they stay editable because pointing a connection at a local
+// gateway is the reason the fields exist.
+//
+// The model is never checked against the catalogue's list. Those names are
+// suggestions: a vendor ships one the day before the table hears about it,
+// and refusing it here would make the app the reason somebody cannot use
+// their own subscription.
+func (h *AIHandler) normalize(w http.ResponseWriter, r *http.Request,
+	p aiConnectionPayload) (models.AIConnection, bool) {
+	provider, err := h.connections.FindProvider(r.Context(),
+		strings.ToLower(strings.TrimSpace(p.Provider)))
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusBadRequest, "Pick a provider", CodeInvalidAIProvider)
+			return models.AIConnection{}, false
+		}
+		writeStoreError(w, err)
 		return models.AIConnection{}, false
 	}
 
 	baseURL := strings.TrimRight(strings.TrimSpace(p.BaseURL), "/")
 	if baseURL == "" {
-		baseURL = models.DefaultAIBaseURL(provider)
+		baseURL = provider.BaseURL
 	}
 	// Anything but http(s) would be a request this API makes on a member's
 	// behalf to somewhere it should not - a file, an internal scheme.
@@ -70,13 +107,33 @@ func (h *AIHandler) normalize(w http.ResponseWriter, p aiConnectionPayload) (mod
 
 	model := strings.TrimSpace(p.Model)
 	if model == "" {
-		model = models.DefaultAIModel(provider)
+		model = provider.DefaultModel
+	}
+
+	// A connection nobody named is named after what it is: the model, and
+	// enough random characters to tell two of them apart. A list of three
+	// connections all called "Anthropic" is a list nobody can pick from, and
+	// asking for a name before the thing exists is a field people skip.
+	name := strings.TrimSpace(p.Name)
+	if name == "" {
+		name = defaultConnectionName(model)
 	}
 
 	return models.AIConnection{
-		Name: strings.TrimSpace(p.Name), Provider: provider,
+		Name: name, Provider: provider.Name,
 		BaseURL: baseURL, Model: model, Token: strings.TrimSpace(p.Token),
 	}, true
+}
+
+// defaultConnectionName is "<model>-<8 random characters>", the same shape
+// the clients show as the field's placeholder - so saving a blank name gives
+// the member exactly what the form said it would.
+func defaultConnectionName(model string) string {
+	suffix, err := utils.RandomHex(4)
+	if err != nil {
+		return model
+	}
+	return model + "-" + suffix
 }
 
 // List is every connection the caller may spend, their own first. Without
@@ -92,24 +149,17 @@ func (h *AIHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, connections)
 }
 
-// Providers is what this build knows how to talk to, with the address and
-// model each one defaults to - so the form can fill itself in as the member
-// picks, rather than making them look the values up.
+// Providers is the catalogue: what this deployment knows how to talk to, the
+// address and model each one defaults to, and the models worth suggesting -
+// so the form fills itself in as the member picks, and its placeholders say
+// what this provider's values look like rather than the last one's.
 func (h *AIHandler) Providers(w http.ResponseWriter, r *http.Request) {
-	type provider struct {
-		Name         string `json:"name"`
-		DefaultURL   string `json:"defaultUrl"`
-		DefaultModel string `json:"defaultModel"`
+	providers, err := h.connections.ListProviders(r.Context())
+	if err != nil {
+		writeStoreError(w, err)
+		return
 	}
-	list := make([]provider, 0, len(models.AIProviders))
-	for _, name := range models.AIProviders {
-		list = append(list, provider{
-			Name:         name,
-			DefaultURL:   models.DefaultAIBaseURL(name),
-			DefaultModel: models.DefaultAIModel(name),
-		})
-	}
-	writeJSON(w, http.StatusOK, list)
+	writeJSON(w, http.StatusOK, providers)
 }
 
 func (h *AIHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +169,7 @@ func (h *AIHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &p) {
 		return
 	}
-	connection, ok := h.normalize(w, p)
+	connection, ok := h.normalize(w, r, p)
 	if !ok {
 		return
 	}
@@ -147,7 +197,7 @@ func (h *AIHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &p) {
 		return
 	}
-	connection, ok := h.normalize(w, p)
+	connection, ok := h.normalize(w, r, p)
 	if !ok {
 		return
 	}
@@ -287,6 +337,9 @@ type chatPayload struct {
 	// question asked here is kept, so a member can come back to what they
 	// were told.
 	ConversationID string `json:"conversationId"`
+	// ConnectionID is which subscription to spend. Blank is the member's
+	// default - the picker only matters to somebody who has more than one.
+	ConnectionID string `json:"connectionId"`
 }
 
 type chatResponse struct {
@@ -355,8 +408,13 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		history = history[len(history)-maxChatHistory:]
 	}
 
-	answer, ok := h.ask(w, r, userID, "chat", ai.Request{
-		System:    templates.CoachSkill + "\n\n" + h.languageRule(r, userID),
+	// The skill, then who is asking, then the language. The member's own
+	// numbers travel with every question rather than being asked for: a coach
+	// does not ask what you squat every time you speak to them.
+	locale := h.localeOf(r, userID)
+	answer, ok := h.ask(w, r, userID, p.ConnectionID, "chat", ai.Request{
+		System: templates.CoachSkill + "\n\n" + h.memberContext(r, userID, locale) +
+			"\n\n" + LanguageRule(locale),
 		Messages:  history,
 		MaxTokens: p.Settings.MaxTokens,
 	})
@@ -377,7 +435,7 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		conversation.ID, conversation.Title = id, models.AIConversationTitle(question)
 	}
 
-	connection, _ := h.connections.Usable(r.Context(), userID)
+	connection, _ := h.usable(r, userID, p.ConnectionID)
 	if err := h.connections.AppendExchange(r.Context(), conversation.ID, models.AIExchange{
 		Question: question, Answer: answer.Message,
 		Provider: connection.Provider, Model: answer.Model, Usage: answer.Usage,
@@ -415,18 +473,17 @@ func lastQuestion(history []models.ChatMessage) string {
 	return history[len(history)-1].Message
 }
 
-// languageRule tells the model which language to answer in.
+// localeOf is the language this member reads the app in.
 //
-// The member's configured language, not the language of the question: somebody
-// reading the app in French is reading French, and a model left to guess
-// answers in whatever the last exercise name looked like. English when nothing
-// is configured.
-func (h *AIHandler) languageRule(r *http.Request, userID string) string {
+// Their configured one, not the language of the question: somebody reading
+// the app in French is reading French, and a model left to guess answers in
+// whatever the last exercise name looked like. English when nothing is set.
+func (h *AIHandler) localeOf(r *http.Request, userID string) string {
 	user, err := h.users.FindByID(r.Context(), userID)
 	if err != nil {
-		return LanguageRule("en")
+		return "en"
 	}
-	return LanguageRule(localeOf(user, r))
+	return localeOf(user, r)
 }
 
 // LanguageRule is that instruction for a locale, shared with the session
@@ -458,22 +515,39 @@ func languageName(locale string) string {
 	return "English"
 }
 
+// usable is the connection a question goes through: the one asked for, or the
+// member's default.
+func (h *AIHandler) usable(r *http.Request, userID, connectionID string) (models.AIConnection, error) {
+	if strings.TrimSpace(connectionID) == "" {
+		return h.connections.Usable(r.Context(), userID)
+	}
+	return h.connections.UsableByID(r.Context(), userID, strings.TrimSpace(connectionID))
+}
+
 // ask resolves the caller's connection and puts the question, turning the two
 // failures a member can act on into codes the clients translate.
 //
 // feature says what the tokens are being spent on - "chat", "session",
 // "health" - which is a label on the meter below rather than anything the
 // model is told.
-func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request, userID, feature string,
+func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request, userID, connectionID, feature string,
 	request ai.Request) (ai.Response, bool) {
-	connection, err := h.connections.Usable(r.Context(), userID)
+	// The one the member picked, or their default when they did not say.
+	// Somebody with a single key should never have to choose it; somebody
+	// with their own and their coach's should always be able to.
+	connection, err := h.usable(r, userID, connectionID)
 	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
+		switch {
+		case errors.Is(err, store.ErrNotFound) && connectionID != "":
+			// Theirs to spend or not there at all: the two are the same
+			// answer, and which it is is not this endpoint's to disclose.
+			writeError(w, http.StatusNotFound, "Connection not found", CodeNotFound)
+		case errors.Is(err, store.ErrNotFound):
 			writeError(w, http.StatusPreconditionRequired,
 				"Connect an AI provider first", CodeAINotConfigured)
-			return ai.Response{}, false
+		default:
+			writeStoreError(w, err)
 		}
-		writeStoreError(w, err)
 		return ai.Response{}, false
 	}
 

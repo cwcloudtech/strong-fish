@@ -53,6 +53,7 @@ export default function Settings() {
       anonymous: Boolean(user.anonymous),
       bio: user.bio || "",
       bodyweight: user.bodyweight || "",
+      height: user.height || "",
       gender: user.gender || "male",
       // One key per entry in the table, plus the rank the one entry that has
       // it carries. Built from the table so a network added there needs
@@ -89,6 +90,7 @@ export default function Settings() {
       const updated = await auth.updateProfile({
         ...form,
         bodyweight: form.bodyweight === "" ? 0 : Number(form.bodyweight),
+        height: form.height === "" ? 0 : Number(form.height),
         gender: form.gender,
         // The language is part of the profile so transactional emails go out in
         // the one the user is actually reading the app in.
@@ -212,6 +214,16 @@ export default function Settings() {
               {t("profile.bodyweight")} ({t("common.kg")})
             </label>
             <input className="sf-input" type="number" min="0" step="0.1" value={form.bodyweight} onChange={set("bodyweight")} />
+          </div>
+          {/* Nothing is computed from the height - no coefficient uses it -
+              but it is context for whoever reads the training: the same
+              deadlift is a different lift on a 160 cm frame and a 195 cm
+              one, and the AI coach is handed it with the rest of the file. */}
+          <div className="sf-field" style={{ flex: 1, minWidth: 160 }}>
+            <label className="sf-label">
+              {t("profile.height")} ({t("common.cm")}) <span className="sf-muted">({t("common.optional")})</span>
+            </label>
+            <input className="sf-input" type="number" min="0" step="1" value={form.height} onChange={set("height")} />
           </div>
           <div className="sf-field" style={{ flex: 1, minWidth: 160 }}>
             <label className="sf-label">{t("common.language")}</label>

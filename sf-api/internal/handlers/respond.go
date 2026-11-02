@@ -130,6 +130,7 @@ const (
 	CodeInvalidCalendarFile = "errors.invalidCalendarFile"
 	// Profiles, search, invitations and coach requests.
 	CodeInvalidBirthdate         = "errors.invalidBirthdate"
+	CodeInvalidHeight            = "errors.invalidHeight"
 	CodeInvalidProfileVisibility = "errors.invalidProfileVisibility"
 	CodeInvitationNotFound       = "errors.invitationNotFound"
 	CodeAlreadyInvited           = "errors.alreadyInvited"
@@ -241,7 +242,7 @@ func meResponse(user models.User, activationMode string) models.UserMeResponse {
 		PictureX: user.PictureX, PictureY: user.PictureY, Locale: user.Locale,
 		Username: user.Username, Anonymous: user.Anonymous,
 		ProfileVisibility: user.ProfileVisibility, Birthdate: user.Birthdate,
-		CoachRequest: user.CoachRequest, Bodyweight: user.Bodyweight,
+		CoachRequest: user.CoachRequest, Bodyweight: user.Bodyweight, Height: user.Height,
 		Gender:     string(strength.NormalizeGender(user.Gender)),
 		Socials:    models.NormalizeSocials(user.Socials),
 		MFAEnabled: user.MFAEnabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,

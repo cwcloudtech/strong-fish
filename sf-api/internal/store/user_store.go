@@ -52,6 +52,7 @@ type userData struct {
 	CoachRequest      *models.CoachRequest  `json:"coachRequest,omitempty"`
 	IPs               []models.ConnectionIP `json:"ips,omitempty"`
 	Bodyweight        float64               `json:"bodyweight,omitempty"`
+	Height            float64               `json:"height,omitempty"`
 	Socials           *models.Socials       `json:"socials,omitempty"`
 	MFAEnabled        bool                  `json:"mfaEnabled,omitempty"`
 	MFATOTPSecret     string                `json:"mfaTotpSecret,omitempty"`
@@ -107,6 +108,7 @@ func scanUser(row pgx.Row) (models.User, error) {
 	}
 	u.IPs = d.IPs
 	u.Bodyweight = d.Bodyweight
+	u.Height = d.Height
 	u.Gender = d.Gender
 	if d.Socials != nil {
 		u.Socials = models.NormalizeSocials(*d.Socials)
@@ -491,6 +493,7 @@ type ProfileFields struct {
 	ProfileVisibility string
 	Birthdate         string
 	Bodyweight        float64
+	Height            float64
 	// Gender is "male" or "female", and drives the strength coefficients.
 	Gender string
 	// Socials replaces the stored accounts wholesale, so a form that sends a
@@ -521,6 +524,7 @@ func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileField
 		"profileVisibility": models.NormalizeProfileVisibility(f.ProfileVisibility),
 		"birthdate":         f.Birthdate,
 		"bodyweight":        f.Bodyweight,
+		"height":            f.Height,
 		"gender":            f.Gender,
 		// Written as a whole object rather than field by field: the payload
 		// merge is shallow, so this key replaces what was there, which is what

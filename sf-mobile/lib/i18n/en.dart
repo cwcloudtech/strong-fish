@@ -10,6 +10,7 @@ const Map<String, dynamic> en = {
     'tagline': 'Powerlifting app',
   },
   'common': {
+    'cm': 'cm',
     'retry': 'Reload',
     'create': 'Create',
     'copy': 'Copy',
@@ -121,6 +122,8 @@ const Map<String, dynamic> en = {
     'accountCreated': 'Welcome to StrongFish - your account is ready.',
   },
   'profile': {
+    'measures': 'About you',
+    'height': 'Height',
     'title': 'Public profile',
     'gender': 'Gender',
     'genderMale': 'Male',
@@ -598,10 +601,6 @@ const Map<String, dynamic> en = {
       'vigorous': 'Vigorous',
       'peak': 'Peak',
     },
-    'provider': {
-      'google-health': 'Google Health (Fitbit, Pixel Watch)',
-      'withings': 'Withings',
-    },
     'range': {
       '24h': 'Last 24h',
       '48h': 'Last 48h',
@@ -621,8 +620,12 @@ const Map<String, dynamic> en = {
       'account_failed': 'You are signed in, but your data could not be read. If you administer this server, check that the provider\'s API is enabled for this application - the reason is in the logs.',
       'store_failed': 'The connection could not be saved. Please try again.',
     },
+    'provider': {
+      'withings': 'Withings',
+    },
   },
   'errors': {
+    'invalidHeight': 'Please enter a height in centimetres.',
     'aiNotConfigured': 'Connect an AI provider in your settings first.',
     'aiRefused': 'Your AI provider refused the request. Check the key, the model and your quota.',
     'invalidAiProvider': 'Pick an AI provider.',
@@ -827,19 +830,17 @@ const Map<String, dynamic> en = {
     'storeManaged': 'Updates arrive through the App Store',
   },
   'ai': {
+    'connection': 'AI connection',
+    'askWith': 'Ask with',
+    'modelHelp': 'Pick one of your provider\'s models, or type any name it serves.',
+    'defaultConnection': 'Default',
     'title': 'AI connections',
     'subtitle': 'Connect a model to ask it about your training. It is your own account and your own key - and you can lend it to other members, the way you lend a storage.',
     'noConnections': 'No AI connected yet.',
     'addConnection': 'Add a connection',
     'name': 'Name',
-    'namePlaceholder': 'My Mistral key',
+    'namePlaceholder': 'My {{provider}} key',
     'providerLabel': 'Provider',
-    'provider': {
-      'openai': 'OpenAI',
-      'mistral': 'Mistral',
-      'anthropic': 'Anthropic (Claude)',
-      'gemini': 'Google Gemini',
-    },
     'baseUrl': 'Address',
     'baseUrlHelp': 'Where the requests go. Change it to point at a gateway of your own - a LiteLLM, an Ollama, an OpenRouter account.',
     'model': 'Model',
@@ -886,6 +887,12 @@ const Map<String, dynamic> en = {
     'placeholder': 'Ask a question...',
     'send': 'Send',
     'sharedSubtitle': 'A conversation shared from StrongFish.',
+    'provider': {
+      'openai': 'OpenAI',
+      'mistral': 'Mistral',
+      'anthropic': 'Anthropic (Claude)',
+      'gemini': 'Google Gemini',
+    },
   },
   'storage': {
     'noTargets': 'No storage configured yet.',

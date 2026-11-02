@@ -15,6 +15,7 @@ const ar = {
     tagline: "تطبيق رفع الأثقال",
   },
   common: {
+    cm: "سم",
     retry: "إعادة التحميل",
     create: "إنشاء",
     copy: "نسخ",
@@ -124,6 +125,8 @@ const ar = {
     accountCreated: "أهلًا بك في StrongFish، حسابك جاهز.",
   },
   profile: {
+    measures: "عنك",
+    height: "الطول",
     title: "الملف الشخصي العام",
     gender: "الجنس",
     genderMale: "ذكر",
@@ -590,10 +593,6 @@ const ar = {
       vigorous: "عالية",
       peak: "قصوى",
     },
-    provider: {
-      "google-health": "Google Health ‏(Fitbit، Pixel Watch)",
-      withings: "Withings",
-    },
     range: {
       "24h": "آخر 24 ساعة",
       "48h": "آخر 48 ساعة",
@@ -615,6 +614,7 @@ const ar = {
     },
   },
   errors: {
+    invalidHeight: "أدخل الطول بالسنتيمتر.",
     aiNotConfigured: "اربط مزوّد ذكاء اصطناعي في الإعدادات أولاً.",
     aiRefused: "رفض مزوّد الذكاء الاصطناعي الطلب. تحقق من المفتاح والنموذج والحصة.",
     invalidAiProvider: "اختر مزوّد ذكاء اصطناعي.",
@@ -820,20 +820,18 @@ const ar = {
     failed: "تعذّر تحميل التحديث أو تثبيته. حاول لاحقاً.",
   },
   ai: {
+    connection: "اتصال الذكاء الاصطناعي",
+    askWith: "اسأل عبر",
+    modelHelp: "اختر نموذجاً من مزوّدك، أو اكتب أي اسم يقدّمه.",
+    defaultConnection: "الافتراضي",
     title: "اتصالات الذكاء الاصطناعي",
     subtitle:
       "اربط نموذجاً لتسأله عن تدريبك. الحساب حسابك والمفتاح مفتاحك - ويمكنك إعارته لأعضاء آخرين، كما تعير مساحة تخزين.",
     noConnections: "لا يوجد ذكاء اصطناعي مرتبط بعد.",
     addConnection: "إضافة اتصال",
     name: "الاسم",
-    namePlaceholder: "مفتاح Mistral الخاص بي",
+    namePlaceholder: "مفتاح {{provider}} الخاص بي",
     providerLabel: "المزوّد",
-    provider: {
-      openai: "OpenAI",
-      mistral: "Mistral",
-      anthropic: "Anthropic (Claude)",
-      gemini: "Google Gemini",
-    },
     baseUrl: "العنوان",
     baseUrlHelp:
       "إلى أين تذهب الطلبات. غيّره ليشير إلى بوابتك الخاصة: LiteLLM أو Ollama أو حساب OpenRouter.",

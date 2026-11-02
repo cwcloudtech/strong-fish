@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { training } from "../../api/services";
+import { ai, training } from "../../api/services";
 import ExportMenu from "../../components/programs/ExportMenu";
 import downloadBlob from "../../utils/downloadBlob";
+import useToastError from "../../utils/useToast";
 import { ErrorMessage, Spinner } from "../../components/common/Feedback";
 import SessionDay, { exerciseLabel } from "../../components/training/SessionDay";
 import { useAuth } from "../../context/AuthContext";
@@ -35,6 +36,7 @@ function weeksOf(days) {
  */
 export default function TrainingSession() {
   const { t, locale } = useI18n();
+  const toastError = useToastError();
   const { user } = useAuth();
   const { assignmentId } = useParams();
   const [assignment, setAssignment] = useState(null);
@@ -43,12 +45,21 @@ export default function TrainingSession() {
   // Which session is waiting on the model, so one reading does not grey out
   // every button on the page.
   const [reading, setReading] = useState(null);
+  const [connections, setConnections] = useState([]);
 
   const load = useCallback(() => {
     training.get(assignmentId).then(setAssignment).catch(setError);
   }, [assignmentId]);
 
   useEffect(load, [load]);
+
+  // The subscriptions the caller may spend, so the reading button can ask
+  // which one pays when there is more than one.
+  useEffect(() => {
+    ai.connections()
+      .then(setConnections)
+      .catch(() => setConnections([]));
+  }, []);
 
   const logSet = async (set, payload) => {
     await training.logSet(assignmentId, set.id, payload);
@@ -80,7 +91,9 @@ export default function TrainingSession() {
         .join("-");
       downloadBlob(blob, `${name}.${format}`);
     } catch (err) {
-      setError(err);
+      // The page itself is fine - an export that failed is a toast, not a
+      // reason to replace the block with an error.
+      toastError(err);
     } finally {
       setExporting(false);
     }
@@ -89,14 +102,15 @@ export default function TrainingSession() {
   // A reading of one finished session, from the caller's own AI connection -
   // so a coach reviewing their athlete's week pays for it out of their own
   // subscription, which is what lets one key serve a roster that has none.
-  const generateFeedback = async (day) => {
+  const generateFeedback = async (day, connectionId) => {
     setReading(day.id);
-    setError(null);
     try {
-      await training.generateFeedback(assignmentId, day.id, locale);
+      await training.generateFeedback(assignmentId, day.id, locale, connectionId);
       load();
     } catch (err) {
-      setError(err);
+      // A toast, not a line under the table: what failed is the provider, and
+      // the member may well have scrolled away from the session by now.
+      toastError(err);
     } finally {
       setReading(null);
     }
@@ -108,7 +122,7 @@ export default function TrainingSession() {
       await training.deleteFeedback(assignmentId, day.id);
       load();
     } catch (err) {
-      setError(err);
+      toastError(err);
     } finally {
       setReading(null);
     }
@@ -199,6 +213,7 @@ export default function TrainingSession() {
               onGenerateFeedback={generateFeedback}
               onDeleteFeedback={deleteFeedback}
               feedbackBusy={reading === day.id}
+              aiConnections={connections}
             />
           ))}
         </section>

@@ -14,13 +14,19 @@ In **Settings**, under **AI connections**, add one:
 
 | Field | What it is |
 | --- | --- |
-| **Name** | What you call it. "My Mistral key", "the club's gateway". |
-| **Provider** | OpenAI, Mistral, Anthropic (Claude) or Google Gemini. This is the wire format, not a commitment to the vendor. |
+| **Name** | What you call it. Left blank, it is named after the model - `claude-sonnet-5-5-a9bffea3` - which is what the field offers while you type. |
+| **Provider** | OpenAI, Mistral, Anthropic (Claude), Google Gemini, OpenRouter or DeepSeek. This is the wire format, not a commitment to the vendor. |
 | **Address** | Where the requests go. It is filled in for the provider you pick, and it is **editable** - point it at a LiteLLM, an Ollama, an OpenRouter account, anything that speaks the same protocol. |
-| **Model** | Which model to ask. A sensible one is filled in for you. |
+| **Model** | Which model to ask. The field suggests the ones your provider is known to serve, and **takes any name you type** - a model released yesterday works the day it is released. |
 | **API key** | The key from your provider. It is kept on the server and never sent back to a browser or a phone - once saved, the field offers to replace it rather than showing it. |
 
-One connection is enough. If you have several, the app uses your own first.
+Every placeholder follows the provider you pick, so what the fields show is
+that provider's own address, model and key format.
+
+One connection is enough. **If you have several** - your own and one your
+coach lent you - you are asked which one to spend: a picker above the chat,
+and a menu on each AI button. The app never guesses when there is a choice,
+and never asks when there is not.
 
 ### Lending it to other members
 
@@ -31,6 +37,16 @@ This is how a coach pays for one key and lets a roster of athletes use it.
 ## The coach chat
 
 **AI coach** in the menu. Ask anything about your lifting - programming, technique, recovery, meet day. The model answers in the language your account is set to.
+
+It already knows who you are. Every question carries **your file**: your age,
+bodyweight and height, every 1RM you have recorded, the block you are running
+with everything you have logged against it, and what your watch counted in the
+last twenty-four hours. So "should I squat tonight?" is answered against
+tonight's session and today's step count, not in general - and the weights it
+talks about are the kilos your program actually prescribes.
+
+The file is rebuilt for each question rather than written into the
+conversation, so an old thread never answers from a max you have since moved.
 
 Every exchange is kept, so the list on the left is your history rather than this tab's. For each conversation you can:
 
@@ -76,6 +92,10 @@ The instructions are markdown files on the server, not strings buried in the cod
 | `coach.skill.md` | How a coach answers at all: the voice, what to do with an RPE, what never to claim. |
 | `feedback.skill.md` | What a session review specifically is. |
 | `health.skill.md` | What a reading of health data specifically is - including that it is not a diagnosis. |
+
+The providers themselves are a table in the database rather than a list in the
+code, so an operator can correct an address, add an OpenAI-compatible service
+or teach the form a new model name without a new release.
 
 Each is sent with the question, the common one first. The answer is always asked for in the language your account is set to, English when nothing is.
 

@@ -4,6 +4,7 @@ const en = {
     tagline: "Powerlifting app",
   },
   common: {
+    cm: "cm",
     retry: "Reload",
     create: "Create",
     copy: "Copy",
@@ -113,6 +114,8 @@ const en = {
     accountCreated: "Welcome to StrongFish - your account is ready.",
   },
   profile: {
+    measures: "About you",
+    height: "Height",
     title: "Public profile",
     gender: "Gender",
     genderMale: "Male",
@@ -582,10 +585,6 @@ const en = {
       vigorous: "Vigorous",
       peak: "Peak",
     },
-    provider: {
-      "google-health": "Google Health (Fitbit, Pixel Watch)",
-      withings: "Withings",
-    },
     range: {
       "24h": "Last 24h",
       "48h": "Last 48h",
@@ -607,6 +606,7 @@ const en = {
     },
   },
   errors: {
+    invalidHeight: "Please enter a height in centimetres.",
     aiNotConfigured: "Connect an AI provider in your settings first.",
     aiRefused: "Your AI provider refused the request. Check the key, the model and your quota.",
     invalidAiProvider: "Pick an AI provider.",
@@ -812,20 +812,18 @@ const en = {
     failed: "The update could not be downloaded or installed. Please try again later.",
   },
   ai: {
+    connection: "AI connection",
+    askWith: "Ask with",
+    modelHelp: "Pick one of your provider's models, or type any name it serves.",
+    defaultConnection: "Default",
     title: "AI connections",
     subtitle:
       "Connect a model to ask it about your training. It is your own account and your own key - and you can lend it to other members, the way you lend a storage.",
     noConnections: "No AI connected yet.",
     addConnection: "Add a connection",
     name: "Name",
-    namePlaceholder: "My Mistral key",
+    namePlaceholder: "My {{provider}} key",
     providerLabel: "Provider",
-    provider: {
-      openai: "OpenAI",
-      mistral: "Mistral",
-      anthropic: "Anthropic (Claude)",
-      gemini: "Google Gemini",
-    },
     baseUrl: "Address",
     baseUrlHelp:
       "Where the requests go. Change it to point at a gateway of your own - a LiteLLM, an Ollama, an OpenRouter account.",

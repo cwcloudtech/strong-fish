@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,6 +21,7 @@ class AiConnectionsSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(tProvider);
     final connections = ref.watch(aiConnectionsProvider);
+    final providers = ref.watch(aiProvidersProvider).valueOrNull ?? const <AiProvider>[];
     final me = ref.watch(sessionProvider).user?.id ?? '';
 
     return Card(
@@ -44,7 +47,11 @@ class AiConnectionsSection extends ConsumerWidget {
                       style: Theme.of(context).textTheme.bodySmall),
                 ),
               for (final connection in list)
-                _ConnectionTile(connection: connection, mine: connection.ownerId == me),
+                _ConnectionTile(
+                  connection: connection,
+                  mine: connection.ownerId == me,
+                  providers: providers,
+                ),
               const SizedBox(height: 8),
               Align(
                 alignment: AlignmentDirectional.centerStart,
@@ -79,13 +86,21 @@ Future<void> _edit(BuildContext context, WidgetRef ref, AiConnection? connection
 class _ConnectionTile extends ConsumerWidget {
   final AiConnection connection;
   final bool mine;
+  final List<AiProvider> providers;
 
-  const _ConnectionTile({required this.connection, required this.mine});
+  const _ConnectionTile({
+    required this.connection,
+    required this.mine,
+    required this.providers,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(tProvider);
-    final provider = t('ai.provider.${connection.provider}');
+    // The vendor's own name, from the server's catalogue: branding rather
+    // than a translated string, so a copy in three dictionaries would be a
+    // second list to keep in step with the table.
+    final provider = providerLabel(providers, connection.provider);
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
@@ -158,12 +173,17 @@ class _ConnectionForm extends ConsumerStatefulWidget {
 class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
   late final TextEditingController _name;
   late final TextEditingController _baseUrl;
-  late final TextEditingController _model;
+  late final TextEditingController _modelField;
   final _token = TextEditingController();
+  final _modelFocus = FocusNode();
   late String _provider;
   List<AiProvider> _providers = const [];
   bool _busy = false;
   String _error = '';
+  /// The random half of the suggested name, minted once for this form: it
+  /// must not change under the member while they look at it, and two
+  /// connections to the same model have to be tellable apart.
+  final String _suffix = _randomSuffix();
 
   @override
   void initState() {
@@ -171,7 +191,7 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
     final connection = widget.connection;
     _name = TextEditingController(text: connection?.name ?? '');
     _baseUrl = TextEditingController(text: connection?.baseUrl ?? '');
-    _model = TextEditingController(text: connection?.model ?? '');
+    _modelField = TextEditingController(text: connection?.model ?? '');
     _provider = connection?.provider ?? 'mistral';
     _loadProviders();
   }
@@ -191,8 +211,9 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
   void dispose() {
     _name.dispose();
     _baseUrl.dispose();
-    _model.dispose();
+    _modelField.dispose();
     _token.dispose();
+    _modelFocus.dispose();
     super.dispose();
   }
 
@@ -209,12 +230,20 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
       if (_baseUrl.text.isEmpty || _baseUrl.text == previous?.defaultUrl) {
         _baseUrl.text = next?.defaultUrl ?? '';
       }
-      if (_model.text.isEmpty || _model.text == previous?.defaultModel) {
-        _model.text = next?.defaultModel ?? '';
+      if (_modelField.text.isEmpty || _modelField.text == previous?.defaultModel) {
+        _modelField.text = next?.defaultModel ?? '';
       }
       _provider = provider;
     });
   }
+
+  /// What the name field offers, and what a blank one becomes: the model it
+  /// points at, plus the suffix. The API fills a blank name exactly this way,
+  /// so what the placeholder promised is what gets saved.
+  String get _model =>
+      _modelField.text.trim().isEmpty ? (_defaults?.defaultModel ?? '') : _modelField.text.trim();
+
+  String get _suggestedName => _model.isEmpty ? '' : '$_model-$_suffix';
 
   Future<void> _save() async {
     setState(() {
@@ -222,10 +251,10 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
       _error = '';
     });
     final payload = {
-      'name': _name.text.trim(),
+      'name': _name.text.trim().isEmpty ? _suggestedName : _name.text.trim(),
       'provider': _provider,
       'baseUrl': _baseUrl.text.trim().isEmpty ? (_defaults?.defaultUrl ?? '') : _baseUrl.text.trim(),
-      'model': _model.text.trim().isEmpty ? (_defaults?.defaultModel ?? '') : _model.text.trim(),
+      'model': _model,
       'token': _token.text.trim(),
     };
     try {
@@ -248,9 +277,11 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
     final connection = widget.connection;
+    // Until the catalogue arrives, the one the connection already points at:
+    // a dropdown with nothing in it cannot show its own value.
     final names = _providers.isEmpty
-        ? [_provider]
-        : [for (final provider in _providers) provider.name];
+        ? [AiProvider(name: _provider, label: _provider)]
+        : _providers;
 
     return SafeArea(
       child: Padding(
@@ -260,7 +291,10 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
             controller: _name,
             decoration: InputDecoration(
               labelText: t('ai.name'),
-              hintText: t('ai.namePlaceholder'),
+              // The name it will be given if this is left alone.
+              hintText: _suggestedName.isEmpty
+                  ? t('ai.namePlaceholder', {'provider': _defaults?.label ?? _provider})
+                  : _suggestedName,
               border: const OutlineInputBorder(),
             ),
           ),
@@ -272,8 +306,8 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
               border: const OutlineInputBorder(),
             ),
             items: [
-              for (final name in names)
-                DropdownMenuItem(value: name, child: Text(t('ai.provider.$name'))),
+              for (final provider in names)
+                DropdownMenuItem(value: provider.name, child: Text(provider.label)),
             ],
             onChanged: (value) => value == null ? null : _pickProvider(value),
           ),
@@ -289,11 +323,51 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
             ),
           ),
           const SizedBox(height: 12),
-          TextField(
-            controller: _model,
-            decoration: InputDecoration(
-              labelText: t('ai.model'),
-              border: const OutlineInputBorder(),
+          // Suggestions, not a list of permitted values: a provider ships a
+          // model the day before the catalogue hears about it, and the API
+          // takes whatever is typed.
+          RawAutocomplete<String>(
+            textEditingController: _modelField,
+            focusNode: _modelFocus,
+            optionsBuilder: (value) {
+              final needle = value.text.trim().toLowerCase();
+              final models = _defaults?.models ?? const <String>[];
+              if (needle.isEmpty) return models;
+              return models.where((model) => model.toLowerCase().contains(needle));
+            },
+            onSelected: (model) => setState(() => _modelField.text = model),
+            fieldViewBuilder: (context, controller, focusNode, onSubmitted) => TextField(
+              controller: controller,
+              focusNode: focusNode,
+              onSubmitted: (_) => onSubmitted(),
+              decoration: InputDecoration(
+                labelText: t('ai.model'),
+                hintText: _defaults?.defaultModel,
+                helperText: t('ai.modelHelp'),
+                helperMaxLines: 3,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            optionsViewBuilder: (context, onSelected, options) => Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                elevation: 4,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 220, maxWidth: 320),
+                  child: ListView(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    children: [
+                      for (final option in options)
+                        ListTile(
+                          dense: true,
+                          title: Text(option),
+                          onTap: () => onSelected(option),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -302,7 +376,9 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
             obscureText: true,
             decoration: InputDecoration(
               labelText: t('ai.token'),
-              hintText: connection?.hasToken == true ? t('ai.tokenSet') : null,
+              hintText: connection?.hasToken == true
+                  ? t('ai.tokenSet')
+                  : (_defaults?.keyHint.isNotEmpty == true ? _defaults!.keyHint : null),
               helperText: connection?.hasToken == true ? t('ai.tokenKeep') : t('ai.tokenHelp'),
               helperMaxLines: 3,
               border: const OutlineInputBorder(),
@@ -464,4 +540,24 @@ class _SharesSheetState extends ConsumerState<_SharesSheet> {
       ),
     );
   }
+}
+
+/// A provider's display name, from the catalogue the server serves. Falls
+/// back to the stored name for a connection whose provider has since been
+/// taken out of the table: it still works, and showing "deepseek" beats
+/// showing nothing.
+String providerLabel(List<AiProvider> providers, String name) {
+  for (final provider in providers) {
+    if (provider.name == name) return provider.label;
+  }
+  return name;
+}
+
+/// Eight random characters, the tail of a connection's suggested name. Not an
+/// id and not a secret: it exists so the same model twice over reads as two
+/// different connections in a menu.
+String _randomSuffix() {
+  const alphabet = '0123456789abcdef';
+  final random = Random();
+  return List.generate(8, (_) => alphabet[random.nextInt(alphabet.length)]).join();
 }

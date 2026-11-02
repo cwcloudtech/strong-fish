@@ -118,7 +118,10 @@ export const devices = {
   // What the AI made of the last ninety days. Kept, and askable again once a
   // day - the numbers underneath move that often at most.
   healthFeedback: (provider) => body(client.get(`/users/me/devices/${provider}/feedback`)),
-  generateHealthFeedback: (provider) => body(client.post(`/users/me/devices/${provider}/feedback`)),
+  generateHealthFeedback: (provider, connectionId) =>
+    body(client.post(`/users/me/devices/${provider}/feedback`, null, {
+      params: connectionId ? { connectionId } : {},
+    })),
   deleteHealthFeedback: (provider) => body(client.delete(`/users/me/devices/${provider}/feedback`)),
 };
 
@@ -209,7 +212,10 @@ export const ai = {
 
   // Asking. conversationId continues a stored thread; left out, the answer
   // starts one and comes back with its id.
-  ask: (message, conversationId) => body(client.post("/ai/chat", { message, conversationId })),
+  // connectionId says which subscription to spend; blank is the member's
+  // default, which is what somebody with one key always wants.
+  ask: (message, conversationId, connectionId) =>
+    body(client.post("/ai/chat", { message, conversationId, connectionId })),
 
   conversations: () => body(client.get("/ai/conversations")),
   conversation: (conversationId) => body(client.get(`/ai/conversations/${conversationId}`)),
@@ -253,9 +259,9 @@ export const training = {
       .then((response) => response.data),
   // What the AI said about one finished session, generated on demand and
   // kept. Deleting it is how a member asks for another reading.
-  generateFeedback: (assignmentId, dayId, locale) =>
+  generateFeedback: (assignmentId, dayId, locale, connectionId) =>
     body(client.post(`/training/${assignmentId}/days/${dayId}/feedback`, null, {
-      params: locale ? { locale } : {},
+      params: { ...(locale ? { locale } : {}), ...(connectionId ? { connectionId } : {}) },
     })),
   deleteFeedback: (assignmentId, dayId) =>
     body(client.delete(`/training/${assignmentId}/days/${dayId}/feedback`)),

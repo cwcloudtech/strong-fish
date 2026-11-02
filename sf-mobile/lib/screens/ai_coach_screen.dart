@@ -7,6 +7,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/ai_ask_button.dart';
 import '../widgets/export_menu.dart';
 import '../widgets/markdown_text.dart';
 
@@ -187,6 +188,9 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
   bool _asking = false;
   bool _exporting = false;
   String _error = '';
+  // Which subscription the next question is spent on. The picker is only
+  // drawn when there is a choice to make - one key is never worth a control.
+  String _connectionId = '';
 
   @override
   void initState() {
@@ -235,9 +239,8 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
     _toBottom();
 
     try {
-      final answer = await ref
-          .read(apiProvider)
-          .askAi(question, conversationId: _conversation?.id ?? '');
+      final answer = await ref.read(apiProvider).askAi(question,
+          conversationId: _conversation?.id ?? '', connectionId: _connectionId);
       await _load(answer['conversationId']?.toString() ?? _conversation?.id ?? '');
     } catch (error) {
       if (mounted) {
@@ -338,6 +341,10 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
     final colors = AppColors.of(context);
     final conversation = _conversation;
     final exchanges = conversation?.exchanges ?? const <AiExchange>[];
+    final connections = ref.watch(aiConnectionsProvider).valueOrNull ?? const <AiConnection>[];
+    if (_connectionId.isEmpty && connections.isNotEmpty) {
+      _connectionId = connections.first.id;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -364,6 +371,28 @@ class _AiThreadScreenState extends ConsumerState<AiThreadScreen> {
         ],
       ),
       body: Column(children: [
+        // The subscription this thread's next question is spent on, the way
+        // ~/aristochat puts its agent picker above the conversation.
+        if (connections.length > 1)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            child: DropdownButtonFormField<String>(
+              initialValue: _connectionId,
+              decoration: InputDecoration(
+                labelText: t('ai.connection'),
+                border: const OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: [
+                for (final connection in connections)
+                  DropdownMenuItem(
+                    value: connection.id,
+                    child: Text(aiConnectionLabel(connection), overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _connectionId = value ?? ''),
+            ),
+          ),
         if (_error.isNotEmpty)
           Padding(
             padding: const EdgeInsets.all(12),

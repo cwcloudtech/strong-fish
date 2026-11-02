@@ -3,10 +3,11 @@ import { useSearchParams } from "react-router-dom";
 import { FiCpu, FiLink, FiRefreshCw, FiSlash, FiTrash2 } from "react-icons/fi";
 import ReactMarkdown from "react-markdown";
 
-import { devices as devicesApi } from "../../api/services";
+import { ai as aiApi, devices as devicesApi } from "../../api/services";
 import ExportMenu from "../programs/ExportMenu";
 import downloadBlob from "../../utils/downloadBlob";
-import Tooltip from "../common/Tooltip";
+import AskButton from "../ai/AskButton";
+import useToastError from "../../utils/useToast";
 import { ErrorMessage, Spinner } from "../common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -218,31 +219,32 @@ export default function DeviceLinks() {
  */
 function HealthFeedbackPanel({ provider }) {
   const { t } = useI18n();
+  const toastError = useToastError();
   const [feedback, setFeedback] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  // The subscriptions this member may spend, so the button can ask which one
+  // pays when there is more than one.
+  const [connections, setConnections] = useState([]);
 
   useEffect(() => {
     // 404 is the ordinary case - nobody has asked yet - so it is not an error
     // to report, it is an empty panel with a button in it.
     devicesApi.healthFeedback(provider).then(setFeedback).catch(() => setFeedback(null));
+    aiApi.connections().then(setConnections).catch(() => setConnections([]));
   }, [provider]);
 
-  const generate = async () => {
+  const generate = async (connectionId) => {
     setBusy(true);
-    setError(null);
     try {
-      setFeedback(await devicesApi.generateHealthFeedback(provider));
+      setFeedback(await devicesApi.generateHealthFeedback(provider, connectionId));
     } catch (err) {
       // Too soon: the refusal carries the reading it would not replace, so
-      // the panel shows that rather than an error about it.
+      // the panel shows that rather than losing it.
       const refused = err?.response?.data;
-      if (refused?.i18n_code === "errors.healthFeedbackTooSoon") {
+      if (refused?.i18n_code === "errors.healthFeedbackTooSoon" && refused.feedback) {
         setFeedback(refused.feedback);
-        setError(err);
-      } else {
-        setError(err);
       }
+      toastError(err);
     } finally {
       setBusy(false);
     }
@@ -254,7 +256,7 @@ function HealthFeedbackPanel({ provider }) {
       await devicesApi.deleteHealthFeedback(provider);
       setFeedback(null);
     } catch (err) {
-      setError(err);
+      toastError(err);
     } finally {
       setBusy(false);
     }
@@ -272,23 +274,18 @@ function HealthFeedbackPanel({ provider }) {
           <FiCpu /> {t("devices.aiFeedback")}
         </strong>
         <div className="sf-row" style={{ gap: "0.3rem" }}>
-          <Tooltip
-            label={
+          <AskButton
+            connections={connections}
+            onAsk={generate}
+            busy={busy}
+            disabled={waiting}
+            label={feedback ? t("devices.aiFeedbackAgain") : t("devices.aiFeedbackAsk")}
+            tooltip={
               waiting
                 ? t("devices.aiFeedbackNext", { date: nextAt.toLocaleString() })
                 : t("devices.aiFeedbackHelp")
             }
-          >
-            <button
-              type="button"
-              className="sf-button sf-button-secondary sf-button-sm"
-              onClick={generate}
-              disabled={busy || waiting}
-            >
-              {busy ? <span className="sf-button-spinner" aria-hidden="true" /> : <FiCpu />}{" "}
-              {feedback ? t("devices.aiFeedbackAgain") : t("devices.aiFeedbackAsk")}
-            </button>
-          </Tooltip>
+          />
           {feedback ? (
             <button
               type="button"
@@ -303,8 +300,6 @@ function HealthFeedbackPanel({ provider }) {
           ) : null}
         </div>
       </div>
-
-      <ErrorMessage error={error} />
 
       {feedback ? (
         <>

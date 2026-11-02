@@ -99,6 +99,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'profileVisibility': user.profileVisibility,
       'birthdate': user.birthdate,
       'bodyweight': user.bodyweight,
+      'height': user.height,
       'gender': user.gender,
       'socials': user.socials,
       ...changes,
@@ -223,6 +224,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 Text(t('profile.socialsHelp'), style: Theme.of(context).textTheme.bodySmall),
                 const SizedBox(height: 8),
                 _SocialsForm(user: user, onSave: (socials) => _patchProfile(user, {'socials': socials})),
+              ],
+            ),
+          ),
+        ),
+
+        // The numbers that are about the lifter rather than about a lift.
+        // The phone had no way to set any of them: bodyweight and birthdate
+        // were sent back untouched on every save, and the AI coach is handed
+        // all three with the rest of the member's file.
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(t('profile.measures'), style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                _MeasuresForm(
+                  user: user,
+                  onSave: (changes) => _patchProfile(user, changes),
+                ),
               ],
             ),
           ),
@@ -415,6 +437,141 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 /// Saved on a button rather than on every keystroke: these are typed, not
 /// picked, and a request per character would be both wasteful and impossible
 /// to correct halfway through.
+/// Bodyweight, height and birthdate.
+///
+/// Saved together behind one button rather than each on its own: they are
+/// typed in one go, and three separate saves of the whole profile is three
+/// chances for one of them to be written over.
+class _MeasuresForm extends ConsumerStatefulWidget {
+  final User user;
+  final Future<void> Function(Map<String, dynamic>) onSave;
+
+  const _MeasuresForm({required this.user, required this.onSave});
+
+  @override
+  ConsumerState<_MeasuresForm> createState() => _MeasuresFormState();
+}
+
+class _MeasuresFormState extends ConsumerState<_MeasuresForm> {
+  late final TextEditingController _bodyweight;
+  late final TextEditingController _height;
+  late String _birthdate;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _bodyweight = TextEditingController(
+        text: widget.user.bodyweight > 0 ? _fmt(widget.user.bodyweight) : '');
+    _height = TextEditingController(
+        text: widget.user.height > 0 ? _fmt(widget.user.height) : '');
+    _birthdate = widget.user.birthdate;
+  }
+
+  @override
+  void dispose() {
+    _bodyweight.dispose();
+    _height.dispose();
+    super.dispose();
+  }
+
+  double _number(TextEditingController field) =>
+      double.tryParse(field.text.trim().replaceAll(',', '.')) ?? 0;
+
+  Future<void> _pickBirthdate() async {
+    final now = DateTime.now();
+    final current = DateTime.tryParse(_birthdate) ?? DateTime(now.year - 30, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      // Nobody lifting is 120, and a date in the future is a typo.
+      firstDate: DateTime(now.year - 120),
+      lastDate: now,
+    );
+    if (picked != null) {
+      setState(() => _birthdate =
+          '${picked.year.toString().padLeft(4, '0')}-'
+          '${picked.month.toString().padLeft(2, '0')}-'
+          '${picked.day.toString().padLeft(2, '0')}');
+    }
+  }
+
+  Future<void> _save() async {
+    final t = ref.read(tProvider);
+    setState(() => _busy = true);
+    try {
+      await widget.onSave({
+        'bodyweight': _number(_bodyweight),
+        'height': _number(_height),
+        'birthdate': _birthdate,
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('profile.saved'))));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        Expanded(
+          child: TextField(
+            controller: _bodyweight,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: '${t('profile.bodyweight')} (${t('common.kg')})',
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: _height,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: '${t('profile.height')} (${t('common.cm')})',
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ),
+      ]),
+      const SizedBox(height: 8),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.cake_outlined),
+        title: Text(t('profile.birthdate')),
+        subtitle: Text(_birthdate.isEmpty ? t('common.optional') : _birthdate),
+        trailing: _birthdate.isEmpty
+            ? null
+            : IconButton(
+                onPressed: () => setState(() => _birthdate = ''),
+                tooltip: t('common.clear'),
+                icon: const Icon(Icons.close, size: 20),
+              ),
+        onTap: _pickBirthdate,
+      ),
+      const SizedBox(height: 8),
+      FilledButton(
+        onPressed: _busy ? null : _save,
+        child: Text(t('common.save')),
+      ),
+    ]);
+  }
+}
+
 class _SocialsForm extends ConsumerStatefulWidget {
   final User user;
   final Future<void> Function(Map<String, String>) onSave;
