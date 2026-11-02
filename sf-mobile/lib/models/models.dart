@@ -1520,6 +1520,11 @@ class AiExchange {
   final String answer;
   final String provider;
   final String model;
+
+  /// The subscription it was spent on, as it was named at the time: with a
+  /// picker above the thread, two answers in one conversation can come from
+  /// two different keys and two different models.
+  final String connection;
   final DateTime createdAt;
 
   const AiExchange({
@@ -1528,6 +1533,7 @@ class AiExchange {
     this.answer = '',
     this.provider = '',
     this.model = '',
+    this.connection = '',
     required this.createdAt,
   });
 
@@ -1537,8 +1543,13 @@ class AiExchange {
         answer: _toString(json['answer']),
         provider: _toString(json['provider']),
         model: _toString(json['model']),
+        connection: _toString(json['connection']),
         createdAt: _toDate(json['createdAt']),
       );
+
+  /// What the credit calls whatever produced it: the model, or the
+  /// subscription when the provider reported no model at all.
+  String get credited => model.isNotEmpty ? model : connection;
 }
 
 /// A thread of exchanges: what the list shows, and what a thread holds.

@@ -281,6 +281,21 @@ func (h *AIHandler) writeConversationSheet(w http.ResponseWriter, r *http.Reques
 // and it suits the material: a question and its answer are a pair, and a
 // bordered block each is how a reader tells one exchange from the next on a
 // page with no colour.
+// exchangeCredit is the line under an answer: which model produced it and
+// when, the same credit a session reading carries.
+//
+// The model leads here, where a session reading names the subscription: a
+// thread can be asked of two models through one key, so the model is what
+// tells two answers apart. The subscription is the fallback for a provider
+// that reported no model at all.
+func exchangeCredit(exchange models.AIExchange, locale string) string {
+	name := creditName(exchange.Model, exchange.Connection)
+	if name == "" || exchange.CreatedAt.IsZero() {
+		return ""
+	}
+	return programsheet.GeneratedBy(locale, name, exchange.CreatedAt)
+}
+
 func conversationSections(conversation models.AIConversation, locale string) []programsheet.Section {
 	sections := make([]programsheet.Section, 0, len(conversation.Exchanges)*2)
 	for i, exchange := range conversation.Exchanges {
@@ -289,9 +304,16 @@ func conversationSections(conversation models.AIConversation, locale string) []p
 			Columns: []programsheet.Column{{Header: programsheet.Heading(locale, "question"), Weight: 1}},
 			Rows:    textRows(exchange.Question),
 		})
+		// The answer, then what produced it: with a picker above the thread,
+		// two answers in one conversation can come from two models, and a
+		// printed page that does not say which is a page nobody can check.
+		answer := textRows(exchange.Answer)
+		if credit := exchangeCredit(exchange, locale); credit != "" {
+			answer = append(answer, programsheet.Line{Cells: []string{credit}})
+		}
 		sections = append(sections, programsheet.Section{
 			Columns: []programsheet.Column{{Header: programsheet.Heading(locale, "answer"), Weight: 1}},
-			Rows:    textRows(exchange.Answer),
+			Rows:    answer,
 		})
 	}
 	return sections

@@ -11,6 +11,7 @@ import { connectionLabel } from "../../components/ai/AskButton";
 import ShareButtons from "../../components/common/ShareButtons";
 import { ConfirmModal } from "../../components/common/Modal";
 import downloadBlob from "../../utils/downloadBlob";
+import longDate from "../../utils/longDate";
 import toastOptions from "../../utils/toastOptions";
 import { ai as aiApi } from "../../api/services";
 import { EmptyState, Spinner } from "../../components/common/Feedback";
@@ -25,7 +26,7 @@ import { useI18n } from "../../i18n/I18nContext";
  * is worth more than a browser tab.
  */
 export default function Coach() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const toastError = useToastError();
   const [conversations, setConversations] = useState(null);
   const [current, setCurrent] = useState(null);
@@ -37,6 +38,11 @@ export default function Coach() {
   // coach's key beside their own - so with one it is simply not drawn.
   const [connections, setConnections] = useState([]);
   const [connectionId, setConnectionId] = useState("");
+  // Which model that subscription is asked for. Its own by default; a thread
+  // can switch mid-conversation, which is why each answer says what produced
+  // it.
+  const [providers, setProviders] = useState([]);
+  const [model, setModel] = useState("");
   // Which threads the member has ticked, for deleting several at once.
   const [picked, setPicked] = useState([]);
   const [exporting, setExporting] = useState(false);
@@ -61,9 +67,20 @@ export default function Coach() {
       .then((list) => {
         setConnections(list);
         setConnectionId(list[0]?.id || "");
+        setModel(list[0]?.model || "");
       })
       .catch(() => setConnections([]));
+    // The catalogue, for the models worth offering beside the connection's own.
+    aiApi.providers().then(setProviders).catch(() => setProviders([]));
   }, [loadList]);
+
+  // Picking a subscription moves the model with it: a model name belongs to
+  // the provider that serves it, and carrying one across would ask Mistral
+  // for a Claude.
+  const pickConnection = (id) => {
+    setConnectionId(id);
+    setModel(connections.find((connection) => connection.id === id)?.model || "");
+  };
 
   // The newest turn, every time one arrives: a thread that answers below the
   // fold looks like it did not answer.
@@ -97,7 +114,7 @@ export default function Coach() {
     setQuestion("");
 
     try {
-      const answer = await aiApi.ask(text, current?.id, connectionId);
+      const answer = await aiApi.ask(text, current?.id, connectionId, model);
       setCurrent(await aiApi.conversation(answer.conversationId));
       loadList();
     } catch (err) {
@@ -219,8 +236,22 @@ export default function Coach() {
                   label: connectionLabel(connection, t),
                 }))}
                 value={connectionId}
-                onChange={setConnectionId}
+                onChange={pickConnection}
                 placeholder={t("ai.connection")}
+              />
+            </div>
+          ) : null}
+          {/* Which model answers. Drawn as soon as there is a subscription,
+              because switching model is a choice even with one key - the
+              same question put to a bigger model is half of what this is
+              for. */}
+          {connections.length > 0 ? (
+            <div style={{ minWidth: 200 }}>
+              <Select
+                options={modelOptions(connections, connectionId, providers, model)}
+                value={model}
+                onChange={setModel}
+                placeholder={t("ai.model")}
               />
             </div>
           ) : null}
@@ -421,6 +452,17 @@ export default function Coach() {
                       ) : (
                         <span className="sf-muted">{t("ai.thinking")}</span>
                       )}
+                      {/* Which model answered, and when. A thread can switch
+                          model between turns, so the answer has to say which
+                          one this was. */}
+                      {exchange.model || exchange.connection ? (
+                        <p className="sf-ai-credit">
+                          {t("ai.generatedBy", {
+                            connection: exchange.model || exchange.connection,
+                            date: longDate(locale, exchange.createdAt),
+                          })}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -451,4 +493,21 @@ export default function Coach() {
       </div>
     </div>
   );
+}
+
+/**
+ * The models to offer for the picked subscription: its own first, then the
+ * ones its provider is known to serve.
+ *
+ * Its own leads because that is what it answers with unless told otherwise,
+ * and it may well be a name the catalogue has never heard of - somebody's
+ * gateway routing name, a model released last week. A list that dropped it
+ * would be a list that cannot select what is already configured.
+ */
+function modelOptions(connections, connectionId, providers, current) {
+  const connection = connections.find((candidate) => candidate.id === connectionId);
+  const catalogue = providers.find((provider) => provider.name === connection?.provider);
+
+  const names = [connection?.model, current, ...(catalogue?.models || [])].filter(Boolean);
+  return [...new Set(names)].map((name) => ({ value: name, label: name }));
 }

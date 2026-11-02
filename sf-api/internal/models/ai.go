@@ -178,6 +178,10 @@ type AIExchange struct {
 	Answer   string `json:"answer"`
 	Provider string `json:"provider,omitempty"`
 	Model    string `json:"model,omitempty"`
+	// Connection is the subscription it was spent on, as it was named at the
+	// time: with a picker above the thread, two answers in one conversation
+	// can come from two different keys and two different models.
+	Connection string `json:"connection,omitempty"`
 	// Usage is what the provider reported spending, kept so somebody lending
 	// a key can see where it went.
 	Usage     map[string]any `json:"usage,omitempty"`

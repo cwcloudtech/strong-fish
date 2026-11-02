@@ -318,14 +318,17 @@ func (h *TrainingHandler) ExportAssignment(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// creditName is what the credit line calls the thing that produced a reading:
-// the subscription it was spent on, or - for a reading made before those were
-// recorded - the model itself.
-func creditName(connection, model string) string {
-	if utils.IsNotBlank(connection) {
-		return connection
+// creditName is what a credit line calls the thing that produced an answer:
+// the first of the two that was recorded.
+//
+// Which one leads is the caller's to decide, because the two surfaces differ:
+// a session reading names the subscription that paid for it, while an answer
+// in a thread names the model, since one key can be asked of several.
+func creditName(first, second string) string {
+	if utils.IsNotBlank(first) {
+		return first
 	}
-	return model
+	return second
 }
 
 // narrowDays limits a block to one session, or to one week, or leaves it whole
