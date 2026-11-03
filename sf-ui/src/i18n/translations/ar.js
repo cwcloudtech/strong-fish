@@ -574,6 +574,8 @@ const ar = {
     title: "الأجهزة المتصلة",
     subtitle: "اقرأ ما قاسته ساعتك وميزانك بالفعل. لا يُكتب شيء في المقابل، ولا يُخزَّن شيء هنا.",
     connect: "ربط",
+    connectGoogle: "الاتصال عبر Google",
+    connectGoogleHint: "أكمِل تسجيل الدخول عبر Google في تطبيق الويب.",
     disconnect: "إلغاء الربط",
     notConnected: "غير مرتبط.",
     unavailable: "غير مفعّل على هذا الخادم.",

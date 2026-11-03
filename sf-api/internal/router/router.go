@@ -235,6 +235,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					// than an OAuth redirect: pair with a password, read the
 					// last set of each lift.
 					r.Post("/{provider}/pair", h.Device.PairDevice)
+					r.Post("/{provider}/google", h.Device.PairDeviceGoogle)
 					r.Get("/{provider}/bar-speed", h.Device.BarSpeed)
 				})
 

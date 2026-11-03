@@ -142,6 +142,25 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     }
   }
 
+  /// Opens the web app to finish connecting with Google, where the browser
+  /// runs Google's own sign-in. Native Google sign-in needs a plugin the app
+  /// does not bundle, so - like the other providers' consent - this step
+  /// happens in the browser.
+  Future<void> _connectGoogleWeb() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final t = ref.read(tProvider);
+    final base = ref.read(apiProvider).client.frontendUrl;
+    try {
+      final opened = await launchUrl(Uri.parse('$base/dashboard/steps'),
+          mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(t('devices.recordFailed'))));
+      }
+    } catch (_) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(t('devices.recordFailed'))));
+    }
+  }
+
   /// Opens the Stance app to record a set. Stance owns the encoder and does
   /// the capture; StrongFish reads the result back afterwards.
   Future<void> _record(String url) async {
@@ -230,7 +249,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   icon: const Icon(Icons.link_off, size: 18),
                   label: Text(t('devices.disconnect')),
                 )
-              else if (!connection.accountPaired)
+              else if (connection.oauth)
                 FilledButton.icon(
                   // Offered but not pressable when the server has no
                   // credentials for it: there is nothing to consent to.
@@ -241,6 +260,30 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   label: Text(t('devices.connect')),
                 ),
             ]),
+            // Stance can also be connected with Google. Native Google
+            // sign-in needs a plugin the app does not bundle, so - as with the
+            // other providers' consent - it is finished in the browser, where
+            // the web app runs Google's own sign-in.
+            if (!connection.connected &&
+                connection.googleClientId.isNotEmpty &&
+                connection.available) ...[
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: OutlinedButton.icon(
+                    onPressed: _connectGoogleWeb,
+                    icon: const Icon(Icons.login, size: 18),
+                    label: Text(t('devices.connectGoogle')),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(t('devices.connectGoogleHint'),
+                    style: Theme.of(context).textTheme.bodySmall),
+              ),
+            ],
             // Account-paired providers (Stance) sign in with an email and
             // password rather than a consent redirect.
             if (!connection.connected && connection.accountPaired && connection.available)

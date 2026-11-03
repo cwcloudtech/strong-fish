@@ -2,102 +2,176 @@ package stance
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
-// TestMatchLiftReadsFreeText covers the one judgement the integration makes on
-// its own: Stance stores a free-text exercise, and the charts key on three
-// lifts. Getting it wrong drops a set off the screen silently, so the shapes a
-// member actually types are pinned.
 func TestMatchLiftReadsFreeText(t *testing.T) {
 	cases := map[string]string{
-		"Comp Squat":      LiftSquat,
-		"Back Squat":      LiftSquat,
-		"Bench Press":     LiftBench,
-		"Paused Bench":    LiftBench,
-		"Deadlift (comp)": LiftDeadlift,
-		"Dead Lift":       LiftDeadlift,
-		"Overhead Press":  "",
-		"Barbell Row":     "",
+		"Back Squat (comp)": LiftSquat,
+		"Paused Bench":      LiftBench,
+		"Sumo Deadlift":     LiftDeadlift,
+		"dead lift":         LiftDeadlift,
+		"Overhead Press":    "",
 	}
-	for exercise, want := range cases {
-		if got := matchLift(exercise); got != want {
-			t.Errorf("matchLift(%q) = %q, want %q", exercise, got, want)
+	for in, want := range cases {
+		if got := matchLift(in); got != want {
+			t.Errorf("matchLift(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
 
-// TestLastSetsKeepsTheNewestPerLift covers the read's whole job: newest first,
-// one set per lift. A second, older squat in the feed must not shadow the
-// first, and a lift never tracked must be absent rather than a zero row.
-func TestLastSetsKeepsTheNewestPerLift(t *testing.T) {
+func TestEnabledRequiresFirebaseAndSupabase(t *testing.T) {
+	full := Config{FirebaseAPIKey: "k", SupabaseProjectRef: "ref", SupabaseAnonKey: "anon"}
+	if !full.Enabled() {
+		t.Fatal("want enabled with firebase key + supabase ref + anon key")
+	}
+	if (Config{SupabaseProjectRef: "ref", SupabaseAnonKey: "anon"}).Enabled() {
+		t.Error("must be disabled without a firebase api key")
+	}
+	if (Config{FirebaseAPIKey: "k", SupabaseAnonKey: "anon"}).Enabled() {
+		t.Error("must be disabled without a supabase project")
+	}
+	if full.GoogleEnabled() {
+		t.Error("google must be off until a client id/secret are set")
+	}
+	withGoogle := full
+	withGoogle.GoogleClientID = "id"
+	if !withGoogle.GoogleEnabled() {
+		t.Error("google should be on with a public client id")
+	}
+}
+
+func TestPairPasswordSignsInAndRefusesBadCredentials(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		// Two squats (newest first), one bench, no deadlift.
-		_, _ = w.Write([]byte(`[
-			{"exercise_raw":"Comp Squat","weight_kg":180,"reps":3,"rpe":8,"predicted_rpe":8.5,
-			 "set_ended_at_epoch_ms":200,"repetitions":[{"rep_index":0,"mean_concentric_velocity":0.4}]},
-			{"exercise_raw":"Bench Press","weight_kg":120,"reps":2,"set_ended_at_epoch_ms":150,
-			 "repetitions":[{"rep_index":0,"mean_concentric_velocity":0.2}]},
-			{"exercise_raw":"Back Squat","weight_kg":170,"reps":5,"set_ended_at_epoch_ms":100,
-			 "repetitions":[{"rep_index":0,"mean_concentric_velocity":0.5}]}
-		]`))
+		if !strings.Contains(r.URL.Path, "accounts:signInWithPassword") {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		var body struct{ Email, Password string }
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body.Password == "right" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"idToken": "id", "refreshToken": "ref", "localId": "uid-1", "expiresIn": "3600",
+			})
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"error": map[string]any{"message": "INVALID_LOGIN_CREDENTIALS"},
+		})
 	}))
 	defer server.Close()
 
-	client := New(Config{SupabaseURL: server.URL, SupabaseAnonKey: "anon"})
-	sets, err := client.LastSets(context.Background(), "token", "user")
+	c := New(Config{
+		FirebaseAPIKey: "k", SupabaseAnonKey: "anon", SupabaseURL: server.URL,
+		FirebaseAuthURL: server.URL,
+	})
+
+	session, err := c.PairPassword(context.Background(), "a@b.co", "right")
+	if err != nil {
+		t.Fatalf("good credentials: %v", err)
+	}
+	if session.FirebaseUID != "uid-1" || session.IDToken != "id" || session.RefreshToken != "ref" {
+		t.Fatalf("session not mapped: %+v", session)
+	}
+
+	if _, err := c.PairPassword(context.Background(), "a@b.co", "wrong"); !errors.Is(err, ErrRefused) {
+		t.Fatalf("bad credentials: want ErrRefused, got %v", err)
+	}
+}
+
+func TestPairGoogleSignsInWithIdToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "accounts:signInWithIdp") {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		var body struct{ PostBody string }
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if !strings.Contains(body.PostBody, "google-id-token") ||
+			!strings.Contains(body.PostBody, "providerId=google.com") {
+			t.Errorf("idp postBody wrong: %s", body.PostBody)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"idToken": "fb-id", "refreshToken": "fb-ref", "localId": "uid-2", "expiresIn": "3600",
+		})
+	}))
+	defer server.Close()
+
+	c := New(Config{
+		FirebaseAPIKey: "k", SupabaseAnonKey: "anon", SupabaseURL: server.URL,
+		GoogleClientID: "gid", FirebaseAuthURL: server.URL,
+	})
+
+	if c.GoogleClientID() != "gid" {
+		t.Fatalf("want client id exposed, got %q", c.GoogleClientID())
+	}
+	session, err := c.PairGoogle(context.Background(), "google-id-token")
+	if err != nil {
+		t.Fatalf("PairGoogle: %v", err)
+	}
+	if session.FirebaseUID != "uid-2" || session.IDToken != "fb-id" {
+		t.Fatalf("session not mapped: %+v", session)
+	}
+}
+
+func TestGoogleClientIDBlankWhenUnconfigured(t *testing.T) {
+	c := New(Config{FirebaseAPIKey: "k", SupabaseProjectRef: "ref", SupabaseAnonKey: "anon"})
+	if id := c.GoogleClientID(); id != "" {
+		t.Fatalf("want blank client id without google configured, got %s", id)
+	}
+}
+
+func TestLastSetsKeepsTheNewestPerLift(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/rest/v1/users"):
+			if r.URL.Query().Get("firebase_id") != "eq.uid-1" {
+				t.Errorf("users filter wrong: %s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]any{{"id": "internal-1"}})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/rest/v1/rpc/get_user_sessions"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body["user_id_param"] != "internal-1" {
+				t.Errorf("rpc param wrong: %v", body)
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"exercise": "Back Squat", "weight": 100.0, "weight_unit_name": "kg",
+					"predicted_rpe_tag": "8", "ended": "2026-01-01T10:00:00Z",
+					"repetitions": []map[string]any{{"mean_concentric_velocity": 0.5, "rep_order": 1}}},
+				{"exercise": "Comp Squat", "weight": 110.0, "weight_unit_name": "kg",
+					"predicted_rpe_tag": "9", "ended": "2026-02-01T10:00:00Z",
+					"repetitions": []map[string]any{{"mean_concentric_velocity": 0.4, "rep_order": 1}}},
+				{"exercise": "Bench Press", "weight": 80.0, "weight_unit_name": "kg",
+					"predicted_rpe_tag": "7", "ended": "2026-01-15T10:00:00Z",
+					"repetitions": []map[string]any{{"mean_concentric_velocity": 0.3, "rep_order": 1}}},
+				{"exercise": "Overhead Press", "weight": 50.0, "weight_unit_name": "kg",
+					"ended": "2026-03-01T10:00:00Z", "repetitions": []map[string]any{}},
+			})
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	c := New(Config{FirebaseAPIKey: "k", SupabaseAnonKey: "anon", SupabaseURL: server.URL})
+
+	sets, err := c.LastSets(context.Background(), "uid-1")
 	if err != nil {
 		t.Fatalf("LastSets: %v", err)
 	}
-
-	byLift := map[string]Set{}
-	for _, set := range sets {
-		if _, seen := byLift[set.Lift]; seen {
-			t.Fatalf("lift %q returned twice", set.Lift)
-		}
-		byLift[set.Lift] = set
+	if len(sets) != 2 {
+		t.Fatalf("want 2 lifts (squat, bench), got %d: %+v", len(sets), sets)
 	}
-	if squat, ok := byLift[LiftSquat]; !ok || squat.WeightKg != 180 {
-		t.Errorf("squat should be the newest (180kg), got %+v", byLift[LiftSquat])
+	// Newest first: the Feb squat before the Jan bench; and the newer squat wins.
+	if sets[0].Lift != LiftSquat || sets[0].WeightKg != 110 || sets[0].PredictedRPE != 9 {
+		t.Errorf("squat not the newest: %+v", sets[0])
 	}
-	if _, ok := byLift[LiftBench]; !ok {
-		t.Error("bench should be present")
+	if sets[1].Lift != LiftBench {
+		t.Errorf("want bench second, got %+v", sets[1])
 	}
-	if _, ok := byLift[LiftDeadlift]; ok {
-		t.Error("deadlift was never tracked and should be absent")
-	}
-}
-
-// TestPairRefusesBadCredentials covers the one error the member can act on: a
-// wrong password has to come back as ErrRefused, not a generic failure, or the
-// screen cannot tell them to check what they typed.
-func TestPairRefusesBadCredentials(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte(`{"error":"invalid_grant","error_description":"Invalid login credentials"}`))
-	}))
-	defer server.Close()
-
-	client := New(Config{SupabaseURL: server.URL, SupabaseAnonKey: "anon"})
-	if _, err := client.Pair(context.Background(), "a@b.co", "wrong"); !isRefused(err) {
-		t.Errorf("want ErrRefused, got %v", err)
-	}
-}
-
-func isRefused(err error) bool {
-	for err != nil {
-		if err == ErrRefused {
-			return true
-		}
-		type wrapped interface{ Unwrap() error }
-		if w, ok := err.(wrapped); ok {
-			err = w.Unwrap()
-			continue
-		}
-		return false
-	}
-	return false
 }

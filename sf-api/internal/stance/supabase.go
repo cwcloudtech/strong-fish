@@ -3,360 +3,240 @@ package stance
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// supabaseURLTemplate builds a project's API base URL from its ref: every
-// Supabase project answers at https://<ref>.supabase.co.
-const supabaseURLTemplate = "https://%s.supabase.co"
-
-// Config is what an operator sets to switch the integration on. Empty leaves
-// it off (see Enabled), which is how a deployment with no Stance arrangement
-// behaves: the provider is listed as unavailable and nothing here runs.
-//
-// Every value has a home in ~/.stance.env. The URLs and the table/bucket
-// names are overridable so this one implementation can be pointed at a
-// stand-in while developing, or corrected without a release if Stance's schema
-// differs - the defaults below are Stance's documented shapes, not a contract.
-type Config struct {
-	// SupabaseProjectRef names the Stance project; its API base URL is built
-	// from it with supabaseURLTemplate. SupabaseAnonKey is the project's
-	// client key. The ref and the key both empty means the feature is off.
-	SupabaseProjectRef string
-	SupabaseAnonKey    string
-	// SupabaseURL overrides the base URL built from SupabaseProjectRef. Blank
-	// in normal use; set directly to point at a stand-in while developing, or
-	// in tests.
-	SupabaseURL string
-	// PreprocessURL is the recompute service for squat and bench. Blank
-	// leaves Submit without a conclusion for those lifts rather than failing.
-	PreprocessURL string
-	// SetsTable is the PostgREST relation the last sets are read from, and
-	// SetsSelect the columns/embeds to pull. Overridable in case Stance's
-	// relation differs from the default.
-	SetsTable  string
-	SetsSelect string
-	// AppURL is where the "record a set" button sends the member: the Stance
-	// app on the same phone, which owns the encoder and does the capture.
-	// Blank defaults to the app's store entry, which brings the installed app
-	// forward; a deep link can replace it without a client release.
-	AppURL string
-	// HTTPClient is injected by tests; nil uses a default with a sane
-	// timeout.
-	HTTPClient *http.Client
-}
-
-// Enabled reports whether there is enough to attempt a call.
-func (c Config) Enabled() bool {
-	return (strings.TrimSpace(c.SupabaseProjectRef) != "" || strings.TrimSpace(c.SupabaseURL) != "") &&
-		strings.TrimSpace(c.SupabaseAnonKey) != ""
-}
-
-// withDefaults fills in Stance's documented shapes for anything left blank.
-func (c Config) withDefaults() Config {
-	c.SupabaseURL = strings.TrimRight(strings.TrimSpace(c.SupabaseURL), "/")
-	if c.SupabaseURL == "" && strings.TrimSpace(c.SupabaseProjectRef) != "" {
-		c.SupabaseURL = fmt.Sprintf(supabaseURLTemplate, strings.TrimSpace(c.SupabaseProjectRef))
-	}
-	c.PreprocessURL = strings.TrimRight(strings.TrimSpace(c.PreprocessURL), "/")
-	if c.SetsTable == "" {
-		c.SetsTable = "full_sets"
-	}
-	if c.AppURL == "" {
-		c.AppURL = "https://play.google.com/store/apps/details?id=com.stancehome.Stance_Fitness"
-	}
-	if c.SetsSelect == "" {
-		// The set, plus its reps embedded, in Stance's own field names. A
-		// relation that names its columns differently is corrected here, not
-		// in the caller.
-		c.SetsSelect = "id,exercise_raw,weight_kg,weight_unit,reps,rpe,predicted_rpe," +
-			"mean_concentric_velocity,peak_concentric_velocity,set_ended_at_epoch_ms," +
-			"repetitions(mean_concentric_velocity,rep_index)"
-	}
-	return c
-}
-
-// supabaseClient is the one implementation of Client, talking to Stance's
-// Supabase backend. Everything specific to it - the auth grant shapes, the
-// PostgREST query, the recompute call - lives here so the Client interface
-// stays about bar speed and nothing else.
-type supabaseClient struct {
-	cfg  Config
-	http *http.Client
-}
-
-// New builds the Supabase-backed client. A disabled config still returns a
-// client; its Enabled reports false and the handlers never call the rest.
-func New(cfg Config) Client {
-	cfg = cfg.withDefaults()
-	httpClient := cfg.HTTPClient
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 20 * time.Second}
-	}
-	return &supabaseClient{cfg: cfg, http: httpClient}
-}
-
-func (c *supabaseClient) Enabled() bool     { return c.cfg.Enabled() }
-func (c *supabaseClient) RecordURL() string { return c.cfg.AppURL }
-
-// --- auth (GoTrue) ---
-
-type tokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int    `json:"expires_in"`
-	User         struct {
-		ID string `json:"id"`
-	} `json:"user"`
-	Error            string `json:"error"`
-	ErrorDescription string `json:"error_description"`
-	Message          string `json:"msg"`
-}
-
-func (c *supabaseClient) Pair(ctx context.Context, email, password string) (Session, error) {
-	return c.token(ctx, "password", map[string]string{
-		"email": strings.TrimSpace(email), "password": password,
-	})
-}
-
-func (c *supabaseClient) Refresh(ctx context.Context, refreshToken string) (Session, error) {
-	return c.token(ctx, "refresh_token", map[string]string{"refresh_token": refreshToken})
-}
-
-// token runs one GoTrue grant. The access token is short-lived; ExpiresAt is
-// computed from expires_in so the caller renews before a read rather than
-// after a 401.
-func (c *supabaseClient) token(ctx context.Context, grant string, body map[string]string) (Session, error) {
-	endpoint := c.cfg.SupabaseURL + "/auth/v1/token?grant_type=" + grant
-
-	var parsed tokenResponse
-	status, err := c.call(ctx, http.MethodPost, endpoint, "", body, &parsed)
-	if err != nil {
-		return Session{}, err
-	}
-	if status == http.StatusBadRequest || status == http.StatusUnauthorized {
-		// GoTrue says why in the body. A bad password on pairing and a dead
-		// refresh token are both "connect again" to the member, but the
-		// provider's words go in the log.
-		return Session{}, fmt.Errorf("%w: %s", ErrRefused, firstNonEmpty(parsed.ErrorDescription, parsed.Message, parsed.Error))
-	}
-	if status/100 != 2 || parsed.AccessToken == "" {
-		return Session{}, fmt.Errorf("stance: auth failed (status %d)", status)
-	}
-
-	session := Session{
-		AccessToken:  parsed.AccessToken,
-		RefreshToken: parsed.RefreshToken,
-		UserID:       parsed.User.ID,
-	}
-	if parsed.ExpiresIn > 0 {
-		session.ExpiresAt = time.Now().Add(time.Duration(parsed.ExpiresIn) * time.Second)
-	}
-	return session, nil
-}
-
-// --- reads (PostgREST) ---
-
-// setRow is one row of the sets relation, in Stance's field names. Tolerant
-// of a column being absent: the exact schema is not pinned, and a missing
-// velocity is a zero, not a parse failure.
-type setRow struct {
-	Exercise     string  `json:"exercise_raw"`
-	WeightKg     float64 `json:"weight_kg"`
-	Reps         int     `json:"reps"`
-	RPE          float64 `json:"rpe"`
-	PredictedRPE float64 `json:"predicted_rpe"`
-	MeanVelocity float64 `json:"mean_concentric_velocity"`
-	PeakVelocity float64 `json:"peak_concentric_velocity"`
-	EndedAtMs    int64   `json:"set_ended_at_epoch_ms"`
-	Repetitions  []struct {
-		MeanVelocity float64 `json:"mean_concentric_velocity"`
-		RepIndex     int     `json:"rep_index"`
-	} `json:"repetitions"`
-}
-
-func (c *supabaseClient) LastSets(ctx context.Context, accessToken, userID string) ([]Set, error) {
-	// Newest first; the first row seen for each lift is its last set. A plain
-	// descending order over the member's rows, filtered server-side, so one
-	// request covers all three lifts.
-	query := url.Values{}
-	query.Set("select", c.cfg.SetsSelect)
-	query.Set("user_id", "eq."+userID)
-	query.Set("order", "set_ended_at_epoch_ms.desc")
-	query.Set("limit", "200")
-	endpoint := c.cfg.SupabaseURL + "/rest/v1/" + c.cfg.SetsTable + "?" + query.Encode()
-
-	var rows []setRow
-	status, err := c.call(ctx, http.MethodGet, endpoint, accessToken, nil, &rows)
+// LastSets reads the member's sets from Supabase and returns the most recent
+// of each lift, newest first. It resolves the Firebase uid to Stance's
+// internal user id, then asks for that user's sets. Reads carry the anon key
+// only - there is no per-member Supabase token.
+func (c *client) LastSets(ctx context.Context, firebaseUID string) ([]Set, error) {
+	userID, err := c.resolveUserID(ctx, firebaseUID)
 	if err != nil {
 		return nil, err
 	}
-	if status == http.StatusUnauthorized {
-		return nil, ErrReauthorize
+	if userID == "" {
+		// The account exists but has no row yet - no sets to show.
+		return nil, nil
 	}
-	if status/100 != 2 {
-		return nil, fmt.Errorf("stance: reading sets failed (status %d)", status)
+	rows, err := c.fetchSets(ctx, userID)
+	if err != nil {
+		return nil, err
 	}
 
-	seen := map[string]bool{}
-	sets := []Set{}
+	// Keep the newest set of each of the three lifts.
+	newest := map[string]Set{}
 	for _, row := range rows {
 		lift := matchLift(row.Exercise)
-		if lift == "" || seen[lift] {
+		if lift == "" {
 			continue
 		}
-		seen[lift] = true
-		sets = append(sets, row.toSet(lift))
-		if len(seen) == len(Lifts) {
+		set := row.toSet(lift)
+		if cur, ok := newest[lift]; !ok || set.PerformedAt.After(cur.PerformedAt) {
+			newest[lift] = set
+		}
+	}
+	out := make([]Set, 0, len(newest))
+	for _, set := range newest {
+		out = append(out, set)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].PerformedAt.After(out[j].PerformedAt) })
+	return out, nil
+}
+
+// resolveUserID maps a Firebase uid to Stance's internal user id (the key the
+// sets are filtered by). Blank when there is no such user yet.
+func (c *client) resolveUserID(ctx context.Context, firebaseUID string) (string, error) {
+	q := url.Values{}
+	q.Set("firebase_id", "eq."+firebaseUID)
+	q.Set("select", "id")
+	q.Set("limit", "1")
+	endpoint := c.cfg.SupabaseURL + "/rest/v1/" + c.cfg.UsersTable + "?" + q.Encode()
+
+	var rows []struct {
+		ID string `json:"id"`
+	}
+	status, err := c.supabaseCall(ctx, http.MethodGet, endpoint, nil, &rows)
+	if err != nil {
+		return "", err
+	}
+	if status/100 != 2 {
+		return "", fmt.Errorf("stance: user lookup failed (status %d)", status)
+	}
+	if len(rows) == 0 {
+		return "", nil
+	}
+	return rows[0].ID, nil
+}
+
+// fetchSets calls the sessions RPC for one user and returns the flattened sets.
+func (c *client) fetchSets(ctx context.Context, userID string) ([]fullSet, error) {
+	endpoint := c.cfg.SupabaseURL + "/rest/v1/rpc/" + c.cfg.SessionsRPC
+	body := map[string]any{"user_id_param": userID}
+
+	// The RPC returns the user's sets, each with its reps embedded. Some
+	// deployments wrap them in sessions; both shapes are accepted.
+	var raw json.RawMessage
+	status, err := c.supabaseCall(ctx, http.MethodPost, endpoint, body, &raw)
+	if err != nil {
+		return nil, err
+	}
+	if status/100 != 2 {
+		return nil, fmt.Errorf("stance: sessions read failed (status %d)", status)
+	}
+	return flattenSets(raw), nil
+}
+
+// flattenSets reads the RPC payload whether it is a flat array of sets or an
+// array of sessions each carrying a "sets" array.
+func flattenSets(raw json.RawMessage) []fullSet {
+	var flat []fullSet
+	if err := json.Unmarshal(raw, &flat); err == nil {
+		// If these look like sets (have reps or an exercise), take them.
+		for _, s := range flat {
+			if s.Exercise != "" || len(s.Repetitions) > 0 {
+				return flat
+			}
+		}
+	}
+	var sessions []struct {
+		Sets []fullSet `json:"sets"`
+	}
+	if err := json.Unmarshal(raw, &sessions); err == nil {
+		var out []fullSet
+		for _, s := range sessions {
+			out = append(out, s.Sets...)
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	return flat
+}
+
+// fullSet is one set as the sessions RPC returns it, in Stance's field names.
+// Only the fields StrongFish charts are modelled; the rest are ignored.
+type fullSet struct {
+	ID           string    `json:"id"`
+	Exercise     string    `json:"exercise"`
+	Weight       float64   `json:"weight"`
+	WeightUnit   string    `json:"weight_unit_name"`
+	PredictedRPE string    `json:"predicted_rpe_tag"`
+	GivenRPE     string    `json:"rpe"`
+	SetTag       string    `json:"tag"`
+	Started      string    `json:"started"`
+	Ended        string    `json:"ended"`
+	Repetitions  []fullRep `json:"repetitions"`
+}
+
+type fullRep struct {
+	MeanConcentricVelocity float64 `json:"mean_concentric_velocity"`
+	PeakConcentricVelocity float64 `json:"peak_concentric_velocity"`
+	RepOrder               int     `json:"rep_order"`
+}
+
+func (r fullSet) toSet(lift string) Set {
+	reps := append([]fullRep(nil), r.Repetitions...)
+	sort.Slice(reps, func(i, j int) bool { return reps[i].RepOrder < reps[j].RepOrder })
+
+	var velocities []float64
+	var sum, peak float64
+	for _, rep := range reps {
+		velocities = append(velocities, rep.MeanConcentricVelocity)
+		sum += rep.MeanConcentricVelocity
+		if rep.PeakConcentricVelocity > peak {
+			peak = rep.PeakConcentricVelocity
+		}
+	}
+	var mean float64
+	if len(reps) > 0 {
+		mean = sum / float64(len(reps))
+	}
+
+	return Set{
+		Lift:          lift,
+		WeightKg:      toKg(r.Weight, r.WeightUnit),
+		Reps:          len(reps),
+		GivenRPE:      parseRPE(firstNonEmpty(r.GivenRPE, r.SetTag)),
+		PredictedRPE:  parseRPE(r.PredictedRPE),
+		MeanVelocity:  mean,
+		PeakVelocity:  peak,
+		RepVelocities: velocities,
+		PerformedAt:   firstTime(r.Ended, r.Started),
+	}
+}
+
+// toKg normalises a weight to kilograms. A pound unit is converted; anything
+// else is taken as already in kilograms.
+func toKg(weight float64, unit string) float64 {
+	u := strings.ToLower(strings.TrimSpace(unit))
+	if strings.HasPrefix(u, "lb") || strings.HasPrefix(u, "pound") {
+		return math.Round(weight*0.45359237*10) / 10
+	}
+	return weight
+}
+
+// parseRPE pulls the first number out of a tag such as "8.5" or "RPE 8". 0
+// when there is none.
+func parseRPE(tag string) float64 {
+	var b strings.Builder
+	for _, r := range tag {
+		if (r >= '0' && r <= '9') || r == '.' {
+			b.WriteRune(r)
+		} else if b.Len() > 0 {
 			break
 		}
 	}
-	return sets, nil
-}
-
-func (r setRow) toSet(lift string) Set {
-	set := Set{
-		Lift: lift, WeightKg: r.WeightKg, Reps: r.Reps,
-		GivenRPE: r.RPE, PredictedRPE: r.PredictedRPE,
-		MeanVelocity: r.MeanVelocity, PeakVelocity: r.PeakVelocity,
+	if b.Len() == 0 {
+		return 0
 	}
-	if r.EndedAtMs > 0 {
-		set.PerformedAt = time.UnixMilli(r.EndedAtMs).UTC()
-	}
-	for _, rep := range r.Repetitions {
-		set.RepVelocities = append(set.RepVelocities, rep.MeanVelocity)
-	}
-	// A rep count the row did not carry is taken from the reps it did.
-	if set.Reps == 0 {
-		set.Reps = len(set.RepVelocities)
-	}
-	return set
-}
-
-// --- submit (recompute service) ---
-
-type preprocessResponse struct {
-	Reps []struct {
-		MeanVelocity float64 `json:"mean_concentric_velocity"`
-		PeakVelocity float64 `json:"peak_concentric_velocity"`
-	} `json:"reps"`
-	PredictedRPE float64 `json:"predicted_rpe"`
-}
-
-func (c *supabaseClient) Submit(ctx context.Context, accessToken, userID string, in Submission) (Set, error) {
-	set := Set{
-		Lift: matchLift(in.Lift), WeightKg: in.WeightKg, Reps: in.Reps,
-		GivenRPE: in.GivenRPE, PerformedAt: time.Now().UTC(),
-	}
-
-	// Only squat and bench are recomputed server-side; deadlift is computed
-	// on the phone and arrives already concluded, so a submission with no
-	// recompute endpoint keeps whatever the phone sent rather than failing.
-	if c.cfg.PreprocessURL == "" {
-		return set, nil
-	}
-
-	body := map[string]any{
-		"user_id": userID, "exercise": in.Lift, "weight_kg": in.WeightKg,
-		"reps": in.Reps, "rpe": in.GivenRPE,
-		// The recording travels base64-encoded; the service decodes it.
-		"recording": base64.StdEncoding.EncodeToString(in.Samples),
-	}
-	var parsed preprocessResponse
-	status, err := c.call(ctx, http.MethodPost, c.cfg.PreprocessURL+"/", accessToken, body, &parsed)
+	v, err := strconv.ParseFloat(b.String(), 64)
 	if err != nil {
-		return Set{}, err
+		return 0
 	}
-	if status/100 != 2 {
-		return Set{}, fmt.Errorf("stance: preprocess failed (status %d)", status)
-	}
-
-	set.PredictedRPE = parsed.PredictedRPE
-	var sum, peak float64
-	for _, rep := range parsed.Reps {
-		set.RepVelocities = append(set.RepVelocities, rep.MeanVelocity)
-		sum += rep.MeanVelocity
-		if rep.PeakVelocity > peak {
-			peak = rep.PeakVelocity
-		}
-	}
-	if n := len(parsed.Reps); n > 0 {
-		set.MeanVelocity = sum / float64(n)
-		set.PeakVelocity = peak
-		if set.Reps == 0 {
-			set.Reps = n
-		}
-	}
-	return set, nil
+	return v
 }
 
-// --- transport ---
+// firstTime parses the first timestamp that parses, or now as a last resort so
+// a set is never dropped for a missing date.
+func firstTime(values ...string) time.Time {
+	for _, v := range values {
+		if t, err := time.Parse(time.RFC3339, strings.TrimSpace(v)); err == nil {
+			return t
+		}
+	}
+	return time.Now()
+}
 
-// call makes one request to the backend. accessToken blank sends only the
-// anon key (the auth grants); set, and it goes as the bearer alongside it, as
-// every PostgREST/recompute call needs.
-func (c *supabaseClient) call(ctx context.Context, method, endpoint, accessToken string,
-	body any, out any) (int, error) {
+// supabaseCall makes one PostgREST request, authorised with the anon key as
+// both the apikey and the bearer (there is no per-member token for reads).
+func (c *client) supabaseCall(ctx context.Context, method, endpoint string, body, out any) (int, error) {
 	var reader io.Reader
 	if body != nil {
-		encoded, err := json.Marshal(body)
+		raw, err := json.Marshal(body)
 		if err != nil {
 			return 0, err
 		}
-		reader = bytes.NewReader(encoded)
+		reader = bytes.NewReader(raw)
 	}
-
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
 	if err != nil {
 		return 0, err
 	}
 	req.Header.Set("apikey", c.cfg.SupabaseAnonKey)
-	if accessToken != "" {
-		req.Header.Set("Authorization", "Bearer "+accessToken)
-	} else {
-		// The auth endpoints accept the anon key as the bearer too.
-		req.Header.Set("Authorization", "Bearer "+c.cfg.SupabaseAnonKey)
-	}
+	req.Header.Set("Authorization", "Bearer "+c.cfg.SupabaseAnonKey)
+	req.Header.Set("Accept", "application/json")
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	payload, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return resp.StatusCode, err
-	}
-	if out != nil && len(bytes.TrimSpace(payload)) > 0 {
-		if err := json.Unmarshal(payload, out); err != nil {
-			// A 2xx that would not parse is a shape we did not expect; a
-			// non-2xx that would not parse is already an error the status
-			// carries, so only the former is worth surfacing.
-			if resp.StatusCode/100 == 2 {
-				return resp.StatusCode, fmt.Errorf("stance: unexpected response: %w", err)
-			}
-		}
-	}
-	return resp.StatusCode, nil
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	return "unknown error"
+	return c.send(req, out)
 }

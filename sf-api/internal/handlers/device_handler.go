@@ -111,6 +111,12 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 		if _, ok := provider.(devicelink.AccountPairer); ok {
 			connection.AccountPaired = true
 		}
+		if provider.Enabled() && provider.AuthorizationURL(h.redirectURI(provider.Name()), "probe") != "" {
+			connection.OAuth = true
+		}
+		if pairer, ok := provider.(devicelink.GoogleAccountPairer); ok && provider.Enabled() {
+			connection.GoogleClientID = pairer.GoogleClientID()
+		}
 		if connection.Connected {
 			if link, err := h.links.Find(r.Context(), userID, provider.Name()); err == nil {
 				at := link.CreatedAt
