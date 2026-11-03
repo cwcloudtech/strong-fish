@@ -123,6 +123,13 @@ export const devices = {
       params: connectionId ? { connectionId } : {},
     })),
   deleteHealthFeedback: (provider) => body(client.delete(`/users/me/devices/${provider}/feedback`)),
+  // Account-paired providers (Stance): exchange an email and password for a
+  // grant. The password is used once and never stored - only the tokens are.
+  pair: (provider, email, password) =>
+    body(client.post(`/users/me/devices/${provider}/pair`, { email, password })),
+  // The last set of each lift a bar-speed provider tracked, with the RPE it
+  // computed from the bar's speed.
+  barSpeed: (provider) => body(client.get(`/users/me/devices/${provider}/bar-speed`)),
 };
 
 export const programs = {

@@ -544,9 +544,26 @@ const ar = {
     noReports: "لا شيء للإشراف عليه.",
   },
   devices: {
+    lift: { squat: "القرفصاء", bench: "الضغط", deadlift: "الرفعة المميتة" },
+    pair: {
+      password: "كلمة مرور Stance",
+      stance: { email: "بريد Stance" },
+    },
+    record: "تسجيل مجموعة",
+    recordHint: "يفتح تطبيق Stance لتتبع مجموعة، ثم يعرضها هنا.",
+    recordFailed: "تعذّر فتح تطبيق Stance. هل هو مثبّت؟",
+    barSpeed: {
+      title: "سرعة البار - آخر مجموعة",
+      empty: "لا توجد مجموعة متتبعة بعد. سجّل واحدة في تطبيق Stance لتظهر هنا.",
+      load: "{{weight}} كغ × {{reps}}",
+      rpePair: "RPE {{given}} محسوس، {{real}} مقاس",
+      rpeReal: "RPE مقاس {{real}}",
+      rep: "تكرار {{n}}",
+    },
     provider: {
       "google-health": "Google Health ‏(Fitbit، Pixel Watch)",
       withings: "Withings",
+      stance: "Stance Fitness",
     },
     aiFeedbackWindow: "على مدى {{days}} يوماً",
     aiFeedback: "تحليل الذكاء الاصطناعي",

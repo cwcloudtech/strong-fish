@@ -386,6 +386,22 @@ class SfApi {
     await client.dio.delete('/users/me/devices/$provider');
   }
 
+  /// Pairs an account-paired provider (Stance) with an email and password.
+  /// The password is used once, here, and never stored - only the grant the
+  /// server gets back is.
+  Future<void> pairDevice(String provider, String email, String password) async {
+    await client.dio
+        .post('/users/me/devices/$provider/pair', data: {'email': email, 'password': password});
+  }
+
+  /// The member's last set of each lift a bar-speed provider tracked.
+  Future<List<StanceSet>> barSpeed(String provider) async {
+    final response = await client.dio.get('/users/me/devices/$provider/bar-speed');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => StanceSet.fromJson(_map(item))).toList();
+  }
+
   /// [range] is one of 24h, 48h, week, month, 90d - the API names the windows,
   /// so the phone and the web app cannot mean different things by "a month".
   Future<StepSeries> deviceSteps(String provider, String range) async {

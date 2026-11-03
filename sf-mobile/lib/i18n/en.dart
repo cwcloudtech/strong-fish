@@ -552,9 +552,32 @@ const Map<String, dynamic> en = {
     'noReports': 'Nothing to moderate.',
   },
   'devices': {
+    'lift': {
+      'squat': 'Squat',
+      'bench': 'Bench',
+      'deadlift': 'Deadlift',
+    },
+    'pair': {
+      'password': 'Stance password',
+      'stance': {
+        'email': 'Stance email',
+      },
+    },
+    'record': 'Record a set',
+    'recordHint': 'Opens the Stance app to track a set, then shows it here.',
+    'recordFailed': 'Could not open the Stance app. Is it installed?',
+    'barSpeed': {
+      'title': 'Bar speed - last set',
+      'empty': 'No tracked set yet. Record one in the Stance app and it shows here.',
+      'load': '{{weight}} kg x {{reps}}',
+      'rpePair': 'RPE {{given}} felt, {{real}} measured',
+      'rpeReal': 'measured RPE {{real}}',
+      'rep': 'Rep {{n}}',
+    },
     'provider': {
       'google-health': 'Google Health (Fitbit, Pixel Watch)',
       'withings': 'Withings',
+      'stance': 'Stance Fitness',
     },
     'aiFeedbackWindow': 'over the last {{days}} days',
     'aiFeedback': 'AI reading',

@@ -105,6 +105,12 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 			Capabilities:   devicelink.Capabilities(provider),
 			ActivitySource: provider.Name() == source,
 		}
+		if recorder, ok := provider.(devicelink.SetRecorder); ok && provider.Enabled() {
+			connection.RecordURL = recorder.RecordURL()
+		}
+		if _, ok := provider.(devicelink.AccountPairer); ok {
+			connection.AccountPaired = true
+		}
 		if connection.Connected {
 			if link, err := h.links.Find(r.Context(), userID, provider.Name()); err == nil {
 				at := link.CreatedAt
@@ -423,6 +429,10 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 	title := healthsheet.Title(h.memberName(r.Context(), userID), locale)
 	subtitle := healthsheet.Subtitle(steps, heart, locale)
 	sections := healthsheet.Sections(steps, heart, h.exportBodyComposition(r, userID), locale)
+	// The last set of each lift the member tracks on a bar-speed provider -
+	// their own charts, printed under the activity ones. Absent when they
+	// track none.
+	sections = append(sections, healthsheet.BarSpeedSections(h.barSpeedForExport(r, userID), locale)...)
 	// What the AI made of the same data, when it was asked recently enough
 	// to be about this sheet (see recentReading).
 	if reading := h.recentReading(r, userID, provider.Name(), locale); reading != nil {

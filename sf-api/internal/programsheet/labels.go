@@ -13,6 +13,14 @@ import (
 // the wrong language is worse than a small table of six words in two.
 var labels = map[string]map[string]string{
 	"en": {
+		"barSpeedTitle":         "Bar speed - %s",
+		"barSpeedLoad":          "%s kg x %d",
+		"barSpeedRpePair":       "RPE %s given, %s measured",
+		"barSpeedRpeReal":       "measured RPE %s",
+		"repN":                  "Rep %d",
+		"liftSquat":             "Squat",
+		"liftBench":             "Bench",
+		"liftDeadlift":          "Deadlift",
 		"date":                  "Date",
 		"steps":                 "Steps",
 		"heartAvg":              "Avg bpm",
@@ -75,6 +83,14 @@ var labels = map[string]map[string]string{
 		"exchange":      "Exchange %d",
 	},
 	"fr": {
+		"barSpeedTitle":         "Vitesse barre - %s",
+		"barSpeedLoad":          "%s kg x %d",
+		"barSpeedRpePair":       "RPE %s ressenti, %s mesuré",
+		"barSpeedRpeReal":       "RPE mesuré %s",
+		"repN":                  "Rép %d",
+		"liftSquat":             "Squat",
+		"liftBench":             "Développé couché",
+		"liftDeadlift":          "Soulevé de terre",
 		"date":                  "Date",
 		"steps":                 "Pas",
 		"heartAvg":              "bpm moyen",

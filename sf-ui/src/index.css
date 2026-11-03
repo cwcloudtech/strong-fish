@@ -1332,6 +1332,10 @@ button {
 /* The AI's reading of a session, under the table it is about: set apart with
    a tinted panel, because it is a commentary on the week rather than part of
    the prescription. */
+/* A bar-speed rep bar: the brand navy, since a velocity has no good/bad
+   bands to colour the way steps do - it is a number to read. */
+.sf-bar-speed { background-color: var(--sf-primary); }
+
 .sf-ai-feedback {
   display: flex;
   flex-direction: column;
