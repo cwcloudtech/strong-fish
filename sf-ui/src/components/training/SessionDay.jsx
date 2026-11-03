@@ -13,11 +13,12 @@ import { sessionTitle } from "../../utils/sessionTitle";
 import ExportMenu from "../programs/ExportMenu";
 
 /**
- * The perceived-RPE values on offer, as the chart itself is written: half
- * points from 6 up, and nothing below - "it moved" is not an RPE, and the
- * chart has no row for one.
+ * The perceived-RPE values on offer: half points across the whole scale, from
+ * 1 up to 10, so a light warm-up set can carry an RPE too.
  */
-const PERCEIVED_RPE = [6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+const PERCEIVED_RPE = [
+  1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10,
+];
 
 /**
  * Done, or not done.

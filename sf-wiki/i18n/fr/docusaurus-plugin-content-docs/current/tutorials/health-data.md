@@ -12,12 +12,15 @@ StrongFish peut afficher ce que votre montre et votre balance ont déjà mesuré
 | --- | --- |
 | **Google Health** (Fitbit, Pixel Watch, téléphone) | Pas et fréquence cardiaque |
 | **Withings** (balances, montres) | Composition corporelle, ainsi que pas et fréquence cardiaque |
+| **Stance Fitness** (capteur de vitesse de barre) | La vitesse de barre et le RPE mesuré sur votre dernière série de squat, développé couché et soulevé de terre |
 
 **Google Health** est l'endroit où vivent désormais les données Fitbit. L'API développeur de Fitbit a été coupée le 30 octobre 2026, et une Fitbit, une Pixel Watch ou un téléphone qui compte les pas alimentent tous le même profil Google Health. Le compte que vous connectez est donc votre **compte Google**, et ce qu'il lit est ce que vos appareils ont déposé dans Google Health.
 
 **Withings** se connecte avec votre compte Withings, celui auquel votre balance se synchronise.
 
-Vous pouvez connecter l'un, l'autre, ou les deux.
+**Stance Fitness** est un capteur de vitesse de barre - un petit accéléromètre qui se fixe sur la barre. Vous l'associez à votre compte Stance, et le suivi lui-même se fait dans l'application Stance sur votre téléphone, là où la barre est réellement mesurée. StrongFish relit votre dernière série de chaque mouvement, et sur le téléphone il peut ouvrir l'application Stance pour que vous enregistriez la suivante.
+
+Vous pouvez connecter n'importe lesquels, dans n'importe quelle combinaison.
 
 ### Quand les deux sont connectés
 
@@ -36,6 +39,8 @@ C'est le piège classique : l'écran de consentement Google accepte volontiers u
 
 **Pour Withings**, votre balance doit simplement être configurée dans l'application Withings, comme d'habitude.
 
+**Pour Stance**, installez l'application Stance sur le même téléphone et connectez-vous-y une fois. C'est ce compte que vous associez, et c'est l'application Stance qui capte la barre - ce doit donc être le téléphone avec lequel vous soulevez.
+
 ## Se connecter
 
 1. Ouvrez **Données santé** sur le site ou le téléphone.
@@ -47,6 +52,8 @@ Seules des permissions de lecture sont demandées :
 
 - **Google Health** : l'activité et la condition physique, et la fréquence cardiaque. Ni votre sommeil, ni votre poids, et rien du tout en écriture.
 - **Withings** : vos mesures et votre activité quotidienne.
+
+**Stance** fait exception à ce ballet de connexion : il n'y a pas d'écran de consentement du fournisseur. Vous l'associez en tapant votre e-mail et votre mot de passe Stance directement dans StrongFish, qui les transmet une fois à Stance en échange d'un jeton. Le mot de passe lui-même n'est jamais conservé.
 
 Sur le téléphone, le consentement s'ouvre dans votre navigateur plutôt que dans l'application - ainsi vous voyez sur quelle page de connexion vous tapez. Revenez ensuite dans l'application, la connexion y est.
 
@@ -93,15 +100,27 @@ Avec Withings connecté, un panneau **Composition corporelle** affiche la derni�
 
 Une mesure que votre balance ne prend pas n'apparaît simplement pas. Chacune a sa propre date, car une balance ne prend pas toutes les mesures à chaque fois - la masse grasse, par exemple, ne se lit que pieds nus.
 
+### Vitesse de barre
+
+Avec Stance associé, un panneau **Vitesse de barre** affiche votre dernière série de chacun des trois mouvements - squat, développé couché et soulevé de terre. Chaque série est une rangée de barres, une par répétition, chacune aussi haute que la vitesse de barre de cette répétition, au-dessus de la charge, des répétitions et des deux RPE : celui que vous avez donné et celui que Stance a mesuré à partir de la barre.
+
+Seule la série la plus récente de chaque mouvement est montrée - ce qui compte est la forme de votre dernier effort, pas un historique. Enregistrez une nouvelle série et elle prend la place de l'ancienne, et un mouvement que vous n'avez pas suivi n'apparaît tout simplement pas.
+
+Sur le téléphone, un bouton **Enregistrer une série** ouvre l'application Stance pour suivre la série suivante ; revenez ensuite et elle y est. Le site n'a pas ce bouton - le téléphone est l'endroit où la barre est mesurée - mais une série enregistrée sur le téléphone apparaît aussi sur le site.
+
+### Comment le RPE mesuré est calculé
+
+Le RPE mesuré vient de la vitesse de la barre : plus une répétition est lente par rapport à la vitesse à laquelle cette charge monte d'habitude chez vous, plus la série est proche de l'échec. Stance le calcule à partir de votre série, et StrongFish lit et trace le résultat - il ne fait aucune estimation lui-même. Pour la méthode derrière, écrite comme de la science du sport et non comme quelque chose de propre à un traqueur en particulier, voir **[L'effort basé sur la vitesse](./velocity-based-rpe.md)**.
+
 ## Export
 
-**Exporter cette vue** enregistre ce qui est à l'écran en PNG ou en PDF : les pas et la fréquence cardiaque tracés en histogrammes, aux couleurs de l'écran, suivis d'un tableau de votre dernière composition corporelle quand Withings est connecté.
+**Exporter cette vue** enregistre ce qui est à l'écran en PNG ou en PDF : les pas et la fréquence cardiaque tracés en histogrammes, aux couleurs de l'écran, suivis d'un tableau de votre dernière composition corporelle quand Withings est connecté, et des mêmes graphiques de vitesse de barre pour vos derniers squat, développé couché et soulevé de terre quand Stance est associé.
 
 ## Se déconnecter
 
 **Déconnecter**, au même endroit, retire l'accès de StrongFish de son côté, et les chiffres cessent d'être lus.
 
-Cela ne révoque rien dans votre compte chez le fournisseur - c'est à vous de le faire, depuis [la page des autorisations de votre compte Google](https://myaccount.google.com/permissions) ou les applications connectées de votre compte Withings, et StrongFish se garde délibérément d'aller le faire à votre place.
+Cela ne révoque rien dans votre compte chez le fournisseur - c'est à vous de le faire, depuis [la page des autorisations de votre compte Google](https://myaccount.google.com/permissions) ou les applications connectées de votre compte Withings, et StrongFish se garde délibérément d'aller le faire à votre place. Pour Stance, il n'y a pas de page de ce genre à visiter - se déconnecter supprime le jeton que StrongFish détient, et c'est tout.
 
 ## Pour qui administre le serveur
 
@@ -130,3 +149,11 @@ Les deux limites disparaissent une fois l'app publiée et validée. Dans une org
 1. Créez une application dans le [tableau de bord développeur Withings](https://developer.withings.com/dashboard/).
 2. Déclarez `<URL de votre API>/v1/devices/withings/callback` comme URL de callback.
 3. Renseignez `SF_WITHINGS_CLIENT_ID` et `SF_WITHINGS_CLIENT_SECRET`.
+
+### Stance Fitness
+
+L'intégration Stance fonctionne avec des valeurs fournies par Stance. Écrivez à leur équipe à **hello@stancefitness.co** pour demander un accès, puis renseignez ce qu'ils vous transmettent :
+
+- `SF_STANCE_SUPABASE_PROJECT_REF` et `SF_STANCE_SUPABASE_ANON_KEY` - le compte et les séries stockées. **Requis** : si l'une est vide, Stance apparaît comme non activé ici, comme toute autre intégration sans ses identifiants.
+- `SF_STANCE_PREPROCESS_URL` - le service qui transforme une série brute en RPE mesuré. Facultatif ; laissé vide, StrongFish affiche quand même la vitesse de barre et le RPE que vous avez donné, mais pas de RPE mesuré.
+- `SF_STANCE_APP_URL` - ce qu'ouvre le bouton **Enregistrer une série** du téléphone. Facultatif ; par défaut, la page de l'application Stance sur le store.

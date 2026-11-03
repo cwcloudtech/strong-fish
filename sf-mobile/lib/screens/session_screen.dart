@@ -512,10 +512,11 @@ class _DoneToggle extends StatelessWidget {
   }
 }
 
-/// The perceived-RPE values on offer, as the chart is written: half points
-/// from 6 up, and nothing below - "it moved" is not an RPE, and the chart has
-/// no row for one.
-const _perceivedRpe = [6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
+/// The perceived-RPE values on offer: half points across the whole scale,
+/// from 1 up to 10, so a light warm-up set can carry an RPE too.
+const _perceivedRpe = [
+  1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0,
+];
 
 class _SetTile extends ConsumerWidget {
   final ProgramSet set;

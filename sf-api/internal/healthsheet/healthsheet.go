@@ -213,3 +213,79 @@ func formatInt[T int | int64](value T) string {
 	}
 	return out.String()
 }
+
+// barSpeed is the colour of a bar-speed chart: the app's green, since a
+// velocity has no good/bad bands the way steps do - it is a number to read,
+// not to judge.
+var barSpeed = color.RGBA{14, 94, 155, 255}
+
+// BarSpeedSections is one chart per tracked lift: a bar per rep, its height
+// the rep's mean concentric velocity, under a heading that carries the set's
+// weight, reps and the two RPEs (what the member said, what the bar said).
+//
+// Returned as its own slice so the export appends it after steps and heart
+// rate, and skips it whole when the member tracks no bar speed.
+func BarSpeedSections(sets []models.BarSet, locale string) []programsheet.Section {
+	sections := make([]programsheet.Section, 0, len(sets))
+	for _, set := range sets {
+		if len(set.RepVelocities) == 0 {
+			continue
+		}
+		chart := &programsheet.Chart{}
+		for i, velocity := range set.RepVelocities {
+			chart.Bars = append(chart.Bars, programsheet.Bar{
+				Label:   fmt.Sprintf(programsheet.Heading(locale, "repN"), i+1),
+				Value:   velocity,
+				Caption: formatVelocity(velocity),
+				Color:   barSpeed,
+			})
+		}
+		sections = append(sections, programsheet.Section{
+			Heading: barSpeedHeading(set, locale),
+			Chart:   chart,
+		})
+	}
+	return sections
+}
+
+// barSpeedHeading says what the set was, so the chart reads without a legend:
+// the lift, the load and reps, and the given vs predicted RPE when both are
+// there - the whole point of the tracker is the gap between them.
+func barSpeedHeading(set models.BarSet, locale string) string {
+	parts := []string{LiftLabel(locale, set.Lift)}
+	if set.WeightKg > 0 && set.Reps > 0 {
+		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedLoad"),
+			trimFloat(set.WeightKg), set.Reps))
+	}
+	if set.GivenRpe > 0 && set.PredictedRpe > 0 {
+		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedRpePair"),
+			trimFloat(set.GivenRpe), trimFloat(set.PredictedRpe)))
+	} else if set.PredictedRpe > 0 {
+		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedRpeReal"),
+			trimFloat(set.PredictedRpe)))
+	}
+	return strings.Join(parts, "  -  ")
+}
+
+// LiftLabel names one of the three lifts in the reader's language.
+func LiftLabel(locale, lift string) string {
+	switch lift {
+	case devicelink.LiftSquat:
+		return programsheet.Heading(locale, "liftSquat")
+	case devicelink.LiftBench:
+		return programsheet.Heading(locale, "liftBench")
+	case devicelink.LiftDeadlift:
+		return programsheet.Heading(locale, "liftDeadlift")
+	}
+	return lift
+}
+
+// formatVelocity is a bar's caption: two decimals and the unit, "0.42 m/s".
+func formatVelocity(v float64) string {
+	return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.2f", v), "0"), ".") + " m/s"
+}
+
+// trimFloat writes a measurement without a pointless decimal.
+func trimFloat(value float64) string {
+	return strings.TrimSuffix(strings.TrimRight(fmt.Sprintf("%.1f", value), "0"), ".")
+}
