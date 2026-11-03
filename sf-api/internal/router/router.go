@@ -231,6 +231,11 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Get("/{provider}/feedback", h.Device.HealthFeedback)
 					r.Post("/{provider}/feedback", h.Device.GenerateHealthFeedback)
 					r.Delete("/{provider}/feedback", h.Device.DeleteHealthFeedback)
+					// Stance and anything else paired with an account rather
+					// than an OAuth redirect: pair with a password, read the
+					// last set of each lift.
+					r.Post("/{provider}/pair", h.Device.PairDevice)
+					r.Get("/{provider}/bar-speed", h.Device.BarSpeed)
 				})
 
 				// The invitations waiting for this account's address. They are

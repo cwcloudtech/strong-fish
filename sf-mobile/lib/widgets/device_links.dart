@@ -125,6 +125,38 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     }
   }
 
+  /// Signs in to an account-paired provider. The password never leaves this
+  /// call - only the grant the server returns is stored.
+  Future<void> _pair(String provider, String email, String password) async {
+    setState(() => _busy = provider);
+    try {
+      await ref.read(apiProvider).pairDevice(provider, email, password);
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = '');
+    }
+  }
+
+  /// Opens the Stance app to record a set. Stance owns the encoder and does
+  /// the capture; StrongFish reads the result back afterwards.
+  Future<void> _record(String url) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final t = ref.read(tProvider);
+    try {
+      final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        messenger.showSnackBar(SnackBar(content: Text(t('devices.recordFailed'))));
+      }
+    } catch (_) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(t('devices.recordFailed'))));
+    }
+  }
+
   Future<void> _disconnect(String provider) async {
     setState(() => _busy = provider);
     try {
@@ -198,7 +230,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   icon: const Icon(Icons.link_off, size: 18),
                   label: Text(t('devices.disconnect')),
                 )
-              else
+              else if (!connection.accountPaired)
                 FilledButton.icon(
                   // Offered but not pressable when the server has no
                   // credentials for it: there is nothing to consent to.
@@ -209,6 +241,14 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   label: Text(t('devices.connect')),
                 ),
             ]),
+            // Account-paired providers (Stance) sign in with an email and
+            // password rather than a consent redirect.
+            if (!connection.connected && connection.accountPaired && connection.available)
+              _AccountPairForm(
+                provider: connection.provider,
+                busy: _busy == connection.provider,
+                onPair: (email, password) => _pair(connection.provider, email, password),
+              ),
             // Steps and heart rate from one provider only, the one the API
             // picked: two devices' worth of steps side by side would be two
             // answers to the same question.
@@ -227,6 +267,28 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
               ),
             if (connection.connected && connection.can('body-composition'))
               _BodyCompositionPanel(provider: connection.provider),
+            if (connection.can('bar-speed') && connection.recordUrl.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    FilledButton.tonalIcon(
+                      style: _compactButton,
+                      onPressed: () => _record(connection.recordUrl),
+                      icon: const Icon(Icons.fiber_manual_record, size: 18),
+                      label: Text(t('devices.record')),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(t('devices.recordHint'),
+                          style: Theme.of(context).textTheme.bodySmall),
+                    ),
+                  ]),
+                ),
+              ),
+            if (connection.connected && connection.can('bar-speed'))
+              _BarSpeedPanel(provider: connection.provider),
           ],
         ]),
       ),
@@ -870,3 +932,215 @@ String _decimal(double value) {
       ? _grouped(rounded.toInt())
       : rounded.toStringAsFixed(1);
 }
+
+/// Signing in to an account-paired provider (Stance): an email and a password,
+/// exchanged once for a grant. The password is never stored - only the tokens
+/// the server returns are - so the field is write-only.
+class _AccountPairForm extends StatefulWidget {
+  final String provider;
+  final bool busy;
+  final void Function(String email, String password) onPair;
+
+  const _AccountPairForm({required this.provider, required this.busy, required this.onPair});
+
+  @override
+  State<_AccountPairForm> createState() => _AccountPairFormState();
+}
+
+class _AccountPairFormState extends State<_AccountPairForm> {
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(builder: (context, ref, _) {
+      final t = ref.watch(tProvider);
+      final ready = _email.text.trim().isNotEmpty && _password.text.isNotEmpty;
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(children: [
+          TextField(
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: t('devices.pair.${widget.provider}.email'),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _password,
+            obscureText: true,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: t('devices.pair.password'),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: FilledButton.icon(
+              onPressed: widget.busy || !ready
+                  ? null
+                  : () => widget.onPair(_email.text.trim(), _password.text),
+              icon: widget.busy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.link, size: 18),
+              label: Text(t('devices.connect')),
+            ),
+          ),
+        ]),
+      );
+    });
+  }
+}
+
+/// The last set of each lift the member tracked on a bar-speed provider: one
+/// small chart a lift, a bar a rep, under the load and the two RPEs.
+class _BarSpeedPanel extends ConsumerStatefulWidget {
+  final String provider;
+  const _BarSpeedPanel({required this.provider});
+
+  @override
+  ConsumerState<_BarSpeedPanel> createState() => _BarSpeedPanelState();
+}
+
+class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
+  List<StanceSet>? _sets;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final sets = await ref.read(apiProvider).barSpeed(widget.provider);
+      if (mounted) setState(() => _sets = sets);
+    } catch (error) {
+      if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final small = Theme.of(context).textTheme.bodySmall;
+
+    if (_error.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(_error, style: TextStyle(color: AppColors.of(context).danger)),
+      );
+    }
+    final sets = _sets;
+    if (sets == null) return const SizedBox.shrink();
+    if (sets.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(t('devices.barSpeed.empty'), style: small),
+      );
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 12),
+      Text(t('devices.barSpeed.title'), style: const TextStyle(fontWeight: FontWeight.w600)),
+      for (final set in sets) _BarSpeedSet(set: set),
+    ]);
+  }
+}
+
+/// One lift's last set: its heading, and a bar per rep.
+class _BarSpeedSet extends ConsumerWidget {
+  final StanceSet set;
+  const _BarSpeedSet({required this.set});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(tProvider);
+    final small = Theme.of(context).textTheme.bodySmall;
+
+    final parts = <String>[t('devices.lift.${set.lift}')];
+    if (set.weightKg > 0 && set.reps > 0) {
+      parts.add(t('devices.barSpeed.load', {'weight': _fmt(set.weightKg), 'reps': '${set.reps}'}));
+    }
+    if (set.givenRpe > 0 && set.predictedRpe > 0) {
+      parts.add(t('devices.barSpeed.rpePair',
+          {'given': _fmt(set.givenRpe), 'real': _fmt(set.predictedRpe)}));
+    } else if (set.predictedRpe > 0) {
+      parts.add(t('devices.barSpeed.rpeReal', {'real': _fmt(set.predictedRpe)}));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(parts.join('  ·  '), style: small),
+        const SizedBox(height: 4),
+        _VelocityBars(velocities: set.repVelocities),
+      ]),
+    );
+  }
+}
+
+/// A bar per rep, its height the rep's velocity, captioned with the figure.
+class _VelocityBars extends StatelessWidget {
+  final List<double> velocities;
+  const _VelocityBars({required this.velocities});
+
+  @override
+  Widget build(BuildContext context) {
+    if (velocities.isEmpty) return const SizedBox.shrink();
+    final peak = velocities.fold<double>(0.01, (a, b) => a > b ? a : b);
+
+    return Container(
+      height: 96,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.of(context).backgroundMuted,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (final velocity in velocities)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Column(mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end, children: [
+                  Text(velocity.toStringAsFixed(2),
+                      style: Theme.of(context).textTheme.labelSmall),
+                  const SizedBox(height: 2),
+                  Container(
+                    height: (74 * velocity / peak).clamp(2, 74).toDouble(),
+                    decoration: BoxDecoration(
+                      color: AppColors.of(context).primary,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A measurement without a pointless decimal.
+String _fmt(double value) =>
+    value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toStringAsFixed(1);

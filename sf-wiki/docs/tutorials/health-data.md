@@ -12,12 +12,15 @@ StrongFish can show what your watch and your scale already measured - steps, hea
 | --- | --- |
 | **Google Health** (Fitbit, Pixel Watch, phone) | Steps and heart rate |
 | **Withings** (scales, watches) | Body composition, plus steps and heart rate |
+| **Stance Fitness** (bar-speed tracker) | Bar speed and measured RPE on your last squat, bench and deadlift |
 
 **Google Health** is where Fitbit data lives now. Fitbit's own developer API was switched off on 30 October 2026, and a Fitbit, a Pixel Watch or a phone that records steps all report into the same Google Health profile. So the account you connect is your **Google account**, and what it reads is whatever your devices have put in Google Health.
 
 **Withings** is connected with your Withings account, the one your scale syncs to.
 
-You can connect either, or both.
+**Stance Fitness** is a bar-speed tracker - a small accelerometer that clips to the bar. You pair it with your Stance account, and the tracking itself happens in the Stance app on your phone, which is where the bar is actually measured. StrongFish reads back your last set of each lift, and on the phone it can open the Stance app for you to record the next one.
+
+You can connect any of them, in any combination.
 
 ### When both are connected
 
@@ -36,6 +39,8 @@ This catches people out: the Google consent screen will happily say yes for an a
 
 **For Withings**, your scale only needs to be set up in the Withings app as usual.
 
+**For Stance**, install the Stance app on the same phone and sign in to it once. That is the account you pair, and the Stance app is what captures the bar - so it has to be the phone you lift with.
+
 ## Connecting
 
 1. Open **Health data** on the web app or the phone.
@@ -47,6 +52,8 @@ Only read permissions are asked for:
 
 - **Google Health**: activity and fitness, and heart rate. Not your sleep, not your weight, and nothing at all to write.
 - **Withings**: your measures and your daily activity.
+
+**Stance** is the exception to the sign-in dance: there is no provider consent screen. You pair it by typing your Stance email and password straight into StrongFish, which hands them to Stance once in exchange for a token. The password itself is never stored.
 
 On the phone, consent opens in your browser rather than inside the app - so you can see whose login page you are typing into. Come back to the app afterwards and the connection is there.
 
@@ -94,15 +101,27 @@ With Withings connected, a **Body composition** panel shows the latest value of 
 
 A measure your scale does not take simply does not appear. Each one has its own date because a scale does not take every measure every time - fat, for instance, is only read barefoot.
 
+### Bar speed
+
+With Stance paired, a **Bar speed** panel shows your last set of each of the three lifts - squat, bench and deadlift. Each set is a row of bars, one per rep, each as tall as that rep's bar speed, above the load and reps and the two RPEs: the one you gave, and the one Stance measured from the bar.
+
+Only the most recent set of each lift is shown - the point is the shape of your last effort, not a log. Record a new set and it takes the old one's place, and a lift you have not tracked simply does not appear.
+
+On the phone, a **Record a set** button opens the Stance app so you can track the next set; come back afterwards and it is there. The web has no such button - the phone is where the bar is measured - but a set you record on the phone shows up on the web all the same.
+
+### How the measured RPE is worked out
+
+The measured RPE comes from the bar's speed: the slower a rep runs compared with how fast that load usually moves for you, the closer the set is to failure. Stance works it out from your set, and StrongFish reads and charts the result - it does none of the estimation itself. For the method behind it, written as plain sports science rather than anything tied to one tracker, see **[Velocity-based effort](./velocity-based-rpe.md)**.
+
 ## Exporting
 
-**Export this view** saves what is on screen as a PNG or a PDF: steps and heart rate drawn as histograms, coloured like the screen, followed by a table of your latest body composition when Withings is connected.
+**Export this view** saves what is on screen as a PNG or a PDF: steps and heart rate drawn as histograms, coloured like the screen, followed by a table of your latest body composition when Withings is connected, and the same bar-speed charts for your last squat, bench and deadlift when Stance is paired.
 
 ## Disconnecting
 
 **Disconnect** in the same place removes StrongFish's access from its side, and the numbers stop being read.
 
-It does not revoke anything in your provider account - that is yours to do, from [your Google account's permissions page](https://myaccount.google.com/permissions) or the connected apps of your Withings account, and StrongFish deliberately does not reach in and do it for you.
+It does not revoke anything in your provider account - that is yours to do, from [your Google account's permissions page](https://myaccount.google.com/permissions) or the connected apps of your Withings account, and StrongFish deliberately does not reach in and do it for you. For Stance there is no such page to visit - disconnecting drops the token StrongFish holds, and that is the whole of it.
 
 ## For whoever runs the server
 
@@ -131,3 +150,11 @@ Both limits go away once the app is published and verified. In a Google Workspac
 1. Create an application in the [Withings developer dashboard](https://developer.withings.com/dashboard/).
 2. Register `<your API URL>/v1/devices/withings/callback` as its callback URL.
 3. Set `SF_WITHINGS_CLIENT_ID` and `SF_WITHINGS_CLIENT_SECRET`.
+
+### Stance Fitness
+
+The Stance integration runs on values that Stance provides. Email their team at **hello@stancefitness.co** to request access, then set what they send you:
+
+- `SF_STANCE_SUPABASE_PROJECT_REF` and `SF_STANCE_SUPABASE_ANON_KEY` - the account and the stored sets. **Required**: with either unset, Stance shows as not enabled here, like any other integration without its credentials.
+- `SF_STANCE_PREPROCESS_URL` - the service that turns a raw set into a measured RPE. Optional; left unset, StrongFish still shows the bar speed and the RPE you gave, just not a measured one.
+- `SF_STANCE_APP_URL` - what the phone's **Record a set** button opens. Optional; defaults to the Stance app's store page.

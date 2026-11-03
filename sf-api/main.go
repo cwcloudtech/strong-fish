@@ -22,6 +22,7 @@ import (
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/oidc"
 	"strong-fish-api/internal/router"
+	"strong-fish-api/internal/stance"
 	"strong-fish-api/internal/store"
 	"strong-fish-api/internal/telemetry"
 	"strong-fish-api/internal/utils"
@@ -134,6 +135,18 @@ func main() {
 		AuthURL:      cfg.WithingsAuthURL,
 		APIBaseURL:   cfg.WithingsAPIURL,
 	}))
+	// Stance Fitness: barbell velocity and the RPE it computes from it. Last,
+	// since it has no steps or heart rate - it never wins the activity source
+	// - and like the others it is registered even unconfigured, so the screen
+	// shows it switched off rather than hiding it.
+	devices = append(devices, stance.NewProvider(stance.New(stance.Config{
+		SupabaseProjectRef: cfg.StanceSupabaseProjectRef,
+		SupabaseAnonKey:    cfg.StanceSupabaseAnonKey,
+		PreprocessURL:      cfg.StancePreprocessURL,
+		SetsTable:          cfg.StanceSetsTable,
+		SetsSelect:         cfg.StanceSetsSelect,
+		AppURL:             cfg.StanceAppURL,
+	})))
 
 	strengthHandler := handlers.NewStrengthHandler(exerciseStore, userStore)
 	profileHandler := handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore).

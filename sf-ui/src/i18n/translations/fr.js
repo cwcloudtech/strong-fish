@@ -547,9 +547,26 @@ const fr = {
     noReports: "Rien à modérer.",
   },
   devices: {
+    lift: { squat: "Squat", bench: "Développé couché", deadlift: "Soulevé de terre" },
+    pair: {
+      password: "Mot de passe Stance",
+      stance: { email: "Email Stance" },
+    },
+    record: "Enregistrer une série",
+    recordHint: "Ouvre l'app Stance pour suivre une série, puis l'affiche ici.",
+    recordFailed: "Impossible d'ouvrir l'app Stance. Est-elle installée ?",
+    barSpeed: {
+      title: "Vitesse barre - dernière série",
+      empty: "Aucune série suivie. Enregistres-en une dans l'app Stance et elle s'affiche ici.",
+      load: "{{weight}} kg x {{reps}}",
+      rpePair: "RPE {{given}} ressenti, {{real}} mesuré",
+      rpeReal: "RPE mesuré {{real}}",
+      rep: "Rép {{n}}",
+    },
     provider: {
       "google-health": "Google Health (Fitbit, Pixel Watch)",
       withings: "Withings",
+      stance: "Stance Fitness",
     },
     aiFeedbackWindow: "sur les {{days}} derniers jours",
     aiFeedback: "Analyse de l'IA",

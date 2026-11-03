@@ -53,6 +53,22 @@ type Config struct {
 	WithingsClientSecret string
 	WithingsAuthURL      string
 	WithingsAPIURL       string
+	// Stance Fitness - barbell-velocity sets and the RPE it computes from bar
+	// speed. These address Stance's API; their values are provided by Stance
+	// (hello@stancefitness.co). The anon key is a client key. The project ref
+	// and the key both empty leaves the whole feature off.
+	StanceSupabaseProjectRef string
+	StanceSupabaseAnonKey    string
+	StancePreprocessURL      string
+	// StanceSetsTable and StanceSetsSelect override the PostgREST relation the
+	// sets are read from, for when the schema differs; blank uses the defaults
+	// Stance documents.
+	StanceSetsTable  string
+	StanceSetsSelect string
+	// StanceAppURL is what the "record a set" button opens: the Stance app,
+	// which owns the bar-speed encoder and does the capture. Swappable
+	// without a client release.
+	StanceAppURL         string
 	CWCloudAPIURL        string
 	CWCloudAPIKey        string
 	CWCloudContactFormID string
@@ -196,6 +212,12 @@ func Load() Config {
 		WithingsClientSecret:     os.Getenv("SF_WITHINGS_CLIENT_SECRET"),
 		WithingsAuthURL:          os.Getenv("SF_WITHINGS_AUTH_URL"),
 		WithingsAPIURL:           os.Getenv("SF_WITHINGS_API_URL"),
+		StanceSupabaseProjectRef: os.Getenv("SF_STANCE_SUPABASE_PROJECT_REF"),
+		StanceSupabaseAnonKey:    os.Getenv("SF_STANCE_SUPABASE_ANON_KEY"),
+		StancePreprocessURL:      os.Getenv("SF_STANCE_PREPROCESS_URL"),
+		StanceSetsTable:          os.Getenv("SF_STANCE_SETS_TABLE"),
+		StanceSetsSelect:         os.Getenv("SF_STANCE_SETS_SELECT"),
+		StanceAppURL:             os.Getenv("SF_STANCE_APP_URL"),
 		CWCloudAPIURL:            utils.GetBaseUrlFromEnvWithFallback("CWCLOUD_API_URL", "https://api.cwcloud.tech"),
 		CWCloudAPIKey:            os.Getenv("CWCLOUD_API_KEY"),
 		CWCloudContactFormID:     os.Getenv("CWCLOUD_CONTACT_FORM_ID"),
