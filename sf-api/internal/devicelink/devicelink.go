@@ -173,6 +173,15 @@ type AccountPairer interface {
 	PairAccount(ctx context.Context, email, password string) (Token, error)
 }
 
+// GoogleAccountPairer is a provider that can be connected with a Google ID
+// token the client obtained itself with a public client id (Stance), no OAuth
+// redirect and no secret. GoogleClientID is the public client id the client
+// needs to get that token; blank when the option is unavailable.
+type GoogleAccountPairer interface {
+	PairGoogleIDToken(ctx context.Context, idToken string) (Token, error)
+	GoogleClientID() string
+}
+
 // BodyCompositionReader is a provider with a scale behind it.
 type BodyCompositionReader interface {
 	// LatestBodyComposition returns the most recent reading of each measure

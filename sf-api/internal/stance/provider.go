@@ -3,6 +3,7 @@ package stance
 import (
 	"context"
 	"errors"
+
 	"strong-fish-api/internal/devicelink"
 )
 
@@ -10,14 +11,11 @@ import (
 const Provider = "stance"
 
 // provider adapts the bar-speed Client to the devicelink.Provider seam so the
-// device handler treats Stance like any other integration - listed, paired,
-// read, disconnected - without knowing it is a Supabase account rather than an
-// OAuth one.
-//
-// It is an AccountPairer (email/password, not a consent redirect) and a
-// BarSpeedReader (the last set of each lift), and nothing else: the OAuth
-// methods of Provider are present only to satisfy the interface and refuse,
-// because there is no authorization URL to send a browser to.
+// device handler treats Stance like any other integration - listed, connected,
+// read, disconnected. It is paired without an OAuth consent redirect: an email
+// and a password (AccountPairer), or a Google ID token the client obtained
+// itself (GoogleAccountPairer). Both end in the same Firebase session, and
+// BarSpeedReader reads the last set of each lift.
 type provider struct {
 	client Client
 }
@@ -31,9 +29,9 @@ func (p *provider) Name() string      { return Provider }
 func (p *provider) Enabled() bool     { return p.client.Enabled() }
 func (p *provider) RecordURL() string { return p.client.RecordURL() }
 
-// errNotOAuth is what the consent methods return: Stance is paired with a
-// password, so a caller that reached for an authorization URL is on the wrong
-// path and should be told so plainly rather than handed an empty string.
+// errNotOAuth is what the consent methods return: Stance is paired with an
+// account, not an authorization redirect, so a caller that reached for an
+// authorization URL is on the wrong path.
 var errNotOAuth = errors.New("stance: paired with an account, not an authorization redirect")
 
 func (p *provider) AuthorizationURL(string, string) string { return "" }
@@ -50,26 +48,46 @@ func (p *provider) Refresh(ctx context.Context, refreshToken string) (devicelink
 	return toToken(session), nil
 }
 
-// CheckAccount has nothing to do once paired: pairing already returned the
-// user id, and a bar-speed account has no "is there a profile behind it"
-// question the way Google Health does. It reports the id it is given.
+// CheckAccount has nothing to do once signed in: the session already carries
+// the uid, and a bar-speed account has no "is there a profile behind it"
+// question the way Google Health does.
 func (p *provider) CheckAccount(context.Context, string) (string, error) {
 	return "", nil
 }
 
-// PairAccount exchanges the member's Stance email and password for a grant.
+// PairAccount signs in with the member's Stance email and password.
 func (p *provider) PairAccount(ctx context.Context, email, password string) (devicelink.Token, error) {
-	session, err := p.client.Pair(ctx, email, password)
+	session, err := p.client.PairPassword(ctx, email, password)
 	if err != nil {
 		return devicelink.Token{}, mapError(err)
 	}
 	return toToken(session), nil
 }
 
-// LastSets reads the last set of each lift, mapping the package's own Set onto
-// the device seam's BarSet.
-func (p *provider) LastSets(ctx context.Context, accessToken, externalUserID string) ([]devicelink.BarSet, error) {
-	sets, err := p.client.LastSets(ctx, accessToken, externalUserID)
+// PairGoogleIDToken signs in with a Google ID token the client obtained with
+// the public Google client id.
+func (p *provider) PairGoogleIDToken(ctx context.Context, idToken string) (devicelink.Token, error) {
+	session, err := p.client.PairGoogle(ctx, idToken)
+	if err != nil {
+		return devicelink.Token{}, mapError(err)
+	}
+	return toToken(session), nil
+}
+
+// GoogleClientID is the public client id the client needs to obtain a Google
+// ID token, or blank when Google sign-in is not configured.
+func (p *provider) GoogleClientID() string {
+	if !p.client.GoogleEnabled() {
+		return ""
+	}
+	return p.client.GoogleClientID()
+}
+
+// LastSets reads the last set of each lift for the signed-in member, mapping
+// the package's own Set onto the device seam's BarSet. The Firebase uid is
+// what keys the reads, so externalUserID is used and accessToken is not.
+func (p *provider) LastSets(ctx context.Context, _, externalUserID string) ([]devicelink.BarSet, error) {
+	sets, err := p.client.LastSets(ctx, externalUserID)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -87,13 +105,13 @@ func (p *provider) LastSets(ctx context.Context, accessToken, externalUserID str
 
 func toToken(s Session) devicelink.Token {
 	return devicelink.Token{
-		AccessToken: s.AccessToken, RefreshToken: s.RefreshToken,
-		ExpiresAt: s.ExpiresAt, UserID: s.UserID,
+		AccessToken: s.IDToken, RefreshToken: s.RefreshToken,
+		ExpiresAt: s.ExpiresAt, UserID: s.FirebaseUID,
 	}
 }
 
-// mapError translates the package's own errors into the seam's, so the
-// handler answers "pair again" the same way whatever provider raised it.
+// mapError translates the package's own errors into the seam's, so the handler
+// answers "sign in again" the same way whatever provider raised it.
 func mapError(err error) error {
 	switch {
 	case errors.Is(err, ErrRefused):

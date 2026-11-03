@@ -59,10 +59,17 @@ type DeviceConnection struct {
 	// RecordURL is set for a provider whose capture happens in its own app
 	// (Stance): the "record a set" button opens it. Empty for the others.
 	RecordURL string `json:"recordUrl,omitempty"`
-	// AccountPaired is true for a provider connected with an email and
-	// password (Stance) rather than an OAuth redirect, so a client shows a
-	// sign-in form instead of a "connect" button that opens a consent page.
+	// AccountPaired is true for a provider that can be connected with an email
+	// and password (Stance), so a client offers a sign-in form.
 	AccountPaired bool `json:"accountPaired,omitempty"`
+	// OAuth is true when the provider offers a consent redirect to connect
+	// (Google Health, Withings). A client shows a "connect" button.
+	OAuth bool `json:"oauth,omitempty"`
+	// GoogleClientID is set for a provider that can be connected with a Google
+	// ID token the client obtains itself (Stance): the public client id the
+	// client needs to run "Sign in with Google". Blank when unavailable, and a
+	// provider can offer this and AccountPaired together.
+	GoogleClientID string `json:"googleClientId,omitempty"`
 }
 
 // BarSet is one completed barbell-velocity set, as the clients render it: what

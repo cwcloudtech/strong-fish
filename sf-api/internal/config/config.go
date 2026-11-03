@@ -53,18 +53,22 @@ type Config struct {
 	WithingsClientSecret string
 	WithingsAuthURL      string
 	WithingsAPIURL       string
-	// Stance Fitness - barbell-velocity sets and the RPE it computes from bar
-	// speed. These address Stance's API; their values are provided by Stance
-	// (hello@stancefitness.co). The anon key is a client key. The project ref
-	// and the key both empty leaves the whole feature off.
+	// Stance Fitness - barbell-velocity sets and the velocity-derived RPE. All
+	// of these are provided by Stance (hello@stancefitness.co). Identity is
+	// Firebase Auth; the sets are read from Supabase with the anon key. The
+	// Firebase API key, the Supabase project ref and the anon key together
+	// switch the feature on; any of them empty leaves it off.
+	StanceFirebaseAPIKey     string
 	StanceSupabaseProjectRef string
 	StanceSupabaseAnonKey    string
-	StancePreprocessURL      string
-	// StanceSetsTable and StanceSetsSelect override the PostgREST relation the
-	// sets are read from, for when the schema differs; blank uses the defaults
-	// Stance documents.
-	StanceSetsTable  string
-	StanceSetsSelect string
+	// StanceGoogleClientID is the project's public Google client id (the app's
+	// default_web_client_id). The client uses it to obtain a Google ID token;
+	// no secret is involved. Empty leaves only email/password pairing.
+	StanceGoogleClientID string
+	// StanceUsersTable and StanceSessionsRPC override the user relation and the
+	// sessions RPC the sets are read through; blank uses Stance's defaults.
+	StanceUsersTable  string
+	StanceSessionsRPC string
 	// StanceAppURL is what the "record a set" button opens: the Stance app,
 	// which owns the bar-speed encoder and does the capture. Swappable
 	// without a client release.
@@ -212,11 +216,12 @@ func Load() Config {
 		WithingsClientSecret:     os.Getenv("SF_WITHINGS_CLIENT_SECRET"),
 		WithingsAuthURL:          os.Getenv("SF_WITHINGS_AUTH_URL"),
 		WithingsAPIURL:           os.Getenv("SF_WITHINGS_API_URL"),
+		StanceFirebaseAPIKey:     os.Getenv("SF_STANCE_FIREBASE_API_KEY"),
 		StanceSupabaseProjectRef: os.Getenv("SF_STANCE_SUPABASE_PROJECT_REF"),
 		StanceSupabaseAnonKey:    os.Getenv("SF_STANCE_SUPABASE_ANON_KEY"),
-		StancePreprocessURL:      os.Getenv("SF_STANCE_PREPROCESS_URL"),
-		StanceSetsTable:          os.Getenv("SF_STANCE_SETS_TABLE"),
-		StanceSetsSelect:         os.Getenv("SF_STANCE_SETS_SELECT"),
+		StanceGoogleClientID:     os.Getenv("SF_STANCE_GOOGLE_CLIENT_ID"),
+		StanceUsersTable:         os.Getenv("SF_STANCE_USERS_TABLE"),
+		StanceSessionsRPC:        os.Getenv("SF_STANCE_SESSIONS_RPC"),
 		StanceAppURL:             os.Getenv("SF_STANCE_APP_URL"),
 		CWCloudAPIURL:            utils.GetBaseUrlFromEnvWithFallback("CWCLOUD_API_URL", "https://api.cwcloud.tech"),
 		CWCloudAPIKey:            os.Getenv("CWCLOUD_API_KEY"),
