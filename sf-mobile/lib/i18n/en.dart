@@ -588,6 +588,8 @@ const Map<String, dynamic> en = {
     'title': 'Connected devices',
     'subtitle': 'Read what your watch and your scale already measured. Nothing is written back, and nothing is stored here.',
     'connect': 'Connect',
+    'connectGoogle': 'Connect with Google',
+    'connectGoogleHint': 'Finish signing in with Google in the web app.',
     'disconnect': 'Disconnect',
     'notConnected': 'Not connected.',
     'unavailable': 'Not enabled on this server.',

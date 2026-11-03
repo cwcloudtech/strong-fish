@@ -81,6 +81,62 @@ func (h *DeviceHandler) PairDevice(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type googlePairPayload struct {
+	IDToken string `json:"idToken"`
+}
+
+// PairDeviceGoogle connects an account-paired provider from a Google ID token
+// the client obtained with the public client id. Like PairDevice, only the
+// resulting session is stored, never the token the client sent.
+func (h *DeviceHandler) PairDeviceGoogle(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	found, ok := h.provider(w, r)
+	if !ok {
+		return
+	}
+	pairer, ok := found.(devicelink.GoogleAccountPairer)
+	if !ok || pairer.GoogleClientID() == "" {
+		writeError(w, http.StatusBadRequest,
+			"This provider cannot be connected with Google", CodeDeviceNotPairable)
+		return
+	}
+	if !found.Enabled() {
+		writeError(w, http.StatusNotImplemented,
+			"This integration is not enabled on this server", CodeDeviceUnavailable)
+		return
+	}
+
+	var p googlePairPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	if utils.IsBlank(p.IDToken) {
+		writeError(w, http.StatusBadRequest, "Missing Google sign-in token", CodeStancePairFailed)
+		return
+	}
+
+	token, err := pairer.PairGoogleIDToken(r.Context(), p.IDToken)
+	if err != nil {
+		if errors.Is(err, stance.ErrRefused) {
+			writeError(w, http.StatusUnauthorized, "That Google sign-in was refused", CodeStancePairFailed)
+			return
+		}
+		h.writeProviderError(w, err, found.Name())
+		return
+	}
+
+	if _, err := h.links.Save(r.Context(), models.DeviceLink{
+		UserID: userID, Provider: found.Name(),
+		AccessToken: token.AccessToken, RefreshToken: token.RefreshToken,
+		ExpiresAt: token.ExpiresAt, ExternalUserID: token.UserID,
+	}); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // BarSpeed returns the member's last set of each tracked lift.
 func (h *DeviceHandler) BarSpeed(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())

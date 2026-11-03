@@ -140,11 +140,12 @@ func main() {
 	// - and like the others it is registered even unconfigured, so the screen
 	// shows it switched off rather than hiding it.
 	devices = append(devices, stance.NewProvider(stance.New(stance.Config{
+		FirebaseAPIKey:     cfg.StanceFirebaseAPIKey,
+		GoogleClientID:     cfg.StanceGoogleClientID,
 		SupabaseProjectRef: cfg.StanceSupabaseProjectRef,
 		SupabaseAnonKey:    cfg.StanceSupabaseAnonKey,
-		PreprocessURL:      cfg.StancePreprocessURL,
-		SetsTable:          cfg.StanceSetsTable,
-		SetsSelect:         cfg.StanceSetsSelect,
+		UsersTable:         cfg.StanceUsersTable,
+		SessionsRPC:        cfg.StanceSessionsRPC,
 		AppURL:             cfg.StanceAppURL,
 	})))
 

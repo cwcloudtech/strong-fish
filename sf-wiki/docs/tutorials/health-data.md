@@ -53,7 +53,7 @@ Only read permissions are asked for:
 - **Google Health**: activity and fitness, and heart rate. Not your sleep, not your weight, and nothing at all to write.
 - **Withings**: your measures and your daily activity.
 
-**Stance** is the exception to the sign-in dance: there is no provider consent screen. You pair it by typing your Stance email and password straight into StrongFish, which hands them to Stance once in exchange for a token. The password itself is never stored.
+**Stance** is the exception to the sign-in dance. You can connect it two ways: type your Stance email and password straight into StrongFish (used once for a token and never stored), or choose **Connect with Google** and sign in with the Google account your Stance account uses. On the phone the Google step opens in the web app, where Google's own sign-in runs.
 
 On the phone, consent opens in your browser rather than inside the app - so you can see whose login page you are typing into. Come back to the app afterwards and the connection is there.
 
@@ -155,6 +155,6 @@ Both limits go away once the app is published and verified. In a Google Workspac
 
 The Stance integration runs on values that Stance provides. Email their team at **hello@stancefitness.co** to request access, then set what they send you:
 
-- `SF_STANCE_SUPABASE_PROJECT_REF` and `SF_STANCE_SUPABASE_ANON_KEY` - the account and the stored sets. **Required**: with either unset, Stance shows as not enabled here, like any other integration without its credentials.
-- `SF_STANCE_PREPROCESS_URL` - the service that turns a raw set into a measured RPE. Optional; left unset, StrongFish still shows the bar speed and the RPE you gave, just not a measured one.
-- `SF_STANCE_APP_URL` - what the phone's **Record a set** button opens. Optional; defaults to the Stance app's store page.
+- `SF_STANCE_FIREBASE_API_KEY`, `SF_STANCE_SUPABASE_PROJECT_REF` and `SF_STANCE_SUPABASE_ANON_KEY` - the account sign-in and the stored sets. **Required**: with any unset, Stance shows as not enabled here, like any other integration without its credentials.
+- `SF_STANCE_GOOGLE_CLIENT_ID` - the public Google client id, to offer **Connect with Google** beside the email/password form. Optional, and there is no secret: it is a public value like the anon key. For the web button, Stance lists your web app's origin under that client's authorized JavaScript origins.
+- `SF_STANCE_USERS_TABLE`, `SF_STANCE_SESSIONS_RPC`, `SF_STANCE_APP_URL` - overrides for the user relation, the sets RPC, and what the **Record a set** button opens. Optional; the defaults are Stance's own.

@@ -293,9 +293,17 @@ class DeviceConnection {
   /// "record a set" button opens it.
   final String recordUrl;
 
-  /// Whether this provider is connected with an email and password rather than
-  /// an OAuth redirect, so the UI shows a sign-in form, not a "connect" button.
+  /// Whether this provider can be connected with an email and password, so the
+  /// UI shows a sign-in form.
   final bool accountPaired;
+
+  /// Whether this provider offers a consent redirect to connect (Google
+  /// Health, Withings), so the UI shows a "connect" button.
+  final bool oauth;
+
+  /// The public Google client id for "Sign in with Google", when the provider
+  /// supports it (Stance). Empty when unavailable.
+  final String googleClientId;
 
   const DeviceConnection({
     required this.provider,
@@ -306,6 +314,8 @@ class DeviceConnection {
     this.activitySource = false,
     this.recordUrl = '',
     this.accountPaired = false,
+    this.oauth = false,
+    this.googleClientId = '',
   });
 
   bool can(String capability) => capabilities.contains(capability);
@@ -321,6 +331,8 @@ class DeviceConnection {
         activitySource: json['activitySource'] == true,
         recordUrl: _toString(json['recordUrl']),
         accountPaired: json['accountPaired'] == true,
+        oauth: json['oauth'] == true,
+        googleClientId: _toString(json['googleClientId']),
       );
 }
 

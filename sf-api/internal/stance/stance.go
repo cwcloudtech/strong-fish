@@ -1,19 +1,18 @@
 // Package stance reads a member's barbell-velocity sets from Stance Fitness -
-// the bar-speed tracker clipped to the barbell - and the "real" RPE Stance
-// computes from how fast the bar actually moved.
+// the bar-speed tracker clipped to the barbell - and the velocity-derived
+// "real" RPE Stance computes from how fast the bar actually moved.
 //
-// Stance's API is a Supabase backend for the account and the stored sets, plus
-// a recompute service that turns a finished set into per-rep velocities and a
-// velocity-derived RPE. Its endpoints and keys are provided by Stance; email
-// hello@stancefitness.co to obtain them. Everything specific to Stance sits
-// behind the Client interface here, so a change on their side touches only the
-// one implementation below and nothing downstream of it.
+// Stance's accounts live in Firebase Auth, and the finished sets in a Supabase
+// (PostgREST) database keyed by the Firebase user id. A member is identified
+// one of two ways, both ending in a Firebase session whose uid keys the reads:
+// an email and password, or Google. The sets are then read from Supabase with
+// the project's anon key, filtered to that uid. The endpoints and keys are
+// provided by Stance; email hello@stancefitness.co to obtain them.
 //
-// Three things are kept out of the handlers because they are Stance's shape,
-// not ours: the account is paired with an email and password rather than an
-// OAuth redirect (a Supabase sign-in), the velocity the bar moved at is the
-// unit everything is expressed in, and the capture itself happens on the phone
-// over Bluetooth - the API only ever receives a finished set.
+// Everything specific to Stance sits behind the Client interface here, so a
+// change on their side touches only the implementation and nothing downstream
+// of it. The capture itself happens on the phone over Bluetooth - this API
+// only ever reads a finished set.
 package stance
 
 import (
@@ -22,10 +21,10 @@ import (
 	"time"
 )
 
-// The three lifts Stance recomputes RPE for, and the only ones StrongFish
-// charts. Stance stores a free-text exercise on each set; these are what it is
-// mapped onto (see matchLift), because a chart keyed on "Back Squat (comp)"
-// is a chart nobody's second set lands in.
+// The three lifts Stance reports a velocity-derived RPE for, and the only ones
+// StrongFish charts. Stance stores a free-text exercise on each set; these are
+// what it is mapped onto (see matchLift), because a chart keyed on "Back Squat
+// (comp)" is a chart nobody's second set lands in.
 const (
 	LiftSquat    = "squat"
 	LiftBench    = "bench"
@@ -35,16 +34,15 @@ const (
 // Lifts is the three, in the order a screen shows them.
 var Lifts = []string{LiftSquat, LiftBench, LiftDeadlift}
 
-// Session is a paired account's Supabase grant, stored per member like any
-// other device link. Access tokens are short (~1h); RefreshToken renews them.
+// Session is a paired account's Firebase grant, stored per member like any
+// other device link. The ID token is short (~1h) and renewed from the refresh
+// token; FirebaseUID is the key every set is filtered by, kept in the link's
+// data so a read needs no round-trip to find out whose sets to ask for.
 type Session struct {
-	AccessToken  string
+	IDToken      string
 	RefreshToken string
 	ExpiresAt    time.Time
-	// UserID is who Supabase knows the member as - the key every set is
-	// filtered by. Kept in the link's data so a read needs no second call to
-	// find out whose sets to ask for.
-	UserID string
+	FirebaseUID  string
 }
 
 // Set is one completed set, as StrongFish needs it: what was lifted, what the
@@ -57,8 +55,7 @@ type Set struct {
 	Reps     int
 	// GivenRPE is what the member rated the set; 0 when they did not.
 	GivenRPE float64
-	// PredictedRPE is Stance's recomputation from the bar speed - the "real"
-	// RPE. 0 when it has not been computed.
+	// PredictedRPE is Stance's velocity-derived "real" RPE; 0 when absent.
 	PredictedRPE float64
 	// MeanVelocity and PeakVelocity are the set's concentric bar speed in m/s,
 	// averaged and at its fastest rep.
@@ -70,41 +67,32 @@ type Set struct {
 	PerformedAt   time.Time
 }
 
-// Submission is a finished set handed to Stance for the conclusion: the reps
-// the phone segmented, what was on the bar, and the member's own RPE. The raw
-// samples travel as an opaque blob in Stance's own encoding - this API carries
-// it, it does not read it.
-type Submission struct {
-	Lift     string
-	WeightKg float64
-	Reps     int
-	GivenRPE float64
-	// Samples is the encoded recording the phone captured over Bluetooth, in
-	// Stance's own format. Opaque here.
-	Samples []byte
-}
-
 // Client is everything StrongFish asks of Stance. Narrow on purpose: pair an
-// account, keep its grant fresh, read the last set of each lift, and submit a
-// finished set to get its conclusion. A later public API is a second
-// implementation of exactly this.
+// account (by password or by Google), keep its grant fresh, and read the last
+// set of each lift. A later public API is a second implementation of this.
 type Client interface {
-	// Pair exchanges an email and password for a Supabase session. The
-	// password is used once, here, and never returned or stored.
-	Pair(ctx context.Context, email, password string) (Session, error)
-	// Refresh renews a session from its refresh token.
+	// PairPassword exchanges an email and password for a Firebase session via
+	// Firebase Auth. The password is used once, here, and never stored.
+	PairPassword(ctx context.Context, email, password string) (Session, error)
+	// PairGoogle signs the member in with a Google ID token the client
+	// obtained with the public Google client id, exactly as the app does.
+	PairGoogle(ctx context.Context, googleIDToken string) (Session, error)
+	// GoogleClientID is the public client id the client needs to obtain that
+	// Google ID token. Blank when Google sign-in is not configured.
+	GoogleClientID() string
+	// Refresh renews a session from its Firebase refresh token.
 	Refresh(ctx context.Context, refreshToken string) (Session, error)
 	// LastSets is the most recent set of each of the three lifts, newest
-	// first, for the member Supabase knows as userID. A lift the member has
-	// never tracked is simply absent.
-	LastSets(ctx context.Context, accessToken, userID string) ([]Set, error)
-	// Submit sends a finished set and returns it with Stance's conclusion
-	// filled in - the recomputed RPE and the per-rep velocities.
-	Submit(ctx context.Context, accessToken, userID string, set Submission) (Set, error)
-	// Enabled reports whether the operator configured the integration. When
-	// false the whole feature is off: the provider lists as unavailable and
-	// none of the above is called.
+	// first, for the member Firebase knows as firebaseUID. A lift the member
+	// has never tracked is simply absent.
+	LastSets(ctx context.Context, firebaseUID string) ([]Set, error)
+	// Enabled reports whether the operator configured the integration (both
+	// the Firebase identity side and the Supabase read side). When false the
+	// whole feature is off: the provider lists as unavailable.
 	Enabled() bool
+	// GoogleEnabled reports whether the Google sign-in option is configured on
+	// top of the password one.
+	GoogleEnabled() bool
 	// RecordURL is what the "record a set" button opens - the Stance app,
 	// which does the capture StrongFish cannot.
 	RecordURL() string
