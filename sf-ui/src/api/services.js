@@ -127,6 +127,11 @@ export const devices = {
   // grant. The password is used once and never stored - only the tokens are.
   pair: (provider, email, password) =>
     body(client.post(`/users/me/devices/${provider}/pair`, { email, password })),
+  // Account-paired providers connected with Google: the client obtains a
+  // Google ID token (public client id) and sends it here; only the resulting
+  // session is stored.
+  pairGoogle: (provider, idToken) =>
+    body(client.post(`/users/me/devices/${provider}/google`, { idToken })),
   // The last set of each lift a bar-speed provider tracked, with the RPE it
   // computed from the bar's speed.
   barSpeed: (provider) => body(client.get(`/users/me/devices/${provider}/bar-speed`)),

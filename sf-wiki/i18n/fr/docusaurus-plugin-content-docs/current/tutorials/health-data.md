@@ -53,7 +53,7 @@ Seules des permissions de lecture sont demandées :
 - **Google Health** : l'activité et la condition physique, et la fréquence cardiaque. Ni votre sommeil, ni votre poids, et rien du tout en écriture.
 - **Withings** : vos mesures et votre activité quotidienne.
 
-**Stance** fait exception à ce ballet de connexion : il n'y a pas d'écran de consentement du fournisseur. Vous l'associez en tapant votre e-mail et votre mot de passe Stance directement dans StrongFish, qui les transmet une fois à Stance en échange d'un jeton. Le mot de passe lui-même n'est jamais conservé.
+**Stance** fait exception à ce ballet de connexion. Vous pouvez le relier de deux façons : en tapant votre e-mail et votre mot de passe Stance directement dans StrongFish (utilisés une fois pour un jeton, jamais conservés), ou via **Se connecter avec Google** avec le compte Google que votre compte Stance utilise. Sur le téléphone, l'étape Google s'ouvre dans l'app web, où tourne la connexion Google.
 
 Sur le téléphone, le consentement s'ouvre dans votre navigateur plutôt que dans l'application - ainsi vous voyez sur quelle page de connexion vous tapez. Revenez ensuite dans l'application, la connexion y est.
 
@@ -154,6 +154,6 @@ Les deux limites disparaissent une fois l'app publiée et validée. Dans une org
 
 L'intégration Stance fonctionne avec des valeurs fournies par Stance. Écrivez à leur équipe à **hello@stancefitness.co** pour demander un accès, puis renseignez ce qu'ils vous transmettent :
 
-- `SF_STANCE_SUPABASE_PROJECT_REF` et `SF_STANCE_SUPABASE_ANON_KEY` - le compte et les séries stockées. **Requis** : si l'une est vide, Stance apparaît comme non activé ici, comme toute autre intégration sans ses identifiants.
-- `SF_STANCE_PREPROCESS_URL` - le service qui transforme une série brute en RPE mesuré. Facultatif ; laissé vide, StrongFish affiche quand même la vitesse de barre et le RPE que vous avez donné, mais pas de RPE mesuré.
-- `SF_STANCE_APP_URL` - ce qu'ouvre le bouton **Enregistrer une série** du téléphone. Facultatif ; par défaut, la page de l'application Stance sur le store.
+- `SF_STANCE_FIREBASE_API_KEY`, `SF_STANCE_SUPABASE_PROJECT_REF` et `SF_STANCE_SUPABASE_ANON_KEY` - la connexion au compte et les séries stockées. **Requis** : si l'une est vide, Stance apparaît comme non activé ici, comme toute autre intégration sans ses identifiants.
+- `SF_STANCE_GOOGLE_CLIENT_ID` - l'identifiant client Google public, pour proposer **Se connecter avec Google** à côté du formulaire e-mail/mot de passe. Facultatif, et sans secret : c'est une valeur publique comme la clé anon. Pour le bouton web, Stance déclare l'origine de votre app web dans les origines JavaScript autorisées de ce client.
+- `SF_STANCE_USERS_TABLE`, `SF_STANCE_SESSIONS_RPC`, `SF_STANCE_APP_URL` - surcharges pour la relation utilisateur, la RPC des séries et ce qu'ouvre le bouton **Enregistrer une série**. Facultatif ; les valeurs par défaut sont celles de Stance.

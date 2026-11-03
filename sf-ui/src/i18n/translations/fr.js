@@ -577,6 +577,8 @@ const fr = {
     title: "Appareils connectés",
     subtitle: "Lisez ce que votre montre et votre balance ont déjà mesuré. Rien n'est écrit en retour, et rien n'est stocké ici.",
     connect: "Connecter",
+    connectGoogle: "Se connecter avec Google",
+    connectGoogleHint: "Terminez la connexion avec Google dans l'app web.",
     disconnect: "Déconnecter",
     notConnected: "Non connecté.",
     unavailable: "Non activé sur ce serveur.",

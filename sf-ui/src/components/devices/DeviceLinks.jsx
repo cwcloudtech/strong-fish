@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { FiCpu, FiLink, FiRefreshCw, FiSlash, FiTrash2 } from "react-icons/fi";
 import ReactMarkdown from "react-markdown";
@@ -124,6 +124,19 @@ export default function DeviceLinks() {
     }
   };
 
+  const pairGoogle = async (provider, idToken) => {
+    setBusy(provider);
+    setError(null);
+    try {
+      await devicesApi.pairGoogle(provider, idToken);
+      await load();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const disconnect = async (provider) => {
     setBusy(provider);
     setError(null);
@@ -185,7 +198,7 @@ export default function DeviceLinks() {
               >
                 <FiSlash /> {t("devices.disconnect")}
               </button>
-            ) : connection.accountPaired ? null : (
+            ) : connection.oauth ? (
               <button
                 className="sf-button sf-button-sm"
                 onClick={() => connect(connection.provider)}
@@ -193,8 +206,19 @@ export default function DeviceLinks() {
               >
                 <FiLink /> {t("devices.connect")}
               </button>
-            )}
+            ) : null}
           </div>
+
+          {/* Stance can also be connected with Google: the client gets a
+              Google ID token with the public client id and sends it on. */}
+          {!connection.connected && connection.googleClientId && connection.available ? (
+            <GoogleConnectButton
+              clientId={connection.googleClientId}
+              label={t("devices.connectGoogle")}
+              onCredential={(idToken) => pairGoogle(connection.provider, idToken)}
+              onError={(err) => setError(err)}
+            />
+          ) : null}
 
           {/* Account-paired providers (Stance) sign in with an email and
               password rather than a consent redirect. */}
@@ -669,6 +693,65 @@ function BodyCompositionPanel({ provider }) {
  * the API gets back are - so the field is write-only and the form clears on
  * success.
  */
+/* Google Identity Services, loaded once and shared. */
+let gsiScriptPromise = null;
+function loadGsi() {
+  if (gsiScriptPromise) return gsiScriptPromise;
+  gsiScriptPromise = new Promise((resolve, reject) => {
+    if (window.google?.accounts?.id) {
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load Google sign-in"));
+    document.head.appendChild(script);
+  });
+  return gsiScriptPromise;
+}
+
+/**
+ * "Sign in with Google", rendered by Google's own library. It hands back a
+ * Google ID token (the credential), which the caller sends to the API to be
+ * exchanged for a session - the same ID-token sign-in the mobile app does. No
+ * secret is involved: the client id is public.
+ */
+function GoogleConnectButton({ clientId, label, onCredential, onError }) {
+  const holder = useRef(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadGsi()
+      .then(() => {
+        if (cancelled || !window.google?.accounts?.id || !holder.current) return;
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response) => {
+            if (response?.credential) onCredential(response.credential);
+          },
+        });
+        holder.current.innerHTML = "";
+        window.google.accounts.id.renderButton(holder.current, {
+          type: "standard",
+          theme: "outline",
+          size: "medium",
+          text: "continue_with",
+        });
+      })
+      .catch((err) => onError && onError(err));
+    return () => {
+      cancelled = true;
+    };
+  }, [clientId, onCredential, onError]);
+
+  return (
+    <div style={{ marginTop: "0.5rem" }}>
+      <div ref={holder} aria-label={label} />
+    </div>
+  );
+}
+
 function AccountPairForm({ provider, busy, onPair }) {
   const { t } = useI18n();
   const [email, setEmail] = useState("");
