@@ -56,6 +56,32 @@ type DeviceConnection struct {
 	// rate are shown. Decided here so the web app and the phone cannot pick
 	// differently when a member has connected more than one.
 	ActivitySource bool `json:"activitySource"`
+	// RecordURL is set for a provider whose capture happens in its own app
+	// (Stance): the "record a set" button opens it. Empty for the others.
+	RecordURL string `json:"recordUrl,omitempty"`
+	// AccountPaired is true for a provider connected with an email and
+	// password (Stance) rather than an OAuth redirect, so a client shows a
+	// sign-in form instead of a "connect" button that opens a consent page.
+	AccountPaired bool `json:"accountPaired,omitempty"`
+}
+
+// BarSet is one completed barbell-velocity set, as the clients render it: what
+// was lifted, what the member rated it, and the RPE the tracker computed from
+// how fast the bar moved.
+type BarSet struct {
+	// Lift is "squat", "bench" or "deadlift".
+	Lift         string  `json:"lift"`
+	WeightKg     float64 `json:"weightKg,omitempty"`
+	Reps         int     `json:"reps,omitempty"`
+	GivenRpe     float64 `json:"givenRpe,omitempty"`
+	PredictedRpe float64 `json:"predictedRpe,omitempty"`
+	// MeanVelocity and PeakVelocity are the set's concentric bar speed, m/s.
+	MeanVelocity float64 `json:"meanVelocity,omitempty"`
+	PeakVelocity float64 `json:"peakVelocity,omitempty"`
+	// RepVelocities is each rep's mean concentric velocity in order - the
+	// per-set chart, one bar a rep.
+	RepVelocities []float64 `json:"repVelocities,omitempty"`
+	PerformedAt   time.Time `json:"performedAt,omitempty"`
 }
 
 // StepDay is one day's step count.

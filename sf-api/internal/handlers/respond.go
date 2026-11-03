@@ -61,9 +61,14 @@ const (
 	// on: nothing connected here, nothing linked at the provider, or a grant
 	// that has to be given again.
 	CodeDeviceNotConnected = "errors.deviceNotConnected"
-	CodeDeviceNotLinked    = "errors.deviceNotLinked"
-	CodeDeviceReauthorize  = "errors.deviceReauthorize"
-	CodeInvalidRange       = "errors.invalidRange"
+	// CodeDeviceNotPairable is a pairing request against a provider that is
+	// connected by OAuth, not by an account - the wrong path for it.
+	CodeDeviceNotPairable = "errors.deviceNotPairable"
+	// CodeStancePairFailed is Stance refusing the email/password at pairing.
+	CodeStancePairFailed  = "errors.stancePairFailed"
+	CodeDeviceNotLinked   = "errors.deviceNotLinked"
+	CodeDeviceReauthorize = "errors.deviceReauthorize"
+	CodeInvalidRange      = "errors.invalidRange"
 	// CodeDeviceUnavailable is an integration the operator has not given
 	// credentials to: offered on screen, but switched off here.
 	CodeDeviceUnavailable = "errors.deviceUnavailable"

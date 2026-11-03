@@ -289,6 +289,14 @@ class DeviceConnection {
   /// member has connected more than one.
   final bool activitySource;
 
+  /// Set for a provider whose capture happens in its own app (Stance): the
+  /// "record a set" button opens it.
+  final String recordUrl;
+
+  /// Whether this provider is connected with an email and password rather than
+  /// an OAuth redirect, so the UI shows a sign-in form, not a "connect" button.
+  final bool accountPaired;
+
   const DeviceConnection({
     required this.provider,
     this.available = false,
@@ -296,6 +304,8 @@ class DeviceConnection {
     this.connectedAt,
     this.capabilities = const [],
     this.activitySource = false,
+    this.recordUrl = '',
+    this.accountPaired = false,
   });
 
   bool can(String capability) => capabilities.contains(capability);
@@ -309,6 +319,46 @@ class DeviceConnection {
             ? (json['capabilities'] as List).map((item) => item.toString()).toList()
             : const [],
         activitySource: json['activitySource'] == true,
+        recordUrl: _toString(json['recordUrl']),
+        accountPaired: json['accountPaired'] == true,
+      );
+}
+
+/// One completed barbell-velocity set, as the phone renders it.
+class StanceSet {
+  final String lift;
+  final double weightKg;
+  final int reps;
+  final double givenRpe;
+  final double predictedRpe;
+  final double meanVelocity;
+  final double peakVelocity;
+
+  /// Each rep's mean concentric velocity in order - the per-set chart.
+  final List<double> repVelocities;
+
+  const StanceSet({
+    this.lift = '',
+    this.weightKg = 0,
+    this.reps = 0,
+    this.givenRpe = 0,
+    this.predictedRpe = 0,
+    this.meanVelocity = 0,
+    this.peakVelocity = 0,
+    this.repVelocities = const [],
+  });
+
+  factory StanceSet.fromJson(Map<String, dynamic> json) => StanceSet(
+        lift: _toString(json['lift']),
+        weightKg: _toDouble(json['weightKg']),
+        reps: _toInt(json['reps']),
+        givenRpe: _toDouble(json['givenRpe']),
+        predictedRpe: _toDouble(json['predictedRpe']),
+        meanVelocity: _toDouble(json['meanVelocity']),
+        peakVelocity: _toDouble(json['peakVelocity']),
+        repVelocities: (json['repVelocities'] as List? ?? const [])
+            .map((v) => _toDouble(v))
+            .toList(),
       );
 }
 

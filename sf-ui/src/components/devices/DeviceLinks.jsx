@@ -111,6 +111,19 @@ export default function DeviceLinks() {
     }
   };
 
+  const pair = async (provider, email, password) => {
+    setBusy(provider);
+    setError(null);
+    try {
+      await devicesApi.pair(provider, email, password);
+      await load();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const disconnect = async (provider) => {
     setBusy(provider);
     setError(null);
@@ -172,7 +185,7 @@ export default function DeviceLinks() {
               >
                 <FiSlash /> {t("devices.disconnect")}
               </button>
-            ) : (
+            ) : connection.accountPaired ? null : (
               <button
                 className="sf-button sf-button-sm"
                 onClick={() => connect(connection.provider)}
@@ -182,6 +195,16 @@ export default function DeviceLinks() {
               </button>
             )}
           </div>
+
+          {/* Account-paired providers (Stance) sign in with an email and
+              password rather than a consent redirect. */}
+          {!connection.connected && connection.accountPaired && connection.available ? (
+            <AccountPairForm
+              provider={connection.provider}
+              busy={busy === connection.provider}
+              onPair={(email, password) => pair(connection.provider, email, password)}
+            />
+          ) : null}
 
           {/* Steps and heart rate from one provider only, the one the API
               picked: two watches' worth of steps side by side would be two
@@ -200,6 +223,9 @@ export default function DeviceLinks() {
           ) : null}
           {connection.connected && connection.capabilities?.includes("body-composition") ? (
             <BodyCompositionPanel provider={connection.provider} />
+          ) : null}
+          {connection.connected && connection.capabilities?.includes("bar-speed") ? (
+            <BarSpeedPanel provider={connection.provider} />
           ) : null}
         </div>
       ))}
@@ -635,4 +661,135 @@ function BodyCompositionPanel({ provider }) {
       ) : null}
     </div>
   );
+}
+
+/**
+ * Signing in to an account-paired provider (Stance): an email and a password,
+ * exchanged once for a grant. The password is never stored - only the tokens
+ * the API gets back are - so the field is write-only and the form clears on
+ * success.
+ */
+function AccountPairForm({ provider, busy, onPair }) {
+  const { t } = useI18n();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!email.trim() || !password) return;
+    onPair(email.trim(), password);
+  };
+
+  return (
+    <form className="sf-row" style={{ gap: "0.5rem", marginTop: "0.6rem", flexWrap: "wrap" }} onSubmit={submit}>
+      <input
+        className="sf-input"
+        type="email"
+        autoComplete="off"
+        placeholder={t(`devices.pair.${provider}.email`)}
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        style={{ flex: 1, minWidth: 180 }}
+      />
+      <input
+        className="sf-input"
+        type="password"
+        autoComplete="off"
+        placeholder={t("devices.pair.password")}
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+        style={{ flex: 1, minWidth: 160 }}
+      />
+      <button className="sf-button sf-button-sm" type="submit" disabled={busy || !email.trim() || !password}>
+        <FiLink /> {t("devices.connect")}
+      </button>
+    </form>
+  );
+}
+
+/**
+ * The last set of each lift the member tracked on a bar-speed provider.
+ *
+ * One small chart a lift: a bar a rep, its height the rep's velocity, under
+ * the load and the two RPEs - what the member rated the set, and what the bar
+ * speed said it really was. The gap between the two is the whole point of the
+ * tracker, so both are shown wherever both exist.
+ */
+function BarSpeedPanel({ provider }) {
+  const { t } = useI18n();
+  const [sets, setSets] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    devicesApi.barSpeed(provider).then(setSets).catch(setError);
+  }, [provider]);
+
+  if (error) {
+    return <p className="sf-muted" style={{ marginTop: "0.8rem" }}>{tErrorText(t, error)}</p>;
+  }
+  if (!sets) return null;
+  if (sets.length === 0) {
+    return (
+      <div style={{ marginTop: "0.8rem" }}>
+        <p className="sf-muted">{t("devices.barSpeed.empty")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: "0.8rem" }}>
+      <strong>{t("devices.barSpeed.title")}</strong>
+      {sets.map((set) => (
+        <BarSpeedSet key={set.lift} set={set} t={t} />
+      ))}
+    </div>
+  );
+}
+
+/** One lift's last set: its heading, and a bar per rep. */
+function BarSpeedSet({ set, t }) {
+  const peak = Math.max(0.01, ...set.repVelocities);
+  const rpe =
+    set.givenRpe && set.predictedRpe
+      ? t("devices.barSpeed.rpePair", { given: fmt(set.givenRpe), real: fmt(set.predictedRpe) })
+      : set.predictedRpe
+        ? t("devices.barSpeed.rpeReal", { real: fmt(set.predictedRpe) })
+        : "";
+
+  return (
+    <div style={{ marginTop: "0.7rem" }}>
+      <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
+        <strong style={{ color: "var(--sf-text)" }}>{t(`devices.lift.${set.lift}`)}</strong>
+        {set.weightKg ? ` · ${t("devices.barSpeed.load", { weight: fmt(set.weightKg), reps: set.reps })}` : ""}
+        {rpe ? ` · ${rpe}` : ""}
+      </div>
+      <div className="sf-steps-chart" aria-hidden="true">
+        {set.repVelocities.map((velocity, index) => (
+          <div
+            key={index}
+            className="sf-steps-bar sf-bar-speed"
+            style={{ height: `${Math.round((velocity / peak) * 100)}%` }}
+            title={`${t("devices.barSpeed.rep", { n: index + 1 })}: ${velocity.toFixed(2)} m/s`}
+          />
+        ))}
+      </div>
+      <div className="sf-row" style={{ gap: "0.8rem", flexWrap: "wrap", fontSize: "0.8rem" }}>
+        {set.repVelocities.map((velocity, index) => (
+          <span key={index} className="sf-muted">
+            {t("devices.barSpeed.rep", { n: index + 1 })} {velocity.toFixed(2)} m/s
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** A number without a pointless decimal. */
+function fmt(value) {
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10);
+}
+
+/** An API error as a line of text, without pulling in the toast helper here. */
+function tErrorText(t, error) {
+  return error?.response?.data?.message || t("errors.generic");
 }

@@ -121,6 +121,58 @@ type ActivityProvider interface {
 	ActivityReader
 }
 
+// BarSet is one completed set as a bar-speed provider reports it: what was
+// lifted, what the member rated it, and what the bar's speed said it really
+// was. Velocities are concentric, in m/s.
+type BarSet struct {
+	// Lift is "squat", "bench" or "deadlift"; a set on anything else is not
+	// reported, since the screen charts only the three.
+	Lift         string
+	WeightKg     float64
+	Reps         int
+	GivenRPE     float64
+	PredictedRPE float64
+	MeanVelocity float64
+	PeakVelocity float64
+	// RepVelocities is each rep's mean concentric velocity in order - what
+	// the per-set chart plots, one bar a rep.
+	RepVelocities []float64
+	PerformedAt   time.Time
+}
+
+// The three lifts a bar-speed provider is read for.
+const (
+	LiftSquat    = "squat"
+	LiftBench    = "bench"
+	LiftDeadlift = "deadlift"
+)
+
+// Lifts is the three, in the order a screen shows them.
+var Lifts = []string{LiftSquat, LiftBench, LiftDeadlift}
+
+// BarSpeedReader is a provider that tracks barbell velocity - the last set of
+// each lift, with the RPE it computed from how fast the bar moved.
+type BarSpeedReader interface {
+	// LastSets is the most recent set of each lift for the member the
+	// provider knows as externalUserID, newest first. A lift never tracked is
+	// absent.
+	LastSets(ctx context.Context, accessToken, externalUserID string) ([]BarSet, error)
+}
+
+// SetRecorder is a provider whose capture happens in its own app on the phone
+// rather than here: it offers a URL the "record a set" button opens.
+type SetRecorder interface {
+	RecordURL() string
+}
+
+// AccountPairer is a provider paired with an email and password rather than an
+// OAuth redirect - a Supabase sign-in, for a backend that has no consent page
+// to send a browser to. The password is used once, to get a grant, and is
+// never stored.
+type AccountPairer interface {
+	PairAccount(ctx context.Context, email, password string) (Token, error)
+}
+
 // BodyCompositionReader is a provider with a scale behind it.
 type BodyCompositionReader interface {
 	// LatestBodyComposition returns the most recent reading of each measure
@@ -133,6 +185,7 @@ type BodyCompositionReader interface {
 const (
 	CapabilityActivity        = "activity"
 	CapabilityBodyComposition = "body-composition"
+	CapabilityBarSpeed        = "bar-speed"
 )
 
 // Capabilities lists what this provider can be read for, so a client draws
@@ -144,6 +197,9 @@ func Capabilities(provider Provider) []string {
 	}
 	if _, ok := provider.(BodyCompositionReader); ok {
 		capabilities = append(capabilities, CapabilityBodyComposition)
+	}
+	if _, ok := provider.(BarSpeedReader); ok {
+		capabilities = append(capabilities, CapabilityBarSpeed)
 	}
 	return capabilities
 }
