@@ -211,18 +211,22 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusCreated, saved)
 }
 
-// LastDay is the member's last twenty-four hours of health data, as markdown,
-// or "" when nothing can be read.
+// FitnessContext is the member's fitness data for the chat coach, as markdown,
+// or "" when nothing can be read: their last twenty-four hours of steps and
+// heart rate, their latest body composition, and the last bar-speed set of
+// each lift.
 //
-// Handed to the chat so a question asked at nine in the evening is answered
-// against the day the member has actually had: "should I train tonight" is a
-// different question after twelve thousand steps than after four hundred.
+// Handed to the chat so a question is answered against what the member has
+// actually done - "should I train tonight" reads differently after twelve
+// thousand steps than after four hundred, and "is my deadlift speed off"
+// cannot be answered without the bar-speed set in front of it.
 //
 // A live read on every question, like every other use of this data - nothing
-// here is stored (see DeviceLinks). It is skipped entirely when no account is
-// connected, and any failure is silence rather than a failed answer: the chat
-// must not stop working because a watch's API is down.
-func (h *DeviceHandler) LastDay(r *http.Request, userID, locale string) string {
+// here is stored (see DeviceLinks). Each part is optional: a member with only a
+// scale or only a tracker still has something worth handing the chat. Any
+// failure is silence rather than a failed answer: the chat must not stop
+// working because a watch's API is down.
+func (h *DeviceHandler) FitnessContext(r *http.Request, userID, locale string) string {
 	connected, err := h.links.ListProviders(r.Context(), userID)
 	if err != nil || len(connected) == 0 {
 		return ""
@@ -232,27 +236,37 @@ func (h *DeviceHandler) LastDay(r *http.Request, userID, locale string) string {
 		linked[name] = true
 	}
 
-	found, ok := devicelink.Find(h.providers, devicelink.ActivitySource(h.providers, linked))
-	if !ok {
-		return ""
-	}
-	provider, ok := found.(devicelink.ActivityProvider)
-	if !ok || !provider.Enabled() {
-		return ""
-	}
-	link, err := h.links.Find(r.Context(), userID, provider.Name())
-	if err != nil {
-		return ""
+	// Steps and heart rate over the last day, from the activity source when
+	// there is one; left empty otherwise, and AllSections drops the empty part.
+	var (
+		steps models.StepSeries
+		heart *models.HeartSeries
+	)
+	if name := devicelink.ActivitySource(h.providers, linked); name != "" {
+		if found, ok := devicelink.Find(h.providers, name); ok {
+			if provider, ok := found.(devicelink.ActivityProvider); ok && provider.Enabled() {
+				if link, err := h.links.Find(r.Context(), userID, name); err == nil {
+					if s, hh, err := h.healthSeries(r, provider, link, 1); err == nil {
+						steps, heart = s, hh
+					} else {
+						slog.Warn("chat context: health data unavailable", "provider", name, "error", err)
+					}
+				}
+			}
+		}
 	}
 
-	steps, heart, err := h.healthSeries(r, provider, link, 1)
-	if err != nil {
-		slog.Warn("chat context: health data unavailable", "provider", provider.Name(), "error", err)
+	sections := healthsheet.AllSections(steps, heart,
+		h.exportBodyComposition(r, userID), h.barSpeedForExport(r, userID), locale)
+	if len(sections) == 0 {
 		return ""
 	}
 
 	// No title: this goes under a heading the caller writes, beside the
 	// member's other sections.
-	return programmd.RenderTables("", healthsheet.Subtitle(steps, heart, locale),
-		healthsheet.Sections(steps, heart, h.exportBodyComposition(r, userID), locale), "")
+	subtitle := ""
+	if len(steps.Days) > 0 {
+		subtitle = healthsheet.Subtitle(steps, heart, locale)
+	}
+	return programmd.RenderTables("", subtitle, sections, "")
 }

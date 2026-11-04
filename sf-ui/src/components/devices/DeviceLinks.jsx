@@ -941,6 +941,8 @@ function velocityLoss(velocities) {
  * peak (tick), the set's mean and peak speed and how much it slowed, and the
  * per-rep numbers in full underneath.
  */
+const LIFT_KEYS = new Set(["squat", "bench", "deadlift"]);
+
 function BarSpeedSet({ set, t }) {
   const means = set.repVelocities || [];
   const peaks = set.repPeakVelocities || [];
@@ -948,6 +950,9 @@ function BarSpeedSet({ set, t }) {
   // read the same from one rep to the next.
   const ceiling = Math.max(0.01, ...means, ...peaks);
   const loss = velocityLoss(means);
+  // One colour per lift - squat yellow, bench red, deadlift green - so the
+  // three charts read apart, the same inks the export uses.
+  const liftInk = LIFT_KEYS.has(set.lift) ? `var(--sf-lift-${set.lift})` : "var(--sf-primary)";
   const rpe =
     set.givenRpe && set.predictedRpe
       ? t("devices.barSpeed.rpePair", { given: fmt(set.givenRpe), real: fmt(set.predictedRpe) })
@@ -958,7 +963,7 @@ function BarSpeedSet({ set, t }) {
   return (
     <div style={{ marginTop: "0.9rem" }}>
       <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
-        <strong style={{ color: "var(--sf-text)" }}>{t(`devices.lift.${set.lift}`)}</strong>
+        <strong style={{ color: liftInk }}>{t(`devices.lift.${set.lift}`)}</strong>
         {set.weightKg ? ` · ${t("devices.barSpeed.load", { weight: fmt(set.weightKg), reps: set.reps })}` : ""}
         {rpe ? ` · ${rpe}` : ""}
       </div>
@@ -984,7 +989,7 @@ function BarSpeedSet({ set, t }) {
         ) : null}
       </div>
 
-      <div className="sf-steps-chart sf-vel-chart" aria-hidden="true">
+      <div className="sf-steps-chart sf-vel-chart" aria-hidden="true" style={{ "--sf-lift": liftInk }}>
         {means.map((velocity, index) => {
           const peakV = peaks[index];
           return (

@@ -53,16 +53,15 @@
   --sf-success-tint: #dcfce7;
   --sf-warning: #d97706;
   --sf-warning-tint: #fef3c7;
-  /* Profile badges. The role somebody holds and the lift they claim as their
-     own each carry a colour, because on a profile the two sit side by side:
-     a coach who squats has to read as two different things at a glance. Only
-     the inks are tokens - each badge mixes its own background out of its ink,
-     rather than every colour needing a tint token in all four theme blocks.
-     Athlete and coach reuse the primary and success inks above. */
+  /* The role badge's ink, and one colour per lift - squat yellow, bench red,
+     deadlift green. The lift inks colour the bar-speed charts, and are reserved
+     for a per-lift badge beside the role should one return. Only the inks are
+     tokens - a badge or bar mixes its own wash out of its ink, rather than
+     every colour needing a tint token in all four theme blocks. */
   --sf-role-superadmin: #b45309;
-  --sf-lift-squat: #7c3aed;
-  --sf-lift-bench: #0e7490;
-  --sf-lift-deadlift: #be123c;
+  --sf-lift-squat: #eab308;
+  --sf-lift-bench: #dc2626;
+  --sf-lift-deadlift: #16a34a;
   /* Backdrop behind avatar images so transparent PNGs (often drawn for a light
      background) stay legible; a no-op in light mode. */
   --sf-avatar-bg: transparent;
@@ -113,9 +112,9 @@
     --sf-warning-tint: rgba(217, 119, 6, 0.18);
     --sf-logged: #4ade80;
     --sf-role-superadmin: #f0b429;
-    --sf-lift-squat: #a78bfa;
-    --sf-lift-bench: #22d3ee;
-    --sf-lift-deadlift: #fb7185;
+    --sf-lift-squat: #facc15;
+    --sf-lift-bench: #f87171;
+    --sf-lift-deadlift: #4ade80;
     --sf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
     --sf-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
     --sf-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
@@ -142,9 +141,9 @@
   --sf-warning-tint: #fef3c7;
   --sf-logged: #16a34a;
   --sf-role-superadmin: #b45309;
-  --sf-lift-squat: #7c3aed;
-  --sf-lift-bench: #0e7490;
-  --sf-lift-deadlift: #be123c;
+  --sf-lift-squat: #eab308;
+  --sf-lift-bench: #dc2626;
+  --sf-lift-deadlift: #16a34a;
   --sf-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
   --sf-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
   --sf-shadow-lg: 0 16px 40px rgba(15, 23, 42, 0.12);
@@ -170,9 +169,9 @@
   --sf-warning-tint: rgba(217, 119, 6, 0.18);
   --sf-logged: #4ade80;
   --sf-role-superadmin: #f0b429;
-  --sf-lift-squat: #a78bfa;
-  --sf-lift-bench: #22d3ee;
-  --sf-lift-deadlift: #fb7185;
+  --sf-lift-squat: #facc15;
+  --sf-lift-bench: #f87171;
+  --sf-lift-deadlift: #4ade80;
   --sf-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sf-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   --sf-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.55);
@@ -1349,23 +1348,28 @@ button {
   display: flex;
   align-items: flex-end;
 }
+/* The filled bar is coloured per lift (set inline from --sf-lift-*); the mean
+   colour here is only the fallback. */
 .sf-vel-mean {
   flex: 1;
   min-height: 2px;
   border-radius: 2px 2px 0 0;
-  background-color: var(--sf-primary);
+  background-color: var(--sf-lift, var(--sf-primary));
 }
+/* The peak tick is a neutral dark marker, so it reads over any lift colour. */
 .sf-vel-peak {
   position: absolute;
   left: 1px;
   right: 1px;
   height: 0;
-  border-top: 2px dashed var(--sf-warning);
+  border-top: 2px dashed var(--sf-text);
 }
+/* The legend explains shape, not colour (the colour is the lift): a filled
+   block is the mean, a dashed line the peak, both in the muted ink they sit in. */
 .sf-vel-key { display: inline-flex; align-items: center; gap: 5px; }
 .sf-vel-swatch { width: 14px; height: 10px; border-radius: 2px; }
-.sf-vel-swatch-mean { background-color: var(--sf-primary); }
-.sf-vel-swatch-peak { height: 0; border-top: 2px dashed var(--sf-warning); }
+.sf-vel-swatch-mean { background-color: currentColor; }
+.sf-vel-swatch-peak { height: 0; border-top: 2px dashed currentColor; }
 
 .sf-ai-feedback {
   display: flex;

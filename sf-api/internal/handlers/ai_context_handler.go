@@ -50,13 +50,15 @@ func (h *AIHandler) memberContext(r *http.Request, userID, locale string) string
 		out.WriteString("\n" + block)
 	}
 
-	// What their watch has counted today. A question asked in the evening is
-	// a question about the day they have actually had: "should I train
+	// Their fitness data: what their watch counted today, their latest body
+	// composition, and their last bar-speed set of each lift. A question asked
+	// in the evening is about the day they have actually had - "should I train
 	// tonight" reads differently after twelve thousand steps than after four
-	// hundred.
+	// hundred - and "is my deadlift moving well" needs the bar-speed set in
+	// front of it.
 	if h.lastDay != nil {
-		if health := h.lastDay(r, userID, locale); health != "" {
-			out.WriteString("\n## Health data, last 24 hours\n\n" + health)
+		if fitness := h.lastDay(r, userID, locale); fitness != "" {
+			out.WriteString("\n## Fitness data (steps and heart rate are the last 24h; bar speed is the last set)\n\n" + fitness)
 		}
 	}
 
