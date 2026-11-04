@@ -95,15 +95,17 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	source := devicelink.ActivitySource(h.providers, linked)
+	bodySource := devicelink.BodyCompositionSource(h.providers, linked)
 
 	results := make([]models.DeviceConnection, 0, len(h.providers))
 	for _, provider := range h.providers {
 		connection := models.DeviceConnection{
-			Provider:       provider.Name(),
-			Available:      provider.Enabled(),
-			Connected:      linked[provider.Name()],
-			Capabilities:   devicelink.Capabilities(provider),
-			ActivitySource: provider.Name() == source,
+			Provider:              provider.Name(),
+			Available:             provider.Enabled(),
+			Connected:             linked[provider.Name()],
+			Capabilities:          devicelink.Capabilities(provider),
+			ActivitySource:        provider.Name() == source,
+			BodyCompositionSource: provider.Name() == bodySource,
 		}
 		if recorder, ok := provider.(devicelink.SetRecorder); ok && provider.Enabled() {
 			connection.RecordURL = recorder.RecordURL()
@@ -414,50 +416,85 @@ func (h *DeviceHandler) HeartRate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, series)
 }
 
-// Export renders a member's health data as a picture or a PDF.
+// Export renders all of a member's fitness data as one picture or PDF.
 //
-// The same two formats the programs offer, and for the same two reasons: an
-// image is what gets pasted into a conversation, a PDF is what gets kept. The
-// rows are built once, here, so the two documents cannot disagree.
+// One document, not one per device: steps and heart rate from the activity
+// source, the latest body composition from the scale, the bar-speed charts
+// from the tracker, and the AI's reading of the lot at the end. Each part is
+// there only when something is behind it, so a member with just a scale and a
+// bar-speed tracker still gets a sheet - their two things, and no empty step
+// chart. The same two formats the programs offer, for the same two reasons: an
+// image is what gets pasted into a conversation, a PDF is what gets kept.
 func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
-
-	provider, link, days, _, ok := h.readable(w, r, userID)
-	if !ok {
-		return
-	}
-
-	steps, heart, err := h.healthSeries(r, provider, link, days)
-	if err != nil {
-		h.writeProviderError(w, err, provider.Name())
-		return
-	}
-
 	locale := sheetLocale(r)
 
-	title := healthsheet.Title(h.memberName(r.Context(), userID), locale)
-	subtitle := healthsheet.Subtitle(steps, heart, locale)
-	sections := healthsheet.Sections(steps, heart, h.exportBodyComposition(r, userID), locale)
-	// The last set of each lift the member tracks on a bar-speed provider -
-	// their own charts, printed under the activity ones. Absent when they
-	// track none.
-	sections = append(sections, healthsheet.BarSpeedSections(h.barSpeedForExport(r, userID), locale)...)
-	// What the AI made of the same data, when it was asked recently enough
-	// to be about this sheet (see recentReading).
-	if reading := h.recentReading(r, userID, provider.Name(), locale); reading != nil {
+	connectedNames, err := h.links.ListProviders(r.Context(), userID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	linked := map[string]bool{}
+	for _, name := range connectedNames {
+		linked[name] = true
+	}
+
+	// Steps and heart rate come from the one activity source, over the range
+	// asked for (the window the screen is showing). Best-effort: a provider
+	// that will not answer must not cost the member the rest of the sheet.
+	var (
+		steps models.StepSeries
+		heart *models.HeartSeries
+	)
+	if name := devicelink.ActivitySource(h.providers, linked); name != "" {
+		if found, ok := devicelink.Find(h.providers, name); ok {
+			if activity, ok := found.(devicelink.ActivityProvider); ok && activity.Enabled() {
+				if link, err := h.links.Find(r.Context(), userID, name); err == nil {
+					days := exportRangeDays(r)
+					if max := activity.MaxRangeDays(); days > max {
+						days = max
+					}
+					if s, hh, err := h.healthSeries(r, activity, link, days); err == nil {
+						steps, heart = s, hh
+					} else {
+						slog.Warn("fitness export: activity unavailable", "provider", name, "error", err)
+					}
+				}
+			}
+		}
+	}
+
+	sections := healthsheet.AllSections(steps, heart,
+		h.exportBodyComposition(r, userID), h.barSpeedForExport(r, userID), locale)
+	// The AI's reading of the same data, last, when it was asked recently
+	// enough to be about this sheet - from whichever provider it was generated
+	// under (see recentReadingAny).
+	if reading := h.recentReadingAny(r, userID, linked, locale); reading != nil {
 		sections = append(sections, *reading)
 	}
+	if len(sections) == 0 {
+		writeError(w, http.StatusNotFound, "No fitness data to export", CodeNotFound)
+		return
+	}
+
+	title := healthsheet.Title(h.memberName(r.Context(), userID), locale)
+	subtitle := ""
+	fileDate := time.Now().UTC().Format("2006-01-02")
+	if len(steps.Days) > 0 {
+		subtitle = healthsheet.Subtitle(steps, heart, locale)
+		fileDate = steps.To
+	}
 	footer := h.uiBaseURL
 
 	var (
-		body  []byte
+		doc   []byte
 		media string
 	)
 	if exportFormat(r) == formatPNG {
-		body, err = programpng.RenderTables(title, subtitle, sections, footer)
+		doc, err = programpng.RenderTables(title, subtitle, sections, footer)
 		media = mediaPNG
 	} else {
-		body, err = programpdf.RenderTables(title, subtitle, sections, footer)
+		doc, err = programpdf.RenderTables(title, subtitle, sections, footer)
 		media = mediaPDF
 	}
 	if err != nil {
@@ -467,77 +504,19 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", media)
 	w.Header().Set("Content-Disposition",
-		fmt.Sprintf("attachment; filename=%q", sheetFileName("health-"+steps.To, exportFormat(r))))
+		fmt.Sprintf("attachment; filename=%q", sheetFileName("fitness-"+fileDate, exportFormat(r))))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
+	_, _ = w.Write(doc)
 }
 
-// BarSpeedExport renders a member's last set of each lift as a picture or a
-// PDF - the same per-rep velocity charts the screen shows.
-//
-// Its own route rather than the health Export above, because a bar-speed
-// provider (Stance) has no step or heart data to hang an export off: a member
-// whose only connected device is the velocity tracker would otherwise have no
-// way to export the one thing it does produce.
-func (h *DeviceHandler) BarSpeedExport(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
-
-	found, ok := h.provider(w, r)
-	if !ok {
-		return
+// exportRangeDays reads the step/heart window off the export's range query,
+// defaulting to a week and never exceeding what the ranges table offers.
+func exportRangeDays(r *http.Request) int {
+	rangeName := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("range")))
+	if days, ok := stepRanges[rangeName]; ok {
+		return days
 	}
-	reader, ok := found.(devicelink.BarSpeedReader)
-	if !ok {
-		writeError(w, http.StatusNotFound, "This provider has no bar-speed data", CodeNotFound)
-		return
-	}
-	if !found.Enabled() {
-		writeError(w, http.StatusNotImplemented,
-			"This integration is not enabled on this server", CodeDeviceUnavailable)
-		return
-	}
-
-	sets, err := h.barSets(r, found, reader, userID)
-	if err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "No account connected", CodeDeviceNotConnected)
-			return
-		}
-		h.writeProviderError(w, err, found.Name())
-		return
-	}
-
-	locale := sheetLocale(r)
-	sections := healthsheet.BarSpeedSections(sets, locale)
-	if len(sections) == 0 {
-		writeError(w, http.StatusNotFound, "No bar-speed sets to export", CodeNotFound)
-		return
-	}
-	title := healthsheet.BarSpeedTitle(h.memberName(r.Context(), userID), locale)
-	subtitle := healthsheet.BarSpeedSubtitle(sets, locale)
-	footer := h.uiBaseURL
-
-	var (
-		body  []byte
-		media string
-	)
-	if exportFormat(r) == formatPNG {
-		body, err = programpng.RenderTables(title, subtitle, sections, footer)
-		media = mediaPNG
-	} else {
-		body, err = programpdf.RenderTables(title, subtitle, sections, footer)
-		media = mediaPDF
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error(), CodeInternal)
-		return
-	}
-
-	w.Header().Set("Content-Type", media)
-	w.Header().Set("Content-Disposition",
-		fmt.Sprintf("attachment; filename=%q", sheetFileName("bar-speed", exportFormat(r))))
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
+	return stepRanges["week"]
 }
 
 // BodyComposition returns the latest reading of every measure the member's
@@ -678,38 +657,47 @@ func (h *DeviceHandler) healthSeries(r *http.Request, provider devicelink.Activi
 	return steps, &series, nil
 }
 
+// exportBodyComposition is the latest body composition for an export, from the
+// one scale the screen shows too: BodyCompositionSource picks it by the same
+// priority (Withings before Garmin), so a member with both does not get two
+// tables on the sheet, and the sheet agrees with the screen on whose it is.
 func (h *DeviceHandler) exportBodyComposition(r *http.Request, userID string) *models.BodyComposition {
 	connected, err := h.links.ListProviders(r.Context(), userID)
 	if err != nil {
 		return nil
 	}
+	linked := map[string]bool{}
 	for _, name := range connected {
-		found, ok := devicelink.Find(h.providers, name)
-		if !ok || !found.Enabled() {
-			continue
-		}
-		reader, ok := found.(devicelink.BodyCompositionReader)
-		if !ok {
-			continue
-		}
-		link, err := h.links.Find(r.Context(), userID, name)
-		if err != nil {
-			continue
-		}
-		accessToken, err := h.freshToken(r, found, link)
-		if err != nil {
-			slog.Warn("health export: body composition unavailable", "provider", name, "error", err)
-			continue
-		}
-		measures, err := reader.LatestBodyComposition(r.Context(), accessToken)
-		if err != nil {
-			slog.Warn("health export: body composition unavailable", "provider", name, "error", err)
-			continue
-		}
-		result := bodyComposition(name, measures)
-		return &result
+		linked[name] = true
 	}
-	return nil
+	name := devicelink.BodyCompositionSource(h.providers, linked)
+	if name == "" {
+		return nil
+	}
+	found, ok := devicelink.Find(h.providers, name)
+	if !ok {
+		return nil
+	}
+	reader, ok := found.(devicelink.BodyCompositionReader)
+	if !ok {
+		return nil
+	}
+	link, err := h.links.Find(r.Context(), userID, name)
+	if err != nil {
+		return nil
+	}
+	accessToken, err := h.freshToken(r, found, link)
+	if err != nil {
+		slog.Warn("health export: body composition unavailable", "provider", name, "error", err)
+		return nil
+	}
+	measures, err := reader.LatestBodyComposition(r.Context(), accessToken)
+	if err != nil {
+		slog.Warn("health export: body composition unavailable", "provider", name, "error", err)
+		return nil
+	}
+	result := bodyComposition(name, measures)
+	return &result
 }
 
 // readable resolves everything a read of a member's data needs: the provider,

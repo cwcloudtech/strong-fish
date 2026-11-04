@@ -408,24 +408,6 @@ class SfApi {
     return data.map((item) => StanceSet.fromJson(_map(item))).toList();
   }
 
-  /// Downloads the bar-speed charts as a picture or a PDF, and returns where it
-  /// was saved. Its own route, since a bar-speed provider has no step or heart
-  /// data to hang the health export off. [format] is the route's own extension.
-  Future<String> downloadBarSpeed(
-    String provider, {
-    required String directory,
-    required String fileName,
-    String format = 'png',
-    String locale = 'en',
-  }) async {
-    final path = '$directory/$fileName';
-    await client.dio.download(
-      '/users/me/devices/$provider/bar-speed/export.$format',
-      path,
-      queryParameters: {'locale': locale},
-    );
-    return path;
-  }
 
   /// [range] is one of 24h, 48h, week, month, 90d - the API names the windows,
   /// so the phone and the web app cannot mean different things by "a month".
@@ -437,11 +419,12 @@ class SfApi {
     return StepSeries.fromJson(_map(response.data));
   }
 
-  /// Downloads the health view as a picture or a PDF, and returns where it
-  /// was saved. [format] is the route's own extension, so the file that
-  /// arrives is named the way its contents are.
-  Future<String> downloadHealth(
-    String provider, {
+  /// Downloads one export of everything the member has connected - steps, heart
+  /// rate, body composition, bar speed and the AI reading - as a picture or a
+  /// PDF, and returns where it was saved. [format] is the route's own
+  /// extension, so the file arrives named the way its contents are; [range] is
+  /// the steps/heart window.
+  Future<String> downloadAll({
     required String directory,
     required String fileName,
     String format = 'png',
@@ -450,7 +433,7 @@ class SfApi {
   }) async {
     final path = '$directory/$fileName';
     await client.dio.download(
-      '/users/me/devices/$provider/export.$format',
+      '/users/me/devices/export.$format',
       path,
       queryParameters: {'range': range, 'locale': locale},
     );

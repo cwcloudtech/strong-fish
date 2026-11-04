@@ -77,6 +77,10 @@ class DeviceLinksSection extends ConsumerStatefulWidget {
 class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with WidgetsBindingObserver {
   List<DeviceConnection>? _connections;
   String _busy = '';
+  bool _exporting = false;
+  // The steps/heart window, owned here so the one export button at the top
+  // sends the same range the chart below it shows.
+  String _range = 'week';
 
   @override
   void initState() {
@@ -212,6 +216,28 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     }
   }
 
+  Future<void> _exportAll(ExportFormat format) async {
+    setState(() => _exporting = true);
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final path = await ref.read(apiProvider).downloadAll(
+            directory: directory.path,
+            fileName: 'fitness-data.${format.extension}',
+            format: format.extension,
+            range: _range,
+            locale: ref.read(localeProvider),
+          );
+      if (mounted) await openExported(context, ref, path);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   Future<void> _disconnect(String provider) async {
     setState(() => _busy = provider);
     try {
@@ -239,6 +265,14 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     for (final connection in connections) {
       if (connection.activitySource) activitySource = connection.provider;
     }
+    // Whether there is anything to put in a document: steps, a scale reading or
+    // a tracked set. The one export button appears only when at least one is
+    // connected.
+    final exportable = connections.any((connection) =>
+        connection.connected &&
+        (connection.activitySource ||
+            connection.bodyCompositionSource ||
+            connection.can('bar-speed')));
 
     return Card(
       child: Padding(
@@ -248,6 +282,13 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
             Expanded(
               child: Text(t('devices.title'), style: Theme.of(context).textTheme.titleMedium),
             ),
+            if (exportable)
+              SfExportButton(
+                onExport: _exportAll,
+                busy: _exporting,
+                tooltip: t('devices.export'),
+                formats: const [ExportFormat.png, ExportFormat.pdf],
+              ),
             IconButton(
               onPressed: _load,
               tooltip: t('common.refresh'),
@@ -257,13 +298,17 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
           ]),
           Text(t('devices.subtitle'), style: Theme.of(context).textTheme.bodySmall),
           // The data first - the numbers a member comes back to read. Each
-          // connected provider shows what it can; the controls that pair and
-          // unpair the accounts are gathered at the bottom.
+          // connected provider shows what it can; the AI's reading of the lot
+          // sits at the end, and the pair/unpair controls below that.
           for (final connection in connections)
             if (connection.connected) ...[
               const SizedBox(height: 12),
-              if (connection.activitySource) _StepPanel(provider: connection.provider),
-              if (connection.activitySource) _HealthFeedbackPanel(provider: connection.provider),
+              if (connection.activitySource)
+                _StepPanel(
+                  provider: connection.provider,
+                  range: _range,
+                  onRange: (value) => setState(() => _range = value),
+                ),
               if (!connection.activitySource &&
                   activitySource != null &&
                   connection.can('activity'))
@@ -274,7 +319,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
-              if (connection.can('body-composition'))
+              if (connection.bodyCompositionSource)
                 _BodyCompositionPanel(provider: connection.provider),
               if (connection.can('bar-speed') && connection.recordUrl.isNotEmpty)
                 Padding(
@@ -298,6 +343,9 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                 ),
               if (connection.can('bar-speed')) _BarSpeedPanel(provider: connection.provider),
             ],
+          // The AI's reading of everything above, at the end of the data - one
+          // reading of the whole picture, not a comment on any single device.
+          if (activitySource != null) _HealthFeedbackPanel(provider: activitySource),
           // The accounts last: connecting and disconnecting sit under the data
           // they produce, not above it.
           const SizedBox(height: 18),
@@ -380,28 +428,36 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
   }
 }
 
-/// One provider's step counts, in whichever window the member picks.
+/// One provider's step counts, in whichever window the member picks. The window
+/// is owned by the parent card, so the one export button there sends the same
+/// range this chart shows.
 class _StepPanel extends ConsumerStatefulWidget {
   final String provider;
-  const _StepPanel({required this.provider});
+  final String range;
+  final ValueChanged<String> onRange;
+  const _StepPanel({required this.provider, required this.range, required this.onRange});
 
   @override
   ConsumerState<_StepPanel> createState() => _StepPanelState();
 }
 
 class _StepPanelState extends ConsumerState<_StepPanel> {
-  String _range = 'week';
   StepSeries? _series;
   HeartSeries? _heart;
   String _error = '';
   Object? _errorRaw;
   bool _loading = false;
-  bool _exporting = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(_StepPanel old) {
+    super.didUpdateWidget(old);
+    if (old.range != widget.range) _load();
   }
 
   Future<void> _load() async {
@@ -415,7 +471,7 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
     // the steps the member came for.
     final api = ref.read(apiProvider);
     try {
-      final steps = await api.deviceSteps(widget.provider, _range);
+      final steps = await api.deviceSteps(widget.provider, widget.range);
       if (mounted) setState(() => _series = steps);
     } catch (error) {
       if (mounted) {
@@ -427,38 +483,12 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
       }
     }
     try {
-      final heart = await api.deviceHeartRate(widget.provider, _range);
+      final heart = await api.deviceHeartRate(widget.provider, widget.range);
       if (mounted) setState(() => _heart = heart);
     } catch (_) {
       if (mounted) setState(() => _heart = null);
     } finally {
       if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  /// Saved to the app's own documents directory rather than a shared one: it
-  /// needs no permission, and the file is a copy of something the server can
-  /// render again at any time.
-  Future<void> _export(ExportFormat format) async {
-    setState(() => _exporting = true);
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final path = await ref.read(apiProvider).downloadHealth(
-            widget.provider,
-            directory: directory.path,
-            fileName: 'health-$_range.${format.extension}',
-            format: format.extension,
-            range: _range,
-            locale: ref.read(localeProvider),
-          );
-      if (mounted) await openExported(context, ref, path);
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
-      }
-    } finally {
-      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -477,35 +507,20 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 10),
-      Row(children: [
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              for (final range in _ranges)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ChoiceChip(
-                    selected: _range == range,
-                    label: Text(t('devices.range.$range')),
-                    onSelected: (_) {
-                      setState(() => _range = range);
-                      _load();
-                    },
-                  ),
-                ),
-            ]),
-          ),
-        ),
-        // Exports what is on screen: the range picked beside it, not some
-        // other window the member would have to go and set again.
-        SfExportButton(
-          onExport: _export,
-          busy: _exporting,
-          tooltip: t('devices.export'),
-          formats: const [ExportFormat.png, ExportFormat.pdf],
-        ),
-      ]),
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: [
+          for (final range in _ranges)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ChoiceChip(
+                selected: widget.range == range,
+                label: Text(t('devices.range.$range')),
+                onSelected: (_) => widget.onRange(range),
+              ),
+            ),
+        ]),
+      ),
       if (_loading && series == null)
         const Padding(
           padding: EdgeInsets.all(16),
@@ -1171,7 +1186,6 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
   List<StanceSet>? _sets;
   String _error = '';
   Object? _errorRaw;
-  bool _exporting = false;
 
   @override
   void initState() {
@@ -1190,28 +1204,6 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
           _error = ref.read(tErrorProvider)(error);
         });
       }
-    }
-  }
-
-  Future<void> _export(ExportFormat format) async {
-    setState(() => _exporting = true);
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final path = await ref.read(apiProvider).downloadBarSpeed(
-            widget.provider,
-            directory: directory.path,
-            fileName: 'bar-speed.${format.extension}',
-            format: format.extension,
-            locale: ref.read(localeProvider),
-          );
-      if (mounted) await openExported(context, ref, path);
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
-      }
-    } finally {
-      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -1238,18 +1230,7 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 12),
-      Row(children: [
-        Expanded(
-          child: Text(t('devices.barSpeed.title'),
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-        ),
-        SfExportButton(
-          onExport: _export,
-          busy: _exporting,
-          tooltip: t('devices.export'),
-          formats: const [ExportFormat.png, ExportFormat.pdf],
-        ),
-      ]),
+      Text(t('devices.barSpeed.title'), style: const TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 2),
       // What the two series are, since a bar and a tick explain nothing alone.
       Row(children: [

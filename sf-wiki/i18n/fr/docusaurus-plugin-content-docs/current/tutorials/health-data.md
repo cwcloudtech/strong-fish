@@ -109,15 +109,20 @@ Seule la série la plus récente de chaque mouvement est montrée - ce qui compt
 
 Sur le téléphone, un bouton **Enregistrer une série** ouvre l'application Stance pour suivre la série suivante ; revenez ensuite et elle y est. Le site n'a pas ce bouton - le téléphone est l'endroit où la barre est mesurée - mais une série enregistrée sur le téléphone apparaît aussi sur le site.
 
-Le panneau a son propre bouton **Exporter** (PNG ou PDF), pour que vous puissiez enregistrer ces graphiques même quand Stance est le seul appareil connecté.
-
 ### Comment le RPE mesuré est calculé
 
 Le RPE mesuré vient de la vitesse de la barre : plus une répétition est lente par rapport à la vitesse à laquelle cette charge monte d'habitude chez vous, plus la série est proche de l'échec. Stance le calcule à partir de votre série, et StrongFish lit et trace le résultat - il ne fait aucune estimation lui-même. Pour la méthode derrière, écrite comme de la science du sport et non comme quelque chose de propre à un traqueur en particulier, voir **[L'effort basé sur la vitesse](./velocity-based-rpe.md)**.
 
 ## Export
 
-**Exporter cette vue** enregistre ce qui est à l'écran en PNG ou en PDF : les pas et la fréquence cardiaque tracés en histogrammes, aux couleurs de l'écran, suivis d'un tableau de votre dernière composition corporelle quand Withings est connecté, et des mêmes graphiques de vitesse de barre - vitesse moyenne, pic et perte de vitesse - pour vos derniers squat, développé couché et soulevé de terre quand Stance est associé. Le panneau **Vitesse de barre** s'exporte aussi tout seul, pour quand Stance est le seul appareil connecté et qu'il n'y a pas de graphique de pas auquel rattacher l'export.
+Un seul bouton **Exporter**, en haut de l'écran, enregistre *tout* ce que vous avez connecté dans un seul PNG ou PDF, dans l'ordre où cela se lit à l'écran :
+
+- les **pas** et la **fréquence cardiaque**, tracés en histogrammes aux couleurs de l'écran (sur la fenêtre que vous avez choisie) ;
+- votre dernière **composition corporelle** en tableau, depuis votre balance ;
+- les graphiques de **vitesse de barre** - vitesse moyenne, pic et perte de vitesse - pour vos derniers squat, développé couché et soulevé de terre ;
+- et, tout à la fin, l'**analyse de l'IA** de l'ensemble, quand vous en avez demandé une assez récemment pour qu'elle décrive encore ce qui est sur la feuille.
+
+Chaque partie n'y est que si vous avez quelque chose derrière, donc un membre avec seulement une balance et un traqueur de vitesse obtient une feuille de ces deux choses et aucun graphique de pas vide. Il y a un seul document, pas un par appareil.
 
 ## Se déconnecter
 

@@ -218,13 +218,16 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 				// The outside accounts that count a member's steps for them.
 				r.Route("/me/devices", func(r chi.Router) {
 					r.Get("/", h.Device.List)
+					// One export of everything the member has connected -
+					// steps, heart rate, body composition, bar speed and the
+					// AI reading - not one per device.
+					r.Get("/export.png", h.Device.Export)
+					r.Get("/export.pdf", h.Device.Export)
 					r.Get("/{provider}/authorize", h.Device.Authorize)
 					r.Delete("/{provider}", h.Device.Disconnect)
 					r.Get("/{provider}/steps", h.Device.Steps)
 					r.Get("/{provider}/heart-rate", h.Device.HeartRate)
 					r.Get("/{provider}/body-composition", h.Device.BodyComposition)
-					r.Get("/{provider}/export.png", h.Device.Export)
-					r.Get("/{provider}/export.pdf", h.Device.Export)
 					// What the AI made of the last ninety days. Generated on
 					// demand, kept, and askable again once a day - the
 					// numbers underneath move that often at most.
@@ -238,8 +241,6 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Post("/{provider}/google", h.Device.PairDeviceGoogle)
 					r.Post("/{provider}/pair-key", h.Device.PairDeviceKey)
 					r.Get("/{provider}/bar-speed", h.Device.BarSpeed)
-					r.Get("/{provider}/bar-speed/export.png", h.Device.BarSpeedExport)
-					r.Get("/{provider}/bar-speed/export.pdf", h.Device.BarSpeedExport)
 				})
 
 				// The invitations waiting for this account's address. They are

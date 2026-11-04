@@ -33,18 +33,41 @@ const healthFeedbackDays = 90
 // the document.
 const healthReadingFresh = 24 * time.Hour
 
-// recentReading is the AI's reading of this member's health data as a section
-// of the exported sheet, or nil when there is none worth printing.
+// recentReadingAny is the AI's reading of this member's fitness data as the
+// last section of the one export, or nil when there is none worth printing.
+//
+// The reading is stored under whichever provider it was generated from (the
+// activity source), but the export is of everything, so it is looked for
+// across every connected provider and the most recent fresh one is taken.
 //
 // Printed rather than generated: an export is not the place to spend
 // somebody's tokens, and a reading that appeared only in the PDF would be one
 // they never saw on screen.
-func (h *DeviceHandler) recentReading(r *http.Request, userID, source, locale string) *programsheet.Section {
-	stored, err := h.ai.connections.FindHealthFeedback(r.Context(), userID, source)
-	if err != nil || time.Since(stored.UpdatedAt) > healthReadingFresh {
+func (h *DeviceHandler) recentReadingAny(r *http.Request, userID string,
+	linked map[string]bool, locale string) *programsheet.Section {
+	var newest models.HealthFeedback
+	have := false
+	for _, provider := range h.providers {
+		if !linked[provider.Name()] {
+			continue
+		}
+		stored, err := h.ai.connections.FindHealthFeedback(r.Context(), userID, provider.Name())
+		if err != nil || time.Since(stored.UpdatedAt) > healthReadingFresh {
+			continue
+		}
+		if !have || stored.UpdatedAt.After(newest.UpdatedAt) {
+			newest, have = stored, true
+		}
+	}
+	if !have {
 		return nil
 	}
+	return readingSection(newest, locale)
+}
 
+// readingSection turns a stored reading into the sheet section, or nil when its
+// body is empty.
+func readingSection(stored models.HealthFeedback, locale string) *programsheet.Section {
 	rows := []programsheet.Line{}
 	for _, line := range programsheet.PlainLines(stored.Content) {
 		rows = append(rows, programsheet.Line{Cells: []string{line}})
@@ -155,10 +178,15 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 		locale = localeOf(user, r)
 	}
 
+	// The same sheet the export produces, so the reading is of everything the
+	// member can see and export - steps, heart rate, body composition and the
+	// bar-speed charts - not just the activity numbers.
+	sections := healthsheet.AllSections(steps, heart,
+		h.exportBodyComposition(r, userID), h.barSpeedForExport(r, userID), locale)
 	sheet := programmd.RenderTables(
 		healthsheet.Title(h.memberName(r.Context(), userID), locale),
 		healthsheet.Subtitle(steps, heart, locale),
-		healthsheet.Sections(steps, heart, h.exportBodyComposition(r, userID), locale),
+		sections,
 		"")
 
 	answer, ok := h.ai.ask(w, r, userID, r.URL.Query().Get("connectionId"), "health", ai.Request{

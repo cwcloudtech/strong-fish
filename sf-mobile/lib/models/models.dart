@@ -289,6 +289,10 @@ class DeviceConnection {
   /// member has connected more than one.
   final bool activitySource;
 
+  /// Whether this is the one scale whose body composition is shown - the same
+  /// single-source rule, so a member with two scales sees one panel, not two.
+  final bool bodyCompositionSource;
+
   /// Set for a provider whose capture happens in its own app (Stance): the
   /// "record a set" button opens it.
   final String recordUrl;
@@ -316,6 +320,7 @@ class DeviceConnection {
     this.connectedAt,
     this.capabilities = const [],
     this.activitySource = false,
+    this.bodyCompositionSource = false,
     this.recordUrl = '',
     this.accountPaired = false,
     this.oauth = false,
@@ -334,6 +339,7 @@ class DeviceConnection {
             ? (json['capabilities'] as List).map((item) => item.toString()).toList()
             : const [],
         activitySource: json['activitySource'] == true,
+        bodyCompositionSource: json['bodyCompositionSource'] == true,
         recordUrl: _toString(json['recordUrl']),
         accountPaired: json['accountPaired'] == true,
         oauth: json['oauth'] == true,
