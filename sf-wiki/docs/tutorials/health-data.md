@@ -12,6 +12,7 @@ StrongFish can show what your watch and your scale already measured - steps, hea
 | --- | --- |
 | **Google Health** (Fitbit, Pixel Watch, phone) | Steps and heart rate |
 | **Withings** (scales, watches) | Body composition, plus steps and heart rate |
+| **Garmin** (watches, Index scale) | Steps, heart rate and body composition |
 | **Stance Fitness** (bar-speed tracker) | Bar speed and measured RPE on your last squat, bench and deadlift |
 
 **Google Health** is where Fitbit data lives now. Fitbit's own developer API was switched off on 30 October 2026, and a Fitbit, a Pixel Watch or a phone that records steps all report into the same Google Health profile. So the account you connect is your **Google account**, and what it reads is whatever your devices have put in Google Health.
@@ -150,6 +151,19 @@ Both limits go away once the app is published and verified. In a Google Workspac
 1. Create an application in the [Withings developer dashboard](https://developer.withings.com/dashboard/).
 2. Register `<your API URL>/v1/devices/withings/callback` as its callback URL.
 3. Set `SF_WITHINGS_CLIENT_ID` and `SF_WITHINGS_CLIENT_SECRET`.
+
+### Garmin
+
+Garmin is connected **per member**, with each person's own [Personal API](https://developer.garmin.com/gc-developer-program/personal/personal-api/) key - there is nothing for the operator to set: no OAuth app, no shared key.
+
+Each member, on the Health data screen:
+
+1. Generates a Personal API key in their Garmin Connect account - it is shown once, so they save it like a password.
+2. Pastes it into the Garmin field under **Accounts**. StrongFish exchanges it for a 24-hour access token and keeps the key to renew it; the key is never shown again and reads only that member's own Garmin data.
+
+Garmin comes third in the activity order - a member with Google Health or Withings connected keeps those for steps and heart rate, and Garmin fills in only when neither is there. Steps go back as far as the others' (ninety days), but the heart-rate view is capped at two weeks, since Garmin returns heart rate a day at a time.
+
+`SF_GARMIN_TOKEN_URL` and `SF_GARMIN_API_URL` override Garmin's default endpoints; they only need setting if Garmin moves them while the Personal API is still rolling out.
 
 ### Stance Fitness
 

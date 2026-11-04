@@ -305,6 +305,10 @@ class DeviceConnection {
   /// supports it (Stance). Empty when unavailable.
   final String googleClientId;
 
+  /// Whether this provider is connected with a single personal API key the
+  /// member enters (Garmin), so the UI shows a one-field key form.
+  final bool keyPaired;
+
   const DeviceConnection({
     required this.provider,
     this.available = false,
@@ -316,6 +320,7 @@ class DeviceConnection {
     this.accountPaired = false,
     this.oauth = false,
     this.googleClientId = '',
+    this.keyPaired = false,
   });
 
   bool can(String capability) => capabilities.contains(capability);
@@ -333,6 +338,7 @@ class DeviceConnection {
         accountPaired: json['accountPaired'] == true,
         oauth: json['oauth'] == true,
         googleClientId: _toString(json['googleClientId']),
+        keyPaired: json['keyPaired'] == true,
       );
 }
 

@@ -132,6 +132,10 @@ export const devices = {
   // session is stored.
   pairGoogle: (provider, idToken) =>
     body(client.post(`/users/me/devices/${provider}/google`, { idToken })),
+  // Key-paired providers (Garmin): the member enters their own personal API
+  // key, exchanged for a grant kept on the server; the key is never echoed.
+  pairKey: (provider, apiKey) =>
+    body(client.post(`/users/me/devices/${provider}/pair-key`, { apiKey })),
   // The last set of each lift a bar-speed provider tracked, with the RPE it
   // computed from the bar's speed.
   barSpeed: (provider) => body(client.get(`/users/me/devices/${provider}/bar-speed`)),

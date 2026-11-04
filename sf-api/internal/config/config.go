@@ -53,6 +53,11 @@ type Config struct {
 	WithingsClientSecret string
 	WithingsAuthURL      string
 	WithingsAPIURL       string
+	// Garmin Connect Personal API - steps, heart rate and body composition, the
+	// third activity source. Each member enters their own personal API key (no
+	// OAuth, no operator key); these only override Garmin's default endpoints.
+	GarminTokenURL string
+	GarminAPIURL   string
 	// Stance Fitness - barbell-velocity sets and the velocity-derived RPE. All
 	// of these are provided by Stance (hello@stancefitness.co). Identity is
 	// Firebase Auth; the sets are read from Supabase with the anon key. The
@@ -216,6 +221,8 @@ func Load() Config {
 		WithingsClientSecret:     os.Getenv("SF_WITHINGS_CLIENT_SECRET"),
 		WithingsAuthURL:          os.Getenv("SF_WITHINGS_AUTH_URL"),
 		WithingsAPIURL:           os.Getenv("SF_WITHINGS_API_URL"),
+		GarminTokenURL:           os.Getenv("SF_GARMIN_TOKEN_URL"),
+		GarminAPIURL:             os.Getenv("SF_GARMIN_API_URL"),
 		StanceFirebaseAPIKey:     os.Getenv("SF_STANCE_FIREBASE_API_KEY"),
 		StanceSupabaseProjectRef: os.Getenv("SF_STANCE_SUPABASE_PROJECT_REF"),
 		StanceSupabaseAnonKey:    os.Getenv("SF_STANCE_SUPABASE_ANON_KEY"),

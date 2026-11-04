@@ -15,6 +15,7 @@ const ar = {
     tagline: "تطبيق رفع الأثقال",
   },
   common: {
+    troubleshoot: "تفاصيل استكشاف الأخطاء",
     cm: "سم",
     retry: "إعادة التحميل",
     create: "إنشاء",
@@ -545,6 +546,12 @@ const ar = {
   },
   devices: {
     lift: { squat: "القرفصاء", bench: "الضغط", deadlift: "الرفعة المميتة" },
+    pairKey: {
+      garmin: {
+        label: "مفتاح واجهة Garmin الشخصي",
+        hint: "أنشئ مفتاح واجهة شخصيًا في Garmin Connect (يظهر مرة واحدة). يُحفظ على هذا الخادم لقراءة بيانات Garmin الخاصة بك.",
+      },
+    },
     pair: {
       password: "كلمة مرور Stance",
       stance: { email: "بريد Stance" },
@@ -563,6 +570,7 @@ const ar = {
     provider: {
       "google-health": "Google Health ‏(Fitbit، Pixel Watch)",
       withings: "Withings",
+      garmin: "Garmin",
       stance: "Stance Fitness",
     },
     aiFeedbackWindow: "على مدى {{days}} يوماً",
@@ -573,6 +581,7 @@ const ar = {
     aiFeedbackEmpty: "لا يوجد تحليل بعد. يمكن للذكاء الاصطناعي قراءة آخر 90 يوماً متى شئت.",
     title: "الأجهزة المتصلة",
     subtitle: "اقرأ ما قاسته ساعتك وميزانك بالفعل. لا يُكتب شيء في المقابل، ولا يُخزَّن شيء هنا.",
+    accounts: "الحسابات",
     connect: "ربط",
     connectGoogle: "الاتصال عبر Google",
     connectGoogleHint: "أكمِل تسجيل الدخول عبر Google في تطبيق الويب.",

@@ -236,6 +236,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					// last set of each lift.
 					r.Post("/{provider}/pair", h.Device.PairDevice)
 					r.Post("/{provider}/google", h.Device.PairDeviceGoogle)
+					r.Post("/{provider}/pair-key", h.Device.PairDeviceKey)
 					r.Get("/{provider}/bar-speed", h.Device.BarSpeed)
 				})
 

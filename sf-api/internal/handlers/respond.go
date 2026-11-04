@@ -18,6 +18,10 @@ import (
 type errorBody struct {
 	Message  string `json:"message"`
 	I18nCode string `json:"i18n_code,omitempty"`
+	// Detail is an upstream error - a status and a body - surfaced for
+	// troubleshooting when a provider could not be reached. Never localized,
+	// never shown as the main message: a client puts it in a console panel.
+	Detail string `json:"detail,omitempty"`
 }
 
 // I18n codes for API errors. The frontend looks these up in its own translation

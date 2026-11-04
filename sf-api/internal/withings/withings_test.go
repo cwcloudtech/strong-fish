@@ -31,7 +31,7 @@ func TestExchangeReadsTheUserID(t *testing.T) {
 		}
 		fmt.Fprint(w, `{"status":0,"body":{"userid":363,"access_token":"a","refresh_token":"r","expires_in":10800,"scope":"user.metrics"}}`)
 	})
-	token, err := client.Exchange(context.Background(), "code", "http://cb")
+	token, err := client.Exchange(context.Background(), "code", "http://cb", "state")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ type fakeActivity struct{ name string }
 func (f fakeActivity) Name() string                           { return f.name }
 func (f fakeActivity) Enabled() bool                          { return true }
 func (f fakeActivity) AuthorizationURL(string, string) string { return "" }
-func (f fakeActivity) Exchange(context.Context, string, string) (devicelink.Token, error) {
+func (f fakeActivity) Exchange(context.Context, string, string, string) (devicelink.Token, error) {
 	return devicelink.Token{}, nil
 }
 func (f fakeActivity) Refresh(context.Context, string) (devicelink.Token, error) {

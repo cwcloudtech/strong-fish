@@ -10,6 +10,7 @@ const Map<String, dynamic> en = {
     'tagline': 'Powerlifting app',
   },
   'common': {
+    'troubleshoot': 'Troubleshooting details',
     'cm': 'cm',
     'retry': 'Reload',
     'create': 'Create',
@@ -557,6 +558,12 @@ const Map<String, dynamic> en = {
       'bench': 'Bench',
       'deadlift': 'Deadlift',
     },
+    'pairKey': {
+      'garmin': {
+        'label': 'Garmin personal API key',
+        'hint': 'Generate a personal API key in Garmin Connect (it is shown once). It is kept on this server to read your Garmin data.',
+      },
+    },
     'pair': {
       'password': 'Stance password',
       'stance': {
@@ -577,6 +584,7 @@ const Map<String, dynamic> en = {
     'provider': {
       'google-health': 'Google Health (Fitbit, Pixel Watch)',
       'withings': 'Withings',
+      'garmin': 'Garmin',
       'stance': 'Stance Fitness',
     },
     'aiFeedbackWindow': 'over the last {{days}} days',
@@ -587,6 +595,7 @@ const Map<String, dynamic> en = {
     'aiFeedbackEmpty': 'No reading yet. The AI can look at your last 90 days whenever you ask.',
     'title': 'Connected devices',
     'subtitle': 'Read what your watch and your scale already measured. Nothing is written back, and nothing is stored here.',
+    'accounts': 'Accounts',
     'connect': 'Connect',
     'connectGoogle': 'Connect with Google',
     'connectGoogleHint': 'Finish signing in with Google in the web app.',

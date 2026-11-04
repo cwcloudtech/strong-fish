@@ -2805,3 +2805,42 @@ a.sf-thread-who:hover strong { color: var(--sf-primary); text-decoration: underl
   border: 1px solid var(--sf-border);
   border-radius: 8px;
 }
+
+/* The upstream error detail, shown to troubleshoot a provider that could not
+   be reached: a log line, so monospace and scrollable rather than prose. */
+.sf-console {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+}
+.sf-console > summary {
+  cursor: pointer;
+  color: var(--sf-muted);
+}
+.sf-console-body {
+  margin-top: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  background: rgba(127, 127, 127, 0.12);
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.sf-console-bar {
+  margin-top: 0.4rem;
+}
+.sf-console-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sf-muted);
+  cursor: pointer;
+}
+.sf-console-copy:hover {
+  color: var(--sf-text, inherit);
+}

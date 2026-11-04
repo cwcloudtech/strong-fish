@@ -1,11 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../api/api_exception.dart';
 import '../theme.dart';
 import 'ai_ask_button.dart';
 import 'export_menu.dart';
@@ -142,6 +144,23 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     }
   }
 
+  /// Connects a key-paired provider (Garmin) with the member's personal API
+  /// key, which is kept on the server.
+  Future<void> _pairKey(String provider, String apiKey) async {
+    setState(() => _busy = provider);
+    try {
+      await ref.read(apiProvider).pairDeviceKey(provider, apiKey);
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = '');
+    }
+  }
+
   /// Opens the web app to finish connecting with Google, where the browser
   /// runs Google's own sign-in. Native Google sign-in needs a plugin the app
   /// does not bundle, so - like the other providers' consent - this step
@@ -220,6 +239,52 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
             ),
           ]),
           Text(t('devices.subtitle'), style: Theme.of(context).textTheme.bodySmall),
+          // The data first - the numbers a member comes back to read. Each
+          // connected provider shows what it can; the controls that pair and
+          // unpair the accounts are gathered at the bottom.
+          for (final connection in connections)
+            if (connection.connected) ...[
+              const SizedBox(height: 12),
+              if (connection.activitySource) _StepPanel(provider: connection.provider),
+              if (connection.activitySource) _HealthFeedbackPanel(provider: connection.provider),
+              if (!connection.activitySource &&
+                  activitySource != null &&
+                  connection.can('activity'))
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    t('devices.activityFrom', {'provider': t('devices.provider.$activitySource')}),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              if (connection.can('body-composition'))
+                _BodyCompositionPanel(provider: connection.provider),
+              if (connection.can('bar-speed') && connection.recordUrl.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      FilledButton.tonalIcon(
+                        style: _compactButton,
+                        onPressed: () => _record(connection.recordUrl),
+                        icon: const Icon(Icons.fiber_manual_record, size: 18),
+                        label: Text(t('devices.record')),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(t('devices.recordHint'),
+                            style: Theme.of(context).textTheme.bodySmall),
+                      ),
+                    ]),
+                  ),
+                ),
+              if (connection.can('bar-speed')) _BarSpeedPanel(provider: connection.provider),
+            ],
+          // The accounts last: connecting and disconnecting sit under the data
+          // they produce, not above it.
+          const SizedBox(height: 18),
+          Text(t('devices.accounts'), style: Theme.of(context).textTheme.titleSmall),
           for (final connection in connections) ...[
             const SizedBox(height: 14),
             Row(children: [
@@ -251,8 +316,6 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                 )
               else if (connection.oauth)
                 FilledButton.icon(
-                  // Offered but not pressable when the server has no
-                  // credentials for it: there is nothing to consent to.
                   onPressed:
                       connection.available ? () => _connect(connection.provider) : null,
                   style: _compactButton,
@@ -260,10 +323,6 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   label: Text(t('devices.connect')),
                 ),
             ]),
-            // Stance can also be connected with Google. Native Google
-            // sign-in needs a plugin the app does not bundle, so - as with the
-            // other providers' consent - it is finished in the browser, where
-            // the web app runs Google's own sign-in.
             if (!connection.connected &&
                 connection.googleClientId.isNotEmpty &&
                 connection.available) ...[
@@ -284,54 +343,19 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                     style: Theme.of(context).textTheme.bodySmall),
               ),
             ],
-            // Account-paired providers (Stance) sign in with an email and
-            // password rather than a consent redirect.
             if (!connection.connected && connection.accountPaired && connection.available)
               _AccountPairForm(
                 provider: connection.provider,
                 busy: _busy == connection.provider,
                 onPair: (email, password) => _pair(connection.provider, email, password),
               ),
-            // Steps and heart rate from one provider only, the one the API
-            // picked: two devices' worth of steps side by side would be two
-            // answers to the same question.
-            if (connection.activitySource) _StepPanel(provider: connection.provider),
-            if (connection.activitySource) _HealthFeedbackPanel(provider: connection.provider),
-            if (connection.connected &&
-                !connection.activitySource &&
-                activitySource != null &&
-                connection.can('activity'))
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(
-                  t('devices.activityFrom', {'provider': t('devices.provider.$activitySource')}),
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+            // Key-paired providers (Garmin): one personal API key field.
+            if (!connection.connected && connection.keyPaired && connection.available)
+              _KeyPairForm(
+                provider: connection.provider,
+                busy: _busy == connection.provider,
+                onPair: (apiKey) => _pairKey(connection.provider, apiKey),
               ),
-            if (connection.connected && connection.can('body-composition'))
-              _BodyCompositionPanel(provider: connection.provider),
-            if (connection.can('bar-speed') && connection.recordUrl.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Align(
-                  alignment: AlignmentDirectional.centerStart,
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    FilledButton.tonalIcon(
-                      style: _compactButton,
-                      onPressed: () => _record(connection.recordUrl),
-                      icon: const Icon(Icons.fiber_manual_record, size: 18),
-                      label: Text(t('devices.record')),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(t('devices.recordHint'),
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ),
-                  ]),
-                ),
-              ),
-            if (connection.connected && connection.can('bar-speed'))
-              _BarSpeedPanel(provider: connection.provider),
           ],
         ]),
       ),
@@ -353,6 +377,7 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
   StepSeries? _series;
   HeartSeries? _heart;
   String _error = '';
+  Object? _errorRaw;
   bool _loading = false;
   bool _exporting = false;
 
@@ -379,6 +404,7 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
       if (mounted) {
         setState(() {
           _series = null;
+          _errorRaw = error;
           _error = ref.read(tErrorProvider)(error);
         });
       }
@@ -471,7 +497,7 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
       if (_error.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 10),
-          child: Text(_error, style: TextStyle(color: AppColors.of(context).danger)),
+          child: _PanelError(_error, _errorRaw),
         ),
       if (series != null) ...[
         const SizedBox(height: 12),
@@ -872,6 +898,7 @@ class _BodyCompositionPanel extends ConsumerStatefulWidget {
 class _BodyCompositionPanelState extends ConsumerState<_BodyCompositionPanel> {
   List<BodyMeasure>? _measures;
   String _error = '';
+  Object? _errorRaw;
   bool _loading = false;
 
   @override
@@ -892,6 +919,7 @@ class _BodyCompositionPanelState extends ConsumerState<_BodyCompositionPanel> {
       if (mounted) {
         setState(() {
           _measures = null;
+          _errorRaw = error;
           _error = ref.read(tErrorProvider)(error);
         });
       }
@@ -926,7 +954,7 @@ class _BodyCompositionPanelState extends ConsumerState<_BodyCompositionPanel> {
           child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
         ),
       if (_error.isNotEmpty)
-        Text(_error, style: TextStyle(color: AppColors.of(context).danger)),
+        _PanelError(_error, _errorRaw),
       if (measures != null && measures.isEmpty)
         Text(t('devices.bodyComposition.empty'), style: small),
       if (measures != null && measures.isNotEmpty)
@@ -1050,6 +1078,68 @@ class _AccountPairFormState extends State<_AccountPairForm> {
   }
 }
 
+/// A member's own personal API key for a key-paired provider (Garmin): one
+/// field, masked, with a hint on where to get it.
+class _KeyPairForm extends StatefulWidget {
+  final String provider;
+  final bool busy;
+  final void Function(String apiKey) onPair;
+
+  const _KeyPairForm({required this.provider, required this.busy, required this.onPair});
+
+  @override
+  State<_KeyPairForm> createState() => _KeyPairFormState();
+}
+
+class _KeyPairFormState extends State<_KeyPairForm> {
+  final _key = TextEditingController();
+
+  @override
+  void dispose() {
+    _key.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer(builder: (context, ref, _) {
+      final t = ref.watch(tProvider);
+      final ready = _key.text.trim().isNotEmpty;
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(
+            controller: _key,
+            obscureText: true,
+            autocorrect: false,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: t('devices.pairKey.${widget.provider}.label'),
+              border: const OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(t('devices.pairKey.${widget.provider}.hint'),
+              style: Theme.of(context).textTheme.bodySmall),
+          const SizedBox(height: 8),
+          Align(
+            alignment: AlignmentDirectional.centerEnd,
+            child: FilledButton.icon(
+              onPressed:
+                  widget.busy || !ready ? null : () => widget.onPair(_key.text.trim()),
+              icon: widget.busy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.link, size: 18),
+              label: Text(t('devices.connect')),
+            ),
+          ),
+        ]),
+      );
+    });
+  }
+}
+
 /// The last set of each lift the member tracked on a bar-speed provider: one
 /// small chart a lift, a bar a rep, under the load and the two RPEs.
 class _BarSpeedPanel extends ConsumerStatefulWidget {
@@ -1063,6 +1153,7 @@ class _BarSpeedPanel extends ConsumerStatefulWidget {
 class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
   List<StanceSet>? _sets;
   String _error = '';
+  Object? _errorRaw;
 
   @override
   void initState() {
@@ -1075,7 +1166,12 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
       final sets = await ref.read(apiProvider).barSpeed(widget.provider);
       if (mounted) setState(() => _sets = sets);
     } catch (error) {
-      if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
+      if (mounted) {
+        setState(() {
+          _errorRaw = error;
+          _error = ref.read(tErrorProvider)(error);
+        });
+      }
     }
   }
 
@@ -1087,7 +1183,7 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
     if (_error.isNotEmpty) {
       return Padding(
         padding: const EdgeInsets.only(top: 8),
-        child: Text(_error, style: TextStyle(color: AppColors.of(context).danger)),
+        child: _PanelError(_error, _errorRaw),
       );
     }
     final sets = _sets;
@@ -1187,3 +1283,72 @@ class _VelocityBars extends StatelessWidget {
 /// A measurement without a pointless decimal.
 String _fmt(double value) =>
     value == value.roundToDouble() ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
+
+/// A panel's error: the translated message, and the troubleshooting console
+/// below it when the failure carried an upstream detail.
+class _PanelError extends StatelessWidget {
+  final String message;
+  final Object? raw;
+  const _PanelError(this.message, this.raw);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(message, style: TextStyle(color: AppColors.of(context).danger)),
+      _DebugConsole(raw),
+    ]);
+  }
+}
+
+/// The raw upstream error (status and body) the API sent when a provider could
+/// not be reached: collapsed by default, with a button to copy it so it can be
+/// pasted into a report. Renders nothing for any other failure.
+class _DebugConsole extends ConsumerWidget {
+  final Object? error;
+  const _DebugConsole(this.error);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (error == null) return const SizedBox.shrink();
+    final ex = asApiException(error!);
+    final detail = ex.detail;
+    if (detail == null || detail.isEmpty) return const SizedBox.shrink();
+    final t = ref.watch(tProvider);
+    final text = (ex.statusCode != null ? 'HTTP ${ex.statusCode}\n' : '') + detail;
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        dense: true,
+        title: Text(t('common.troubleshoot'), style: Theme.of(context).textTheme.bodySmall),
+        children: [
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: text));
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(SnackBar(content: Text(t('common.copied'))));
+              },
+              icon: const Icon(Icons.copy, size: 16),
+              label: Text(t('common.copy')),
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0x14808080),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: SelectableText(
+              text,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

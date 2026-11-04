@@ -70,6 +70,9 @@ type DeviceConnection struct {
 	// client needs to run "Sign in with Google". Blank when unavailable, and a
 	// provider can offer this and AccountPaired together.
 	GoogleClientID string `json:"googleClientId,omitempty"`
+	// KeyPaired is true for a provider connected with a single personal API
+	// key the member enters (Garmin), so a client shows a one-field key form.
+	KeyPaired bool `json:"keyPaired,omitempty"`
 }
 
 // BarSet is one completed barbell-velocity set, as the clients render it: what

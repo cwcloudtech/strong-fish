@@ -36,7 +36,7 @@ var errNotOAuth = errors.New("stance: paired with an account, not an authorizati
 
 func (p *provider) AuthorizationURL(string, string) string { return "" }
 
-func (p *provider) Exchange(context.Context, string, string) (devicelink.Token, error) {
+func (p *provider) Exchange(context.Context, string, string, string) (devicelink.Token, error) {
 	return devicelink.Token{}, errNotOAuth
 }
 
