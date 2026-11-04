@@ -110,15 +110,20 @@ Only the most recent set of each lift is shown - the point is the shape of your 
 
 On the phone, a **Record a set** button opens the Stance app so you can track the next set; come back afterwards and it is there. The web has no such button - the phone is where the bar is measured - but a set you record on the phone shows up on the web all the same.
 
-The panel has its own **Export** button (PNG or PDF), so you can save these charts even when Stance is the only device you have connected.
-
 ### How the measured RPE is worked out
 
 The measured RPE comes from the bar's speed: the slower a rep runs compared with how fast that load usually moves for you, the closer the set is to failure. Stance works it out from your set, and StrongFish reads and charts the result - it does none of the estimation itself. For the method behind it, written as plain sports science rather than anything tied to one tracker, see **[Velocity-based effort](./velocity-based-rpe.md)**.
 
 ## Exporting
 
-**Export this view** saves what is on screen as a PNG or a PDF: steps and heart rate drawn as histograms, coloured like the screen, followed by a table of your latest body composition when Withings is connected, and the same bar-speed charts - mean speed, peak and velocity loss - for your last squat, bench and deadlift when Stance is paired. The **Bar speed** panel also exports on its own, for when Stance is the only device connected and there is no step chart to hang the export off.
+One **Export** button at the top of the screen saves *everything* you have connected as a single PNG or PDF, in the order it reads on screen:
+
+- **steps** and **heart rate**, drawn as histograms coloured like the screen (over the window you have picked);
+- your latest **body composition** as a table, from your scale;
+- the **bar-speed** charts - mean speed, peak and velocity loss - for your last squat, bench and deadlift;
+- and, at the very end, the **AI reading** of the whole picture, when you have asked for one recently enough for it to still describe what is on the sheet.
+
+Each part is there only when you have something behind it, so a member with just a scale and a bar-speed tracker gets a sheet of those two things and no empty step chart. There is one document, not one per device.
 
 ## Disconnecting
 

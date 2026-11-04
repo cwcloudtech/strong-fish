@@ -238,6 +238,21 @@ func ActivitySource(providers []Provider, connected map[string]bool) string {
 	return ""
 }
 
+// BodyCompositionSource picks, among the providers a member connected, the one
+// scale whose measures are shown - the first in registration order that can be
+// read for body composition. The order is the priority, the same way
+// ActivitySource works: a member with both a Withings scale and a Garmin that
+// also reports weight sees Withings' numbers, and only one panel, not one per
+// provider that happens to carry a reading.
+func BodyCompositionSource(providers []Provider, connected map[string]bool) string {
+	for _, provider := range providers {
+		if _, ok := provider.(BodyCompositionReader); ok && connected[provider.Name()] && provider.Enabled() {
+			return provider.Name()
+		}
+	}
+	return ""
+}
+
 // Body composition measures. Names rather than the provider's numeric codes,
 // so the clients translate a word and never learn a vendor's numbering.
 const (

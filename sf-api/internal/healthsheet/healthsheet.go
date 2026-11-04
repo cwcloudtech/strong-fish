@@ -63,6 +63,29 @@ func Sections(steps models.StepSeries, heart *models.HeartSeries,
 	return sections
 }
 
+// AllSections is every part of the one fitness export, in reading order and
+// each only when there is something behind it: steps and heart rate (when an
+// activity source is connected), the latest body composition (when a scale
+// is), and the bar-speed charts (when a tracker is). Unlike Sections it leaves
+// steps out entirely when there are none, rather than drawing an empty chart -
+// this one sheet is assembled from whatever the member has, not from one
+// provider that must exist.
+func AllSections(steps models.StepSeries, heart *models.HeartSeries,
+	body *models.BodyComposition, barSets []models.BarSet, locale string) []programsheet.Section {
+	var sections []programsheet.Section
+	if len(steps.Days) > 0 {
+		sections = append(sections, StepsSection(steps, locale))
+		if heart != nil {
+			sections = append(sections, HeartSection(*heart, locale))
+		}
+	}
+	if body != nil && len(body.Measures) > 0 {
+		sections = append(sections, BodySection(*body, locale))
+	}
+	sections = append(sections, BarSpeedSections(barSets, locale)...)
+	return sections
+}
+
 // StepsSection is a histogram of the range, a bar a day coloured by its band.
 func StepsSection(steps models.StepSeries, locale string) programsheet.Section {
 	chart := &programsheet.Chart{
@@ -294,36 +317,6 @@ func VelocityLoss(repVelocities []float64) float64 {
 		return 0
 	}
 	return (best - last) / best * 100
-}
-
-// BarSpeedTitle is what a bar-speed-only export is called: whose sets these are.
-func BarSpeedTitle(memberName, locale string) string {
-	name := strings.TrimSpace(memberName)
-	if name == "" {
-		return strings.TrimSuffix(programsheet.Heading(locale, "barSpeedTitle"), " - %s")
-	}
-	return fmt.Sprintf(programsheet.Heading(locale, "barSpeedTitle"), name)
-}
-
-// BarSpeedSubtitle is the line under that title: the lifts it covers and when
-// their last set was performed.
-func BarSpeedSubtitle(sets []models.BarSet, locale string) string {
-	if len(sets) == 0 {
-		return ""
-	}
-	names := make([]string, 0, len(sets))
-	latest := sets[0].PerformedAt
-	for _, set := range sets {
-		names = append(names, LiftLabel(locale, set.Lift))
-		if set.PerformedAt.After(latest) {
-			latest = set.PerformedAt
-		}
-	}
-	line := strings.Join(names, ", ")
-	if !latest.IsZero() {
-		line += "  -  " + latest.Format("2006-01-02")
-	}
-	return line
 }
 
 // LiftLabel names one of the three lifts in the reader's language.

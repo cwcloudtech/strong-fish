@@ -106,11 +106,13 @@ export const devices = {
   // The latest reading of each measure the scale takes; no range, since the
   // panel is "where am I now".
   bodyComposition: (provider) => body(client.get(`/users/me/devices/${provider}/body-composition`)),
-  // format is "pdf" or "png": the route's own extension, so the file that
-  // arrives is named the way its contents are.
-  export: (provider, { format = "png", range, locale } = {}) =>
+  // One export of everything connected - steps, heart rate, body composition,
+  // bar speed and the AI reading - as a PNG or PDF. format is the route's own
+  // extension, so the file arrives named the way its contents are; range is the
+  // steps/heart window.
+  exportAll: ({ format = "png", range, locale } = {}) =>
     client
-      .get(`/users/me/devices/${provider}/export.${format}`, {
+      .get(`/users/me/devices/export.${format}`, {
         params: { ...(range ? { range } : {}), ...(locale ? { locale } : {}) },
         responseType: "blob",
       })
@@ -139,15 +141,6 @@ export const devices = {
   // The last set of each lift a bar-speed provider tracked, with the RPE it
   // computed from the bar's speed.
   barSpeed: (provider) => body(client.get(`/users/me/devices/${provider}/bar-speed`)),
-  // The same sets as a picture or a PDF - its own route, since a bar-speed
-  // provider has no steps or heart rate to hang the health export off.
-  barSpeedExport: (provider, { format = "png", locale } = {}) =>
-    client
-      .get(`/users/me/devices/${provider}/bar-speed/export.${format}`, {
-        params: { ...(locale ? { locale } : {}) },
-        responseType: "blob",
-      })
-      .then((response) => response.data),
 };
 
 export const programs = {

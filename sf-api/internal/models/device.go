@@ -56,6 +56,11 @@ type DeviceConnection struct {
 	// rate are shown. Decided here so the web app and the phone cannot pick
 	// differently when a member has connected more than one.
 	ActivitySource bool `json:"activitySource"`
+	// BodyCompositionSource marks the one connected scale whose measures are
+	// shown, the same way: a member with two providers that both report weight
+	// sees one panel, not one per provider. Decided here so the clients and the
+	// export agree on which.
+	BodyCompositionSource bool `json:"bodyCompositionSource"`
 	// RecordURL is set for a provider whose capture happens in its own app
 	// (Stance): the "record a set" button opens it. Empty for the others.
 	RecordURL string `json:"recordUrl,omitempty"`

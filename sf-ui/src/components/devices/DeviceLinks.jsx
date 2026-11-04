@@ -68,13 +68,30 @@ function outcomeMessage(t, outcome) {
  * belongs to Google, not to this app.
  */
 export default function DeviceLinks() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [connections, setConnections] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState("");
+  const [exporting, setExporting] = useState(false);
+  // The steps/heart window is owned here, not inside the data panel, so the one
+  // export button at the top sends the same range the chart below it shows.
+  const [range, setRange] = useState("week");
   const [params, setParams] = useSearchParams();
 
   const outcome = params.get("device") ? params.get("status") : "";
+
+  const exportAll = async (format) => {
+    setExporting(true);
+    setError(null);
+    try {
+      const blob = await devicesApi.exportAll({ format, range, locale });
+      downloadBlob(blob, `fitness-data.${format}`);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -170,10 +187,31 @@ export default function DeviceLinks() {
   if (connections.length === 0) return null;
 
   const activitySource = connections.find((connection) => connection.activitySource)?.provider;
+  // Whether there is anything to put in a document: steps, a scale reading or a
+  // tracked set. The one export button appears only when at least one of them
+  // is connected.
+  const exportable = connections.some(
+    (connection) =>
+      connection.connected &&
+      (connection.activitySource ||
+        connection.bodyCompositionSource ||
+        connection.capabilities?.includes("bar-speed")),
+  );
 
   return (
     <div className="sf-card">
-      <p className="sf-muted" style={{ marginTop: 0 }}>{t("devices.subtitle")}</p>
+      <div className="sf-row-between">
+        <p className="sf-muted" style={{ margin: 0 }}>{t("devices.subtitle")}</p>
+        {exportable ? (
+          <ExportMenu
+            onExport={exportAll}
+            busy={exporting}
+            size="sf-button-sm"
+            formats={["png", "pdf"]}
+            label={t("devices.export")}
+          />
+        ) : null}
+      </div>
 
       {outcome ? (
         <div
@@ -191,8 +229,9 @@ export default function DeviceLinks() {
       <ErrorMessage error={error} />
 
       {/* The data first - the numbers a member comes back to read. Each
-          connected provider contributes what it can; the controls that pair
-          and unpair the accounts are gathered at the bottom. */}
+          connected provider contributes what it can; the AI's reading of the
+          lot sits at the end, and the controls that pair and unpair the
+          accounts below that. */}
       {connections.map((connection) => {
         if (!connection.connected) return null;
         const activityNote =
@@ -201,17 +240,14 @@ export default function DeviceLinks() {
         return (
           <div key={`data-${connection.provider}`}>
             {connection.activitySource ? (
-              <>
-                <DataPanel provider={connection.provider} />
-                <HealthFeedbackPanel provider={connection.provider} />
-              </>
+              <DataPanel provider={connection.provider} range={range} onRange={setRange} />
             ) : null}
             {activityNote ? (
               <p className="sf-muted" style={{ marginTop: "0.5rem" }}>
                 {t("devices.activityFrom", { provider: t(`devices.provider.${activitySource}`) })}
               </p>
             ) : null}
-            {connection.capabilities?.includes("body-composition") ? (
+            {connection.bodyCompositionSource ? (
               <BodyCompositionPanel provider={connection.provider} />
             ) : null}
             {connection.capabilities?.includes("bar-speed") ? (
@@ -220,6 +256,10 @@ export default function DeviceLinks() {
           </div>
         );
       })}
+
+      {/* The AI's reading of everything above, at the end of the data - one
+          reading of the whole picture, not a comment on any single device. */}
+      {activitySource ? <HealthFeedbackPanel provider={activitySource} /> : null}
 
       {/* The accounts last: connecting and disconnecting sit under the data
           they produce, not above it. */}
@@ -417,10 +457,8 @@ function HealthFeedbackPanel({ provider }) {
  * offered, so there is nothing to be gained by asking for more than what is
  * being looked at.
  */
-function DataPanel({ provider }) {
-  const { t, locale } = useI18n();
-  const [range, setRange] = useState("week");
-  const [exporting, setExporting] = useState(false);
+function DataPanel({ provider, range, onRange }) {
+  const { t } = useI18n();
   const [series, setSeries] = useState(null);
   const [heart, setHeart] = useState(null);
   const [heartError, setHeartError] = useState(null);
@@ -455,18 +493,6 @@ function DataPanel({ provider }) {
     load();
   }, [load]);
 
-  const exportAs = async (format) => {
-    setExporting(true);
-    try {
-      const blob = await devicesApi.export(provider, { format, range, locale });
-      downloadBlob(blob, `health-${series?.to || range}.${format}`);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setExporting(false);
-    }
-  };
-
   const peak = Math.max(1, ...(series?.days || []).map((day) => day.steps));
 
   // The most recent day the watch actually recorded - "last" rather than
@@ -480,7 +506,7 @@ function DataPanel({ provider }) {
           <button
             key={name}
             className={`sf-button sf-button-sm ${range === name ? "" : "sf-button-secondary"}`}
-            onClick={() => setRange(name)}
+            onClick={() => onRange(name)}
           >
             {t(`devices.range.${name}`)}
           </button>
@@ -494,15 +520,6 @@ function DataPanel({ provider }) {
         >
           <FiRefreshCw />
         </button>
-        {/* Exports what is on screen: the range picked above, not some other
-            window the member would have to go and set again. */}
-        <ExportMenu
-          onExport={exportAs}
-          busy={exporting}
-          size="sf-button-sm"
-          formats={["png", "pdf"]}
-          label={t("devices.export")}
-        />
       </div>
 
       <ErrorMessage error={error} />
@@ -860,30 +877,16 @@ function AccountPairForm({ provider, busy, onPair }) {
  * speed and the tick above it the rep's peak - the two lines the tracker's own
  * app draws, the gap between them the rep. Under each, the load and the two
  * RPEs: what the member rated the set, and what the bar speed said it really
- * was. The whole sheet exports as a picture or a PDF, since the tracker has no
- * step or heart data to hang the health export off.
+ * was. It all goes into the one fitness export, with the rest of the data.
  */
 function BarSpeedPanel({ provider }) {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [sets, setSets] = useState(null);
   const [error, setError] = useState(null);
-  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     devicesApi.barSpeed(provider).then(setSets).catch(setError);
   }, [provider]);
-
-  const exportAs = async (format) => {
-    setExporting(true);
-    try {
-      const blob = await devicesApi.barSpeedExport(provider, { format, locale });
-      downloadBlob(blob, `bar-speed.${format}`);
-    } catch (err) {
-      setError(err);
-    } finally {
-      setExporting(false);
-    }
-  };
 
   if (error) {
     return (
@@ -904,16 +907,7 @@ function BarSpeedPanel({ provider }) {
 
   return (
     <div style={{ marginTop: "0.8rem" }}>
-      <div className="sf-row-between">
-        <strong>{t("devices.barSpeed.title")}</strong>
-        <ExportMenu
-          onExport={exportAs}
-          busy={exporting}
-          size="sf-button-sm"
-          formats={["png", "pdf"]}
-          label={t("devices.export")}
-        />
-      </div>
+      <strong>{t("devices.barSpeed.title")}</strong>
 
       {/* What the two series are, since a filled bar and a tick explain nothing
           on their own. */}
