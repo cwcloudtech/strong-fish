@@ -83,8 +83,19 @@ func (c Config) GoogleEnabled() bool {
 // for anything left blank, and derives the Supabase base URL from the ref.
 func (c Config) withDefaults() Config {
 	c.SupabaseURL = strings.TrimRight(strings.TrimSpace(c.SupabaseURL), "/")
-	if c.SupabaseURL == "" && strings.TrimSpace(c.SupabaseProjectRef) != "" {
-		c.SupabaseURL = fmt.Sprintf(supabaseURLTemplate, strings.TrimSpace(c.SupabaseProjectRef))
+	if c.SupabaseURL == "" {
+		// Tolerant of the project ref being given as a bare ref, a host, or a
+		// full URL, so a pasted "https://<ref>.supabase.co" still works.
+		ref := strings.TrimRight(strings.TrimSpace(c.SupabaseProjectRef), "/")
+		switch {
+		case ref == "":
+		case strings.Contains(ref, "://"):
+			c.SupabaseURL = ref
+		case strings.Contains(ref, "."):
+			c.SupabaseURL = "https://" + ref
+		default:
+			c.SupabaseURL = fmt.Sprintf(supabaseURLTemplate, ref)
+		}
 	}
 	if c.FirebaseAuthURL == "" {
 		c.FirebaseAuthURL = "https://identitytoolkit.googleapis.com/v1"
