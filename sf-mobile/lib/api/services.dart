@@ -408,6 +408,25 @@ class SfApi {
     return data.map((item) => StanceSet.fromJson(_map(item))).toList();
   }
 
+  /// Downloads the bar-speed charts as a picture or a PDF, and returns where it
+  /// was saved. Its own route, since a bar-speed provider has no step or heart
+  /// data to hang the health export off. [format] is the route's own extension.
+  Future<String> downloadBarSpeed(
+    String provider, {
+    required String directory,
+    required String fileName,
+    String format = 'png',
+    String locale = 'en',
+  }) async {
+    final path = '$directory/$fileName';
+    await client.dio.download(
+      '/users/me/devices/$provider/bar-speed/export.$format',
+      path,
+      queryParameters: {'locale': locale},
+    );
+    return path;
+  }
+
   /// [range] is one of 24h, 48h, week, month, 90d - the API names the windows,
   /// so the phone and the web app cannot mean different things by "a month".
   Future<StepSeries> deviceSteps(String provider, String range) async {

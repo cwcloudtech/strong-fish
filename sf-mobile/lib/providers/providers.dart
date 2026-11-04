@@ -25,6 +25,18 @@ final apiClientProvider = Provider<ApiClient>((ref) => ApiClient());
 
 final apiProvider = Provider<SfApi>((ref) => SfApi(ref.watch(apiClientProvider)));
 
+/// The Stance connection when it is paired and connected, else null. Powers the
+/// per-set "record on Stance" button on the training screen; cached and auto-
+/// disposed so it is fetched once while a session is open.
+final stanceConnectionProvider = FutureProvider.autoDispose<DeviceConnection?>((ref) async {
+  try {
+    for (final connection in await ref.read(apiProvider).deviceConnections()) {
+      if (connection.provider == 'stance' && connection.connected) return connection;
+    }
+  } catch (_) {}
+  return null;
+});
+
 /// restoring (checking storage at boot) | missing (no usable session, show the
 /// login screen) | connected (ready for the app).
 enum SessionStatus { restoring, missing, connected }

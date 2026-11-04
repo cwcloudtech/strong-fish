@@ -52,9 +52,8 @@ type Config struct {
 	// in normal use; set directly to point at a stand-in while developing, or
 	// in tests.
 	SupabaseURL string
-	// UsersTable resolves a Firebase uid to the internal user id; SessionsRPC
-	// returns that user's sets. Overridable in case Stance's names differ.
-	UsersTable  string
+	// SessionsRPC returns a member's sets, keyed by their Firebase uid.
+	// Overridable in case Stance's name for it differs.
 	SessionsRPC string
 	// AppURL is where the "record a set" button sends the member: the Stance
 	// app. Blank defaults to the app's store entry.
@@ -105,9 +104,6 @@ func (c Config) withDefaults() Config {
 	}
 	c.FirebaseAuthURL = strings.TrimRight(c.FirebaseAuthURL, "/")
 	c.FirebaseTokenURL = strings.TrimRight(c.FirebaseTokenURL, "/")
-	if c.UsersTable == "" {
-		c.UsersTable = "users"
-	}
 	if c.SessionsRPC == "" {
 		c.SessionsRPC = "get_user_sessions"
 	}

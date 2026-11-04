@@ -143,15 +143,12 @@ func TestGoogleClientIDBlankWhenUnconfigured(t *testing.T) {
 func TestLastSetsKeepsTheNewestPerLift(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/rest/v1/users"):
-			if r.URL.Query().Get("firebase_id") != "eq.uid-1" {
-				t.Errorf("users filter wrong: %s", r.URL.RawQuery)
-			}
-			_ = json.NewEncoder(w).Encode([]map[string]any{{"id": "internal-1"}})
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/rest/v1/rpc/get_user_sessions"):
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			if body["user_id_param"] != "internal-1" {
+			// The RPC is keyed by the Firebase uid directly, exactly as the
+			// Stance app passes it - no users-table lookup in between.
+			if body["user_id_param"] != "uid-1" {
 				t.Errorf("rpc param wrong: %v", body)
 			}
 			_ = json.NewEncoder(w).Encode([]map[string]any{

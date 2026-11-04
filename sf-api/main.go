@@ -152,7 +152,6 @@ func main() {
 		GoogleClientID:     cfg.StanceGoogleClientID,
 		SupabaseProjectRef: cfg.StanceSupabaseProjectRef,
 		SupabaseAnonKey:    cfg.StanceSupabaseAnonKey,
-		UsersTable:         cfg.StanceUsersTable,
 		SessionsRPC:        cfg.StanceSessionsRPC,
 		AppURL:             cfg.StanceAppURL,
 	})))

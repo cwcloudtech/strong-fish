@@ -355,6 +355,10 @@ class StanceSet {
   /// Each rep's mean concentric velocity in order - the per-set chart.
   final List<double> repVelocities;
 
+  /// Each rep's peak concentric velocity, the faster series drawn over the
+  /// mean one - the two lines the bar-speed app itself plots.
+  final List<double> repPeakVelocities;
+
   const StanceSet({
     this.lift = '',
     this.weightKg = 0,
@@ -364,6 +368,7 @@ class StanceSet {
     this.meanVelocity = 0,
     this.peakVelocity = 0,
     this.repVelocities = const [],
+    this.repPeakVelocities = const [],
   });
 
   factory StanceSet.fromJson(Map<String, dynamic> json) => StanceSet(
@@ -375,6 +380,9 @@ class StanceSet {
         meanVelocity: _toDouble(json['meanVelocity']),
         peakVelocity: _toDouble(json['peakVelocity']),
         repVelocities: (json['repVelocities'] as List? ?? const [])
+            .map((v) => _toDouble(v))
+            .toList(),
+        repPeakVelocities: (json['repPeakVelocities'] as List? ?? const [])
             .map((v) => _toDouble(v))
             .toList(),
       );

@@ -139,6 +139,15 @@ export const devices = {
   // The last set of each lift a bar-speed provider tracked, with the RPE it
   // computed from the bar's speed.
   barSpeed: (provider) => body(client.get(`/users/me/devices/${provider}/bar-speed`)),
+  // The same sets as a picture or a PDF - its own route, since a bar-speed
+  // provider has no steps or heart rate to hang the health export off.
+  barSpeedExport: (provider, { format = "png", locale } = {}) =>
+    client
+      .get(`/users/me/devices/${provider}/bar-speed/export.${format}`, {
+        params: { ...(locale ? { locale } : {}) },
+        responseType: "blob",
+      })
+      .then((response) => response.data),
 };
 
 export const programs = {

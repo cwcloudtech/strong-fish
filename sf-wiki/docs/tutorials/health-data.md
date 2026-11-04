@@ -1,6 +1,6 @@
 ---
 id: health-data
-title: Health data
+title: Fitness data
 sidebar_position: 6
 ---
 
@@ -44,7 +44,7 @@ This catches people out: the Google consent screen will happily say yes for an a
 
 ## Connecting
 
-1. Open **Health data** on the web app or the phone.
+1. Open **Fitness data** on the web app or the phone.
 2. Choose **Connect** next to Google Health or Withings.
 3. The provider asks you to sign in and to allow StrongFish to read your data.
 4. You land back on StrongFish, connected.
@@ -104,11 +104,13 @@ A measure your scale does not take simply does not appear. Each one has its own 
 
 ### Bar speed
 
-With Stance paired, a **Bar speed** panel shows your last set of each of the three lifts - squat, bench and deadlift. Each set is a row of bars, one per rep, each as tall as that rep's bar speed, above the load and reps and the two RPEs: the one you gave, and the one Stance measured from the bar.
+With Stance paired, a **Bar speed** panel shows your last set of each of the three lifts - squat, bench and deadlift. Each set is a column per rep: the filled bar is that rep's **mean** speed and the tick above it its **peak** - the two lines the tracker's own app draws, the gap between them the rep's acceleration. Above the chart sit the set's mean and peak speed, how much the bar **slowed across the set** (velocity loss, the usual fatigue reading), and the two RPEs: the one you gave, and the one Stance measured from the bar.
 
 Only the most recent set of each lift is shown - the point is the shape of your last effort, not a log. Record a new set and it takes the old one's place, and a lift you have not tracked simply does not appear.
 
 On the phone, a **Record a set** button opens the Stance app so you can track the next set; come back afterwards and it is there. The web has no such button - the phone is where the bar is measured - but a set you record on the phone shows up on the web all the same.
+
+The panel has its own **Export** button (PNG or PDF), so you can save these charts even when Stance is the only device you have connected.
 
 ### How the measured RPE is worked out
 
@@ -116,7 +118,7 @@ The measured RPE comes from the bar's speed: the slower a rep runs compared with
 
 ## Exporting
 
-**Export this view** saves what is on screen as a PNG or a PDF: steps and heart rate drawn as histograms, coloured like the screen, followed by a table of your latest body composition when Withings is connected, and the same bar-speed charts for your last squat, bench and deadlift when Stance is paired.
+**Export this view** saves what is on screen as a PNG or a PDF: steps and heart rate drawn as histograms, coloured like the screen, followed by a table of your latest body composition when Withings is connected, and the same bar-speed charts - mean speed, peak and velocity loss - for your last squat, bench and deadlift when Stance is paired. The **Bar speed** panel also exports on its own, for when Stance is the only device connected and there is no step chart to hang the export off.
 
 ## Disconnecting
 
@@ -156,7 +158,7 @@ Both limits go away once the app is published and verified. In a Google Workspac
 
 Garmin is connected **per member**, with each person's own [Personal API](https://developer.garmin.com/gc-developer-program/personal/personal-api/) key - there is nothing for the operator to set: no OAuth app, no shared key.
 
-Each member, on the Health data screen:
+Each member, on the Fitness data screen:
 
 1. Generates a Personal API key in their Garmin Connect account - it is shown once, so they save it like a password.
 2. Pastes it into the Garmin field under **Accounts**. StrongFish exchanges it for a 24-hour access token and keeps the key to renew it; the key is never shown again and reads only that member's own Garmin data.
@@ -171,4 +173,4 @@ The Stance integration runs on values that Stance provides. Email their team at 
 
 - `SF_STANCE_FIREBASE_API_KEY`, `SF_STANCE_SUPABASE_PROJECT_REF` and `SF_STANCE_SUPABASE_ANON_KEY` - the account sign-in and the stored sets. **Required**: with any unset, Stance shows as not enabled here, like any other integration without its credentials.
 - `SF_STANCE_GOOGLE_CLIENT_ID` - the public Google client id, to offer **Connect with Google** beside the email/password form. Optional, and there is no secret: it is a public value like the anon key. For the web button, Stance lists your web app's origin under that client's authorized JavaScript origins.
-- `SF_STANCE_USERS_TABLE`, `SF_STANCE_SESSIONS_RPC`, `SF_STANCE_APP_URL` - overrides for the user relation, the sets RPC, and what the **Record a set** button opens. Optional; the defaults are Stance's own.
+- `SF_STANCE_SESSIONS_RPC`, `SF_STANCE_APP_URL` - overrides for the sets RPC (keyed by your Firebase id) and what the **Record a set** button opens. Optional; the defaults are Stance's own.
