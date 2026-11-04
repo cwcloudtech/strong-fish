@@ -1,4 +1,7 @@
+import 'dart:io' show Platform;
+
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +16,11 @@ import 'ai_ask_button.dart';
 import 'export_menu.dart';
 import 'long_date.dart';
 import 'markdown_text.dart';
+
+/// Opens an installed app by package in any profile - see MainActivity. Used to
+/// launch the Stance app for "record a set", even when it lives in a work
+/// profile the personal app cannot reach with an ordinary intent.
+const _appLauncher = MethodChannel('sf/app_launcher');
 
 /// The windows the API offers, in the order they widen.
 const _ranges = ['24h', '48h', 'week', '14d', 'month', '90d'];
@@ -185,6 +193,23 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
   Future<void> _record(String url) async {
     final messenger = ScaffoldMessenger.of(context);
     final t = ref.read(tProvider);
+
+    // On Android, open the Stance app directly - including a work-profile copy
+    // the personal profile cannot reach with an ordinary intent - through
+    // LauncherApps. The package is the store URL's id.
+    final pkg = Uri.tryParse(url)?.queryParameters['id'];
+    if (!kIsWeb && Platform.isAndroid && pkg != null && pkg.isNotEmpty) {
+      try {
+        final launched = await _appLauncher
+            .invokeMethod<bool>('launchPackageAnyProfile', {'package': pkg});
+        if (launched == true) return;
+      } catch (_) {
+        // Fall through to opening the URL.
+      }
+    }
+
+    // Otherwise open the URL - the store page on iOS, or when the app is not
+    // installed in any profile.
     try {
       final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       if (!opened && mounted) {
