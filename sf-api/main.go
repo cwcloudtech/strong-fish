@@ -16,6 +16,7 @@ import (
 	"strong-fish-api/internal/db"
 	"strong-fish-api/internal/devicelink"
 	"strong-fish-api/internal/email"
+	"strong-fish-api/internal/garmin"
 	"strong-fish-api/internal/googlehealth"
 	"strong-fish-api/internal/handlers"
 	"strong-fish-api/internal/metrics"
@@ -134,6 +135,13 @@ func main() {
 		ClientSecret: cfg.WithingsClientSecret,
 		AuthURL:      cfg.WithingsAuthURL,
 		APIBaseURL:   cfg.WithingsAPIURL,
+	}))
+	// Garmin Connect, third in the activity order: a member with Google Health
+	// or Withings connected keeps those for steps and heart rate, and Garmin
+	// fills in only when neither of the others is there.
+	devices = append(devices, garmin.New(garmin.Config{
+		TokenURL:   cfg.GarminTokenURL,
+		APIBaseURL: cfg.GarminAPIURL,
 	}))
 	// Stance Fitness: barbell velocity and the RPE it computes from it. Last,
 	// since it has no steps or heart rate - it never wins the activity source

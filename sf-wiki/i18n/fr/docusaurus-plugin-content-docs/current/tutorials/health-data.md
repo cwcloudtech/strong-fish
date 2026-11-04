@@ -12,6 +12,7 @@ StrongFish peut afficher ce que votre montre et votre balance ont déjà mesuré
 | --- | --- |
 | **Google Health** (Fitbit, Pixel Watch, téléphone) | Pas et fréquence cardiaque |
 | **Withings** (balances, montres) | Composition corporelle, ainsi que pas et fréquence cardiaque |
+| **Garmin** (montres, balance Index) | Pas, fréquence cardiaque et composition corporelle |
 | **Stance Fitness** (capteur de vitesse de barre) | La vitesse de barre et le RPE mesuré sur votre dernière série de squat, développé couché et soulevé de terre |
 
 **Google Health** est l'endroit où vivent désormais les données Fitbit. L'API développeur de Fitbit a été coupée le 30 octobre 2026, et une Fitbit, une Pixel Watch ou un téléphone qui compte les pas alimentent tous le même profil Google Health. Le compte que vous connectez est donc votre **compte Google**, et ce qu'il lit est ce que vos appareils ont déposé dans Google Health.
@@ -149,6 +150,19 @@ Les deux limites disparaissent une fois l'app publiée et validée. Dans une org
 1. Créez une application dans le [tableau de bord développeur Withings](https://developer.withings.com/dashboard/).
 2. Déclarez `<URL de votre API>/v1/devices/withings/callback` comme URL de callback.
 3. Renseignez `SF_WITHINGS_CLIENT_ID` et `SF_WITHINGS_CLIENT_SECRET`.
+
+### Garmin
+
+Garmin se connecte **par membre**, chacun avec sa propre clé d'[API Personal](https://developer.garmin.com/gc-developer-program/personal/personal-api/) - l'opérateur n'a rien à configurer : pas d'app OAuth, pas de clé partagée.
+
+Chaque membre, sur l'écran Données santé :
+
+1. Génère une clé d'API Personal dans son compte Garmin Connect - affichée une seule fois, à conserver comme un mot de passe.
+2. La colle dans le champ Garmin sous **Comptes**. StrongFish l'échange contre un jeton d'accès de 24 h et conserve la clé pour le renouveler ; la clé n'est plus jamais affichée et ne lit que les données Garmin de ce membre.
+
+Garmin arrive en troisième dans l'ordre d'activité - un membre qui a connecté Google Health ou Withings garde ceux-ci, et Garmin ne prend le relais que si aucun des deux n'est là. Les pas remontent aussi loin que les autres (quatre-vingt-dix jours), mais la vue de fréquence cardiaque est plafonnée à deux semaines, Garmin la renvoyant un jour à la fois.
+
+`SF_GARMIN_TOKEN_URL` et `SF_GARMIN_API_URL` surchargent les points d'accès par défaut de Garmin ; ils ne sont à renseigner que si Garmin les déplace pendant que l'API Personal est encore en déploiement.
 
 ### Stance Fitness
 

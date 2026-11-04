@@ -10,7 +10,7 @@ import longDate from "../../utils/longDate";
 import { ConfirmModal } from "../common/Modal";
 import AskButton from "../ai/AskButton";
 import useToastError from "../../utils/useToast";
-import { ErrorMessage, Spinner } from "../common/Feedback";
+import { DebugConsole, ErrorMessage, Spinner } from "../common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
 /** The windows the API offers, in the order they widen. */
@@ -137,6 +137,19 @@ export default function DeviceLinks() {
     }
   };
 
+  const pairKey = async (provider, apiKey) => {
+    setBusy(provider);
+    setError(null);
+    try {
+      await devicesApi.pairKey(provider, apiKey);
+      await load();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy("");
+    }
+  };
+
   const disconnect = async (provider) => {
     setBusy(provider);
     setError(null);
@@ -177,8 +190,44 @@ export default function DeviceLinks() {
 
       <ErrorMessage error={error} />
 
+      {/* The data first - the numbers a member comes back to read. Each
+          connected provider contributes what it can; the controls that pair
+          and unpair the accounts are gathered at the bottom. */}
+      {connections.map((connection) => {
+        if (!connection.connected) return null;
+        const activityNote =
+          !connection.activitySource && activitySource
+          && connection.capabilities?.includes("activity");
+        return (
+          <div key={`data-${connection.provider}`}>
+            {connection.activitySource ? (
+              <>
+                <DataPanel provider={connection.provider} />
+                <HealthFeedbackPanel provider={connection.provider} />
+              </>
+            ) : null}
+            {activityNote ? (
+              <p className="sf-muted" style={{ marginTop: "0.5rem" }}>
+                {t("devices.activityFrom", { provider: t(`devices.provider.${activitySource}`) })}
+              </p>
+            ) : null}
+            {connection.capabilities?.includes("body-composition") ? (
+              <BodyCompositionPanel provider={connection.provider} />
+            ) : null}
+            {connection.capabilities?.includes("bar-speed") ? (
+              <BarSpeedPanel provider={connection.provider} />
+            ) : null}
+          </div>
+        );
+      })}
+
+      {/* The accounts last: connecting and disconnecting sit under the data
+          they produce, not above it. */}
+      <h2 className="sf-subtitle" style={{ marginTop: "1.4rem", marginBottom: 0 }}>
+        {t("devices.accounts")}
+      </h2>
       {connections.map((connection) => (
-        <div key={connection.provider} style={{ marginTop: "0.8rem" }}>
+        <div key={`account-${connection.provider}`} style={{ marginTop: "0.8rem" }}>
           <div className="sf-row-between">
             <div>
               <strong>{t(`devices.provider.${connection.provider}`)}</strong>
@@ -209,8 +258,6 @@ export default function DeviceLinks() {
             ) : null}
           </div>
 
-          {/* Stance can also be connected with Google: the client gets a
-              Google ID token with the public client id and sends it on. */}
           {!connection.connected && connection.googleClientId && connection.available ? (
             <GoogleConnectButton
               clientId={connection.googleClientId}
@@ -220,8 +267,6 @@ export default function DeviceLinks() {
             />
           ) : null}
 
-          {/* Account-paired providers (Stance) sign in with an email and
-              password rather than a consent redirect. */}
           {!connection.connected && connection.accountPaired && connection.available ? (
             <AccountPairForm
               provider={connection.provider}
@@ -230,26 +275,13 @@ export default function DeviceLinks() {
             />
           ) : null}
 
-          {/* Steps and heart rate from one provider only, the one the API
-              picked: two watches' worth of steps side by side would be two
-              answers to the same question. */}
-          {connection.activitySource ? (
-            <>
-              <DataPanel provider={connection.provider} />
-              <HealthFeedbackPanel provider={connection.provider} />
-            </>
-          ) : null}
-          {connection.connected && !connection.activitySource && activitySource
-          && connection.capabilities?.includes("activity") ? (
-            <p className="sf-muted" style={{ marginTop: "0.5rem" }}>
-              {t("devices.activityFrom", { provider: t(`devices.provider.${activitySource}`) })}
-            </p>
-          ) : null}
-          {connection.connected && connection.capabilities?.includes("body-composition") ? (
-            <BodyCompositionPanel provider={connection.provider} />
-          ) : null}
-          {connection.connected && connection.capabilities?.includes("bar-speed") ? (
-            <BarSpeedPanel provider={connection.provider} />
+          {/* Key-paired providers (Garmin): a single personal API key field. */}
+          {!connection.connected && connection.keyPaired && connection.available ? (
+            <KeyPairForm
+              provider={connection.provider}
+              busy={busy === connection.provider}
+              onPair={(apiKey) => pairKey(connection.provider, apiKey)}
+            />
           ) : null}
         </div>
       ))}
@@ -752,6 +784,37 @@ function GoogleConnectButton({ clientId, label, onCredential, onError }) {
   );
 }
 
+function KeyPairForm({ provider, busy, onPair }) {
+  const { t } = useI18n();
+  const [key, setKey] = useState("");
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!key.trim()) return;
+    onPair(key.trim());
+  };
+
+  return (
+    <form className="sf-row" style={{ gap: "0.5rem", marginTop: "0.6rem", flexWrap: "wrap" }} onSubmit={submit}>
+      <input
+        className="sf-input"
+        type="password"
+        autoComplete="off"
+        placeholder={t(`devices.pairKey.${provider}.label`)}
+        value={key}
+        onChange={(event) => setKey(event.target.value)}
+        style={{ flex: 1, minWidth: 240 }}
+      />
+      <button className="sf-button sf-button-sm" type="submit" disabled={busy || !key.trim()}>
+        <FiLink /> {t("devices.connect")}
+      </button>
+      <p className="sf-muted" style={{ flexBasis: "100%", margin: "0.2rem 0 0" }}>
+        {t(`devices.pairKey.${provider}.hint`)}
+      </p>
+    </form>
+  );
+}
+
 function AccountPairForm({ provider, busy, onPair }) {
   const { t } = useI18n();
   const [email, setEmail] = useState("");
@@ -808,7 +871,12 @@ function BarSpeedPanel({ provider }) {
   }, [provider]);
 
   if (error) {
-    return <p className="sf-muted" style={{ marginTop: "0.8rem" }}>{tErrorText(t, error)}</p>;
+    return (
+      <div style={{ marginTop: "0.8rem" }}>
+        <p className="sf-muted">{tErrorText(t, error)}</p>
+        <DebugConsole error={error} />
+      </div>
+    );
   }
   if (!sets) return null;
   if (sets.length === 0) {

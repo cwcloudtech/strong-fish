@@ -142,6 +142,7 @@ var routes = []struct{ method, path string }{
 	{"DELETE", "/v1/users/me/devices/google_health/feedback"},
 	{"POST", "/v1/users/me/devices/google_health/pair"},
 	{"POST", "/v1/users/me/devices/google_health/google"},
+	{"POST", "/v1/users/me/devices/google_health/pair-key"},
 	{"GET", "/v1/users/me/devices/google_health/bar-speed"},
 	{"GET", "/v1/ai/providers"},
 	{"GET", "/v1/ai/conversations"},

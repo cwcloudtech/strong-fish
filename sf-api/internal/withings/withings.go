@@ -98,7 +98,7 @@ func (c *Client) AuthorizationURL(redirectURI, state string) string {
 }
 
 // Exchange turns the code from the consent redirect into a grant.
-func (c *Client) Exchange(ctx context.Context, code, redirectURI string) (devicelink.Token, error) {
+func (c *Client) Exchange(ctx context.Context, code, redirectURI string, _ string) (devicelink.Token, error) {
 	return c.token(ctx, url.Values{
 		"grant_type":   {"authorization_code"},
 		"code":         {code},

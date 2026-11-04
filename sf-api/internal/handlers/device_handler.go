@@ -111,6 +111,9 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 		if _, ok := provider.(devicelink.AccountPairer); ok {
 			connection.AccountPaired = true
 		}
+		if _, ok := provider.(devicelink.KeyPairer); ok {
+			connection.KeyPaired = true
+		}
 		if provider.Enabled() && provider.AuthorizationURL(h.redirectURI(provider.Name()), "probe") != "" {
 			connection.OAuth = true
 		}
@@ -207,7 +210,7 @@ func (h *DeviceHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := provider.Exchange(r.Context(), code, h.redirectURI(providerName))
+	token, err := provider.Exchange(r.Context(), code, h.redirectURI(providerName), state)
 	if err != nil {
 		// The redirect URI is logged because it is half of the commonest
 		// failure: the provider compares it character for character against
@@ -726,7 +729,11 @@ func (h *DeviceHandler) writeProviderError(w http.ResponseWriter, err error, pro
 		writeError(w, http.StatusUnauthorized, "Connect the account again", CodeDeviceReauthorize)
 	default:
 		slog.Error("device provider call failed", "provider", provider, "error", err)
-		writeError(w, http.StatusBadGateway, "The provider could not be reached", CodeUpstream)
+		writeJSON(w, http.StatusBadGateway, errorBody{
+			Message:  "The provider could not be reached",
+			I18nCode: CodeUpstream,
+			Detail:   err.Error(),
+		})
 	}
 }
 

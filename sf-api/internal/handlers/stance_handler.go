@@ -137,6 +137,62 @@ func (h *DeviceHandler) PairDeviceGoogle(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
+type keyPairPayload struct {
+	ApiKey string `json:"apiKey"`
+}
+
+// PairDeviceKey connects a key-paired provider (Garmin) from the member's own
+// personal API key. The key is exchanged for a grant and kept only as the
+// stored refresh credential, never echoed back.
+func (h *DeviceHandler) PairDeviceKey(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	found, ok := h.provider(w, r)
+	if !ok {
+		return
+	}
+	pairer, ok := found.(devicelink.KeyPairer)
+	if !ok {
+		writeError(w, http.StatusBadRequest,
+			"This provider is not connected with a key", CodeDeviceNotPairable)
+		return
+	}
+	if !found.Enabled() {
+		writeError(w, http.StatusNotImplemented,
+			"This integration is not enabled on this server", CodeDeviceUnavailable)
+		return
+	}
+
+	var p keyPairPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	if utils.IsBlank(p.ApiKey) {
+		writeError(w, http.StatusBadRequest, "Enter your personal API key", CodeStancePairFailed)
+		return
+	}
+
+	token, err := pairer.PairKey(r.Context(), p.ApiKey)
+	if err != nil {
+		if errors.Is(err, devicelink.ErrReauthorize) {
+			writeError(w, http.StatusUnauthorized, "That key was refused", CodeStancePairFailed)
+			return
+		}
+		h.writeProviderError(w, err, found.Name())
+		return
+	}
+
+	if _, err := h.links.Save(r.Context(), models.DeviceLink{
+		UserID: userID, Provider: found.Name(),
+		AccessToken: token.AccessToken, RefreshToken: token.RefreshToken,
+		ExpiresAt: token.ExpiresAt, ExternalUserID: token.UserID,
+	}); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // BarSpeed returns the member's last set of each tracked lift.
 func (h *DeviceHandler) BarSpeed(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())

@@ -88,7 +88,7 @@ type Provider interface {
 	Enabled() bool
 
 	AuthorizationURL(redirectURI, state string) string
-	Exchange(ctx context.Context, code, redirectURI string) (Token, error)
+	Exchange(ctx context.Context, code, redirectURI, state string) (Token, error)
 	Refresh(ctx context.Context, refreshToken string) (Token, error)
 
 	// CheckAccount confirms a fresh grant can actually read anything, so a
@@ -171,6 +171,14 @@ type SetRecorder interface {
 // never stored.
 type AccountPairer interface {
 	PairAccount(ctx context.Context, email, password string) (Token, error)
+}
+
+// KeyPairer is a provider paired with a single personal API key the member
+// enters (Garmin's Personal API), rather than an OAuth redirect or an
+// email/password. The key is exchanged for a grant and kept as the refresh
+// credential; it is the member's own, not the operator's.
+type KeyPairer interface {
+	PairKey(ctx context.Context, apiKey string) (Token, error)
 }
 
 // GoogleAccountPairer is a provider that can be connected with a Google ID

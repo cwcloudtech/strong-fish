@@ -11,7 +11,11 @@ class ApiException implements Exception, ApiErrorLike {
   final String? message;
   final int? statusCode;
 
-  ApiException({this.i18nCode, this.message, this.statusCode});
+  /// An upstream error (a status and a body) surfaced for troubleshooting when
+  /// a provider could not be reached. Shown in a console, never as the message.
+  final String? detail;
+
+  ApiException({this.i18nCode, this.message, this.statusCode, this.detail});
 
   bool get isUnauthorized => statusCode == 401;
 

@@ -4,6 +4,7 @@ const fr = {
     tagline: "Application de powerlifting",
   },
   common: {
+    troubleshoot: "Détails de dépannage",
     cm: "cm",
     retry: "Recharger",
     create: "Créer",
@@ -548,6 +549,12 @@ const fr = {
   },
   devices: {
     lift: { squat: "Squat", bench: "Développé couché", deadlift: "Soulevé de terre" },
+    pairKey: {
+      garmin: {
+        label: "Clé d'API personnelle Garmin",
+        hint: "Générez une clé d'API personnelle dans Garmin Connect (affichée une seule fois). Elle est conservée sur ce serveur pour lire vos données Garmin.",
+      },
+    },
     pair: {
       password: "Mot de passe Stance",
       stance: { email: "Email Stance" },
@@ -566,6 +573,7 @@ const fr = {
     provider: {
       "google-health": "Google Health (Fitbit, Pixel Watch)",
       withings: "Withings",
+      garmin: "Garmin",
       stance: "Stance Fitness",
     },
     aiFeedbackWindow: "sur les {{days}} derniers jours",
@@ -576,6 +584,7 @@ const fr = {
     aiFeedbackEmpty: "Pas encore d'analyse. L'IA peut lire tes 90 derniers jours quand tu veux.",
     title: "Appareils connectés",
     subtitle: "Lisez ce que votre montre et votre balance ont déjà mesuré. Rien n'est écrit en retour, et rien n'est stocké ici.",
+    accounts: "Comptes",
     connect: "Connecter",
     connectGoogle: "Se connecter avec Google",
     connectGoogleHint: "Terminez la connexion avec Google dans l'app web.",

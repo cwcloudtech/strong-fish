@@ -394,6 +394,12 @@ class SfApi {
         .post('/users/me/devices/$provider/pair', data: {'email': email, 'password': password});
   }
 
+  /// Connects a key-paired provider (Garmin) with the member's personal API
+  /// key. The key is kept on the server as the refresh credential.
+  Future<void> pairDeviceKey(String provider, String apiKey) async {
+    await client.dio.post('/users/me/devices/$provider/pair-key', data: {'apiKey': apiKey});
+  }
+
   /// The member's last set of each lift a bar-speed provider tracked.
   Future<List<StanceSet>> barSpeed(String provider) async {
     final response = await client.dio.get('/users/me/devices/$provider/bar-speed');
