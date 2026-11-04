@@ -208,8 +208,15 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
       }
     }
 
-    // Otherwise open the URL - the store page on iOS, or when the app is not
-    // installed in any profile.
+    // A store URL is a dead end when the app is distributed off-store (Stance
+    // ships through Firebase, not the Play Store), so don't send the member
+    // there - tell them to open it. A real URL (a deep link, an install page)
+    // is still worth opening.
+    final isStore = url.contains('play.google.com') || url.startsWith('market:');
+    if (isStore) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(t('devices.recordFailed'))));
+      return;
+    }
     try {
       final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
       if (!opened && mounted) {
