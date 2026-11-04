@@ -61,5 +61,8 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
+        <!-- The Stance Fitness app, so the "record a set" button can find and
+             open it (including a work-profile copy) via LauncherApps. -->
+        <package android:name="com.stancehome.Stance_Fitness"/>
     </queries>
 </manifest>
