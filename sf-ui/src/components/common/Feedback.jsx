@@ -44,7 +44,14 @@ export function DebugConsole({ error }) {
   const detail = error?.response?.data?.detail;
   if (!detail) return null;
   const status = error?.response?.status;
-  const text = (status ? `HTTP ${status}\n` : "") + detail;
+  const provider = error?.response?.data?.provider;
+  const text = [
+    provider ? `provider: ${provider}` : null,
+    status ? `HTTP ${status}` : null,
+    detail,
+  ]
+    .filter(Boolean)
+    .join("\n");
   const copy = () => {
     try {
       navigator.clipboard?.writeText(text);
@@ -55,7 +62,7 @@ export function DebugConsole({ error }) {
   };
   return (
     <details className="sf-console">
-      <summary>{t("common.troubleshoot")}</summary>
+      <summary>{t("common.troubleshoot")}{provider ? ` \u2014 ${provider}` : ""}</summary>
       <div className="sf-console-bar">
         <button type="button" className="sf-console-copy" onClick={copy} title={t("common.copy")}>
           <FiCopy /> {t("common.copy")}

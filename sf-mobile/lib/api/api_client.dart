@@ -95,10 +95,12 @@ class ApiClient {
     String? i18nCode;
     String? message;
     String? detail;
+    String? provider;
     if (data is Map) {
       i18nCode = data['i18n_code'] as String?;
       message = data['message'] as String?;
       detail = data['detail'] as String?;
+      provider = data['provider'] as String?;
     }
 
     // A 413 does not always come from this API. A reverse proxy in front of it
@@ -113,7 +115,11 @@ class ApiClient {
 
     return error.copyWith(
       error: ApiException(
-          i18nCode: i18nCode, message: message, statusCode: response.statusCode, detail: detail),
+          i18nCode: i18nCode,
+          message: message,
+          statusCode: response.statusCode,
+          detail: detail,
+          provider: provider),
     );
   }
 }

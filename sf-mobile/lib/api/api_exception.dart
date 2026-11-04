@@ -15,7 +15,10 @@ class ApiException implements Exception, ApiErrorLike {
   /// a provider could not be reached. Shown in a console, never as the message.
   final String? detail;
 
-  ApiException({this.i18nCode, this.message, this.statusCode, this.detail});
+  /// Which integration an upstream detail is from (garmin, stance, ...).
+  final String? provider;
+
+  ApiException({this.i18nCode, this.message, this.statusCode, this.detail, this.provider});
 
   bool get isUnauthorized => statusCode == 401;
 
