@@ -38,10 +38,11 @@ type AIHandler struct {
 	oneRMs   *store.OneRMStore
 	programs *store.ProgramStore
 	sets     *ProgramHandler
-	// lastDay is the member's last twenty-four hours of health data, as
-	// markdown. A function rather than the device handler itself: that
-	// handler already holds this one, and two pointers at each other is a
-	// knot nobody needs to untie later.
+	// lastDay is the member's fitness data as markdown - recent steps and heart
+	// rate, latest body composition, and the last bar-speed set of each lift. A
+	// function rather than the device handler itself: that handler already
+	// holds this one, and two pointers at each other is a knot nobody needs to
+	// untie later.
 	lastDay func(*http.Request, string, string) string
 }
 
@@ -56,7 +57,8 @@ func (h *AIHandler) WithMemberContext(oneRMs *store.OneRMStore, programs *store.
 	return h
 }
 
-// WithHealth adds the member's last day of health data to that context.
+// WithHealth adds the member's fitness data - recent activity, body
+// composition and bar speed - to that context.
 func (h *AIHandler) WithHealth(lastDay func(*http.Request, string, string) string) *AIHandler {
 	h.lastDay = lastDay
 	return h

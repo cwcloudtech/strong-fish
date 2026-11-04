@@ -1232,11 +1232,12 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
       const SizedBox(height: 12),
       Text(t('devices.barSpeed.title'), style: const TextStyle(fontWeight: FontWeight.w600)),
       const SizedBox(height: 2),
-      // What the two series are, since a bar and a tick explain nothing alone.
+      // The legend explains shape, not colour (the colour is the lift): a
+      // filled block is the mean, a dashed line the peak.
       Row(children: [
-        _VelocityLegend(color: colors.primary, label: t('devices.barSpeed.legendMean')),
+        _VelocityLegend(color: colors.textMuted, label: t('devices.barSpeed.legendMean')),
         const SizedBox(width: 14),
-        _VelocityLegend(color: colors.warning, label: t('devices.barSpeed.legendPeak'), tick: true),
+        _VelocityLegend(color: colors.textMuted, label: t('devices.barSpeed.legendPeak'), tick: true),
       ]),
       for (final set in sets) _BarSpeedSet(set: set),
     ]);
@@ -1258,6 +1259,21 @@ int _velocityLoss(List<double> velocities) {
 
 /// One lift's last set: its heading, the set's mean and peak speed and how much
 /// it slowed, then a column per rep showing mean (bar) and peak (tick).
+/// One colour per lift - squat yellow, bench red, deadlift green - the same inks
+/// the web and the export use. Null for anything that is not one of the three.
+Color? _liftInk(String lift, Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  switch (lift) {
+    case 'squat':
+      return dark ? const Color(0xFFFACC15) : const Color(0xFFEAB308);
+    case 'bench':
+      return dark ? const Color(0xFFF87171) : const Color(0xFFDC2626);
+    case 'deadlift':
+      return dark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
+  }
+  return null;
+}
+
 class _BarSpeedSet extends ConsumerWidget {
   final StanceSet set;
   const _BarSpeedSet({required this.set});
@@ -1266,16 +1282,17 @@ class _BarSpeedSet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(tProvider);
     final small = Theme.of(context).textTheme.bodySmall;
+    final liftInk = _liftInk(set.lift, Theme.of(context).brightness) ?? AppColors.of(context).primary;
 
-    final parts = <String>[t('devices.lift.${set.lift}')];
+    final rest = <String>[];
     if (set.weightKg > 0 && set.reps > 0) {
-      parts.add(t('devices.barSpeed.load', {'weight': _fmt(set.weightKg), 'reps': '${set.reps}'}));
+      rest.add(t('devices.barSpeed.load', {'weight': _fmt(set.weightKg), 'reps': '${set.reps}'}));
     }
     if (set.givenRpe > 0 && set.predictedRpe > 0) {
-      parts.add(t('devices.barSpeed.rpePair',
+      rest.add(t('devices.barSpeed.rpePair',
           {'given': _fmt(set.givenRpe), 'real': _fmt(set.predictedRpe)}));
     } else if (set.predictedRpe > 0) {
-      parts.add(t('devices.barSpeed.rpeReal', {'real': _fmt(set.predictedRpe)}));
+      rest.add(t('devices.barSpeed.rpeReal', {'real': _fmt(set.predictedRpe)}));
     }
 
     final loss = _velocityLoss(set.repVelocities);
@@ -1293,13 +1310,22 @@ class _BarSpeedSet extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(parts.join('  ·  '), style: small),
+        Text.rich(
+          TextSpan(children: [
+            TextSpan(
+              text: t('devices.lift.${set.lift}'),
+              style: TextStyle(color: liftInk, fontWeight: FontWeight.w600),
+            ),
+            if (rest.isNotEmpty) TextSpan(text: '  ·  ${rest.join('  ·  ')}'),
+          ]),
+          style: small,
+        ),
         if (stats.isNotEmpty) ...[
           const SizedBox(height: 6),
           Wrap(spacing: 20, runSpacing: 6, children: stats),
         ],
         const SizedBox(height: 4),
-        _VelocityBars(velocities: set.repVelocities, peaks: set.repPeakVelocities),
+        _VelocityBars(velocities: set.repVelocities, peaks: set.repPeakVelocities, mean: liftInk),
       ]),
     );
   }
@@ -1349,7 +1375,8 @@ class _VelocityLegend extends StatelessWidget {
 class _VelocityBars extends StatelessWidget {
   final List<double> velocities;
   final List<double> peaks;
-  const _VelocityBars({required this.velocities, this.peaks = const []});
+  final Color mean;
+  const _VelocityBars({required this.velocities, this.peaks = const [], required this.mean});
 
   @override
   Widget build(BuildContext context) {
@@ -1393,17 +1420,19 @@ class _VelocityBars extends StatelessWidget {
                         child: Container(
                           height: (chartH * velocities[i] / ceiling).clamp(2, chartH).toDouble(),
                           decoration: BoxDecoration(
-                            color: colors.primary,
+                            color: mean,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
                           ),
                         ),
                       ),
+                      // The peak tick is a neutral dark marker, so it reads over
+                      // any lift colour.
                       if (i < peaks.length && peaks[i] > 0)
                         Positioned(
                           left: 0,
                           right: 0,
                           bottom: (chartH * peaks[i] / ceiling).clamp(0, chartH - 2).toDouble(),
-                          child: Container(height: 2, color: colors.warning),
+                          child: Container(height: 2, color: colors.text),
                         ),
                     ]),
                   ),

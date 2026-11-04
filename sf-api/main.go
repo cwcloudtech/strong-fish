@@ -180,7 +180,7 @@ func main() {
 	// built with the other already in hand.
 	deviceHandler := handlers.NewDeviceHandler(devices, deviceLinkStore, userStore, cfg.JWTSecret,
 		cfg.APIBaseURL, cfg.UIBaseURL, aiHandler)
-	aiHandler.WithHealth(deviceHandler.LastDay)
+	aiHandler.WithHealth(deviceHandler.FitnessContext)
 
 	api := router.New(router.Handlers{
 		User: handlers.NewUserHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.MaxImageSize,

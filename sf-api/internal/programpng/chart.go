@@ -16,7 +16,11 @@ import (
 
 const (
 	// chartHeight is the plot itself, between the captions and the baseline.
-	chartHeight = 260
+	// Kept short on purpose: a fitness export can carry several charts - steps,
+	// heart rate, and one per tracked lift - and each is placed in the PDF at
+	// the page's full width, so a tall plot scaled to that width eats a whole
+	// A4 page. Short enough that the usual set fits a page or two.
+	chartHeight = 150
 	// chartMaxBar keeps a short range from drawing a single bar the width of
 	// the page: one day of steps is a bar, not a wall.
 	chartMaxBar = 90

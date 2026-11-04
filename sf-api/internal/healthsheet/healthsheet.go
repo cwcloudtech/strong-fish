@@ -237,10 +237,29 @@ func formatInt[T int | int64](value T) string {
 	return out.String()
 }
 
-// barSpeed is the colour of a bar-speed chart: the app's green, since a
-// velocity has no good/bad bands the way steps do - it is a number to read,
-// not to judge.
-var barSpeed = color.RGBA{14, 94, 155, 255}
+// One colour per lift, so the three charts read apart at a glance and match
+// the lift colours the apps use elsewhere: squat yellow, bench red, deadlift
+// green. A velocity has no good/bad bands the way steps do, so the colour
+// names the lift rather than judging the number.
+var (
+	liftSquatColor    = color.RGBA{234, 179, 8, 255} // yellow
+	liftBenchColor    = color.RGBA{220, 38, 38, 255} // red
+	liftDeadliftColor = color.RGBA{22, 163, 74, 255} // green
+	liftOtherColor    = color.RGBA{14, 94, 155, 255} // fallback navy
+)
+
+// liftBarColor is the chart colour for one lift.
+func liftBarColor(lift string) color.RGBA {
+	switch lift {
+	case devicelink.LiftSquat:
+		return liftSquatColor
+	case devicelink.LiftBench:
+		return liftBenchColor
+	case devicelink.LiftDeadlift:
+		return liftDeadliftColor
+	}
+	return liftOtherColor
+}
 
 // BarSpeedSections is one chart per tracked lift: a bar per rep, its height
 // the rep's mean concentric velocity, under a heading that carries the set's
@@ -254,13 +273,14 @@ func BarSpeedSections(sets []models.BarSet, locale string) []programsheet.Sectio
 		if len(set.RepVelocities) == 0 {
 			continue
 		}
+		colour := liftBarColor(set.Lift)
 		chart := &programsheet.Chart{}
 		for i, velocity := range set.RepVelocities {
 			chart.Bars = append(chart.Bars, programsheet.Bar{
 				Label:   fmt.Sprintf(programsheet.Heading(locale, "repN"), i+1),
 				Value:   velocity,
 				Caption: formatVelocity(velocity),
-				Color:   barSpeed,
+				Color:   colour,
 			})
 		}
 		sections = append(sections, programsheet.Section{
