@@ -1314,14 +1314,21 @@ class _DebugConsole extends ConsumerWidget {
     final detail = ex.detail;
     if (detail == null || detail.isEmpty) return const SizedBox.shrink();
     final t = ref.watch(tProvider);
-    final text = (ex.statusCode != null ? 'HTTP ${ex.statusCode}\n' : '') + detail;
+    final text = [
+      if (ex.provider != null) 'provider: ${ex.provider}',
+      if (ex.statusCode != null) 'HTTP ${ex.statusCode}',
+      detail,
+    ].join('\n');
+    final title = ex.provider != null
+        ? '${t('common.troubleshoot')} — ${ex.provider}'
+        : t('common.troubleshoot');
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
         tilePadding: EdgeInsets.zero,
         childrenPadding: const EdgeInsets.only(bottom: 8),
         dense: true,
-        title: Text(t('common.troubleshoot'), style: Theme.of(context).textTheme.bodySmall),
+        title: Text(title, style: Theme.of(context).textTheme.bodySmall),
         children: [
           Align(
             alignment: AlignmentDirectional.centerStart,

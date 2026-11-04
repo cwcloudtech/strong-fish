@@ -22,6 +22,10 @@ type errorBody struct {
 	// troubleshooting when a provider could not be reached. Never localized,
 	// never shown as the main message: a client puts it in a console panel.
 	Detail string `json:"detail,omitempty"`
+	// Provider names which integration the detail is from (garmin, stance,
+	// google-health, withings), so a console can say so when several providers
+	// can each fail at once.
+	Provider string `json:"provider,omitempty"`
 }
 
 // I18n codes for API errors. The frontend looks these up in its own translation

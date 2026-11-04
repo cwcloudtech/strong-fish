@@ -733,6 +733,7 @@ func (h *DeviceHandler) writeProviderError(w http.ResponseWriter, err error, pro
 			Message:  "The provider could not be reached",
 			I18nCode: CodeUpstream,
 			Detail:   err.Error(),
+			Provider: provider,
 		})
 	}
 }
