@@ -118,6 +118,21 @@ func TestPairGoogleSignsInWithIdToken(t *testing.T) {
 	}
 }
 
+func TestSupabaseURLDerivedFromRefForms(t *testing.T) {
+	cases := map[string]string{
+		"rszfl":                      "https://rszfl.supabase.co",
+		"rszfl.supabase.co":          "https://rszfl.supabase.co",
+		"https://rszfl.supabase.co":  "https://rszfl.supabase.co",
+		"https://rszfl.supabase.co/": "https://rszfl.supabase.co",
+	}
+	for ref, want := range cases {
+		got := Config{SupabaseProjectRef: ref}.withDefaults().SupabaseURL
+		if got != want {
+			t.Errorf("ref %q -> %q, want %q", ref, got, want)
+		}
+	}
+}
+
 func TestGoogleClientIDBlankWhenUnconfigured(t *testing.T) {
 	c := New(Config{FirebaseAPIKey: "k", SupabaseProjectRef: "ref", SupabaseAnonKey: "anon"})
 	if id := c.GoogleClientID(); id != "" {
