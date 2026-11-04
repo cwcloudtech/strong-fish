@@ -62,15 +62,18 @@ func (c *client) resolveUserID(ctx context.Context, firebaseUID string) (string,
 	q.Set("limit", "1")
 	endpoint := c.cfg.SupabaseURL + "/rest/v1/" + c.cfg.UsersTable + "?" + q.Encode()
 
-	var rows []struct {
-		ID string `json:"id"`
-	}
-	status, err := c.supabaseCall(ctx, http.MethodGet, endpoint, nil, &rows)
+	status, data, err := c.supabaseCall(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return "", err
 	}
 	if status/100 != 2 {
-		return "", fmt.Errorf("stance: user lookup failed (status %d)", status)
+		return "", fmt.Errorf("stance: user lookup failed (status %d: %s)", status, snippet(data))
+	}
+	var rows []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return "", fmt.Errorf("stance: user lookup decode: %w", err)
 	}
 	if len(rows) == 0 {
 		return "", nil
@@ -85,15 +88,14 @@ func (c *client) fetchSets(ctx context.Context, userID string) ([]fullSet, error
 
 	// The RPC returns the user's sets, each with its reps embedded. Some
 	// deployments wrap them in sessions; both shapes are accepted.
-	var raw json.RawMessage
-	status, err := c.supabaseCall(ctx, http.MethodPost, endpoint, body, &raw)
+	status, data, err := c.supabaseCall(ctx, http.MethodPost, endpoint, body)
 	if err != nil {
 		return nil, err
 	}
 	if status/100 != 2 {
-		return nil, fmt.Errorf("stance: sessions read failed (status %d)", status)
+		return nil, fmt.Errorf("stance: sessions read failed (status %d: %s)", status, snippet(data))
 	}
-	return flattenSets(raw), nil
+	return flattenSets(data), nil
 }
 
 // flattenSets reads the RPC payload whether it is a flat array of sets or an
@@ -218,19 +220,21 @@ func firstTime(values ...string) time.Time {
 }
 
 // supabaseCall makes one PostgREST request, authorised with the anon key as
-// both the apikey and the bearer (there is no per-member token for reads).
-func (c *client) supabaseCall(ctx context.Context, method, endpoint string, body, out any) (int, error) {
+// both the apikey and the bearer (there is no per-member token for reads). It
+// returns the raw body so a non-2xx can be reported with PostgREST's own
+// error message.
+func (c *client) supabaseCall(ctx context.Context, method, endpoint string, body any) (int, []byte, error) {
 	var reader io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
 		if err != nil {
-			return 0, err
+			return 0, nil, err
 		}
 		reader = bytes.NewReader(raw)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
 	if err != nil {
-		return 0, err
+		return 0, nil, err
 	}
 	req.Header.Set("apikey", c.cfg.SupabaseAnonKey)
 	req.Header.Set("Authorization", "Bearer "+c.cfg.SupabaseAnonKey)
@@ -238,5 +242,23 @@ func (c *client) supabaseCall(ctx context.Context, method, endpoint string, body
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return c.send(req, out)
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return resp.StatusCode, nil, err
+	}
+	return resp.StatusCode, data, nil
+}
+
+// snippet trims a response body to something loggable.
+func snippet(b []byte) string {
+	s := strings.TrimSpace(string(b))
+	if len(s) > 300 {
+		return s[:300] + "…"
+	}
+	return s
 }
