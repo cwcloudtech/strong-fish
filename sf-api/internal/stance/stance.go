@@ -62,9 +62,12 @@ type Set struct {
 	MeanVelocity float64
 	PeakVelocity float64
 	// RepVelocities is the mean concentric velocity of each rep in order -
-	// what the per-set chart plots, one bar a rep.
-	RepVelocities []float64
-	PerformedAt   time.Time
+	// what the per-set chart plots, one bar a rep. RepPeakVelocities is each
+	// rep's peak concentric velocity, the faster line the app draws over the
+	// mean one.
+	RepVelocities     []float64
+	RepPeakVelocities []float64
+	PerformedAt       time.Time
 }
 
 // Client is everything StrongFish asks of Stance. Narrow on purpose: pair an

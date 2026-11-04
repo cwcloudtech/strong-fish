@@ -135,9 +135,11 @@ type BarSet struct {
 	MeanVelocity float64
 	PeakVelocity float64
 	// RepVelocities is each rep's mean concentric velocity in order - what
-	// the per-set chart plots, one bar a rep.
-	RepVelocities []float64
-	PerformedAt   time.Time
+	// the per-set chart plots, one bar a rep. RepPeakVelocities is each rep's
+	// peak concentric velocity, the faster series drawn over the mean one.
+	RepVelocities     []float64
+	RepPeakVelocities []float64
+	PerformedAt       time.Time
 }
 
 // The three lifts a bar-speed provider is read for.

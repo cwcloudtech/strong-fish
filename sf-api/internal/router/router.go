@@ -238,6 +238,8 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Post("/{provider}/google", h.Device.PairDeviceGoogle)
 					r.Post("/{provider}/pair-key", h.Device.PairDeviceKey)
 					r.Get("/{provider}/bar-speed", h.Device.BarSpeed)
+					r.Get("/{provider}/bar-speed/export.png", h.Device.BarSpeedExport)
+					r.Get("/{provider}/bar-speed/export.pdf", h.Device.BarSpeedExport)
 				})
 
 				// The invitations waiting for this account's address. They are

@@ -249,7 +249,8 @@ func (h *DeviceHandler) barSets(r *http.Request, provider devicelink.Provider,
 			Lift: set.Lift, WeightKg: set.WeightKg, Reps: set.Reps,
 			GivenRpe: set.GivenRPE, PredictedRpe: set.PredictedRPE,
 			MeanVelocity: set.MeanVelocity, PeakVelocity: set.PeakVelocity,
-			RepVelocities: set.RepVelocities, PerformedAt: set.PerformedAt,
+			RepVelocities: set.RepVelocities, RepPeakVelocities: set.RepPeakVelocities,
+			PerformedAt: set.PerformedAt,
 		})
 	}
 	return out, nil

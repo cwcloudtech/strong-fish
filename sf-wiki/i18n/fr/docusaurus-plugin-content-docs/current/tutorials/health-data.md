@@ -1,6 +1,6 @@
 ---
 id: health-data
-title: Données santé
+title: Données fitness
 sidebar_position: 6
 ---
 
@@ -44,7 +44,7 @@ C'est le piège classique : l'écran de consentement Google accepte volontiers u
 
 ## Se connecter
 
-1. Ouvrez **Données santé** sur le site ou le téléphone.
+1. Ouvrez **Données fitness** sur le site ou le téléphone.
 2. Choisissez **Connecter** en face de Google Health ou de Withings.
 3. Le fournisseur vous demande de vous identifier et d'autoriser StrongFish à lire vos données.
 4. Vous revenez sur StrongFish, connecté.
@@ -103,11 +103,13 @@ Une mesure que votre balance ne prend pas n'apparaît simplement pas. Chacune a 
 
 ### Vitesse de barre
 
-Avec Stance associé, un panneau **Vitesse de barre** affiche votre dernière série de chacun des trois mouvements - squat, développé couché et soulevé de terre. Chaque série est une rangée de barres, une par répétition, chacune aussi haute que la vitesse de barre de cette répétition, au-dessus de la charge, des répétitions et des deux RPE : celui que vous avez donné et celui que Stance a mesuré à partir de la barre.
+Avec Stance associé, un panneau **Vitesse de barre** affiche votre dernière série de chacun des trois mouvements - squat, développé couché et soulevé de terre. Chaque série est une colonne par répétition : la barre pleine est la vitesse **moyenne** de cette répétition et le trait au-dessus son **pic** - les deux lignes que trace l'application du traqueur elle-même, l'écart entre les deux étant l'accélération de la répétition. Au-dessus du graphique figurent la vitesse moyenne et de pointe de la série, de combien la barre a **ralenti au fil de la série** (perte de vitesse, l'indicateur de fatigue habituel) et les deux RPE : celui que vous avez donné et celui que Stance a mesuré à partir de la barre.
 
 Seule la série la plus récente de chaque mouvement est montrée - ce qui compte est la forme de votre dernier effort, pas un historique. Enregistrez une nouvelle série et elle prend la place de l'ancienne, et un mouvement que vous n'avez pas suivi n'apparaît tout simplement pas.
 
 Sur le téléphone, un bouton **Enregistrer une série** ouvre l'application Stance pour suivre la série suivante ; revenez ensuite et elle y est. Le site n'a pas ce bouton - le téléphone est l'endroit où la barre est mesurée - mais une série enregistrée sur le téléphone apparaît aussi sur le site.
+
+Le panneau a son propre bouton **Exporter** (PNG ou PDF), pour que vous puissiez enregistrer ces graphiques même quand Stance est le seul appareil connecté.
 
 ### Comment le RPE mesuré est calculé
 
@@ -115,7 +117,7 @@ Le RPE mesuré vient de la vitesse de la barre : plus une répétition est lente
 
 ## Export
 
-**Exporter cette vue** enregistre ce qui est à l'écran en PNG ou en PDF : les pas et la fréquence cardiaque tracés en histogrammes, aux couleurs de l'écran, suivis d'un tableau de votre dernière composition corporelle quand Withings est connecté, et des mêmes graphiques de vitesse de barre pour vos derniers squat, développé couché et soulevé de terre quand Stance est associé.
+**Exporter cette vue** enregistre ce qui est à l'écran en PNG ou en PDF : les pas et la fréquence cardiaque tracés en histogrammes, aux couleurs de l'écran, suivis d'un tableau de votre dernière composition corporelle quand Withings est connecté, et des mêmes graphiques de vitesse de barre - vitesse moyenne, pic et perte de vitesse - pour vos derniers squat, développé couché et soulevé de terre quand Stance est associé. Le panneau **Vitesse de barre** s'exporte aussi tout seul, pour quand Stance est le seul appareil connecté et qu'il n'y a pas de graphique de pas auquel rattacher l'export.
 
 ## Se déconnecter
 
@@ -155,7 +157,7 @@ Les deux limites disparaissent une fois l'app publiée et validée. Dans une org
 
 Garmin se connecte **par membre**, chacun avec sa propre clé d'[API Personal](https://developer.garmin.com/gc-developer-program/personal/personal-api/) - l'opérateur n'a rien à configurer : pas d'app OAuth, pas de clé partagée.
 
-Chaque membre, sur l'écran Données santé :
+Chaque membre, sur l'écran Données fitness :
 
 1. Génère une clé d'API Personal dans son compte Garmin Connect - affichée une seule fois, à conserver comme un mot de passe.
 2. La colle dans le champ Garmin sous **Comptes**. StrongFish l'échange contre un jeton d'accès de 24 h et conserve la clé pour le renouveler ; la clé n'est plus jamais affichée et ne lit que les données Garmin de ce membre.
@@ -170,4 +172,4 @@ L'intégration Stance fonctionne avec des valeurs fournies par Stance. Écrivez 
 
 - `SF_STANCE_FIREBASE_API_KEY`, `SF_STANCE_SUPABASE_PROJECT_REF` et `SF_STANCE_SUPABASE_ANON_KEY` - la connexion au compte et les séries stockées. **Requis** : si l'une est vide, Stance apparaît comme non activé ici, comme toute autre intégration sans ses identifiants.
 - `SF_STANCE_GOOGLE_CLIENT_ID` - l'identifiant client Google public, pour proposer **Se connecter avec Google** à côté du formulaire e-mail/mot de passe. Facultatif, et sans secret : c'est une valeur publique comme la clé anon. Pour le bouton web, Stance déclare l'origine de votre app web dans les origines JavaScript autorisées de ce client.
-- `SF_STANCE_USERS_TABLE`, `SF_STANCE_SESSIONS_RPC`, `SF_STANCE_APP_URL` - surcharges pour la relation utilisateur, la RPC des séries et ce qu'ouvre le bouton **Enregistrer une série**. Facultatif ; les valeurs par défaut sont celles de Stance.
+- `SF_STANCE_SESSIONS_RPC`, `SF_STANCE_APP_URL` - surcharges pour la RPC des séries (indexée par votre identifiant Firebase) et ce qu'ouvre le bouton **Enregistrer une série**. Facultatif ; les valeurs par défaut sont celles de Stance.

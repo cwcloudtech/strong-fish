@@ -4,7 +4,7 @@ title: AI assistant
 sidebar_position: 7
 ---
 
-StrongFish can put your training in front of a language model: a chat that answers as a powerlifting coach, a reading of a session you have just finished, and a reading of the last ninety days of your health data.
+StrongFish can put your training in front of a language model: a chat that answers as a powerlifting coach, a reading of a session you have just finished, and a reading of the last ninety days of your fitness data.
 
 It does not come with a model. You connect **your own account** at a provider - the key is yours, the bill is yours - and the app spends it on your behalf. You can also lend your connection to other members, the way you lend a video storage.
 
@@ -108,9 +108,9 @@ A coach can also **generate it for you**, from their own AI connection. That is 
 
 A session that has a reading carries it into the **PDF, the spreadsheet and the picture**, printed under the table it is about.
 
-## A reading of your health data
+## A reading of your fitness data
 
-On the **Health data** screen, under the charts, the same button reads what your watch and scale recorded: up to **ninety days** of steps and heart rate, and your latest body composition.
+On the **Fitness data** screen, under the charts, the same button reads what your watch and scale recorded: up to **ninety days** of steps and heart rate, and your latest body composition.
 
 Ninety days because the question is a direction rather than a day - which weeks were busy, which were quiet, whether the resting figures are drifting.
 
@@ -137,7 +137,7 @@ The instructions are markdown files on the server, not strings buried in the cod
 | --- | --- |
 | `coach.skill.md` | How a coach answers at all: the voice, what to do with an RPE, what never to claim. |
 | `feedback.skill.md` | What a session review specifically is. |
-| `health.skill.md` | What a reading of health data specifically is - including that it is not a diagnosis. |
+| `health.skill.md` | What a reading of fitness data specifically is - including that it is not a diagnosis. |
 
 The providers themselves are a table in the database rather than a list in the
 code, so an operator can correct an address, add an OpenAI-compatible service

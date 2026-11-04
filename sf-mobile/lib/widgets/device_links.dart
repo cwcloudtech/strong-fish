@@ -1,7 +1,4 @@
-import 'dart:io' show Platform;
-
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
+import '../native/app_launcher.dart';
 import '../providers/providers.dart';
 import '../api/api_exception.dart';
 import '../theme.dart';
@@ -16,11 +14,6 @@ import 'ai_ask_button.dart';
 import 'export_menu.dart';
 import 'long_date.dart';
 import 'markdown_text.dart';
-
-/// Opens an installed app by package in any profile - see MainActivity. Used to
-/// launch the Stance app for "record a set", even when it lives in a work
-/// profile the personal app cannot reach with an ordinary intent.
-const _appLauncher = MethodChannel('sf/app_launcher');
 
 /// The windows the API offers, in the order they widen.
 const _ranges = ['24h', '48h', 'week', '14d', 'month', '90d'];
@@ -198,15 +191,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     // the personal profile cannot reach with an ordinary intent - through
     // LauncherApps. The package is the store URL's id.
     final pkg = Uri.tryParse(url)?.queryParameters['id'];
-    if (!kIsWeb && Platform.isAndroid && pkg != null && pkg.isNotEmpty) {
-      try {
-        final launched = await _appLauncher
-            .invokeMethod<bool>('launchPackageAnyProfile', {'package': pkg});
-        if (launched == true) return;
-      } catch (_) {
-        // Fall through to opening the URL.
-      }
-    }
+    if (pkg != null && pkg.isNotEmpty && await launchAppAnyProfile(pkg)) return;
 
     // A store URL is a dead end when the app is distributed off-store (Stance
     // ships through Firebase, not the Play Store), so don't send the member
@@ -1186,6 +1171,7 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
   List<StanceSet>? _sets;
   String _error = '';
   Object? _errorRaw;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -1207,10 +1193,33 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
     }
   }
 
+  Future<void> _export(ExportFormat format) async {
+    setState(() => _exporting = true);
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final path = await ref.read(apiProvider).downloadBarSpeed(
+            widget.provider,
+            directory: directory.path,
+            fileName: 'bar-speed.${format.extension}',
+            format: format.extension,
+            locale: ref.read(localeProvider),
+          );
+      if (mounted) await openExported(context, ref, path);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
     final small = Theme.of(context).textTheme.bodySmall;
+    final colors = AppColors.of(context);
 
     if (_error.isNotEmpty) {
       return Padding(
@@ -1229,13 +1238,45 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 12),
-      Text(t('devices.barSpeed.title'), style: const TextStyle(fontWeight: FontWeight.w600)),
+      Row(children: [
+        Expanded(
+          child: Text(t('devices.barSpeed.title'),
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        SfExportButton(
+          onExport: _export,
+          busy: _exporting,
+          tooltip: t('devices.export'),
+          formats: const [ExportFormat.png, ExportFormat.pdf],
+        ),
+      ]),
+      const SizedBox(height: 2),
+      // What the two series are, since a bar and a tick explain nothing alone.
+      Row(children: [
+        _VelocityLegend(color: colors.primary, label: t('devices.barSpeed.legendMean')),
+        const SizedBox(width: 14),
+        _VelocityLegend(color: colors.warning, label: t('devices.barSpeed.legendPeak'), tick: true),
+      ]),
       for (final set in sets) _BarSpeedSet(set: set),
     ]);
   }
 }
 
-/// One lift's last set: its heading, and a bar per rep.
+/// How much the bar slowed across the set, as a percentage of the fastest rep -
+/// the standard fatigue reading. 0 when there is nothing to compare.
+int _velocityLoss(List<double> velocities) {
+  if (velocities.length < 2) return 0;
+  var best = velocities.first;
+  for (final v in velocities) {
+    if (v > best) best = v;
+  }
+  final last = velocities.last;
+  if (best <= 0 || last >= best) return 0;
+  return ((best - last) / best * 100).round();
+}
+
+/// One lift's last set: its heading, the set's mean and peak speed and how much
+/// it slowed, then a column per rep showing mean (bar) and peak (tick).
 class _BarSpeedSet extends ConsumerWidget {
   final StanceSet set;
   const _BarSpeedSet({required this.set});
@@ -1256,52 +1297,134 @@ class _BarSpeedSet extends ConsumerWidget {
       parts.add(t('devices.barSpeed.rpeReal', {'real': _fmt(set.predictedRpe)}));
     }
 
+    final loss = _velocityLoss(set.repVelocities);
+    final stats = <Widget>[];
+    if (set.meanVelocity > 0) {
+      stats.add(_Stat(label: t('devices.barSpeed.mean'), value: '${set.meanVelocity.toStringAsFixed(2)} m/s'));
+    }
+    if (set.peakVelocity > 0) {
+      stats.add(_Stat(label: t('devices.barSpeed.peak'), value: '${set.peakVelocity.toStringAsFixed(2)} m/s'));
+    }
+    if (loss > 0) {
+      stats.add(_Stat(label: t('devices.barSpeed.velocityLoss'), value: '$loss %'));
+    }
+
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(parts.join('  ·  '), style: small),
+        if (stats.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Wrap(spacing: 20, runSpacing: 6, children: stats),
+        ],
         const SizedBox(height: 4),
-        _VelocityBars(velocities: set.repVelocities),
+        _VelocityBars(velocities: set.repVelocities, peaks: set.repPeakVelocities),
       ]),
     );
   }
 }
 
-/// A bar per rep, its height the rep's velocity, captioned with the figure.
+/// One figure of a set: a small label over the value.
+class _Stat extends StatelessWidget {
+  final String label;
+  final String value;
+  const _Stat({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      Text(label, style: TextStyle(fontSize: 11, color: colors.textMuted)),
+      Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+    ]);
+  }
+}
+
+/// A legend swatch: a filled square for the mean series, a short line for peak.
+class _VelocityLegend extends StatelessWidget {
+  final Color color;
+  final String label;
+  final bool tick;
+  const _VelocityLegend({required this.color, required this.label, this.tick = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: 14,
+        height: tick ? 2 : 10,
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+      ),
+      const SizedBox(width: 5),
+      Text(label, style: TextStyle(fontSize: 12, color: colors.textMuted)),
+    ]);
+  }
+}
+
+/// A column per rep: the filled bar is the rep's mean concentric speed, the
+/// tick above it its peak - both against one ceiling, so the gap reads the same
+/// from rep to rep. The two lines the bar-speed app itself draws.
 class _VelocityBars extends StatelessWidget {
   final List<double> velocities;
-  const _VelocityBars({required this.velocities});
+  final List<double> peaks;
+  const _VelocityBars({required this.velocities, this.peaks = const []});
 
   @override
   Widget build(BuildContext context) {
     if (velocities.isEmpty) return const SizedBox.shrink();
-    final peak = velocities.fold<double>(0.01, (a, b) => a > b ? a : b);
+    final colors = AppColors.of(context);
+    var ceiling = 0.01;
+    for (final v in velocities) {
+      if (v > ceiling) ceiling = v;
+    }
+    for (final v in peaks) {
+      if (v > ceiling) ceiling = v;
+    }
+    const chartH = 74.0;
 
     return Container(
       height: 96,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.of(context).backgroundMuted,
+        color: colors.backgroundMuted,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          for (final velocity in velocities)
+          for (var i = 0; i < velocities.length; i++)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 3),
                 child: Column(mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.end, children: [
-                  Text(velocity.toStringAsFixed(2),
+                  Text(velocities[i].toStringAsFixed(2),
                       style: Theme.of(context).textTheme.labelSmall),
                   const SizedBox(height: 2),
-                  Container(
-                    height: (74 * velocity / peak).clamp(2, 74).toDouble(),
-                    decoration: BoxDecoration(
-                      color: AppColors.of(context).primary,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
-                    ),
+                  SizedBox(
+                    height: chartH,
+                    child: Stack(children: [
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          height: (chartH * velocities[i] / ceiling).clamp(2, chartH).toDouble(),
+                          decoration: BoxDecoration(
+                            color: colors.primary,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                          ),
+                        ),
+                      ),
+                      if (i < peaks.length && peaks[i] > 0)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: (chartH * peaks[i] / ceiling).clamp(0, chartH - 2).toDouble(),
+                          child: Container(height: 2, color: colors.warning),
+                        ),
+                    ]),
                   ),
                 ]),
               ),

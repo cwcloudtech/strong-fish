@@ -4,7 +4,7 @@ title: Assistant IA
 sidebar_position: 7
 ---
 
-StrongFish peut soumettre votre entraînement à un modèle de langage : un chat qui répond comme un coach de powerlifting, une analyse d'une séance que vous venez de terminer, et une analyse des quatre-vingt-dix derniers jours de vos données santé.
+StrongFish peut soumettre votre entraînement à un modèle de langage : un chat qui répond comme un coach de powerlifting, une analyse d'une séance que vous venez de terminer, et une analyse des quatre-vingt-dix derniers jours de vos données fitness.
 
 L'application ne fournit pas de modèle. Vous connectez **votre propre compte** chez un fournisseur - la clé est la vôtre, la facture aussi - et l'application la dépense pour vous. Vous pouvez aussi prêter votre connexion à d'autres membres, comme vous prêtez un stockage vidéo.
 
@@ -113,9 +113,9 @@ Un coach peut aussi la **générer pour vous**, avec sa propre connexion IA. C'e
 
 Une séance analysée emporte son analyse dans le **PDF, le tableur et l'image**, imprimée sous le tableau qu'elle commente.
 
-## L'analyse de vos données santé
+## L'analyse de vos données fitness
 
-Sur l'écran **Données santé**, sous les graphiques, le même bouton lit ce que votre montre et votre balance ont enregistré : jusqu'à **quatre-vingt-dix jours** de pas et de fréquence cardiaque, et votre dernière composition corporelle.
+Sur l'écran **Données fitness**, sous les graphiques, le même bouton lit ce que votre montre et votre balance ont enregistré : jusqu'à **quatre-vingt-dix jours** de pas et de fréquence cardiaque, et votre dernière composition corporelle.
 
 Quatre-vingt-dix jours parce que la question est une direction plutôt qu'une journée : quelles semaines ont été chargées, lesquelles calmes, si les valeurs de repos dérivent.
 
@@ -128,7 +128,7 @@ d'une séance : ce qu'elle décrit est une fenêtre qui se déplace, donc une
 ancienne lecture est périmée plutôt qu'un second avis. La ligne en dessous
 indique quelle souscription a produit celle que vous lisez, et quand.
 
-Elle part aussi dans l'**export des données santé**, PDF comme image, sous
+Elle part aussi dans l'**export des données fitness**, PDF comme image, sous
 les graphiques qu'elle commente - à condition d'avoir moins d'un jour. Une
 analyse plus ancienne reste à l'écran avec sa date, mais n'entre pas dans le
 document, où elle se lirait comme un commentaire de chiffres qu'elle n'a
@@ -142,7 +142,7 @@ Les instructions sont des fichiers markdown sur le serveur, pas des chaînes enf
 | --- | --- |
 | `coach.skill.md` | Comment un coach répond en général : le ton, quoi faire d'un RPE, ce qu'il ne faut jamais affirmer. |
 | `feedback.skill.md` | Ce qu'est précisément une analyse de séance. |
-| `health.skill.md` | Ce qu'est précisément une lecture de données santé - y compris qu'il ne s'agit pas d'un diagnostic. |
+| `health.skill.md` | Ce qu'est précisément une lecture de données fitness - y compris qu'il ne s'agit pas d'un diagnostic. |
 
 Les fournisseurs eux-mêmes sont une table en base plutôt qu'une liste dans le
 code : un exploitant peut corriger une adresse, ajouter un service compatible

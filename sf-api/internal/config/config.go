@@ -70,9 +70,8 @@ type Config struct {
 	// default_web_client_id). The client uses it to obtain a Google ID token;
 	// no secret is involved. Empty leaves only email/password pairing.
 	StanceGoogleClientID string
-	// StanceUsersTable and StanceSessionsRPC override the user relation and the
-	// sessions RPC the sets are read through; blank uses Stance's defaults.
-	StanceUsersTable  string
+	// StanceSessionsRPC overrides the sessions RPC the sets are read through
+	// (keyed by the member's Firebase uid); blank uses Stance's default.
 	StanceSessionsRPC string
 	// StanceAppURL is what the "record a set" button opens: the Stance app,
 	// which owns the bar-speed encoder and does the capture. Swappable
@@ -227,7 +226,6 @@ func Load() Config {
 		StanceSupabaseProjectRef: os.Getenv("SF_STANCE_SUPABASE_PROJECT_REF"),
 		StanceSupabaseAnonKey:    os.Getenv("SF_STANCE_SUPABASE_ANON_KEY"),
 		StanceGoogleClientID:     os.Getenv("SF_STANCE_GOOGLE_CLIENT_ID"),
-		StanceUsersTable:         os.Getenv("SF_STANCE_USERS_TABLE"),
 		StanceSessionsRPC:        os.Getenv("SF_STANCE_SESSIONS_RPC"),
 		StanceAppURL:             os.Getenv("SF_STANCE_APP_URL"),
 		CWCloudAPIURL:            utils.GetBaseUrlFromEnvWithFallback("CWCLOUD_API_URL", "https://api.cwcloud.tech"),

@@ -5,6 +5,24 @@ import { readFileSync, writeFileSync } from 'fs';
 
 const q = (s) => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\$/g, '\\$').replace(/\n/g, '\\n') + "'";
 
+// The inverse of q, for values read back out of a .dart file. Without it, a
+// preserved (phone-only) value would be re-escaped on every run - its
+// backslashes doubling each time - until a single apostrophe became hundreds
+// of megabytes. A shared key never hit this (merge takes the web value), which
+// is why it went unnoticed; a phone-only key compounded silently.
+function unquote(s) {
+  let out = '';
+  for (let i = 0; i < s.length; i += 1) {
+    if (s[i] === '\\' && i + 1 < s.length) {
+      const next = s[i + 1];
+      if (next === 'n') { out += '\n'; i += 1; continue; }
+      if (next === "'" || next === '$' || next === '\\') { out += next; i += 1; continue; }
+    }
+    out += s[i];
+  }
+  return out;
+}
+
 function emit(value, indent) {
   const pad = '  '.repeat(indent);
   const inner = '  '.repeat(indent + 1);
@@ -49,7 +67,7 @@ function readExisting(path) {
       continue;
     }
     const entry = trimmed.match(/^'([\w.]+)': '(.*)',$/);
-    if (entry) stack[stack.length - 1][entry[1]] = entry[2];
+    if (entry) stack[stack.length - 1][entry[1]] = unquote(entry[2]);
   }
   return root;
 }

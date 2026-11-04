@@ -856,19 +856,34 @@ function AccountPairForm({ provider, busy, onPair }) {
 /**
  * The last set of each lift the member tracked on a bar-speed provider.
  *
- * One small chart a lift: a bar a rep, its height the rep's velocity, under
- * the load and the two RPEs - what the member rated the set, and what the bar
- * speed said it really was. The gap between the two is the whole point of the
- * tracker, so both are shown wherever both exist.
+ * One small chart a lift: a column a rep, the filled bar its mean concentric
+ * speed and the tick above it the rep's peak - the two lines the tracker's own
+ * app draws, the gap between them the rep. Under each, the load and the two
+ * RPEs: what the member rated the set, and what the bar speed said it really
+ * was. The whole sheet exports as a picture or a PDF, since the tracker has no
+ * step or heart data to hang the health export off.
  */
 function BarSpeedPanel({ provider }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [sets, setSets] = useState(null);
   const [error, setError] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     devicesApi.barSpeed(provider).then(setSets).catch(setError);
   }, [provider]);
+
+  const exportAs = async (format) => {
+    setExporting(true);
+    try {
+      const blob = await devicesApi.barSpeedExport(provider, { format, locale });
+      downloadBlob(blob, `bar-speed.${format}`);
+    } catch (err) {
+      setError(err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (error) {
     return (
@@ -889,7 +904,28 @@ function BarSpeedPanel({ provider }) {
 
   return (
     <div style={{ marginTop: "0.8rem" }}>
-      <strong>{t("devices.barSpeed.title")}</strong>
+      <div className="sf-row-between">
+        <strong>{t("devices.barSpeed.title")}</strong>
+        <ExportMenu
+          onExport={exportAs}
+          busy={exporting}
+          size="sf-button-sm"
+          formats={["png", "pdf"]}
+          label={t("devices.export")}
+        />
+      </div>
+
+      {/* What the two series are, since a filled bar and a tick explain nothing
+          on their own. */}
+      <div className="sf-row" style={{ gap: "0.9rem", flexWrap: "wrap", marginTop: "0.3rem" }}>
+        <span className="sf-muted sf-vel-key">
+          <i className="sf-vel-swatch sf-vel-swatch-mean" /> {t("devices.barSpeed.legendMean")}
+        </span>
+        <span className="sf-muted sf-vel-key">
+          <i className="sf-vel-swatch sf-vel-swatch-peak" /> {t("devices.barSpeed.legendPeak")}
+        </span>
+      </div>
+
       {sets.map((set) => (
         <BarSpeedSet key={set.lift} set={set} t={t} />
       ))}
@@ -897,9 +933,27 @@ function BarSpeedPanel({ provider }) {
   );
 }
 
-/** One lift's last set: its heading, and a bar per rep. */
+/** How much the bar slowed across the set, as a percentage of the fastest rep. */
+function velocityLoss(velocities) {
+  if (!velocities || velocities.length < 2) return 0;
+  const best = Math.max(...velocities);
+  const last = velocities[velocities.length - 1];
+  if (best <= 0 || last >= best) return 0;
+  return Math.round(((best - last) / best) * 100);
+}
+
+/**
+ * One lift's last set: its heading, a column per rep showing mean (bar) and
+ * peak (tick), the set's mean and peak speed and how much it slowed, and the
+ * per-rep numbers in full underneath.
+ */
 function BarSpeedSet({ set, t }) {
-  const peak = Math.max(0.01, ...set.repVelocities);
+  const means = set.repVelocities || [];
+  const peaks = set.repPeakVelocities || [];
+  // Mean and peak share one scale, so the gap between the bar and its tick is
+  // read the same from one rep to the next.
+  const ceiling = Math.max(0.01, ...means, ...peaks);
+  const loss = velocityLoss(means);
   const rpe =
     set.givenRpe && set.predictedRpe
       ? t("devices.barSpeed.rpePair", { given: fmt(set.givenRpe), real: fmt(set.predictedRpe) })
@@ -908,26 +962,59 @@ function BarSpeedSet({ set, t }) {
         : "";
 
   return (
-    <div style={{ marginTop: "0.7rem" }}>
+    <div style={{ marginTop: "0.9rem" }}>
       <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
         <strong style={{ color: "var(--sf-text)" }}>{t(`devices.lift.${set.lift}`)}</strong>
         {set.weightKg ? ` · ${t("devices.barSpeed.load", { weight: fmt(set.weightKg), reps: set.reps })}` : ""}
         {rpe ? ` · ${rpe}` : ""}
       </div>
-      <div className="sf-steps-chart" aria-hidden="true">
-        {set.repVelocities.map((velocity, index) => (
-          <div
-            key={index}
-            className="sf-steps-bar sf-bar-speed"
-            style={{ height: `${Math.round((velocity / peak) * 100)}%` }}
-            title={`${t("devices.barSpeed.rep", { n: index + 1 })}: ${velocity.toFixed(2)} m/s`}
-          />
-        ))}
+
+      <div className="sf-row" style={{ gap: "1.4rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
+        {set.meanVelocity ? (
+          <div>
+            <div className="sf-muted">{t("devices.barSpeed.mean")}</div>
+            <strong className="sf-steps-figure">{set.meanVelocity.toFixed(2)}<span className="sf-muted" style={{ fontSize: "0.8rem" }}> m/s</span></strong>
+          </div>
+        ) : null}
+        {set.peakVelocity ? (
+          <div>
+            <div className="sf-muted">{t("devices.barSpeed.peak")}</div>
+            <strong className="sf-steps-figure">{set.peakVelocity.toFixed(2)}<span className="sf-muted" style={{ fontSize: "0.8rem" }}> m/s</span></strong>
+          </div>
+        ) : null}
+        {loss > 0 ? (
+          <div>
+            <div className="sf-muted">{t("devices.barSpeed.velocityLoss")}</div>
+            <strong className="sf-steps-figure">{loss}<span className="sf-muted" style={{ fontSize: "0.8rem" }}> %</span></strong>
+          </div>
+        ) : null}
       </div>
+
+      <div className="sf-steps-chart sf-vel-chart" aria-hidden="true">
+        {means.map((velocity, index) => {
+          const peakV = peaks[index];
+          return (
+            <div
+              key={index}
+              className="sf-vel-col"
+              title={`${t("devices.barSpeed.rep", { n: index + 1 })}: ${velocity.toFixed(2)} m/s${
+                peakV ? ` · ${t("devices.barSpeed.peak")} ${peakV.toFixed(2)}` : ""
+              }`}
+            >
+              {peakV ? (
+                <div className="sf-vel-peak" style={{ bottom: `${Math.round((peakV / ceiling) * 100)}%` }} />
+              ) : null}
+              <div className="sf-vel-mean" style={{ height: `${Math.round((velocity / ceiling) * 100)}%` }} />
+            </div>
+          );
+        })}
+      </div>
+
       <div className="sf-row" style={{ gap: "0.8rem", flexWrap: "wrap", fontSize: "0.8rem" }}>
-        {set.repVelocities.map((velocity, index) => (
+        {means.map((velocity, index) => (
           <span key={index} className="sf-muted">
-            {t("devices.barSpeed.rep", { n: index + 1 })} {velocity.toFixed(2)} m/s
+            {t("devices.barSpeed.rep", { n: index + 1 })} {velocity.toFixed(2)}
+            {peaks[index] ? ` / ${peaks[index].toFixed(2)}` : ""} m/s
           </span>
         ))}
       </div>

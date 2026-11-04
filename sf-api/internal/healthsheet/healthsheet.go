@@ -249,8 +249,9 @@ func BarSpeedSections(sets []models.BarSet, locale string) []programsheet.Sectio
 }
 
 // barSpeedHeading says what the set was, so the chart reads without a legend:
-// the lift, the load and reps, and the given vs predicted RPE when both are
-// there - the whole point of the tracker is the gap between them.
+// the lift, the load and reps, the given vs predicted RPE when both are there
+// (the whole point of the tracker is the gap between them), and the peak speed
+// and velocity loss the bars alone cannot show.
 func barSpeedHeading(set models.BarSet, locale string) string {
 	parts := []string{LiftLabel(locale, set.Lift)}
 	if set.WeightKg > 0 && set.Reps > 0 {
@@ -264,7 +265,65 @@ func barSpeedHeading(set models.BarSet, locale string) string {
 		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedRpeReal"),
 			trimFloat(set.PredictedRpe)))
 	}
+	if set.PeakVelocity > 0 {
+		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedPeak"),
+			formatVelocity(set.PeakVelocity)))
+	}
+	if loss := VelocityLoss(set.RepVelocities); loss > 0 {
+		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedLoss"),
+			strconv.Itoa(int(loss+0.5))))
+	}
 	return strings.Join(parts, "  -  ")
+}
+
+// VelocityLoss is how much the bar slowed across the set, as a percentage of
+// the fastest rep - the standard fatigue reading a velocity tracker gives. 0
+// when there is nothing to compare (one rep, or no slowing).
+func VelocityLoss(repVelocities []float64) float64 {
+	if len(repVelocities) < 2 {
+		return 0
+	}
+	best, last := repVelocities[0], repVelocities[0]
+	for _, v := range repVelocities {
+		if v > best {
+			best = v
+		}
+		last = v
+	}
+	if best <= 0 || last >= best {
+		return 0
+	}
+	return (best - last) / best * 100
+}
+
+// BarSpeedTitle is what a bar-speed-only export is called: whose sets these are.
+func BarSpeedTitle(memberName, locale string) string {
+	name := strings.TrimSpace(memberName)
+	if name == "" {
+		return strings.TrimSuffix(programsheet.Heading(locale, "barSpeedTitle"), " - %s")
+	}
+	return fmt.Sprintf(programsheet.Heading(locale, "barSpeedTitle"), name)
+}
+
+// BarSpeedSubtitle is the line under that title: the lifts it covers and when
+// their last set was performed.
+func BarSpeedSubtitle(sets []models.BarSet, locale string) string {
+	if len(sets) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(sets))
+	latest := sets[0].PerformedAt
+	for _, set := range sets {
+		names = append(names, LiftLabel(locale, set.Lift))
+		if set.PerformedAt.After(latest) {
+			latest = set.PerformedAt
+		}
+	}
+	line := strings.Join(names, ", ")
+	if !latest.IsZero() {
+		line += "  -  " + latest.Format("2006-01-02")
+	}
+	return line
 }
 
 // LiftLabel names one of the three lifts in the reader's language.

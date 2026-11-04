@@ -89,9 +89,11 @@ type BarSet struct {
 	MeanVelocity float64 `json:"meanVelocity,omitempty"`
 	PeakVelocity float64 `json:"peakVelocity,omitempty"`
 	// RepVelocities is each rep's mean concentric velocity in order - the
-	// per-set chart, one bar a rep.
-	RepVelocities []float64 `json:"repVelocities,omitempty"`
-	PerformedAt   time.Time `json:"performedAt,omitempty"`
+	// per-set chart, one bar a rep. RepPeakVelocities is each rep's peak
+	// concentric velocity, the faster series the app overlays on the mean one.
+	RepVelocities     []float64 `json:"repVelocities,omitempty"`
+	RepPeakVelocities []float64 `json:"repPeakVelocities,omitempty"`
+	PerformedAt       time.Time `json:"performedAt,omitempty"`
 }
 
 // StepDay is one day's step count.

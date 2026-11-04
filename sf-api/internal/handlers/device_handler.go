@@ -472,6 +472,74 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
+// BarSpeedExport renders a member's last set of each lift as a picture or a
+// PDF - the same per-rep velocity charts the screen shows.
+//
+// Its own route rather than the health Export above, because a bar-speed
+// provider (Stance) has no step or heart data to hang an export off: a member
+// whose only connected device is the velocity tracker would otherwise have no
+// way to export the one thing it does produce.
+func (h *DeviceHandler) BarSpeedExport(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	found, ok := h.provider(w, r)
+	if !ok {
+		return
+	}
+	reader, ok := found.(devicelink.BarSpeedReader)
+	if !ok {
+		writeError(w, http.StatusNotFound, "This provider has no bar-speed data", CodeNotFound)
+		return
+	}
+	if !found.Enabled() {
+		writeError(w, http.StatusNotImplemented,
+			"This integration is not enabled on this server", CodeDeviceUnavailable)
+		return
+	}
+
+	sets, err := h.barSets(r, found, reader, userID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "No account connected", CodeDeviceNotConnected)
+			return
+		}
+		h.writeProviderError(w, err, found.Name())
+		return
+	}
+
+	locale := sheetLocale(r)
+	sections := healthsheet.BarSpeedSections(sets, locale)
+	if len(sections) == 0 {
+		writeError(w, http.StatusNotFound, "No bar-speed sets to export", CodeNotFound)
+		return
+	}
+	title := healthsheet.BarSpeedTitle(h.memberName(r.Context(), userID), locale)
+	subtitle := healthsheet.BarSpeedSubtitle(sets, locale)
+	footer := h.uiBaseURL
+
+	var (
+		body  []byte
+		media string
+	)
+	if exportFormat(r) == formatPNG {
+		body, err = programpng.RenderTables(title, subtitle, sections, footer)
+		media = mediaPNG
+	} else {
+		body, err = programpdf.RenderTables(title, subtitle, sections, footer)
+		media = mediaPDF
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error(), CodeInternal)
+		return
+	}
+
+	w.Header().Set("Content-Type", media)
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf("attachment; filename=%q", sheetFileName("bar-speed", exportFormat(r))))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
+}
+
 // BodyComposition returns the latest reading of every measure the member's
 // scale has taken.
 //

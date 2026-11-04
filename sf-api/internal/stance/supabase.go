@@ -8,7 +8,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,19 +15,13 @@ import (
 )
 
 // LastSets reads the member's sets from Supabase and returns the most recent
-// of each lift, newest first. It resolves the Firebase uid to Stance's
-// internal user id, then asks for that user's sets. Reads carry the anon key
-// only - there is no per-member Supabase token.
+// of each lift, newest first. The sessions RPC is keyed by the Firebase uid
+// directly - that is what the Stance app passes as user_id_param (its own
+// client names the argument firebaseId), and the RPC joins to the member
+// server-side. Reads carry the anon key only - there is no per-member Supabase
+// token.
 func (c *client) LastSets(ctx context.Context, firebaseUID string) ([]Set, error) {
-	userID, err := c.resolveUserID(ctx, firebaseUID)
-	if err != nil {
-		return nil, err
-	}
-	if userID == "" {
-		// The account exists but has no row yet - no sets to show.
-		return nil, nil
-	}
-	rows, err := c.fetchSets(ctx, userID)
+	rows, err := c.fetchSets(ctx, firebaseUID)
 	if err != nil {
 		return nil, err
 	}
@@ -53,38 +46,12 @@ func (c *client) LastSets(ctx context.Context, firebaseUID string) ([]Set, error
 	return out, nil
 }
 
-// resolveUserID maps a Firebase uid to Stance's internal user id (the key the
-// sets are filtered by). Blank when there is no such user yet.
-func (c *client) resolveUserID(ctx context.Context, firebaseUID string) (string, error) {
-	q := url.Values{}
-	q.Set("firebase_id", "eq."+firebaseUID)
-	q.Set("select", "id")
-	q.Set("limit", "1")
-	endpoint := c.cfg.SupabaseURL + "/rest/v1/" + c.cfg.UsersTable + "?" + q.Encode()
-
-	status, data, err := c.supabaseCall(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return "", err
-	}
-	if status/100 != 2 {
-		return "", fmt.Errorf("stance: user lookup failed (status %d: %s)", status, snippet(data))
-	}
-	var rows []struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(data, &rows); err != nil {
-		return "", fmt.Errorf("stance: user lookup decode: %w", err)
-	}
-	if len(rows) == 0 {
-		return "", nil
-	}
-	return rows[0].ID, nil
-}
-
-// fetchSets calls the sessions RPC for one user and returns the flattened sets.
-func (c *client) fetchSets(ctx context.Context, userID string) ([]fullSet, error) {
+// fetchSets calls the sessions RPC for one member and returns the flattened
+// sets. The user_id_param is the member's Firebase uid - the RPC resolves it
+// to the sets server-side, exactly as the Stance app's own client does.
+func (c *client) fetchSets(ctx context.Context, firebaseUID string) ([]fullSet, error) {
 	endpoint := c.cfg.SupabaseURL + "/rest/v1/rpc/" + c.cfg.SessionsRPC
-	body := map[string]any{"user_id_param": userID}
+	body := map[string]any{"user_id_param": firebaseUID}
 
 	// The RPC returns the user's sets, each with its reps embedded. Some
 	// deployments wrap them in sessions; both shapes are accepted.
@@ -150,10 +117,11 @@ func (r fullSet) toSet(lift string) Set {
 	reps := append([]fullRep(nil), r.Repetitions...)
 	sort.Slice(reps, func(i, j int) bool { return reps[i].RepOrder < reps[j].RepOrder })
 
-	var velocities []float64
+	var velocities, peakVelocities []float64
 	var sum, peak float64
 	for _, rep := range reps {
 		velocities = append(velocities, rep.MeanConcentricVelocity)
+		peakVelocities = append(peakVelocities, rep.PeakConcentricVelocity)
 		sum += rep.MeanConcentricVelocity
 		if rep.PeakConcentricVelocity > peak {
 			peak = rep.PeakConcentricVelocity
@@ -165,15 +133,16 @@ func (r fullSet) toSet(lift string) Set {
 	}
 
 	return Set{
-		Lift:          lift,
-		WeightKg:      toKg(r.Weight, r.WeightUnit),
-		Reps:          len(reps),
-		GivenRPE:      parseRPE(firstNonEmpty(r.GivenRPE, r.SetTag)),
-		PredictedRPE:  parseRPE(r.PredictedRPE),
-		MeanVelocity:  mean,
-		PeakVelocity:  peak,
-		RepVelocities: velocities,
-		PerformedAt:   firstTime(r.Ended, r.Started),
+		Lift:              lift,
+		WeightKg:          toKg(r.Weight, r.WeightUnit),
+		Reps:              len(reps),
+		GivenRPE:          parseRPE(firstNonEmpty(r.GivenRPE, r.SetTag)),
+		PredictedRPE:      parseRPE(r.PredictedRPE),
+		MeanVelocity:      mean,
+		PeakVelocity:      peak,
+		RepVelocities:     velocities,
+		RepPeakVelocities: peakVelocities,
+		PerformedAt:       firstTime(r.Ended, r.Started),
 	}
 }
 
