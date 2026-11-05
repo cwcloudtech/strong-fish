@@ -153,7 +153,6 @@ func main() {
 		SupabaseProjectRef: cfg.StanceSupabaseProjectRef,
 		SupabaseAnonKey:    cfg.StanceSupabaseAnonKey,
 		SessionsRPC:        cfg.StanceSessionsRPC,
-		AppURL:             cfg.StanceAppURL,
 	})))
 
 	strengthHandler := handlers.NewStrengthHandler(exerciseStore, userStore)
@@ -215,6 +214,8 @@ func main() {
 		Strength: strengthHandler,
 		AI:       aiHandler,
 		Device:   deviceHandler,
+		BarSpeed: handlers.NewBarSpeedHandler(store.NewBarSpeedStore(pool)).
+			WithTracker(deviceHandler.BarSpeedSets),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),
 		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, mailer, cfg.MaxImageSize, cfg.UIBaseURL),

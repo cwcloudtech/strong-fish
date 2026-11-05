@@ -256,11 +256,12 @@ func (h *DeviceHandler) barSets(r *http.Request, provider devicelink.Provider,
 	return out, nil
 }
 
-// barSpeedForExport is the member's last sets for the health sheet, or nil
-// when they track no bar speed. Best-effort: a sheet is not worth failing
-// because a third-party read was slow, so any error is swallowed and the
-// section is simply left out.
-func (h *DeviceHandler) barSpeedForExport(r *http.Request, userID string) []models.BarSet {
+// BarSpeedSets is the member's last set of each lift from a connected bar-speed
+// tracker, each tagged with the provider it came from, or nil when they track
+// none. Best-effort: nothing it feeds - the health sheet, or the consolidated
+// bar-speed read - is worth failing because a third-party read was slow, so any
+// error is swallowed and the sets are simply left out.
+func (h *DeviceHandler) BarSpeedSets(r *http.Request, userID string) []models.BarSet {
 	for _, provider := range h.providers {
 		reader, ok := provider.(devicelink.BarSpeedReader)
 		if !ok || !provider.Enabled() {
@@ -270,6 +271,9 @@ func (h *DeviceHandler) barSpeedForExport(r *http.Request, userID string) []mode
 			continue
 		}
 		if sets, err := h.barSets(r, provider, reader, userID); err == nil {
+			for i := range sets {
+				sets[i].Source = provider.Name()
+			}
 			return sets
 		}
 	}

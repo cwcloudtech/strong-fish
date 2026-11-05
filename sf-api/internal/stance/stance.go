@@ -96,9 +96,6 @@ type Client interface {
 	// GoogleEnabled reports whether the Google sign-in option is configured on
 	// top of the password one.
 	GoogleEnabled() bool
-	// RecordURL is what the "record a set" button opens - the Stance app,
-	// which does the capture StrongFish cannot.
-	RecordURL() string
 }
 
 // matchLift maps Stance's free-text exercise onto one of the three lifts, or

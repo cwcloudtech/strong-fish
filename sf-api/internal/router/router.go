@@ -38,6 +38,7 @@ type Handlers struct {
 	Strength   *handlers.StrengthHandler
 	AI         *handlers.AIHandler
 	Device     *handlers.DeviceHandler
+	BarSpeed   *handlers.BarSpeedHandler
 }
 
 // Options carries the settings the middleware chain needs.
@@ -242,6 +243,14 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Post("/{provider}/pair-key", h.Device.PairDeviceKey)
 					r.Get("/{provider}/bar-speed", h.Device.BarSpeed)
 				})
+
+				// Bar speed captured by StrongFish itself: any accelerometer -
+				// a phone over Bluetooth, a board over HTTP - posts the raw
+				// stream and the movement, and gets the computed set back. The
+				// list consolidates these with what a connected tracker reports,
+				// keeping the most recent set of each lift.
+				r.Get("/me/bar-speed", h.BarSpeed.List)
+				r.Post("/me/bar-speed/analyze", h.BarSpeed.Analyze)
 
 				// The invitations waiting for this account's address. They are
 				// matched by email, not by user id, so one that arrived before

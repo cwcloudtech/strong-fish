@@ -161,12 +161,6 @@ type BarSpeedReader interface {
 	LastSets(ctx context.Context, accessToken, externalUserID string) ([]BarSet, error)
 }
 
-// SetRecorder is a provider whose capture happens in its own app on the phone
-// rather than here: it offers a URL the "record a set" button opens.
-type SetRecorder interface {
-	RecordURL() string
-}
-
 // AccountPairer is a provider paired with an email and password rather than an
 // OAuth redirect - a Supabase sign-in, for a backend that has no consent page
 // to send a browser to. The password is used once, to get a grant, and is

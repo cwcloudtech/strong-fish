@@ -141,6 +141,10 @@ export const devices = {
   // The last set of each lift a bar-speed provider tracked, with the RPE it
   // computed from the bar's speed.
   barSpeed: (provider) => body(client.get(`/users/me/devices/${provider}/bar-speed`)),
+  // The most recent set of each lift, consolidated across sources - what
+  // StrongFish captured itself and what a connected tracker reports - each
+  // tagged by its source.
+  barSpeedList: () => body(client.get("/users/me/bar-speed")),
 };
 
 export const programs = {

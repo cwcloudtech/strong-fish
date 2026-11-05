@@ -6,8 +6,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
-import '../native/app_launcher.dart';
+import '../native/bar_speed_capture.dart';
 import '../providers/providers.dart';
+import '../screens/record_bar_speed_screen.dart';
 import '../api/api_exception.dart';
 import '../theme.dart';
 import 'ai_ask_button.dart';
@@ -185,37 +186,6 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     }
   }
 
-  /// Opens the Stance app to record a set. Stance owns the encoder and does
-  /// the capture; StrongFish reads the result back afterwards.
-  Future<void> _record(String url) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final t = ref.read(tProvider);
-
-    // On Android, open the Stance app directly - including a work-profile copy
-    // the personal profile cannot reach with an ordinary intent - through
-    // LauncherApps. The package is the store URL's id.
-    final pkg = Uri.tryParse(url)?.queryParameters['id'];
-    if (pkg != null && pkg.isNotEmpty && await launchAppAnyProfile(pkg)) return;
-
-    // A store URL is a dead end when the app is distributed off-store (Stance
-    // ships through Firebase, not the Play Store), so don't send the member
-    // there - tell them to open it. A real URL (a deep link, an install page)
-    // is still worth opening.
-    final isStore = url.contains('play.google.com') || url.startsWith('market:');
-    if (isStore) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(t('devices.recordFailed'))));
-      return;
-    }
-    try {
-      final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (!opened && mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(t('devices.recordFailed'))));
-      }
-    } catch (_) {
-      if (mounted) messenger.showSnackBar(SnackBar(content: Text(t('devices.recordFailed'))));
-    }
-  }
-
   Future<void> _exportAll(ExportFormat format) async {
     setState(() => _exporting = true);
     try {
@@ -321,28 +291,11 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                 ),
               if (connection.bodyCompositionSource)
                 _BodyCompositionPanel(provider: connection.provider),
-              if (connection.can('bar-speed') && connection.recordUrl.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      FilledButton.tonalIcon(
-                        style: _compactButton,
-                        onPressed: () => _record(connection.recordUrl),
-                        icon: const Icon(Icons.fiber_manual_record, size: 18),
-                        label: Text(t('devices.record')),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(t('devices.recordHint'),
-                            style: Theme.of(context).textTheme.bodySmall),
-                      ),
-                    ]),
-                  ),
-                ),
-              if (connection.can('bar-speed')) _BarSpeedPanel(provider: connection.provider),
             ],
+          // Bar speed, once and consolidated: the most recent set of each lift
+          // across every source - what StrongFish captured itself, and what a
+          // connected tracker reports - not one panel per device.
+          const _BarSpeedPanel(),
           // The AI's reading of everything above, at the end of the data - one
           // reading of the whole picture, not a comment on any single device.
           if (activitySource != null) _HealthFeedbackPanel(provider: activitySource),
@@ -755,6 +708,9 @@ class _HealthFeedbackPanel extends ConsumerStatefulWidget {
 class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
   HealthFeedback? _feedback;
   String _error = '';
+  // The raw failure, so the troubleshoot console can show the provider, the
+  // status and the body - the same console a device read shows.
+  Object? _errorRaw;
   bool _busy = false;
   // The subscriptions this member may spend, so the button can ask which one
   // pays when there is more than one.
@@ -788,6 +744,7 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
     setState(() {
       _busy = true;
       _error = '';
+      _errorRaw = null;
     });
     try {
       final feedback = await ref
@@ -796,6 +753,7 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
       if (mounted) setState(() => _feedback = feedback);
     } catch (error) {
       if (!mounted) return;
+      _errorRaw = error;
       // Too soon: the refusal carries the reading it would not replace, so
       // the panel shows that rather than an error about it.
       final body = error is DioException && error.response?.data is Map<String, dynamic>
@@ -903,6 +861,9 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
             padding: const EdgeInsets.only(top: 6),
             child: Text(_error, style: TextStyle(color: colors.danger)),
           ),
+        // When the provider failed, the status and body under a copy button, so
+        // the member can share the troubleshoot.
+        _DebugConsole(_errorRaw),
         const SizedBox(height: 8),
         // Asked for as often as the member likes, through whichever
         // subscription they pick: the reading replaces the one before it,
@@ -1172,11 +1133,11 @@ class _KeyPairFormState extends State<_KeyPairForm> {
   }
 }
 
-/// The last set of each lift the member tracked on a bar-speed provider: one
-/// small chart a lift, a bar a rep, under the load and the two RPEs.
+/// The most recent set of each lift, consolidated across sources: one small
+/// chart a lift, a bar a rep, under the load, the two RPEs and where it came
+/// from. Rendered once, and silent when there is nothing to show.
 class _BarSpeedPanel extends ConsumerStatefulWidget {
-  final String provider;
-  const _BarSpeedPanel({required this.provider});
+  const _BarSpeedPanel();
 
   @override
   ConsumerState<_BarSpeedPanel> createState() => _BarSpeedPanelState();
@@ -1186,16 +1147,22 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
   List<StanceSet>? _sets;
   String _error = '';
   Object? _errorRaw;
+  // Whether a native BLE capture source is present: the "record a set" button
+  // appears only then, so the panel never offers a capture it cannot do.
+  bool _canCapture = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    BarSpeedCapture.isAvailable().then((available) {
+      if (mounted) setState(() => _canCapture = available);
+    });
   }
 
   Future<void> _load() async {
     try {
-      final sets = await ref.read(apiProvider).barSpeed(widget.provider);
+      final sets = await ref.read(apiProvider).barSpeedList();
       if (mounted) setState(() => _sets = sets);
     } catch (error) {
       if (mounted) {
@@ -1207,10 +1174,16 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
     }
   }
 
+  Future<void> _record() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const RecordBarSpeedScreen()),
+    );
+    await _load(); // a new capture may have landed
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
-    final small = Theme.of(context).textTheme.bodySmall;
     final colors = AppColors.of(context);
 
     if (_error.isNotEmpty) {
@@ -1219,27 +1192,36 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
         child: _PanelError(_error, _errorRaw),
       );
     }
-    final sets = _sets;
-    if (sets == null) return const SizedBox.shrink();
-    if (sets.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(t('devices.barSpeed.empty'), style: small),
-      );
-    }
+    final sets = _sets ?? const <StanceSet>[];
+    // Nothing to show and nothing to capture: stay out of the way.
+    if (sets.isEmpty && !_canCapture) return const SizedBox.shrink();
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 12),
-      Text(t('devices.barSpeed.title'), style: const TextStyle(fontWeight: FontWeight.w600)),
-      const SizedBox(height: 2),
-      // The legend explains shape, not colour (the colour is the lift): a
-      // filled block is the mean, a dashed line the peak.
       Row(children: [
-        _VelocityLegend(color: colors.textMuted, label: t('devices.barSpeed.legendMean')),
-        const SizedBox(width: 14),
-        _VelocityLegend(color: colors.textMuted, label: t('devices.barSpeed.legendPeak'), tick: true),
+        Expanded(
+          child: Text(t('devices.barSpeed.title'),
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        if (_canCapture)
+          TextButton.icon(
+            style: _compactButton,
+            onPressed: _record,
+            icon: const Icon(Icons.fiber_manual_record, size: 18),
+            label: Text(t('devices.barSpeed.record')),
+          ),
       ]),
-      for (final set in sets) _BarSpeedSet(set: set),
+      if (sets.isNotEmpty) ...[
+        const SizedBox(height: 2),
+        // The legend explains shape, not colour (the colour is the lift): a
+        // filled block is the mean, a dashed line the peak.
+        Row(children: [
+          _VelocityLegend(color: colors.textMuted, label: t('devices.barSpeed.legendMean')),
+          const SizedBox(width: 14),
+          _VelocityLegend(color: colors.textMuted, label: t('devices.barSpeed.legendPeak'), tick: true),
+        ]),
+        for (final set in sets) _BarSpeedSet(set: set),
+      ],
     ]);
   }
 }
@@ -1272,6 +1254,13 @@ Color? _liftInk(String lift, Brightness brightness) {
       return dark ? const Color(0xFF4ADE80) : const Color(0xFF16A34A);
   }
   return null;
+}
+
+/// Where a set came from, in the reader's language: StrongFish, or a provider.
+String _barSpeedSource(String Function(String, [Map<String, String>?]) t, String source) {
+  if (source == 'strongfish') return t('devices.barSpeed.sourceSelf');
+  final label = t('devices.provider.$source');
+  return label == 'devices.provider.$source' ? source : label;
 }
 
 class _BarSpeedSet extends ConsumerWidget {
@@ -1317,6 +1306,11 @@ class _BarSpeedSet extends ConsumerWidget {
               style: TextStyle(color: liftInk, fontWeight: FontWeight.w600),
             ),
             if (rest.isNotEmpty) TextSpan(text: '  ·  ${rest.join('  ·  ')}'),
+            if (set.source.isNotEmpty)
+              TextSpan(
+                text: '  ·  ${_barSpeedSource(t, set.source)}',
+                style: TextStyle(color: AppColors.of(context).textMuted, fontSize: 11),
+              ),
           ]),
           style: small,
         ),
