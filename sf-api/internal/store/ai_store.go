@@ -28,11 +28,12 @@ func NewAIStore(pool *pgxpool.Pool) *AIStore {
 
 // aiConnectionData is the JSONB payload of the ai_connections table.
 type aiConnectionData struct {
-	Name     string `json:"name,omitempty"`
-	Provider string `json:"provider"`
-	BaseURL  string `json:"baseUrl"`
-	Model    string `json:"model,omitempty"`
-	Token    string `json:"token,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Provider  string `json:"provider"`
+	BaseURL   string `json:"baseUrl"`
+	Model     string `json:"model,omitempty"`
+	MaxTokens int    `json:"maxTokens,omitempty"`
+	Token     string `json:"token,omitempty"`
 }
 
 const aiConnectionSelect = `
@@ -66,6 +67,7 @@ func scanAIConnection(row pgx.Row, withRole, withOwner, withFormat bool) (models
 	connection.Provider = data.Provider
 	connection.BaseURL = data.BaseURL
 	connection.Model = data.Model
+	connection.MaxTokens = data.MaxTokens
 	connection.Token = data.Token
 	connection.HasToken = strings.TrimSpace(data.Token) != ""
 	return connection, nil
@@ -231,7 +233,8 @@ func (s *AIStore) UsableByID(ctx context.Context, userID, connectionID string) (
 func (s *AIStore) Create(ctx context.Context, ownerID string, connection models.AIConnection) (models.AIConnection, error) {
 	data, err := json.Marshal(aiConnectionData{
 		Name: connection.Name, Provider: connection.Provider,
-		BaseURL: connection.BaseURL, Model: connection.Model, Token: connection.Token,
+		BaseURL: connection.BaseURL, Model: connection.Model,
+		MaxTokens: connection.MaxTokens, Token: connection.Token,
 	})
 	if err != nil {
 		return models.AIConnection{}, err
@@ -254,6 +257,7 @@ func (s *AIStore) Update(ctx context.Context, id string, connection models.AICon
 	data, err := json.Marshal(aiConnectionData{
 		Name: connection.Name, Provider: connection.Provider,
 		BaseURL: connection.BaseURL, Model: connection.Model,
+		MaxTokens: connection.MaxTokens,
 	})
 	if err != nil {
 		return models.AIConnection{}, err

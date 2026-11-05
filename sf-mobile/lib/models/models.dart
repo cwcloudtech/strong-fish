@@ -1510,6 +1510,11 @@ class AiConnection {
   final String provider;
   final String baseUrl;
   final String model;
+
+  /// How long an answer from this subscription may run, in tokens. Zero means
+  /// the server default - a form shows it as an empty field with the default as
+  /// the placeholder, rather than a number the member never chose.
+  final int maxTokens;
   final bool hasToken;
   final String role;
   final String ownerName;
@@ -1521,6 +1526,7 @@ class AiConnection {
     this.provider = '',
     this.baseUrl = '',
     this.model = '',
+    this.maxTokens = 0,
     this.hasToken = false,
     this.role = '',
     this.ownerName = '',
@@ -1533,6 +1539,7 @@ class AiConnection {
         provider: _toString(json['provider']),
         baseUrl: _toString(json['baseUrl']),
         model: _toString(json['model']),
+        maxTokens: _toInt(json['maxTokens']),
         hasToken: json['hasToken'] == true,
         role: _toString(json['role']),
         ownerName: _toString(json['ownerName']),

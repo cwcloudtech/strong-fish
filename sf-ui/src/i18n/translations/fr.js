@@ -890,6 +890,9 @@ const fr = {
     baseUrlHelp:
       "Où partent les requêtes. Change-la pour viser ta propre passerelle : un LiteLLM, un Ollama, un compte OpenRouter.",
     model: "Modèle",
+    maxTokens: "Longueur maximale des réponses",
+    maxTokensHelp:
+      "Le nombre maximal de tokens qu'une réponse peut atteindre. Augmentez-le si les réponses sont coupées ; laissez vide pour la valeur par défaut.",
     token: "Clé d'API",
     tokenSet: "Une clé est déjà enregistrée",
     tokenHelp: "La clé de ton fournisseur. Elle reste sur le serveur et n'est jamais renvoyée au navigateur.",

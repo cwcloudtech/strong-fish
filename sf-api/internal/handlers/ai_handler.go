@@ -65,11 +65,12 @@ func (h *AIHandler) WithHealth(lastDay func(*http.Request, string, string) strin
 }
 
 type aiConnectionPayload struct {
-	Name     string `json:"name"`
-	Provider string `json:"provider"`
-	BaseURL  string `json:"baseUrl"`
-	Model    string `json:"model"`
-	Token    string `json:"token"`
+	Name      string `json:"name"`
+	Provider  string `json:"provider"`
+	BaseURL   string `json:"baseUrl"`
+	Model     string `json:"model"`
+	MaxTokens int    `json:"maxTokens"`
+	Token     string `json:"token"`
 }
 
 // normalize fills in what the member left blank and refuses what cannot work.
@@ -121,9 +122,21 @@ func (h *AIHandler) normalize(w http.ResponseWriter, r *http.Request,
 		name = defaultConnectionName(model)
 	}
 
+	// The answer-length ceiling is the member's to raise, within a sane bound: a
+	// blank or nonsense value takes the deployment default rather than being
+	// rejected, and a slipped digit is capped rather than billed.
+	maxTokens := p.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = models.DefaultMaxTokens
+	}
+	if maxTokens > models.MaxMaxTokens {
+		maxTokens = models.MaxMaxTokens
+	}
+
 	return models.AIConnection{
 		Name: name, Provider: provider.Name,
-		BaseURL: baseURL, Model: model, Token: strings.TrimSpace(p.Token),
+		BaseURL: baseURL, Model: model, MaxTokens: maxTokens,
+		Token: strings.TrimSpace(p.Token),
 	}, true
 }
 
