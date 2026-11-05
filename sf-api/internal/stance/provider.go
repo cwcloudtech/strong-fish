@@ -25,9 +25,8 @@ func NewProvider(client Client) devicelink.Provider {
 	return &provider{client: client}
 }
 
-func (p *provider) Name() string      { return Provider }
-func (p *provider) Enabled() bool     { return p.client.Enabled() }
-func (p *provider) RecordURL() string { return p.client.RecordURL() }
+func (p *provider) Name() string  { return Provider }
+func (p *provider) Enabled() bool { return p.client.Enabled() }
 
 // errNotOAuth is what the consent methods return: Stance is paired with an
 // account, not an authorization redirect, so a caller that reached for an

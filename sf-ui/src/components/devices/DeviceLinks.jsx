@@ -250,12 +250,14 @@ export default function DeviceLinks() {
             {connection.bodyCompositionSource ? (
               <BodyCompositionPanel provider={connection.provider} />
             ) : null}
-            {connection.capabilities?.includes("bar-speed") ? (
-              <BarSpeedPanel provider={connection.provider} />
-            ) : null}
           </div>
         );
       })}
+
+      {/* Bar speed, once and consolidated: the most recent set of each lift
+          across every source - what StrongFish captured itself, and what a
+          connected tracker reports - not one panel per device. */}
+      <BarSpeedPanel />
 
       {/* The AI's reading of everything above, at the end of the data - one
           reading of the whole picture, not a comment on any single device. */}
@@ -349,6 +351,10 @@ function HealthFeedbackPanel({ provider }) {
   // The subscriptions this member may spend, so the button can ask which one
   // pays when there is more than one.
   const [connections, setConnections] = useState([]);
+  // The last failed reading, so the troubleshoot console can show the provider,
+  // the status and the body - the same way a device read does when its provider
+  // cannot be reached.
+  const [error, setError] = useState(null);
   // Held until the member confirms: a reading cost money, and the next one
   // cannot be asked for until tomorrow.
   const [removing, setRemoving] = useState(false);
@@ -362,9 +368,11 @@ function HealthFeedbackPanel({ provider }) {
 
   const generate = async (connectionId) => {
     setBusy(true);
+    setError(null);
     try {
       setFeedback(await devicesApi.generateHealthFeedback(provider, connectionId));
     } catch (err) {
+      setError(err);
       toastError(err);
     } finally {
       setBusy(false);
@@ -414,6 +422,11 @@ function HealthFeedbackPanel({ provider }) {
           ) : null}
         </div>
       </div>
+
+      {/* When the provider failed, the status and body under a copy button, so
+          the member can share the troubleshoot - the same console a device read
+          shows. */}
+      <DebugConsole error={error} />
 
       {feedback ? (
         <>
@@ -871,22 +884,26 @@ function AccountPairForm({ provider, busy, onPair }) {
 }
 
 /**
- * The last set of each lift the member tracked on a bar-speed provider.
+ * The most recent set of each lift, consolidated across sources.
  *
  * One small chart a lift: a column a rep, the filled bar its mean concentric
- * speed and the tick above it the rep's peak - the two lines the tracker's own
- * app draws, the gap between them the rep. Under each, the load and the two
- * RPEs: what the member rated the set, and what the bar speed said it really
- * was. It all goes into the one fitness export, with the rest of the data.
+ * speed and the tick above it the rep's peak, the gap between them the rep.
+ * Under each, the load and the two RPEs: what the member rated the set, and
+ * what the bar speed said it really was. The set shown is the latest of that
+ * lift whichever produced it - a set StrongFish captured itself, or one read
+ * off a connected tracker - each labelled with where it came from.
+ *
+ * Rendered once, not per device, and silent when there is nothing to show: a
+ * member who tracks no bar speed sees no empty panel.
  */
-function BarSpeedPanel({ provider }) {
+function BarSpeedPanel() {
   const { t } = useI18n();
   const [sets, setSets] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    devicesApi.barSpeed(provider).then(setSets).catch(setError);
-  }, [provider]);
+    devicesApi.barSpeedList().then(setSets).catch(setError);
+  }, []);
 
   if (error) {
     return (
@@ -896,14 +913,7 @@ function BarSpeedPanel({ provider }) {
       </div>
     );
   }
-  if (!sets) return null;
-  if (sets.length === 0) {
-    return (
-      <div style={{ marginTop: "0.8rem" }}>
-        <p className="sf-muted">{t("devices.barSpeed.empty")}</p>
-      </div>
-    );
-  }
+  if (!sets || sets.length === 0) return null;
 
   return (
     <div style={{ marginTop: "0.8rem" }}>
@@ -966,6 +976,11 @@ function BarSpeedSet({ set, t }) {
         <strong style={{ color: liftInk }}>{t(`devices.lift.${set.lift}`)}</strong>
         {set.weightKg ? ` · ${t("devices.barSpeed.load", { weight: fmt(set.weightKg), reps: set.reps })}` : ""}
         {rpe ? ` · ${rpe}` : ""}
+        {set.source ? (
+          <span style={{ marginLeft: "0.4rem", fontSize: "0.72rem", opacity: 0.75 }}>
+            · {barSpeedSource(t, set.source)}
+          </span>
+        ) : null}
       </div>
 
       <div className="sf-row" style={{ gap: "1.4rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
@@ -1024,6 +1039,13 @@ function BarSpeedSet({ set, t }) {
 /** A number without a pointless decimal. */
 function fmt(value) {
   return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10);
+}
+
+/** Where a set came from, in the reader's language: StrongFish, or a provider. */
+function barSpeedSource(t, source) {
+  if (source === "strongfish") return t("devices.barSpeed.sourceSelf");
+  const label = t(`devices.provider.${source}`);
+  return label === `devices.provider.${source}` ? source : label;
 }
 
 /** An API error as a line of text, without pulling in the toast helper here. */

@@ -408,6 +408,39 @@ class SfApi {
     return data.map((item) => StanceSet.fromJson(_map(item))).toList();
   }
 
+  /// The most recent set of each lift, consolidated across sources - what
+  /// StrongFish captured itself and what a connected tracker reports - each
+  /// tagged by its source.
+  Future<List<StanceSet>> barSpeedList() async {
+    final response = await client.dio.get('/users/me/bar-speed');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => StanceSet.fromJson(_map(item))).toList();
+  }
+
+  /// Posts a captured set's raw stream to StrongFish's own velocity engine and
+  /// returns the computed set. Device-agnostic: the caller supplies the samples
+  /// however they were captured (over Bluetooth, here). The server stores it
+  /// and it shows in the consolidated panel.
+  Future<StanceSet> analyzeBarSpeed({
+    required String movement,
+    required double load,
+    required List<Map<String, double>> samples,
+    String unit = 'kg',
+    double sampleRateHz = 200,
+    double givenRpe = 0,
+  }) async {
+    final response = await client.dio.post('/users/me/bar-speed/analyze', data: {
+      'movement': movement,
+      'load': load,
+      'unit': unit,
+      'sampleRateHz': sampleRateHz,
+      if (givenRpe > 0) 'givenRpe': givenRpe,
+      'samples': samples,
+    });
+    return StanceSet.fromJson(_map(response.data));
+  }
+
 
   /// [range] is one of 24h, 48h, week, month, 90d - the API names the windows,
   /// so the phone and the web app cannot mean different things by "a month".

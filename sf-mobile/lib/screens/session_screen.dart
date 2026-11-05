@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/models.dart';
-import '../native/app_launcher.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
@@ -608,23 +606,6 @@ class _SetTile extends ConsumerWidget {
           // the rest of the session is re-resolved against the max that effort
           // demonstrates.
           _PerceivedRpe(set: set, assignmentId: assignmentId),
-          // A not-yet-done set on a competition lift, when Stance is paired: a
-          // button to open the Stance app and record the bar speed. Stance
-          // cannot be pre-filled from outside, so the lift and load are copied
-          // to the clipboard to re-enter there.
-          if (!logged && _isCompLift(set.exerciseOneRmRef))
-            ref.watch(stanceConnectionProvider).maybeWhen(
-                  data: (stance) => stance == null
-                      ? const SizedBox.shrink()
-                      : IconButton(
-                          icon: const Icon(Icons.fiber_manual_record,
-                              size: 20, color: Colors.redAccent),
-                          tooltip: t('session.recordOnStance'),
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => _recordOnStance(context, ref, stance),
-                        ),
-                  orElse: () => const SizedBox.shrink(),
-                ),
           // Done or not done, and nothing else: the two states a set is in
           // while a session is being run.
           _DoneToggle(
@@ -668,30 +649,6 @@ class _SetTile extends ConsumerWidget {
     } catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
     }
-  }
-
-  bool _isCompLift(String oneRmRef) =>
-      oneRmRef == 'squat' || oneRmRef == 'bench' || oneRmRef == 'deadlift';
-
-  /// Opens the Stance app to record this set's bar speed, and copies the lift
-  /// and load to the clipboard - Stance cannot be pre-filled from outside, so
-  /// this is the nearest thing to "sending" it.
-  Future<void> _recordOnStance(BuildContext context, WidgetRef ref, DeviceConnection stance) async {
-    final t = ref.read(tProvider);
-    final messenger = ScaffoldMessenger.of(context);
-    final load = set.log?.actualLoad ??
-        (set.loadKnown && set.roundedLoad > 0 ? set.roundedLoad : null);
-    final info = load != null
-        ? '${set.label(locale)} - ${_fmt(load)} ${t('common.kg')} x ${set.reps}'
-        : set.label(locale);
-    await Clipboard.setData(ClipboardData(text: info));
-
-    final pkg = Uri.tryParse(stance.recordUrl)?.queryParameters['id'];
-    final launched = pkg != null && pkg.isNotEmpty ? await launchAppAnyProfile(pkg) : false;
-    if (!context.mounted) return;
-    messenger.showSnackBar(SnackBar(
-      content: Text(launched ? t('session.stanceRecordCopied') : t('devices.recordFailed')),
-    ));
   }
 
   Future<void> _openLogSheet(BuildContext context, WidgetRef ref) async {

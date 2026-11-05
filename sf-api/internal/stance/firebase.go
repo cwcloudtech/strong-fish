@@ -55,9 +55,6 @@ type Config struct {
 	// SessionsRPC returns a member's sets, keyed by their Firebase uid.
 	// Overridable in case Stance's name for it differs.
 	SessionsRPC string
-	// AppURL is where the "record a set" button sends the member: the Stance
-	// app. Blank defaults to the app's store entry.
-	AppURL string
 	// The identity endpoints, overridable for tests/stand-ins.
 	FirebaseAuthURL  string
 	FirebaseTokenURL string
@@ -107,9 +104,6 @@ func (c Config) withDefaults() Config {
 	if c.SessionsRPC == "" {
 		c.SessionsRPC = "get_user_sessions"
 	}
-	if c.AppURL == "" {
-		c.AppURL = "https://play.google.com/store/apps/details?id=com.stancehome.Stance_Fitness"
-	}
 	return c
 }
 
@@ -133,7 +127,6 @@ func New(cfg Config) Client {
 func (c *client) Enabled() bool          { return c.cfg.Enabled() }
 func (c *client) GoogleEnabled() bool    { return c.cfg.GoogleEnabled() }
 func (c *client) GoogleClientID() string { return c.cfg.GoogleClientID }
-func (c *client) RecordURL() string      { return c.cfg.AppURL }
 
 // --- Firebase Auth ---
 

@@ -12,6 +12,13 @@
          what makes the in-app upgrade an update rather than a re-install. The
          user still confirms it in the system dialog. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- Bar-speed capture reads a Bluetooth LE accelerometer clipped to the bar.
+         Optional hardware: without it, the member records elsewhere. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
 
     <application
         android:label="strong-fish"
@@ -61,8 +68,5 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="https"/>
         </intent>
-        <!-- The Stance Fitness app, so the "record a set" button can find and
-             open it (including a work-profile copy) via LauncherApps. -->
-        <package android:name="com.stancehome.Stance_Fitness"/>
     </queries>
 </manifest>

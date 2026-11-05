@@ -182,7 +182,7 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 	// member can see and export - steps, heart rate, body composition and the
 	// bar-speed charts - not just the activity numbers.
 	sections := healthsheet.AllSections(steps, heart,
-		h.exportBodyComposition(r, userID), h.barSpeedForExport(r, userID), locale)
+		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale)
 	sheet := programmd.RenderTables(
 		healthsheet.Title(h.memberName(r.Context(), userID), locale),
 		healthsheet.Subtitle(steps, heart, locale),
@@ -257,7 +257,7 @@ func (h *DeviceHandler) FitnessContext(r *http.Request, userID, locale string) s
 	}
 
 	sections := healthsheet.AllSections(steps, heart,
-		h.exportBodyComposition(r, userID), h.barSpeedForExport(r, userID), locale)
+		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale)
 	if len(sections) == 0 {
 		return ""
 	}

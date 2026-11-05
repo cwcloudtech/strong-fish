@@ -61,9 +61,6 @@ type DeviceConnection struct {
 	// sees one panel, not one per provider. Decided here so the clients and the
 	// export agree on which.
 	BodyCompositionSource bool `json:"bodyCompositionSource"`
-	// RecordURL is set for a provider whose capture happens in its own app
-	// (Stance): the "record a set" button opens it. Empty for the others.
-	RecordURL string `json:"recordUrl,omitempty"`
 	// AccountPaired is true for a provider that can be connected with an email
 	// and password (Stance), so a client offers a sign-in form.
 	AccountPaired bool `json:"accountPaired,omitempty"`
@@ -85,7 +82,11 @@ type DeviceConnection struct {
 // how fast the bar moved.
 type BarSet struct {
 	// Lift is "squat", "bench" or "deadlift".
-	Lift         string  `json:"lift"`
+	Lift string `json:"lift"`
+	// Source names what produced the set - "strongfish" for one we captured and
+	// computed ourselves, or the provider it was read from (e.g. "stance") - so
+	// a merged panel can tell them apart and label each.
+	Source       string  `json:"source,omitempty"`
 	WeightKg     float64 `json:"weightKg,omitempty"`
 	Reps         int     `json:"reps,omitempty"`
 	GivenRpe     float64 `json:"givenRpe,omitempty"`
@@ -93,6 +94,9 @@ type BarSet struct {
 	// MeanVelocity and PeakVelocity are the set's concentric bar speed, m/s.
 	MeanVelocity float64 `json:"meanVelocity,omitempty"`
 	PeakVelocity float64 `json:"peakVelocity,omitempty"`
+	// Confidence (0..1) is how clean a StrongFish-computed capture looked, so a
+	// client can flag a shaky reading. Set on a fresh capture only; not stored.
+	Confidence float64 `json:"confidence,omitempty"`
 	// RepVelocities is each rep's mean concentric velocity in order - the
 	// per-set chart, one bar a rep. RepPeakVelocities is each rep's peak
 	// concentric velocity, the faster series the app overlays on the mean one.

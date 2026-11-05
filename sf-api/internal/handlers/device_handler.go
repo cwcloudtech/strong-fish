@@ -107,9 +107,6 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 			ActivitySource:        provider.Name() == source,
 			BodyCompositionSource: provider.Name() == bodySource,
 		}
-		if recorder, ok := provider.(devicelink.SetRecorder); ok && provider.Enabled() {
-			connection.RecordURL = recorder.RecordURL()
-		}
 		if _, ok := provider.(devicelink.AccountPairer); ok {
 			connection.AccountPaired = true
 		}
@@ -465,7 +462,7 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sections := healthsheet.AllSections(steps, heart,
-		h.exportBodyComposition(r, userID), h.barSpeedForExport(r, userID), locale)
+		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale)
 	// The AI's reading of the same data, last, when it was asked recently
 	// enough to be about this sheet - from whichever provider it was generated
 	// under (see recentReadingAny).

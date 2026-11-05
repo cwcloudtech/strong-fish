@@ -293,10 +293,6 @@ class DeviceConnection {
   /// single-source rule, so a member with two scales sees one panel, not two.
   final bool bodyCompositionSource;
 
-  /// Set for a provider whose capture happens in its own app (Stance): the
-  /// "record a set" button opens it.
-  final String recordUrl;
-
   /// Whether this provider can be connected with an email and password, so the
   /// UI shows a sign-in form.
   final bool accountPaired;
@@ -321,7 +317,6 @@ class DeviceConnection {
     this.capabilities = const [],
     this.activitySource = false,
     this.bodyCompositionSource = false,
-    this.recordUrl = '',
     this.accountPaired = false,
     this.oauth = false,
     this.googleClientId = '',
@@ -340,7 +335,6 @@ class DeviceConnection {
             : const [],
         activitySource: json['activitySource'] == true,
         bodyCompositionSource: json['bodyCompositionSource'] == true,
-        recordUrl: _toString(json['recordUrl']),
         accountPaired: json['accountPaired'] == true,
         oauth: json['oauth'] == true,
         googleClientId: _toString(json['googleClientId']),
@@ -351,6 +345,10 @@ class DeviceConnection {
 /// One completed barbell-velocity set, as the phone renders it.
 class StanceSet {
   final String lift;
+
+  /// Where the set came from - "strongfish" for one we captured ourselves, or
+  /// the provider it was read from (e.g. "stance").
+  final String source;
   final double weightKg;
   final int reps;
   final double givenRpe;
@@ -367,6 +365,7 @@ class StanceSet {
 
   const StanceSet({
     this.lift = '',
+    this.source = '',
     this.weightKg = 0,
     this.reps = 0,
     this.givenRpe = 0,
@@ -379,6 +378,7 @@ class StanceSet {
 
   factory StanceSet.fromJson(Map<String, dynamic> json) => StanceSet(
         lift: _toString(json['lift']),
+        source: _toString(json['source']),
         weightKg: _toDouble(json['weightKg']),
         reps: _toInt(json['reps']),
         givenRpe: _toDouble(json['givenRpe']),

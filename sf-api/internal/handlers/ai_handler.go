@@ -603,14 +603,26 @@ func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request, userID, connecti
 		case errors.As(err, &refused):
 			// The provider's own refusal, logged with its words: a bad key, a
 			// model the account cannot reach and an exhausted quota are
-			// different problems the member alone can fix.
+			// different problems the member alone can fix. The provider and its
+			// status and body travel to the client too, so the troubleshoot
+			// console can show them - the same shape a device read uses.
 			slog.Error("ai: the provider refused",
 				"provider", connection.Provider, "model", connection.Model, "error", err)
-			writeError(w, http.StatusBadGateway, "The AI provider refused the request", CodeAIRefused)
+			writeJSON(w, http.StatusBadGateway, errorBody{
+				Message:  "The AI provider refused the request",
+				I18nCode: CodeAIRefused,
+				Detail:   err.Error(),
+				Provider: connection.Provider,
+			})
 		default:
 			slog.Error("ai: the provider could not be reached",
 				"provider", connection.Provider, "error", err)
-			writeError(w, http.StatusBadGateway, "The AI provider could not be reached", CodeUpstream)
+			writeJSON(w, http.StatusBadGateway, errorBody{
+				Message:  "The AI provider could not be reached",
+				I18nCode: CodeUpstream,
+				Detail:   err.Error(),
+				Provider: connection.Provider,
+			})
 		}
 		return ai.Response{}, false
 	}
