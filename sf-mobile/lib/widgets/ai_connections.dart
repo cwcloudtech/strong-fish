@@ -230,6 +230,7 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
   late final TextEditingController _name;
   late final TextEditingController _baseUrl;
   late final TextEditingController _modelField;
+  late final TextEditingController _maxTokens;
   final _token = TextEditingController();
   final _modelFocus = FocusNode();
   late String _provider;
@@ -248,6 +249,9 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
     _name = TextEditingController(text: connection?.name ?? '');
     _baseUrl = TextEditingController(text: connection?.baseUrl ?? '');
     _modelField = TextEditingController(text: connection?.model ?? '');
+    _maxTokens = TextEditingController(
+      text: (connection?.maxTokens ?? 0) > 0 ? '${connection!.maxTokens}' : '',
+    );
     _provider = connection?.provider ?? 'mistral';
     _loadProviders();
   }
@@ -268,6 +272,7 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
     _name.dispose();
     _baseUrl.dispose();
     _modelField.dispose();
+    _maxTokens.dispose();
     _token.dispose();
     _modelFocus.dispose();
     super.dispose();
@@ -311,6 +316,8 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
       'provider': _provider,
       'baseUrl': _baseUrl.text.trim().isEmpty ? (_defaults?.defaultUrl ?? '') : _baseUrl.text.trim(),
       'model': _model,
+      // Blank or non-numeric leaves it to the API, which fills in the default.
+      'maxTokens': int.tryParse(_maxTokens.text.trim()) ?? 0,
       'token': _token.text.trim(),
     };
     try {
@@ -424,6 +431,18 @@ class _ConnectionFormState extends ConsumerState<_ConnectionForm> {
                   ),
                 ),
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _maxTokens,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              labelText: t('ai.maxTokens'),
+              hintText: '4096',
+              helperText: t('ai.maxTokensHelp'),
+              helperMaxLines: 3,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),

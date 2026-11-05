@@ -43,10 +43,12 @@ func (e ErrRefused) Error() string {
 	return fmt.Sprintf("ai: the provider refused the request (http %d): %s", e.Status, e.Detail)
 }
 
-// defaultMaxTokens bounds an answer when the caller names no limit. Long
-// enough for a considered paragraph about a session, short enough that a
-// runaway model does not spend somebody's budget in one question.
-const defaultMaxTokens = 1200
+// requestTimeout bounds one call to a provider. A large model reasoning over a
+// month of training takes its time, and a longer answer (a subscription's
+// MaxTokens, up to models.DefaultMaxTokens) takes longer still to come back; a
+// timeout that fires mid-answer wastes the tokens already spent as well as the
+// member's question, so it is deliberately generous.
+const requestTimeout = 300 * time.Second
 
 // Client talks to one member's connection.
 type Client struct {
@@ -54,10 +56,7 @@ type Client struct {
 }
 
 func New() *Client {
-	// Generous: a large model thinking about a month of training takes its
-	// time, and a timeout that fires mid-answer wastes the tokens already
-	// spent as well as the member's question.
-	return &Client{http: &http.Client{Timeout: 120 * time.Second}}
+	return &Client{http: &http.Client{Timeout: requestTimeout}}
 }
 
 // Request is one question, in the shape cwclock's web agent takes.
@@ -157,8 +156,15 @@ func (c *Client) Ask(ctx context.Context, connection models.AIConnection, reques
 	if !connection.Configured() {
 		return Response{}, ErrNotConfigured
 	}
+	// The ceiling is the caller's if they named one (the chat passes a member's
+	// setting), otherwise the subscription's own, otherwise the deployment
+	// default. A connection backfilled by migration always carries a value, so
+	// the last fallback only covers one somehow saved without one.
 	if request.MaxTokens <= 0 {
-		request.MaxTokens = defaultMaxTokens
+		request.MaxTokens = connection.MaxTokens
+	}
+	if request.MaxTokens <= 0 {
+		request.MaxTokens = models.DefaultMaxTokens
 	}
 	model := strings.TrimSpace(connection.Model)
 

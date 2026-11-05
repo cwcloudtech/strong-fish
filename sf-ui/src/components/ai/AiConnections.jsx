@@ -237,6 +237,7 @@ function AiConnectionForm({ connection, providers, busy, onCancel, onSubmit }) {
     provider: connection?.provider || providers[0]?.name || "",
     baseUrl: connection?.baseUrl || "",
     model: connection?.model || "",
+    maxTokens: connection?.maxTokens ? String(connection.maxTokens) : "",
     token: "",
   });
 
@@ -278,6 +279,9 @@ function AiConnectionForm({ connection, providers, busy, onCancel, onSubmit }) {
       provider: form.provider,
       baseUrl: form.baseUrl.trim() || defaults?.defaultUrl || "",
       model,
+      // Blank, or anything that is not a positive number, leaves it to the API,
+      // which fills in the default - so the member never has to know the number.
+      maxTokens: Number.parseInt(form.maxTokens, 10) || 0,
       token: form.token.trim(),
     });
   };
@@ -327,6 +331,20 @@ function AiConnectionForm({ connection, providers, busy, onCancel, onSubmit }) {
             placeholder={defaults?.defaultModel || ""}
           />
           <p className="sf-muted" style={{ fontSize: "0.8rem" }}>{t("ai.modelHelp")}</p>
+        </div>
+        <div className="sf-field" style={{ flex: 1, minWidth: 180 }}>
+          <label className="sf-label">{t("ai.maxTokens")}</label>
+          <input
+            className="sf-input"
+            type="number"
+            inputMode="numeric"
+            min="1"
+            step="256"
+            value={form.maxTokens}
+            onChange={set("maxTokens")}
+            placeholder="4096"
+          />
+          <p className="sf-muted" style={{ fontSize: "0.8rem" }}>{t("ai.maxTokensHelp")}</p>
         </div>
       </div>
 

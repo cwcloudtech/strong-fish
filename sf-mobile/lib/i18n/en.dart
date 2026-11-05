@@ -896,6 +896,8 @@ const Map<String, dynamic> en = {
     'baseUrl': 'Address',
     'baseUrlHelp': 'Where the requests go. Change it to point at a gateway of your own - a LiteLLM, an Ollama, an OpenRouter account.',
     'model': 'Model',
+    'maxTokens': 'Max answer length',
+    'maxTokensHelp': 'The most tokens one answer may run to. Raise it if replies get cut off; leave it blank for the default.',
     'token': 'API key',
     'tokenSet': 'A key is already saved',
     'tokenHelp': 'The key from your provider. It is kept on the server and never sent back to the browser.',

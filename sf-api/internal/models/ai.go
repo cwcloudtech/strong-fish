@@ -59,6 +59,18 @@ func IsValidAIRole(role string) bool { return role == AIRoleUser }
 // CanUseAI reports whether role may ask the model.
 func CanUseAI(role string) bool { return role == AIRoleOwner || role == AIRoleUser }
 
+// DefaultMaxTokens is how long an answer may run when a subscription carries no
+// ceiling of its own. A full fitness read - steps, cardio, body composition,
+// bar speed and the coaching note at the end - runs long, and a lower cap cut
+// answers off mid-sentence; this leaves room for the whole answer while still
+// stopping a runaway model from spending a budget in one question. It is the
+// value a new subscription is given and the one an older one is backfilled to.
+const DefaultMaxTokens = 4096
+
+// MaxMaxTokens is the largest ceiling the form and the API will accept, so a
+// slipped digit cannot turn one question into a bill.
+const MaxMaxTokens = 32000
+
 // AIConnection is one account's access to a model.
 type AIConnection struct {
 	ID      string `json:"id"`
@@ -73,6 +85,11 @@ type AIConnection struct {
 	Format  string `json:"-"`
 	BaseURL string `json:"baseUrl"`
 	Model   string `json:"model,omitempty"`
+	// MaxTokens caps one answer from this subscription - how long a reply may
+	// run before the provider stops it. Per connection because a member on a
+	// cheap local model and a member on a large hosted one want different
+	// ceilings; zero means the deployment default (DefaultMaxTokens).
+	MaxTokens int `json:"maxTokens,omitempty"`
 	// Token is write-only. It is set through the form and never sent back:
 	// what a client needs to render is whether one is stored, not what it is.
 	Token string `json:"-"`
