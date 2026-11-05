@@ -35,7 +35,7 @@ means *pick a weight you could have got 7 reps with, and do 5*.
 
 A percentage is a promise about a day you have not had yet. RPE is an instruction about the day you are actually having: if you slept badly, "3 @ RPE 8" is a lighter bar than it was last week, and it is still the right way of training.
 
-:::infos
+:::info
 Always follow the indicated RPE instead of estimated loads
 :::
 
