@@ -575,6 +575,16 @@ button {
 /* A day the watch recorded nothing: not a zone, and not zero beats either. */
 .sf-zone-none { --sf-steps-tone: var(--sf-border); }
 
+/* Nutrition bars read against their target: protein amber when it fell short of
+   the band, green when it met it; energy blue for a deficit (a cut), green for
+   maintenance, amber for a surplus (a bulk). Navy when there is no target to
+   judge against. The same --sf-steps-tone hook the step and zone bars use. */
+.sf-nut-under { --sf-steps-tone: var(--sf-warning); }
+.sf-nut-ok { --sf-steps-tone: var(--sf-success); }
+.sf-nut-deficit { --sf-steps-tone: #3b82f6; }
+.sf-nut-surplus { --sf-steps-tone: var(--sf-warning); }
+.sf-nut-neutral { --sf-steps-tone: var(--sf-primary); }
+
 .sf-zone-key { display: inline-flex; align-items: center; gap: 5px; }
 .sf-zone-dot {
   width: 10px;

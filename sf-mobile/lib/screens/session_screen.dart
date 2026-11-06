@@ -620,8 +620,20 @@ class _SetTile extends ConsumerWidget {
               ],
             ])),
           ),
-          if (set.log?.comment.isNotEmpty == true)
-            Text('“${set.log!.comment}”', style: Theme.of(context).textTheme.bodySmall),
+          // The comment and the estimated 1RM, under the set, the same line the
+          // web shows: the e1RM is worked out on the server from the RPE on this
+          // set (or a previous one today), and it is what the next set's load is
+          // resolved against. Shown here so the member sees it without opening
+          // the log.
+          if (set.log?.comment.isNotEmpty == true || (set.log?.e1rm ?? 0) > 0)
+            Text(
+              [
+                if (set.log?.comment.isNotEmpty == true) '“${set.log!.comment}”',
+                if ((set.log?.e1rm ?? 0) > 0)
+                  '${t('session.e1rm')} ${_fmt(set.log!.e1rm)} ${t('common.kg')}',
+              ].join(' · '),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
         ],
       ),
       trailing: Row(
@@ -750,7 +762,20 @@ class _LoadLabel extends ConsumerWidget {
       '${_fmt(set.load)} ${t('common.kg')}',
       style: TextStyle(color: scheme.primary, fontWeight: FontWeight.bold, fontSize: 16),
     );
-    if (!set.autoregulated) return load;
+    if (!set.autoregulated) {
+      // Not re-resolved from today's effort: say the recorded 1RM it came from,
+      // the way the web's tooltip does, so a long-press explains the weight.
+      if (set.oneRm > 0) {
+        return Tooltip(
+          message: t('session.from1rm', {
+            'lift': set.exerciseOneRmRef.isNotEmpty ? set.exerciseOneRmRef : set.exerciseSlug,
+            'value': _fmt(set.oneRm),
+          }),
+          child: load,
+        );
+      }
+      return load;
+    }
 
     // A load that moved because of what was just lifted has to say so, or the
     // weight looks like it changed on its own.

@@ -225,11 +225,18 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					// AI reading - not one per device.
 					r.Get("/export.png", h.Device.Export)
 					r.Get("/export.pdf", h.Device.Export)
+					// The member's ideal protein band and maintenance energy,
+					// computed from their body - not tied to any one provider,
+					// so a member who tracks no food still sees a target.
+					r.Get("/nutrition-targets", h.Device.NutritionTargets)
 					r.Get("/{provider}/authorize", h.Device.Authorize)
 					r.Delete("/{provider}", h.Device.Disconnect)
 					r.Get("/{provider}/steps", h.Device.Steps)
 					r.Get("/{provider}/heart-rate", h.Device.HeartRate)
 					r.Get("/{provider}/body-composition", h.Device.BodyComposition)
+					// Logged energy and protein from a food diary (Yazio,
+					// MyFitnessPal), with the member's daily targets.
+					r.Get("/{provider}/nutrition", h.Device.Nutrition)
 					// What the AI made of the last ninety days. Generated on
 					// demand, kept, and askable again once a day - the
 					// numbers underneath move that often at most.

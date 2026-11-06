@@ -61,6 +61,11 @@ type DeviceConnection struct {
 	// sees one panel, not one per provider. Decided here so the clients and the
 	// export agree on which.
 	BodyCompositionSource bool `json:"bodyCompositionSource"`
+	// NutritionSource marks the one connected food diary whose figures are
+	// shown - a member with two nutrition apps sees one histogram, not one per
+	// app. Decided here, like the other two sources, so the clients and the
+	// export never pick differently.
+	NutritionSource bool `json:"nutritionSource"`
 	// AccountPaired is true for a provider that can be connected with an email
 	// and password (Stance), so a client offers a sign-in form.
 	AccountPaired bool `json:"accountPaired,omitempty"`

@@ -61,7 +61,7 @@ func (h *DeviceHandler) PairDevice(w http.ResponseWriter, r *http.Request) {
 
 	token, err := pairer.PairAccount(r.Context(), p.Email, p.Password)
 	if err != nil {
-		if errors.Is(err, stance.ErrRefused) {
+		if errors.Is(err, stance.ErrRefused) || errors.Is(err, devicelink.ErrRefused) {
 			// A bad email or password - theirs to fix, not a server fault.
 			writeError(w, http.StatusUnauthorized, "Those credentials were refused", CodeStancePairFailed)
 			return
@@ -174,7 +174,7 @@ func (h *DeviceHandler) PairDeviceKey(w http.ResponseWriter, r *http.Request) {
 
 	token, err := pairer.PairKey(r.Context(), p.ApiKey)
 	if err != nil {
-		if errors.Is(err, devicelink.ErrReauthorize) {
+		if errors.Is(err, devicelink.ErrReauthorize) || errors.Is(err, devicelink.ErrRefused) {
 			writeError(w, http.StatusUnauthorized, "That key was refused", CodeStancePairFailed)
 			return
 		}

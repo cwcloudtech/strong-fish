@@ -229,14 +229,15 @@ func (c *Client) DailySteps(ctx context.Context, accessToken string, start, end 
 	return days, nil
 }
 
-// dailySummary is the Connect daily summary, which carries both the step total
-// and the day's heart-rate figures.
+// dailySummary is the Connect daily summary, which carries the step total, the
+// day's heart-rate figures, and the active calories burned.
 type dailySummary struct {
-	CalendarDate     string   `json:"calendarDate"`
-	TotalSteps       *int64   `json:"totalSteps"`
-	RestingHeartRate *float64 `json:"restingHeartRate"`
-	MinHeartRate     *float64 `json:"minHeartRate"`
-	MaxHeartRate     *float64 `json:"maxHeartRate"`
+	CalendarDate       string   `json:"calendarDate"`
+	TotalSteps         *int64   `json:"totalSteps"`
+	RestingHeartRate   *float64 `json:"restingHeartRate"`
+	MinHeartRate       *float64 `json:"minHeartRate"`
+	MaxHeartRate       *float64 `json:"maxHeartRate"`
+	ActiveKilocalories *float64 `json:"activeKilocalories"`
 }
 
 // DailyHeartRate returns one entry per day in [start, end] that has heart-rate
@@ -266,6 +267,26 @@ func (c *Client) DailyHeartRate(ctx context.Context, accessToken string, start, 
 			Zone:  zoneFor(max),
 			Known: true,
 		})
+	}
+	return days, nil
+}
+
+// DailyActiveCalories returns the active calories burned on each day in
+// [start, end] the summary has a figure for, read a day at a time from the same
+// Connect daily summary as the heart rate.
+func (c *Client) DailyActiveCalories(ctx context.Context, accessToken string, start, end time.Time) ([]devicelink.DayCalories, error) {
+	days := []devicelink.DayCalories{}
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		date := day.Format("2006-01-02")
+		var s dailySummary
+		if err := c.get(ctx, accessToken, "/usersummary-service/usersummary/daily",
+			url.Values{"calendarDate": {date}}, &s); err != nil {
+			return nil, err
+		}
+		if s.ActiveKilocalories == nil || *s.ActiveKilocalories <= 0 {
+			continue
+		}
+		days = append(days, devicelink.DayCalories{Date: date, Kcal: *s.ActiveKilocalories})
 	}
 	return days, nil
 }

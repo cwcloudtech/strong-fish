@@ -482,6 +482,25 @@ class SfApi {
     return HeartSeries.fromJson(_map(response.data));
   }
 
+  /// Logged energy and protein from a food diary (Yazio, MyFitnessPal), over
+  /// the same named windows the steps use. The response carries the daily
+  /// averages and the member's targets alongside the per-day series.
+  Future<NutritionSeries> deviceNutrition(String provider, String range) async {
+    final response = await client.dio.get(
+      '/users/me/devices/$provider/nutrition',
+      queryParameters: {'range': range},
+    );
+    return NutritionSeries.fromJson(_map(response.data));
+  }
+
+  /// The member's ideal protein band and maintenance energy, computed from
+  /// their body rather than any provider - so a member who tracks no food still
+  /// gets a target. NeedsHeight is set when a height is the one thing missing.
+  Future<NutritionTargets> deviceNutritionTargets() async {
+    final response = await client.dio.get('/users/me/devices/nutrition-targets');
+    return NutritionTargets.fromJson(_map(response.data));
+  }
+
   /// The latest reading of each measure the member's scale takes.
   Future<List<BodyMeasure>> deviceBodyComposition(String provider) async {
     final response = await client.dio.get('/users/me/devices/$provider/body-composition');

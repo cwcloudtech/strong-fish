@@ -599,11 +599,18 @@ const Map<String, dynamic> ar = {
         'label': 'مفتاح واجهة Garmin الشخصي',
         'hint': 'أنشئ مفتاح واجهة شخصيًا في Garmin Connect (يظهر مرة واحدة). يُحفظ على هذا الخادم لقراءة بيانات Garmin الخاصة بك.',
       },
+      'myfitnesspal': {
+        'label': 'رمز وصول MyFitnessPal',
+        'hint': 'لا يوفّر MyFitnessPal تسجيل دخول بكلمة مرور للتطبيقات الأخرى، لذا الصق رمز وصول شخصيًا حصلت عليه بنفسك. يُحفظ على هذا الخادم للقراءة فقط لقراءة سجلّك.',
+      },
     },
     'pair': {
-      'password': 'كلمة مرور Stance',
+      'password': 'كلمة المرور',
       'stance': {
         'email': 'بريد Stance',
+      },
+      'yazio': {
+        'email': 'بريد Yazio',
       },
     },
     'barSpeed': {
@@ -632,6 +639,8 @@ const Map<String, dynamic> ar = {
       'triggered': 'تم تشغيل {{count}} جهاز/أجهزة',
       'triggerFailed': 'تعذّر الوصول إلى {{name}}',
       'savedToSet': 'تم الحفظ في مجموعتك',
+      'detectedReps': '{{count}} تكرار',
+      'savedSummary': 'تم الحفظ: {{detail}}',
     },
     'sensor': {
       'title': 'مستشعر السرعة',
@@ -652,6 +661,23 @@ const Map<String, dynamic> ar = {
       'withings': 'Withings',
       'garmin': 'Garmin',
       'stance': 'Stance Fitness',
+      'yazio': 'Yazio',
+      'myfitnesspal': 'MyFitnessPal',
+    },
+    'nutrition': {
+      'title': 'التغذية',
+      'targetsTitle': 'الأهداف اليومية',
+      'avgProtein': 'متوسط البروتين',
+      'avgKcal': 'متوسط الطاقة',
+      'loggedDays': 'الأيام المسجّلة',
+      'proteinChart': 'البروتين يوميًا',
+      'kcalChart': 'الطاقة يوميًا',
+      'idealProtein': 'البروتين المثالي',
+      'maintenance': 'طاقة المحافظة',
+      'gramsUnit': 'غ',
+      'kcalUnit': 'سعرة',
+      'estimate': 'مقدَّر من طولك ووزنك - اربط ميزانًا للحصول على رقم مُقاس.',
+      'needHeight': 'أدخل طولك في ملفك الشخصي لرؤية أهداف البروتين والطاقة.',
     },
     'aiFeedbackWindow': 'على مدى {{days}} يوماً',
     'aiFeedback': 'تحليل الذكاء الاصطناعي',

@@ -33,6 +33,12 @@ const healthFeedbackDays = 90
 // the document.
 const healthReadingFresh = 24 * time.Hour
 
+// nutritionContextDays is how many days of logged nutrition the chat is shown.
+// A week rather than the single day the steps use: a food diary with one day in
+// it has no average worth reading, where a week says what the member habitually
+// eats and whether it sits above or below their target.
+const nutritionContextDays = 7
+
 // recentReadingAny is the AI's reading of this member's fitness data as the
 // last section of the one export, or nil when there is none worth printing.
 //
@@ -182,6 +188,7 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 	// member can see and export - steps, heart rate, body composition and the
 	// bar-speed charts - not just the activity numbers.
 	sections := healthsheet.AllSections(steps, heart,
+		h.exportNutrition(r, userID, days), h.computeTargets(r, userID),
 		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale)
 	sheet := programmd.RenderTables(
 		healthsheet.Title(h.memberName(r.Context(), userID), locale),
@@ -257,6 +264,7 @@ func (h *DeviceHandler) FitnessContext(r *http.Request, userID, locale string) s
 	}
 
 	sections := healthsheet.AllSections(steps, heart,
+		h.exportNutrition(r, userID, nutritionContextDays), h.computeTargets(r, userID),
 		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale)
 	if len(sections) == 0 {
 		return ""

@@ -434,6 +434,60 @@ func (c *Client) DailyHeartRate(ctx context.Context, accessToken string, start, 
 	return ordered, nil
 }
 
+// caloriesRollupResponse is the active-energy roll-up. PROVISIONAL: the exact
+// data-type name and field are reverse-engineered from the activity family, so
+// the parse is tolerant and the caller treats a miss as "no active calories",
+// not a failure.
+type caloriesRollupResponse struct {
+	RollupDataPoints []struct {
+		CivilStartTime       civilDateTime `json:"civilStartTime"`
+		ActiveCaloriesBurned *struct {
+			EnergySum float64 `json:"energySum"`
+		} `json:"activeCaloriesBurned"`
+	} `json:"rollupDataPoints"`
+}
+
+// DailyActiveCalories returns the active calories burned on each day from start
+// up to and including end that Google Health has a figure for.
+//
+// PROVISIONAL (see caloriesRollupResponse): the active-energy data type is not
+// one this app had an account to confirm against, so a shape it does not
+// recognize comes back as no days rather than an error.
+func (c *Client) DailyActiveCalories(ctx context.Context, accessToken string, start, end time.Time) ([]devicelink.DayCalories, error) {
+	start = truncateDay(start)
+	end = truncateDay(end)
+	if end.Before(start) {
+		return nil, nil
+	}
+	if earliest := end.AddDate(0, 0, -(MaxRollupDays - 1)); start.Before(earliest) {
+		start = earliest
+	}
+
+	var body rollupRequest
+	body.Range.Start = civilDateTime{Date: dateOf(start)}
+	body.Range.End = civilDateTime{Date: dateOf(end.AddDate(0, 0, 1))}
+	body.WindowSizeDays = 1
+
+	var parsed caloriesRollupResponse
+	if err := c.call(ctx, http.MethodPost,
+		"/v4/users/me/dataTypes/active-calories-burned/dataPoints:dailyRollUp", accessToken, body, &parsed); err != nil {
+		return nil, err
+	}
+
+	days := []devicelink.DayCalories{}
+	for _, point := range parsed.RollupDataPoints {
+		if point.ActiveCaloriesBurned == nil || point.ActiveCaloriesBurned.EnergySum <= 0 {
+			continue
+		}
+		date := point.CivilStartTime.Date
+		days = append(days, devicelink.DayCalories{
+			Date: fmt.Sprintf("%04d-%02d-%02d", date.Year, date.Month, date.Day),
+			Kcal: point.ActiveCaloriesBurned.EnergySum,
+		})
+	}
+	return days, nil
+}
+
 type apiError struct {
 	Error struct {
 		Code    int    `json:"code"`
