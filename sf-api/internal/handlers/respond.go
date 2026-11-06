@@ -90,6 +90,13 @@ const (
 	CodeInvalidAIRole     = "errors.invalidAiRole"
 	CodeAINotConfigured   = "errors.aiNotConfigured"
 	CodeAIRefused         = "errors.aiRefused"
+	// A member's own recording callback (a device the phone triggers): a
+	// missing URL, one whose scheme does not match the transport, a transport
+	// this build cannot fire, or an MQTT callback with no topic.
+	CodeCallbackURLRequired   = "errors.callbackUrlRequired"
+	CodeInvalidCallbackURL    = "errors.invalidCallbackUrl"
+	CodeInvalidCallbackType   = "errors.invalidCallbackType"
+	CodeCallbackTopicRequired = "errors.callbackTopicRequired"
 	// CodeConversationTitle is retitling a thread to nothing, and
 	// CodeNothingSelected is a bulk delete that named nothing to delete -
 	// which is refused rather than read as "everything".

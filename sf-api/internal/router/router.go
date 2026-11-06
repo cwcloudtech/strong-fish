@@ -39,6 +39,7 @@ type Handlers struct {
 	AI         *handlers.AIHandler
 	Device     *handlers.DeviceHandler
 	BarSpeed   *handlers.BarSpeedHandler
+	Callback   *handlers.CallbackHandler
 }
 
 // Options carries the settings the middleware chain needs.
@@ -308,6 +309,21 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 						r.Get("/shares", h.AI.ListGrants)
 						r.Post("/shares", h.AI.Share)
 						r.Delete("/shares/{userId}", h.AI.Unshare)
+					})
+				})
+
+				// The member's own recording callbacks: triggers the phone
+				// fires when they start a bar-speed set, so a device of their
+				// own (an ESP32) records it too - a webhook (HTTP), a WebSocket
+				// message or an MQTT publish. Not shared, so no ACL - a callback
+				// points at the member's own hardware and is theirs alone.
+				r.Route("/me/callbacks", func(r chi.Router) {
+					r.Get("/", h.Callback.List)
+					r.Post("/", h.Callback.Create)
+
+					r.Route("/{callbackId}", func(r chi.Router) {
+						r.Put("/", h.Callback.Update)
+						r.Delete("/", h.Callback.Delete)
 					})
 				})
 

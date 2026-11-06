@@ -1546,6 +1546,88 @@ class AiConnection {
       );
 }
 
+/// One custom header on an HTTP or WebSocket callback: a name and a value.
+class CallbackHeader {
+  final String name;
+  final String value;
+  const CallbackHeader({required this.name, required this.value});
+
+  factory CallbackHeader.fromJson(Map<String, dynamic> json) =>
+      CallbackHeader(name: _toString(json['name']), value: _toString(json['value']));
+
+  Map<String, dynamic> toJson() => {'name': name, 'value': value};
+}
+
+/// A member's recording callback: a trigger the phone fires when a bar-speed
+/// set starts, so a device of their own - an ESP32 on the gym network - records
+/// it too. A webhook (HTTP POST) is one transport; a WebSocket message and an
+/// MQTT publish are the others. The secrets ([token], [password]) come back from
+/// the server because the phone needs them to fire, and a callback is the
+/// member's own device, shared with no one.
+class RecordingCallback {
+  final String id;
+  final String ownerId;
+  final String name;
+  final String type; // http | websocket | mqtt
+  final String url;
+
+  final String token;
+  final bool hasToken;
+  final List<CallbackHeader> headers;
+
+  final String username;
+  final String password;
+  final bool hasPassword;
+
+  final String topic;
+  final String clientId;
+  final int qos;
+
+  final bool enabled;
+
+  const RecordingCallback({
+    this.id = '',
+    this.ownerId = '',
+    this.name = '',
+    this.type = 'http',
+    this.url = '',
+    this.token = '',
+    this.hasToken = false,
+    this.headers = const [],
+    this.username = '',
+    this.password = '',
+    this.hasPassword = false,
+    this.topic = '',
+    this.clientId = '',
+    this.qos = 0,
+    this.enabled = true,
+  });
+
+  /// What to show for it: its name, or the URL when it has none.
+  String get label => name.trim().isNotEmpty ? name.trim() : url;
+
+  factory RecordingCallback.fromJson(Map<String, dynamic> json) => RecordingCallback(
+        id: _toString(json['id']),
+        ownerId: _toString(json['ownerId']),
+        name: _toString(json['name']),
+        type: _toString(json['type']),
+        url: _toString(json['url']),
+        token: _toString(json['token']),
+        hasToken: json['hasToken'] == true,
+        headers: (json['headers'] as List? ?? const [])
+            .whereType<Map<String, dynamic>>()
+            .map(CallbackHeader.fromJson)
+            .toList(),
+        username: _toString(json['username']),
+        password: _toString(json['password']),
+        hasPassword: json['hasPassword'] == true,
+        topic: _toString(json['topic']),
+        clientId: _toString(json['clientId']),
+        qos: _toInt(json['qos']),
+        enabled: json['enabled'] == true,
+      );
+}
+
 /// One row of the server's provider catalogue: where a provider lives, what
 /// it serves, and what its key looks like.
 ///

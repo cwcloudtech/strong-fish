@@ -270,6 +270,20 @@ export const ai = {
       .then((response) => response.data),
 };
 
+/**
+ * A member's recording callbacks: triggers the phone fires when they start a
+ * bar-speed set, so a device of their own (an ESP32) records it too. A webhook
+ * (HTTP POST) is one transport, alongside a WebSocket message and an MQTT
+ * publish. Configured anywhere, fired from the phone - the destination is
+ * usually on the gym's local network, which only the phone can reach.
+ */
+export const callbacks = {
+  list: () => body(client.get("/users/me/callbacks")),
+  add: (payload) => body(client.post("/users/me/callbacks", payload)),
+  set: (callbackId, payload) => body(client.put(`/users/me/callbacks/${callbackId}`, payload)),
+  remove: (callbackId) => body(client.delete(`/users/me/callbacks/${callbackId}`)),
+};
+
 export const training = {
   list: () => body(client.get("/training")),
   get: (assignmentId) => body(client.get(`/training/${assignmentId}`)),

@@ -162,6 +162,107 @@ semblé propre). Elle est stockée pour votre compte, elle apparaît donc aussi
 dans les **Données de fitness**, fusionnée avec tout traqueur que vous avez
 connecté, la série la plus récente de chaque mouvement en premier.
 
+## Le déclencher depuis StrongFish {#trigger}
+
+Le capteur ci-dessus enregistre tout seul et envoie le résultat. On peut aussi
+faire l'inverse : laisser **StrongFish indiquer à la carte qu'une série a
+commencé**, de sorte que vous appuyez sur **Démarrer** sur votre téléphone et la
+carte se met à bufferiser — le mouvement et la charge arrivent avec le signal.
+
+Dans StrongFish, ajoutez un **Déclencheur d'enregistrement** (Réglages →
+_Déclencheurs d'enregistrement_, ou la feuille des capteurs sur le téléphone).
+C'est le **callback** de cwcloud : un petit message JSON que le téléphone envoie
+au démarrage d'une série, transporté par l'un de trois moyens — un **webhook**
+(POST HTTP), un message **WebSocket**, ou une publication **MQTT**. Quand un
+capteur Bluetooth est aussi connecté, le téléphone déclenche le callback _et_
+enregistre en Bluetooth, les deux à la fois.
+
+Le corps est le même quel que soit le transport :
+
+```json
+{
+  "event": "bar-speed",
+  "action": "start",
+  "lift": "squat",
+  "load": 120,
+  "unit": "kg",
+  "source": "strongfish",
+  "firedAt": "2026-11-06T18:30:00Z"
+}
+```
+
+`action` vaut `"start"` quand vous commencez la série et `"stop"` quand vous la
+terminez ; `lift` vaut `squat`, `bench` ou `deadlift`. Il est envoyé depuis le
+téléphone, car la carte est sur le réseau de votre salle, que seul le téléphone
+peut joindre.
+
+### Webhook (HTTP)
+
+Pointez le déclencheur vers `http://<ip-carte>/record` et faites tourner un petit
+serveur sur la carte. Un **jeton** facultatif est envoyé dans l'en-tête
+`Authorization` (ou un **utilisateur/mot de passe** en authentification HTTP
+basique), et vous pouvez ajouter les **en-têtes** de votre choix — pour que la
+carte ignore les requêtes indésirables.
+
+```python
+import socket, ujson
+
+def serve_trigger():
+    s = socket.socket()
+    s.bind(('0.0.0.0', 80))
+    s.listen(1)
+    while True:
+        conn, _ = s.accept()
+        body = conn.recv(1024).split(b'\r\n\r\n', 1)[-1]
+        try:
+            msg = ujson.loads(body)
+            if msg.get('action') == 'start':
+                start_recording(msg.get('lift'), msg.get('load'))
+            else:
+                stop_recording()
+        except Exception:
+            pass
+        conn.send(b'HTTP/1.1 204 No Content\r\n\r\n')
+        conn.close()
+```
+
+### MQTT
+
+Pointez le déclencheur vers un broker (`mqtt://broker.local:1883`, ou `mqtts://`
+pour le TLS), donnez-lui un **topic** et, au besoin, un **utilisateur/mot de
+passe** du broker et une **QoS**. La carte s'abonne au même topic :
+
+```python
+from umqtt.simple import MQTTClient
+
+def on_message(topic, msg):
+    data = ujson.loads(msg)
+    if data.get('action') == 'start':
+        start_recording(data.get('lift'), data.get('load'))
+    else:
+        stop_recording()
+
+client = MQTTClient('esp32', 'broker.local', 1883)
+client.set_callback(on_message)
+client.connect()
+client.subscribe(b'strongfish/bar-speed')
+while True:
+    client.wait_msg()
+```
+
+### WebSocket
+
+Pointez le déclencheur vers `ws://<ip-carte>/ws` (ou `wss://` pour le TLS). La
+carte fait tourner un serveur WebSocket et lit le même JSON à chaque message.
+MicroPython n'a pas de serveur WebSocket dans sa bibliothèque standard ; une
+petite bibliothèque comme `MicroWebSrv2` en ajoute un — ou utilisez la voie HTTP
+ou MQTT ci-dessus, qui ne demandent rien de plus.
+
+Quel que soit le transport choisi, la carte **renvoie la série terminée** à
+`/v1/users/me/bar-speed/analyze` exactement comme plus haut — le déclencheur lui
+dit seulement _quand_ enregistrer, et _quel_ mouvement et _quelle_ charge y
+associer.
+
 ## Notes et réglages
 
 - **Fréquence d'échantillonnage.** Le moteur suppose la fréquence que vous

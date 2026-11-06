@@ -34,6 +34,11 @@ dependencies:
   # manifest; the package asks for it at the moment the mic button is pressed.
   record: ^7.1.1
   share_plus: ^13.3.0
+  # Recording callbacks the phone fires to a device of the member's own (an
+  # ESP32): a WebSocket message or an MQTT publish, beside the plain HTTP
+  # webhook dio already covers. See services/callback_trigger.dart.
+  web_socket_channel: ^3.0.0
+  mqtt_client: ^10.0.0
 
 dev_dependencies:
   flutter_test:

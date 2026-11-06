@@ -282,6 +282,15 @@ final barSpeedDevicesProvider = StreamProvider.autoDispose<List<BleDevice>>((ref
   return BarSpeedCapture.instance.devices();
 });
 
+/// The member's recording callbacks - the devices of their own (an ESP32) the
+/// phone triggers when a set starts, over a webhook, a WebSocket or MQTT. Read
+/// so the record screen can fire the enabled ones, and the sensor sheet can
+/// list and edit them.
+final recordingCallbacksProvider = FutureProvider<List<RecordingCallback>>((ref) async {
+  ref.watch(sessionProvider.select((session) => session.user?.id));
+  return ref.watch(apiProvider).callbacks();
+});
+
 /// The largest video this deployment accepts, in bytes, or 0 when the config
 /// cannot be read - in which case the upload is attempted and the API has the
 /// final word, as it always did.

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../native/bar_speed_capture.dart';
 import '../providers/providers.dart';
+import '../services/callback_trigger.dart';
 import '../theme.dart';
 import '../widgets/sensor_sheet.dart';
 
@@ -22,11 +23,18 @@ const _movements = ['squat', 'bench', 'deadlift'];
 class RecordBarSpeedScreen extends ConsumerStatefulWidget {
   final String initialMovement;
   final double initialLoad;
+  // When opened from a training-session set, these say which set to write the
+  // result back to, so a recorded set fills in its reps, load and measured RPE
+  // rather than being entered twice. Blank when recording stands alone.
+  final String assignmentId;
+  final String setId;
 
   const RecordBarSpeedScreen({
     super.key,
     this.initialMovement = 'deadlift',
     this.initialLoad = 0,
+    this.assignmentId = '',
+    this.setId = '',
   });
 
   @override
@@ -76,6 +84,9 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   }
 
   void _start() {
+    // Signal the member's own device(s) too, if they set any up: the callback
+    // fires alongside the local capture, so an ESP32 records the same set.
+    _fireCallbacks('start');
     setState(() {
       _samples.clear();
       _baseT = null;
@@ -86,10 +97,16 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   }
 
   Future<void> _stop() async {
-    setState(() {
-      _recording = false;
-      _busy = true;
-    });
+    setState(() => _recording = false);
+    _fireCallbacks('stop');
+
+    // Nothing to compute when no sensor was streaming: a callback-only recording
+    // is the member's device doing the capture on its own, so Stop just ends
+    // the window and signals it.
+    final connected = ref.read(barSpeedConnectionProvider).valueOrNull?.isConnected ?? false;
+    if (!connected || _samples.isEmpty) return;
+
+    setState(() => _busy = true);
     try {
       final load = double.tryParse(_load.text.replaceAll(',', '.')) ?? 0;
       final set = await ref.read(apiProvider).analyzeBarSpeed(
@@ -97,11 +114,65 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
             load: load,
             samples: List.of(_samples),
           );
-      if (mounted) setState(() => _result = set);
+      if (!mounted) return;
+      setState(() => _result = set);
+      await _saveToSet(set);
     } catch (error) {
       if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Writes a recorded set back to the training-session set it was opened from:
+  /// its reps, the load that was on the bar and the measured RPE, marked done -
+  /// so recording a set logs it rather than leaving it to be typed in again.
+  /// Does nothing for a standalone recording (no set to write to).
+  Future<void> _saveToSet(StanceSet set) async {
+    if (widget.assignmentId.isEmpty || widget.setId.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final t = ref.read(tProvider);
+    try {
+      await ref.read(apiProvider).logSet(
+            widget.assignmentId,
+            widget.setId,
+            actualReps: set.reps > 0 ? set.reps : null,
+            actualRpe: set.predictedRpe > 0 ? set.predictedRpe : null,
+            actualLoad: set.weightKg > 0 ? set.weightKg : null,
+            done: true,
+          );
+      messenger.showSnackBar(SnackBar(content: Text(t('devices.barSpeed.savedToSet'))));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+    }
+  }
+
+  /// Fires the lift and load to the member's enabled callback device(s) - over
+  /// a webhook, a WebSocket or MQTT. Fire and forget: a device being off must
+  /// not hold up the set on the phone, so this is not awaited by Start/Stop - it
+  /// reports its own outcome in a snackbar.
+  Future<void> _fireCallbacks(String action) async {
+    final callbacks = ref.read(recordingCallbacksProvider).valueOrNull ?? const <RecordingCallback>[];
+    final enabled = callbacks.where((c) => c.enabled && c.url.trim().isNotEmpty).toList();
+    if (enabled.isEmpty) return;
+
+    final load = double.tryParse(_load.text.replaceAll(',', '.')) ?? 0;
+    final results = await CallbackTrigger.instance.fire(
+      enabled,
+      BarSpeedTrigger(lift: _movement, load: load, action: action),
+    );
+    if (!mounted) return;
+
+    final t = ref.read(tProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    final failed = results.where((result) => !result.ok).toList();
+    if (failed.isNotEmpty) {
+      messenger.showSnackBar(SnackBar(
+          content: Text(t('devices.barSpeed.triggerFailed', {'name': failed.first.callback.label}))));
+    } else if (action == 'start') {
+      // One confirmation, on start: the stop signal is silent unless it fails.
+      messenger.showSnackBar(SnackBar(
+          content: Text(t('devices.barSpeed.triggered', {'count': '${results.length}'}))));
     }
   }
 
@@ -112,6 +183,11 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
     final connection =
         ref.watch(barSpeedConnectionProvider).valueOrNull ?? const BarSpeedConnection();
     final connected = connection.isConnected;
+    // A callback-only recording is allowed too: with a device of their own set
+    // up, Start triggers it even when no sensor is connected to the phone.
+    final callbacks = ref.watch(recordingCallbacksProvider).valueOrNull ?? const <RecordingCallback>[];
+    final hasCallbacks = callbacks.any((c) => c.enabled && c.url.trim().isNotEmpty);
+    final canStart = connected || hasCallbacks;
 
     return Scaffold(
       appBar: AppBar(
@@ -126,8 +202,9 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         // Nothing records without a sensor connected: say so, and offer the
-        // one tap that fixes it, rather than a dead Start button.
-        if (!connected)
+        // one tap that fixes it, rather than a dead Start button - unless a
+        // callback device is set up, which can record on its own.
+        if (!connected && !hasCallbacks)
           Card(
             color: colors.backgroundMuted,
             child: Padding(
@@ -145,6 +222,19 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
                 ),
               ]),
             ),
+          ),
+        // No sensor, but a callback device is set up: say what Start will do.
+        if (!connected && hasCallbacks)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(children: [
+              Icon(Icons.sensors, size: 18, color: colors.textMuted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(t('devices.barSpeed.triggerOnly'),
+                    style: TextStyle(color: colors.textMuted)),
+              ),
+            ]),
           ),
         if (connected)
           Padding(
@@ -181,13 +271,13 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
         ),
         const SizedBox(height: 18),
         FilledButton.icon(
-          onPressed: (!connected || _busy) ? null : (_recording ? _stop : _start),
+          onPressed: (!canStart || _busy) ? null : (_recording ? _stop : _start),
           icon: Icon(_recording ? Icons.stop : Icons.fiber_manual_record),
           label: Text(_recording
               ? t('devices.barSpeed.recordStop')
               : t('devices.barSpeed.recordStart')),
         ),
-        if (_recording)
+        if (_recording && connected)
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: Text(
