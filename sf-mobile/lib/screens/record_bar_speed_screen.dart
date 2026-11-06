@@ -56,6 +56,16 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   StanceSet? _result;
   String _error = '';
 
+  // The troubleshoot console: the most recent raw samples, shown live when the
+  // bug icon is on, so a member can see whether the sensor is actually
+  // streaming - and what it is streaming - rather than guessing from a result.
+  bool _showDebug = false;
+  final List<BarSpeedSample> _debugSamples = [];
+  static const int _debugMax = 14;
+  // The stream runs at ~200 Hz; the console is repainted at most this often so
+  // it stays readable and cheap.
+  DateTime _lastDebugPaint = DateTime.fromMillisecondsSinceEpoch(0);
+
   @override
   void initState() {
     super.initState();
@@ -68,12 +78,31 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
     // connected, and a recording is just the window we keep between Start and
     // Stop.
     _sub = _capture.samples().listen((sample) {
-      if (!_recording) return;
-      _baseT ??= sample.t;
-      final json = sample.toJson();
-      json['t'] = sample.t - _baseT!;
-      _samples.add(json);
-      if (mounted) setState(() {}); // refresh the live sample count
+      if (_recording) {
+        _baseT ??= sample.t;
+        final json = sample.toJson();
+        json['t'] = sample.t - _baseT!;
+        _samples.add(json);
+      }
+      // The console reads live even when not recording, so a connection can be
+      // checked before a set. Repainted on a throttle, the capture count on
+      // each sample as before.
+      if (_showDebug) {
+        _debugSamples.add(sample);
+        while (_debugSamples.length > _debugMax) {
+          _debugSamples.removeAt(0);
+        }
+      }
+      if (!mounted) return;
+      if (_recording) {
+        setState(() {}); // the live rep count
+      } else if (_showDebug) {
+        final now = DateTime.now();
+        if (now.difference(_lastDebugPaint).inMilliseconds >= 100) {
+          _lastDebugPaint = now;
+          setState(() {});
+        }
+      }
     });
   }
 
@@ -267,6 +296,18 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
                 ),
               ),
               if (connection.hasBattery) BatteryBadge(percent: connection.battery),
+              // Troubleshoot: show the raw sensor values live in a console.
+              IconButton(
+                onPressed: () => setState(() {
+                  _showDebug = !_showDebug;
+                  if (!_showDebug) _debugSamples.clear();
+                }),
+                tooltip: t('devices.barSpeed.troubleshoot'),
+                iconSize: 20,
+                visualDensity: VisualDensity.compact,
+                color: _showDebug ? colors.primary : colors.textMuted,
+                icon: const Icon(Icons.bug_report_outlined),
+              ),
             ]),
           ),
         Wrap(spacing: 8, children: [
@@ -299,6 +340,11 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
               t('devices.barSpeed.recordCapturing', {'count': '${_samples.length}'}),
               style: TextStyle(color: colors.textMuted),
             ),
+          ),
+        if (_showDebug)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: _DebugConsole(samples: _debugSamples),
           ),
         if (_busy)
           const Padding(
@@ -356,5 +402,50 @@ class _ResultView extends ConsumerWidget {
           ),
         ),
     ]);
+  }
+}
+
+/// A live window on the raw sensor stream, for troubleshooting: the most recent
+/// samples as they arrive, newest at the bottom. Shown only when the bug icon
+/// is on. The numbers are the acceleration in m/s² and the quaternion the
+/// sensor sent; if nothing scrolls, the sensor is not streaming.
+class _DebugConsole extends ConsumerWidget {
+  final List<BarSpeedSample> samples;
+  const _DebugConsole({required this.samples});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(tProvider);
+    const ink = Color(0xFF9CDCFE);
+    const mono = TextStyle(fontFamily: 'monospace', fontSize: 11, color: ink, height: 1.4);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.terminal, size: 14, color: ink),
+          const SizedBox(width: 6),
+          Text(t('devices.barSpeed.debugTitle'),
+              style: const TextStyle(color: ink, fontSize: 12, fontWeight: FontWeight.w600)),
+          const Spacer(),
+          Text('${samples.length}', style: const TextStyle(fontFamily: 'monospace', fontSize: 11, color: Color(0xFF808080))),
+        ]),
+        const SizedBox(height: 6),
+        if (samples.isEmpty)
+          Text(t('devices.barSpeed.debugWaiting'), style: mono)
+        else
+          for (final s in samples)
+            Text(
+              't=${s.t.toStringAsFixed(2)}  '
+              'a=[${s.ax.toStringAsFixed(2)}, ${s.ay.toStringAsFixed(2)}, ${s.az.toStringAsFixed(2)}]  '
+              'q=[${s.qw.toStringAsFixed(2)}, ${s.qx.toStringAsFixed(2)}, ${s.qy.toStringAsFixed(2)}, ${s.qz.toStringAsFixed(2)}]',
+              style: mono,
+            ),
+      ]),
+    );
   }
 }
