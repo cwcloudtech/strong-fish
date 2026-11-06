@@ -57,6 +57,31 @@ class _SensorSheetState extends ConsumerState<SensorSheet> {
     }
   }
 
+  /// Confirms before dropping the sensor: a disconnect ends the session and
+  /// stops the retries that otherwise keep it on, so it is asked for rather
+  /// than a stray tap.
+  Future<void> _confirmDisconnect(BuildContext context) async {
+    final t = ref.read(tProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('devices.sensor.disconnect')),
+        content: Text(t('devices.sensor.disconnectConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(t('common.cancel')),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(t('devices.sensor.disconnect')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) _capture.disconnect();
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
@@ -91,7 +116,7 @@ class _SensorSheetState extends ConsumerState<SensorSheet> {
             if (connection.isConnected) ...[
               const SizedBox(height: 10),
               OutlinedButton.icon(
-                onPressed: () => _capture.disconnect(),
+                onPressed: () => _confirmDisconnect(context),
                 icon: const Icon(Icons.bluetooth_disabled),
                 label: Text(t('devices.sensor.disconnect')),
               ),

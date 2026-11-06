@@ -58,6 +58,13 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
     private var startedAtNanos = 0L
     private val quaternion = FloatArray(4) // w, x, y, z; 0 until the sensor sends one
 
+    // The raw bytes the notify characteristic has delivered but not yet made a
+    // whole frame. A frame does not fit one notification - the 0x61 data frame
+    // is 30 bytes against a ~20-byte default BLE payload, so it always arrives
+    // split - and framing has to carry across notifications or no frame is ever
+    // seen whole. Mirrors Stance's own witRxBuffer.
+    private val rxBuffer = ArrayList<Byte>(256)
+
     // The one sensor's identity while connected, so a battery reading can be
     // pushed as a fresh "connected" state, and the last battery percent (-1
     // until the first reading, then 0..100), carried on every state event.
@@ -297,6 +304,7 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
 
     private fun closeGatt() {
         main.removeCallbacks(batteryPoll)
+        rxBuffer.clear()
         try {
             gatt?.disconnect()
             gatt?.close()
@@ -394,6 +402,7 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
                 writeChar = gatt.getService(SERVICE_UUID)?.getCharacteristic(WRITE_UUID)
                 startedAtNanos = System.nanoTime()
                 quaternion.fill(0f)
+                rxBuffer.clear()
                 connectedId = address
                 connectedName = name
                 batteryPercent = -1
@@ -419,44 +428,75 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
 
     // --- the WitMotion frame ---
 
-    // parse walks the buffer for 0x55 frames. Most are 11-byte data frames (an
-    // acceleration frame emits a sample, a quaternion frame updates the pose);
-    // a 0x71 frame is the 20-byte answer to a register read, which is how the
-    // battery comes back. Length-aware because the frame types differ in size,
-    // so a 20-byte battery frame cannot be stepped over as if it were 11.
+    // frameLength is how many bytes a 0x55 frame of this type carries, header
+    // included: the 0x61 combined data frame (accel + gyro + quaternion) is 30,
+    // the 0x71 register answer (the battery) is 20, and the legacy single-value
+    // frames (0x51 accel, 0x59 quaternion, …) are 11. Zero for a second byte
+    // that starts no frame we know.
+    private fun frameLength(type: Int): Int = when (type) {
+        0x61 -> 30
+        0x71 -> 20
+        0x51, 0x52, 0x53, 0x54, 0x59 -> 11
+        else -> 0
+    }
+
+    // parse appends what just arrived to the running buffer and takes whole
+    // frames off the front of it, leaving a partial frame to be completed by the
+    // next notification. The modern Stance sensor streams the 0x61 frame, which
+    // is longer than one notification, so a parser that read each notification
+    // on its own would never see one whole - which is exactly why nothing was
+    // captured and every set came back empty.
     private fun parse(data: ByteArray) {
-        var i = 0
-        while (i + 2 <= data.size) {
-            if (data[i].toInt() and 0xFF != 0x55) { i++; continue }
-            when (data[i + 1].toInt() and 0xFF) {
-                0x71 -> {
-                    if (i + 20 > data.size) break
-                    parseBattery(data, i)
-                    i += 20
-                }
-                0x51 -> {
-                    if (i + 11 > data.size) break
-                    val ax = int16(data, i + 2) / 32768.0 * 16.0 * G
-                    val ay = int16(data, i + 4) / 32768.0 * 16.0 * G
-                    val az = int16(data, i + 6) / 32768.0 * 16.0 * G
-                    emitSample(ax, ay, az)
-                    i += 11
-                }
+        for (b in data) rxBuffer.add(b)
+        while (true) {
+            // Drop anything before a header we recognize.
+            while (rxBuffer.size >= 2) {
+                val b0 = rxBuffer[0].toInt() and 0xFF
+                val b1 = rxBuffer[1].toInt() and 0xFF
+                if (b0 == 0x55 && frameLength(b1) > 0) break
+                rxBuffer.removeAt(0)
+            }
+            if (rxBuffer.size < 2) return
+            val type = rxBuffer[1].toInt() and 0xFF
+            val len = frameLength(type)
+            if (rxBuffer.size < len) return // wait for the rest of this frame
+            val frame = ByteArray(len)
+            for (k in 0 until len) frame[k] = rxBuffer[k]
+            rxBuffer.subList(0, len).clear()
+            when (type) {
+                0x61 -> parseFrame61(frame)
+                0x71 -> parseBattery(frame, 0)
+                0x51 -> emitSample(
+                    int16(frame, 2) / 32768.0 * 16.0 * G,
+                    int16(frame, 4) / 32768.0 * 16.0 * G,
+                    int16(frame, 6) / 32768.0 * 16.0 * G
+                )
                 0x59 -> {
-                    if (i + 11 > data.size) break
-                    quaternion[0] = (int16(data, i + 2) / 32768.0).toFloat()
-                    quaternion[1] = (int16(data, i + 4) / 32768.0).toFloat()
-                    quaternion[2] = (int16(data, i + 6) / 32768.0).toFloat()
-                    quaternion[3] = (int16(data, i + 8) / 32768.0).toFloat()
-                    i += 11
-                }
-                else -> {
-                    // Some other 11-byte frame (angle, magnetometer…): skip it.
-                    if (i + 11 > data.size) break
-                    i += 11
+                    quaternion[0] = (int16(frame, 2) / 32768.0).toFloat()
+                    quaternion[1] = (int16(frame, 4) / 32768.0).toFloat()
+                    quaternion[2] = (int16(frame, 6) / 32768.0).toFloat()
+                    quaternion[3] = (int16(frame, 8) / 32768.0).toFloat()
                 }
             }
         }
+    }
+
+    // parseFrame61 reads the 30-byte 0x61 frame the modern WitMotion sensor
+    // streams: acceleration at bytes 10-15, gyro at 16-21 (unused here), and the
+    // quaternion at 22-29. The accel is ±16 g over the signed 16-bit range,
+    // turned into m/s² the way the engine expects; the quaternion (w, x, y, z)
+    // gives the engine the vertical. Both come in one frame, so the pose is
+    // fresh for the sample emitted beside it.
+    private fun parseFrame61(frame: ByteArray) {
+        quaternion[0] = (int16(frame, 22) / 32768.0).toFloat()
+        quaternion[1] = (int16(frame, 24) / 32768.0).toFloat()
+        quaternion[2] = (int16(frame, 26) / 32768.0).toFloat()
+        quaternion[3] = (int16(frame, 28) / 32768.0).toFloat()
+        emitSample(
+            int16(frame, 10) / 32768.0 * 16.0 * G,
+            int16(frame, 12) / 32768.0 * 16.0 * G,
+            int16(frame, 14) / 32768.0 * 16.0 * G
+        )
     }
 
     // parseBattery reads register 0x64 (battery voltage ×100) out of a 0x55 0x71
