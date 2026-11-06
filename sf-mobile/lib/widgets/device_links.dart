@@ -15,6 +15,7 @@ import 'ai_ask_button.dart';
 import 'export_menu.dart';
 import 'long_date.dart';
 import 'markdown_text.dart';
+import 'sensor_sheet.dart';
 
 /// The windows the API offers, in the order they widen.
 const _ranges = ['24h', '48h', 'week', '14d', 'month', '90d'];
@@ -1203,6 +1204,13 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
           child: Text(t('devices.barSpeed.title'),
               style: const TextStyle(fontWeight: FontWeight.w600)),
         ),
+        if (_canCapture)
+          IconButton(
+            icon: const Icon(Icons.bluetooth, size: 18),
+            tooltip: t('devices.sensor.title'),
+            visualDensity: VisualDensity.compact,
+            onPressed: () => showSensorSheet(context),
+          ),
         if (_canCapture)
           TextButton.icon(
             style: _compactButton,
