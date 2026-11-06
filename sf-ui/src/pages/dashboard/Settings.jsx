@@ -9,6 +9,7 @@ import Switch from "../../components/common/Switch";
 import toastOptions from "../../utils/toastOptions";
 import { auth, media as mediaApi, mfa as mfaApi } from "../../api/services";
 import AiConnections from "../../components/ai/AiConnections";
+import Callbacks from "../../components/devices/Callbacks";
 import Avatar from "../../components/common/Avatar";
 import Modal from "../../components/common/Modal";
 import Select from "../../components/common/Select";
@@ -335,6 +336,7 @@ export default function Settings() {
 
       <MfaSettings />
       <AiConnections />
+      <Callbacks />
       <StorageSettings />
     </div>
   );

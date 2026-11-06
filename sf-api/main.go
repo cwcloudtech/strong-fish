@@ -87,6 +87,7 @@ func main() {
 	messageStore := store.NewMessageStore(pool)
 	deviceLinkStore := store.NewDeviceLinkStore(pool)
 	aiStore := store.NewAIStore(pool)
+	callbackStore := store.NewCallbackStore(pool)
 
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
 	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
@@ -216,6 +217,7 @@ func main() {
 		Device:   deviceHandler,
 		BarSpeed: handlers.NewBarSpeedHandler(store.NewBarSpeedStore(pool)).
 			WithTracker(deviceHandler.BarSpeedSets),
+		Callback:   handlers.NewCallbackHandler(callbackStore),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),
 		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, mailer, cfg.MaxImageSize, cfg.UIBaseURL),

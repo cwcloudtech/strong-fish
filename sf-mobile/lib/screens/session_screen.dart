@@ -639,7 +639,7 @@ class _SetTile extends ConsumerWidget {
               iconSize: 20,
               tooltip: t('session.recordBarSpeed'),
               visualDensity: VisualDensity.compact,
-              onPressed: () => _openRecord(context, movement),
+              onPressed: () => _openRecord(context, ref, movement),
             ),
           // Done or not done, and nothing else: the two states a set is in
           // while a session is being run.
@@ -701,13 +701,22 @@ class _SetTile extends ConsumerWidget {
   /// Opens the recorder for this set, with the lift it maps to and the load on
   /// the bar already filled - the member confirms or changes both, then records.
   /// Prefers a logged load over the prescription, since that is what was lifted.
-  Future<void> _openRecord(BuildContext context, String movement) async {
+  Future<void> _openRecord(BuildContext context, WidgetRef ref, String movement) async {
     final load = set.log?.actualLoad ?? (set.loadKnown && set.roundedLoad > 0 ? set.roundedLoad : 0.0);
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => RecordBarSpeedScreen(initialMovement: movement, initialLoad: load),
+        builder: (_) => RecordBarSpeedScreen(
+          initialMovement: movement,
+          initialLoad: load,
+          // Opened from this set: a recorded set writes its reps, load and
+          // measured RPE straight back here.
+          assignmentId: assignmentId,
+          setId: set.id,
+        ),
       ),
     );
+    // The recording may have logged the set; refresh so the tile shows it.
+    ref.invalidate(assignmentProvider(assignmentId));
   }
 }
 

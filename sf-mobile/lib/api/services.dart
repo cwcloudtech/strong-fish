@@ -698,6 +698,29 @@ class SfApi {
     await client.dio.delete('/training/$assignmentId/days/$dayId/feedback/$feedbackId');
   }
 
+  // --- recording callbacks (webhook / websocket / mqtt) ---
+
+  /// The member's own callbacks - the triggers the phone fires when a set
+  /// starts. The secrets come back on each: the phone needs them to fire, and a
+  /// callback points at the member's own device, shared with no one.
+  Future<List<RecordingCallback>> callbacks() async {
+    final response = await client.dio.get('/users/me/callbacks');
+    final data = response.data;
+    if (data is! List) return const [];
+    return data.map((item) => RecordingCallback.fromJson(_map(item))).toList();
+  }
+
+  Future<RecordingCallback> addCallback(Map<String, dynamic> payload) async => RecordingCallback.fromJson(
+      _map((await client.dio.post('/users/me/callbacks', data: payload)).data));
+
+  Future<RecordingCallback> setCallback(String callbackId, Map<String, dynamic> payload) async =>
+      RecordingCallback.fromJson(
+          _map((await client.dio.put('/users/me/callbacks/$callbackId', data: payload)).data));
+
+  Future<void> deleteCallback(String callbackId) async {
+    await client.dio.delete('/users/me/callbacks/$callbackId');
+  }
+
   // --- administration (superadmin only) ---
 
   Future<Map<String, dynamic>> adminStats() async =>

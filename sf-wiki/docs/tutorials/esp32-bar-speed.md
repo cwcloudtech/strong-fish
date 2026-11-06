@@ -157,6 +157,102 @@ between 0 and 1 (how clean the capture looked). It is stored for your account, s
 it also appears in **Fitness data**, merged with any tracker you have connected,
 newest set of each lift first.
 
+## Trigger it from StrongFish {#trigger}
+
+The sensor above records on its own and posts the result. You can also have it
+the other way round: let **StrongFish tell the board a set has started**, so you
+tap **Start** on your phone and the board begins buffering — the lift and the
+load arrive with the signal.
+
+In StrongFish, add a **Recording trigger** (Settings → _Recording triggers_, or
+the phone's sensor sheet). It is cwcloud's **callback**: a small JSON message
+the phone fires when you start a set, carried by one of three transports — a
+**webhook** (HTTP POST), a **WebSocket** message, or an **MQTT** publish. When a
+Bluetooth sensor is also connected, the phone fires the callback _and_ records
+over Bluetooth, both at once.
+
+The body is the same whichever transport carries it:
+
+```json
+{
+  "event": "bar-speed",
+  "action": "start",
+  "lift": "squat",
+  "load": 120,
+  "unit": "kg",
+  "source": "strongfish",
+  "firedAt": "2026-11-06T18:30:00Z"
+}
+```
+
+`action` is `"start"` when you begin the set and `"stop"` when you end it;
+`lift` is `squat`, `bench` or `deadlift`. It is fired from the phone, because the
+board is on your gym's network, which only the phone can reach.
+
+### Webhook (HTTP)
+
+Point the trigger at `http://<board-ip>/record` and run a tiny listener on the
+board. An optional **token** is sent as the `Authorization` header (or a
+**username/password** as HTTP basic auth), and you can add any **custom headers**
+your setup wants — so the board can ignore stray requests.
+
+```python
+import socket, ujson
+
+def serve_trigger():
+    s = socket.socket()
+    s.bind(('0.0.0.0', 80))
+    s.listen(1)
+    while True:
+        conn, _ = s.accept()
+        body = conn.recv(1024).split(b'\r\n\r\n', 1)[-1]
+        try:
+            msg = ujson.loads(body)
+            if msg.get('action') == 'start':
+                start_recording(msg.get('lift'), msg.get('load'))
+            else:
+                stop_recording()
+        except Exception:
+            pass
+        conn.send(b'HTTP/1.1 204 No Content\r\n\r\n')
+        conn.close()
+```
+
+### MQTT
+
+Point the trigger at a broker (`mqtt://broker.local:1883`, or `mqtts://` for
+TLS), give it a **topic** and optional broker **username/password** and **QoS**.
+The board subscribes to the same topic:
+
+```python
+from umqtt.simple import MQTTClient
+
+def on_message(topic, msg):
+    data = ujson.loads(msg)
+    if data.get('action') == 'start':
+        start_recording(data.get('lift'), data.get('load'))
+    else:
+        stop_recording()
+
+client = MQTTClient('esp32', 'broker.local', 1883)
+client.set_callback(on_message)
+client.connect()
+client.subscribe(b'strongfish/bar-speed')
+while True:
+    client.wait_msg()
+```
+
+### WebSocket
+
+Point the trigger at `ws://<board-ip>/ws` (or `wss://` for TLS). The board runs
+a WebSocket server and reads the same JSON on each message. MicroPython has no
+WebSocket server in its standard library; a small library such as `MicroWebSrv2`
+adds one — or use the HTTP or MQTT path above, which need nothing extra.
+
+Whichever transport you pick, the board still **posts the finished set back** to
+`/v1/users/me/bar-speed/analyze` exactly as above — the trigger only tells it
+_when_ to record, and _what_ lift and load to tag it with.
+
 ## Notes and tuning
 
 - **Sample rate.** The engine assumes the rate you send in `sampleRateHz`; 200 Hz
