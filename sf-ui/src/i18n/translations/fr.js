@@ -623,7 +623,7 @@ const fr = {
       recordLoad: "Charge (kg)",
       recordStart: "Démarrer",
       recordStop: "Arrêter",
-      recordCapturing: "Enregistrement… {{count}} reps",
+      recordCapturing: "Enregistrement… {{count}} stances",
       troubleshoot: "Dépannage : afficher les données brutes du capteur",
       debugTitle: "Données brutes du capteur",
       debugWaiting: "En attente de données… si rien n'apparaît, le capteur n'émet pas.",

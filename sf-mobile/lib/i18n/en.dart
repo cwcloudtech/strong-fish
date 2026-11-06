@@ -640,7 +640,7 @@ const Map<String, dynamic> en = {
       'recordLoad': 'Load (kg)',
       'recordStart': 'Start',
       'recordStop': 'Stop',
-      'recordCapturing': 'Recording… {{count}} reps',
+      'recordCapturing': 'Recording… {{count}} stances',
       'troubleshoot': 'Troubleshoot: show raw sensor data',
       'debugTitle': 'Raw sensor data',
       'debugWaiting': 'Waiting for data… if nothing appears, the sensor is not streaming.',

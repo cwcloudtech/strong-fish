@@ -20,6 +20,13 @@ const (
 	// without the power to add/remove members or write programs. A read-only
 	// seat, so it is not a manager (see CanManageClub) but it can view member
 	// data (see CanViewMemberData).
+	//
+	// The seat limits only what they may do to the club and to other members:
+	// like any member they can still be assigned programs and run them
+	// (ProgramHandler.Assign gates on club membership, not role), so a
+	// nutritionist - or a coach invited as a plain member - trains exactly like
+	// an athlete. The role is kept distinct for ergonomics and for nutrition
+	// features to come, not to restrict training.
 	RoleNutritionist Role = "nutritionist"
 )
 

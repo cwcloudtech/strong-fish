@@ -620,7 +620,7 @@ const ar = {
       recordLoad: "الحمل (كغ)",
       recordStart: "ابدأ",
       recordStop: "إيقاف",
-      recordCapturing: "جارٍ التسجيل… {{count}} تكرار",
+      recordCapturing: "جارٍ التسجيل… {{count}} عيّنة",
       troubleshoot: "استكشاف الأخطاء: عرض البيانات الخام للمستشعر",
       debugTitle: "البيانات الخام للمستشعر",
       debugWaiting: "في انتظار البيانات… إن لم يظهر شيء فالمستشعر لا يبث.",
