@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { FiCopy, FiEdit2, FiEdit3, FiGlobe, FiLock, FiPlus, FiTrash2 } from "react-icons/fi";
 
@@ -315,7 +315,13 @@ export default function ProgramDetail() {
                   {assignments.map((assignment) => (
                     <tr key={assignment.id}>
                       <td>
-                        {assignment.memberName}
+                        {assignment.memberHandle ? (
+                          <Link to={`/profile/${assignment.memberHandle}`}>
+                            {assignment.memberName}
+                          </Link>
+                        ) : (
+                          assignment.memberName
+                        )}
                         <div className="sf-muted">{assignment.memberEmail}</div>
                       </td>
                       <td className="sf-muted">

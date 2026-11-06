@@ -184,9 +184,12 @@ type ProgramAssignment struct {
 	ClubName    string `json:"clubName,omitempty"`
 	MemberName  string `json:"memberName,omitempty"`
 	MemberEmail string `json:"memberEmail,omitempty"`
-	StartDate   string `json:"startDate,omitempty"`
-	Status      string `json:"status,omitempty"`
-	Note        string `json:"note,omitempty"`
+	// MemberHandle lets the assignment list link to the member's public
+	// profile (/profile/{handle}); empty when they never chose a handle.
+	MemberHandle string `json:"memberHandle,omitempty"`
+	StartDate    string `json:"startDate,omitempty"`
+	Status       string `json:"status,omitempty"`
+	Note         string `json:"note,omitempty"`
 	// CompletedSets/TotalSets summarize progress for the assignment list.
 	CompletedSets int       `json:"completedSets"`
 	TotalSets     int       `json:"totalSets"`

@@ -900,7 +900,7 @@ type assignmentData struct {
 var assignmentSelect = `
 	SELECT a.id, a.program_id, a.user_id, a.data, a.created_at, a.updated_at,
 	       coalesce(p.data->>'name', ''), coalesce(p.club_id::text, ''), coalesce(c.data->>'name', ''),
-	       ` + displayFullName("u") + `, u.email,
+	       ` + displayFullName("u") + `, u.email, coalesce(u.data->>'handle', ''),
 	       (SELECT count(*) FROM program_sets WHERE program_id = a.program_id),
 	       (SELECT count(*) FROM set_logs WHERE assignment_id = a.id AND (data->>'done')::boolean IS TRUE)
 	FROM program_assignments a
@@ -913,7 +913,7 @@ func scanAssignment(row pgx.Row) (models.ProgramAssignment, error) {
 	var a models.ProgramAssignment
 	var raw []byte
 	if err := row.Scan(&a.ID, &a.ProgramID, &a.UserID, &raw, &a.CreatedAt, &a.UpdatedAt,
-		&a.ProgramName, &a.ClubID, &a.ClubName, &a.MemberName, &a.MemberEmail,
+		&a.ProgramName, &a.ClubID, &a.ClubName, &a.MemberName, &a.MemberEmail, &a.MemberHandle,
 		&a.TotalSets, &a.CompletedSets); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return models.ProgramAssignment{}, ErrNotFound
