@@ -67,15 +67,24 @@ class BarSpeedConnection {
   final String deviceName;
   final String error;
 
+  /// The sensor's battery level, 0..100, or -1 until it has reported one (and
+  /// once disconnected). WitMotion reports it a second or two after connecting
+  /// and every half-minute after, so it is briefly unknown on a fresh connect.
+  final int battery;
+
   const BarSpeedConnection({
     this.state = BleConnectionState.idle,
     this.deviceId = '',
     this.deviceName = '',
     this.error = '',
+    this.battery = -1,
   });
 
   bool get isConnected => state == BleConnectionState.connected;
   bool get isBusy => state == BleConnectionState.connecting || state == BleConnectionState.scanning;
+
+  /// Whether a battery reading has arrived (so the UI shows it only once real).
+  bool get hasBattery => battery >= 0;
 
   static BleConnectionState _stateOf(String? name) {
     switch (name) {
@@ -99,6 +108,7 @@ class BarSpeedConnection {
         deviceId: (map['deviceId'] as String?) ?? '',
         deviceName: (map['name'] as String?) ?? '',
         error: (map['error'] as String?) ?? '',
+        battery: (map['battery'] as num?)?.toInt() ?? -1,
       );
 }
 

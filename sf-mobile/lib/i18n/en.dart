@@ -645,6 +645,7 @@ const Map<String, dynamic> en = {
       'connectHint': 'Connect your sensor to record a set.',
       'failed': 'Could not connect',
       'rssi': '{{rssi}} dBm',
+      'battery': '{{percent}}%',
     },
     'provider': {
       'google-health': 'Google Health (Fitbit, Pixel Watch)',

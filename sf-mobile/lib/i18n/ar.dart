@@ -645,6 +645,7 @@ const Map<String, dynamic> ar = {
       'connectHint': 'اتصل بمستشعرك لتسجيل مجموعة.',
       'failed': 'تعذّر الاتصال',
       'rssi': '{{rssi}} dBm',
+      'battery': '{{percent}}٪',
     },
     'provider': {
       'google-health': 'Google Health ‏(Fitbit، Pixel Watch)',

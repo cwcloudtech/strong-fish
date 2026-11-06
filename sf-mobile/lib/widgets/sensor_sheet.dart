@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../native/bar_speed_capture.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
+import 'battery_badge.dart';
 
 /// Opens the sensor sheet: scan for nearby bar-speed sensors, connect to one,
 /// and see whether it is connected - the same thing a brand's own app does, so
@@ -178,6 +179,7 @@ class _StatusBanner extends ConsumerWidget {
         Icon(icon, color: tint, size: 20),
         const SizedBox(width: 8),
         Expanded(child: Text(text, style: TextStyle(color: tint))),
+        if (connection.isConnected && connection.hasBattery) BatteryBadge(percent: connection.battery),
       ],
     );
   }
