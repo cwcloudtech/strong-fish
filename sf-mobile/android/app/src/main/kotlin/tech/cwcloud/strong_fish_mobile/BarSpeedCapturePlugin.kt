@@ -51,9 +51,17 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
     private var samplesSink: EventChannel.EventSink? = null
 
     private var gatt: BluetoothGatt? = null
+    private var writeChar: BluetoothGattCharacteristic? = null
     private var scanning = false
     private var startedAtNanos = 0L
     private val quaternion = FloatArray(4) // w, x, y, z; 0 until the sensor sends one
+
+    // The one sensor's identity while connected, so a battery reading can be
+    // pushed as a fresh "connected" state, and the last battery percent (-1
+    // until the first reading, then 0..100), carried on every state event.
+    private var connectedId = ""
+    private var connectedName: String? = null
+    private var batteryPercent = -1
 
     // address -> {name, rssi}, insertion-ordered so the list stays stable as it
     // grows under the member's eyes.
@@ -66,9 +74,21 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
         private const val SAMPLES = "sf/bar_speed_capture/samples"
         private val SERVICE_UUID: UUID = UUID.fromString("0000ffe5-0000-1000-8000-00805f9a34fb")
         private val NOTIFY_UUID: UUID = UUID.fromString("0000ffe4-0000-1000-8000-00805f9a34fb")
+        // The write characteristic, for vendor commands - here, reading the
+        // battery register.
+        private val WRITE_UUID: UUID = UUID.fromString("0000ffe9-0000-1000-8000-00805f9a34fb")
         private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
         private const val G = 9.80665
         private const val PERMISSION_REQUEST = 7021
+        // The WitMotion "read register" command for register 0x64 (battery
+        // voltage): FF AA 27 64 00, written to the write characteristic. The
+        // sensor answers with a 0x55 0x71 register frame on the notify one.
+        private val READ_BATTERY_REGISTER =
+            byteArrayOf(0xFF.toByte(), 0xAA.toByte(), 0x27, 0x64, 0x00)
+        // Battery moves slowly; a reading shortly after connecting and every
+        // half-minute after is plenty, and keeps the radio quiet between.
+        private const val BATTERY_INITIAL_MS = 1500L
+        private const val BATTERY_POLL_MS = 30000L
     }
 
     init {
@@ -203,11 +223,46 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
     }
 
     private fun closeGatt() {
+        main.removeCallbacks(batteryPoll)
         try {
             gatt?.disconnect()
             gatt?.close()
         } catch (_: Exception) {}
         gatt = null
+        writeChar = null
+        connectedId = ""
+        connectedName = null
+        batteryPercent = -1
+    }
+
+    // --- battery ---
+
+    // Polls the battery register while connected: once shortly after the
+    // stream is up, then every half-minute. Each run writes the read command;
+    // the answer arrives as a 0x55 0x71 frame and is parsed in [parse].
+    private val batteryPoll = object : Runnable {
+        override fun run() {
+            requestBattery()
+            main.postDelayed(this, BATTERY_POLL_MS)
+        }
+    }
+
+    private fun startBatteryPolling() {
+        main.removeCallbacks(batteryPoll)
+        main.postDelayed(batteryPoll, BATTERY_INITIAL_MS)
+    }
+
+    @Suppress("DEPRECATION") // characteristic.value + writeCharacteristic on this path
+    private fun requestBattery() {
+        val connection = gatt ?: return
+        val characteristic = writeChar ?: return
+        try {
+            characteristic.value = READ_BATTERY_REGISTER
+            // No response: it is a fire-and-forget request, and the sensor
+            // answers on the notify characteristic, not on the write ack.
+            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+            connection.writeCharacteristic(characteristic)
+        } catch (_: SecurityException) {}
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
@@ -239,9 +294,17 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
                     cccd.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                     gatt.writeDescriptor(cccd)
                 }
+                // The same service's write characteristic carries the battery
+                // read; absent on a sensor that is not a WitMotion, in which
+                // case the battery simply stays unknown.
+                writeChar = gatt.getService(SERVICE_UUID)?.getCharacteristic(WRITE_UUID)
                 startedAtNanos = System.nanoTime()
                 quaternion.fill(0f)
+                connectedId = address
+                connectedName = name
+                batteryPercent = -1
                 emitState("connected", deviceId = address, name = name)
+                startBatteryPolling()
             } catch (_: SecurityException) {
                 emitState("failed", deviceId = address, name = name,
                     error = "bluetooth connect permission not granted")
@@ -256,28 +319,74 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
 
     // --- the WitMotion frame ---
 
-    // parse walks the buffer for 11-byte 0x55 frames and emits a sample on each
-    // acceleration frame, carrying the most recent quaternion.
+    // parse walks the buffer for 0x55 frames. Most are 11-byte data frames (an
+    // acceleration frame emits a sample, a quaternion frame updates the pose);
+    // a 0x71 frame is the 20-byte answer to a register read, which is how the
+    // battery comes back. Length-aware because the frame types differ in size,
+    // so a 20-byte battery frame cannot be stepped over as if it were 11.
     private fun parse(data: ByteArray) {
         var i = 0
-        while (i + 11 <= data.size) {
+        while (i + 2 <= data.size) {
             if (data[i].toInt() and 0xFF != 0x55) { i++; continue }
             when (data[i + 1].toInt() and 0xFF) {
+                0x71 -> {
+                    if (i + 20 > data.size) break
+                    parseBattery(data, i)
+                    i += 20
+                }
                 0x51 -> {
+                    if (i + 11 > data.size) break
                     val ax = int16(data, i + 2) / 32768.0 * 16.0 * G
                     val ay = int16(data, i + 4) / 32768.0 * 16.0 * G
                     val az = int16(data, i + 6) / 32768.0 * 16.0 * G
                     emitSample(ax, ay, az)
+                    i += 11
                 }
                 0x59 -> {
+                    if (i + 11 > data.size) break
                     quaternion[0] = (int16(data, i + 2) / 32768.0).toFloat()
                     quaternion[1] = (int16(data, i + 4) / 32768.0).toFloat()
                     quaternion[2] = (int16(data, i + 6) / 32768.0).toFloat()
                     quaternion[3] = (int16(data, i + 8) / 32768.0).toFloat()
+                    i += 11
+                }
+                else -> {
+                    // Some other 11-byte frame (angle, magnetometer…): skip it.
+                    if (i + 11 > data.size) break
+                    i += 11
                 }
             }
-            i += 11
         }
+    }
+
+    // parseBattery reads register 0x64 (battery voltage ×100) out of a 0x55 0x71
+    // register frame and turns it into a percentage, pushing a fresh connected
+    // state when it changes.
+    private fun parseBattery(data: ByteArray, i: Int) {
+        if (data[i + 2].toInt() and 0xFF != 0x64) return
+        val voltage = int16(data, i + 4) / 100.0
+        val percent = batteryPercentFromVoltage(voltage)
+        if (percent != batteryPercent) {
+            batteryPercent = percent
+            emitState("connected", deviceId = connectedId, name = connectedName)
+        }
+    }
+
+    // The WitMotion LiPo voltage-to-percent steps the sensor's own app uses, so
+    // StrongFish shows the same figure the member would see there.
+    private fun batteryPercentFromVoltage(v: Double): Int = when {
+        v > 3.96 -> 100
+        v > 3.93 -> 90
+        v > 3.87 -> 75
+        v > 3.82 -> 60
+        v > 3.79 -> 50
+        v > 3.77 -> 40
+        v > 3.73 -> 30
+        v > 3.70 -> 20
+        v > 3.68 -> 15
+        v > 3.50 -> 10
+        v > 3.40 -> 5
+        else -> 0
     }
 
     private fun int16(data: ByteArray, offset: Int): Int {
@@ -301,6 +410,9 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
             "deviceId" to deviceId,
             "name" to (name ?: ""),
             "error" to error,
+            // -1 until the first reading (and once disconnected); 0..100 once the
+            // sensor has answered the battery poll.
+            "battery" to batteryPercent,
         )
         main.post { stateSink?.success(event) }
     }

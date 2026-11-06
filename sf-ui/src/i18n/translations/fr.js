@@ -630,6 +630,7 @@ const fr = {
       connectHint: "Connectez votre capteur pour enregistrer une série.",
       failed: "Connexion impossible",
       rssi: "{{rssi}} dBm",
+      battery: "{{percent}} %",
     },
     provider: {
       "google-health": "Google Health (Fitbit, Pixel Watch)",

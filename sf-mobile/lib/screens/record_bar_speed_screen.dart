@@ -8,6 +8,7 @@ import '../native/bar_speed_capture.dart';
 import '../providers/providers.dart';
 import '../services/callback_trigger.dart';
 import '../theme.dart';
+import '../widgets/battery_badge.dart';
 import '../widgets/sensor_sheet.dart';
 
 const _movements = ['squat', 'bench', 'deadlift'];
@@ -252,6 +253,7 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
                   style: TextStyle(color: colors.success),
                 ),
               ),
+              if (connection.hasBattery) BatteryBadge(percent: connection.battery),
             ]),
           ),
         Wrap(spacing: 8, children: [
