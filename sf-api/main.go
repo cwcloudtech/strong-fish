@@ -18,6 +18,7 @@ import (
 	"strong-fish-api/internal/email"
 	"strong-fish-api/internal/garmin"
 	"strong-fish-api/internal/googlehealth"
+	"strong-fish-api/internal/myfitnesspal"
 	"strong-fish-api/internal/handlers"
 	"strong-fish-api/internal/metrics"
 	"strong-fish-api/internal/middleware"
@@ -28,6 +29,7 @@ import (
 	"strong-fish-api/internal/telemetry"
 	"strong-fish-api/internal/utils"
 	"strong-fish-api/internal/withings"
+	"strong-fish-api/internal/yazio"
 )
 
 // shutdownTimeout bounds how long the exporters get to flush what they have
@@ -155,6 +157,13 @@ func main() {
 		SupabaseAnonKey:    cfg.StanceSupabaseAnonKey,
 		SessionsRPC:        cfg.StanceSessionsRPC,
 	})))
+	// Nutrition sources: a member's food diary, read for the energy and protein
+	// they logged. Each is connected per member with their own account - Yazio
+	// with an email and password, MyFitnessPal with a personal token - so both
+	// need no operator credentials and are always offered. Yazio first, which is
+	// the priority when a member somehow connects both.
+	devices = append(devices, yazio.New(yazio.Config{}))
+	devices = append(devices, myfitnesspal.New(myfitnesspal.Config{}))
 
 	strengthHandler := handlers.NewStrengthHandler(exerciseStore, userStore)
 	profileHandler := handlers.NewProfileHandler(userStore, socialStore, clubStore, oneRMStore).

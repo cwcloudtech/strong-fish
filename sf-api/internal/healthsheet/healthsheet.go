@@ -65,12 +65,19 @@ func Sections(steps models.StepSeries, heart *models.HeartSeries,
 
 // AllSections is every part of the one fitness export, in reading order and
 // each only when there is something behind it: steps and heart rate (when an
-// activity source is connected), the latest body composition (when a scale
-// is), and the bar-speed charts (when a tracker is). Unlike Sections it leaves
-// steps out entirely when there are none, rather than drawing an empty chart -
-// this one sheet is assembled from whatever the member has, not from one
-// provider that must exist.
+// activity source is connected), the nutrition the member logged and their
+// daily targets (when a food app is connected, or their body is known), the
+// latest body composition (when a scale is), and the bar-speed charts (when a
+// tracker is). Unlike Sections it leaves steps out entirely when there are
+// none, rather than drawing an empty chart - this one sheet is assembled from
+// whatever the member has, not from one provider that must exist.
+//
+// Nutrition sits just under the heart rate and before the bar speed: the diary
+// charts read like the step chart they follow, and the daily targets are the
+// number an athlete and coach read against what was eaten to decide cut, bulk
+// or maintain.
 func AllSections(steps models.StepSeries, heart *models.HeartSeries,
+	nutrition *models.NutritionSeries, targets *models.NutritionTargets,
 	body *models.BodyComposition, barSets []models.BarSet, locale string) []programsheet.Section {
 	var sections []programsheet.Section
 	if len(steps.Days) > 0 {
@@ -79,6 +86,7 @@ func AllSections(steps models.StepSeries, heart *models.HeartSeries,
 			sections = append(sections, HeartSection(*heart, locale))
 		}
 	}
+	sections = append(sections, NutritionSections(nutrition, targets, locale)...)
 	if body != nil && len(body.Measures) > 0 {
 		sections = append(sections, BodySection(*body, locale))
 	}
@@ -155,6 +163,140 @@ func BodySection(body models.BodyComposition, locale string) programsheet.Sectio
 			{Header: programsheet.Heading(locale, "measure"), Weight: 1.8},
 			{Header: programsheet.Heading(locale, "value"), Weight: 1.2},
 			{Header: programsheet.Heading(locale, "measuredOn"), Weight: 1.2},
+		},
+		Rows: rows,
+	}
+}
+
+// Nutrition bar colours. Protein reads against its target - amber when the day
+// fell short of the minimum dose, green when it met it. Energy reads against
+// maintenance - blue for a deficit (a cut), green for maintenance, amber for a
+// surplus (a bulk) - so the cut/bulk/maintain shape is visible without reading
+// a single number. A neutral navy stands in when there is no target to judge
+// against.
+var (
+	nutShort   = color.RGBA{217, 119, 6, 255}  // amber - under the protein target
+	nutMet     = color.RGBA{22, 163, 74, 255}   // green - protein met, or maintenance
+	nutDeficit = color.RGBA{59, 130, 246, 255}  // blue - an energy deficit
+	nutSurplus = color.RGBA{217, 119, 6, 255}   // amber - an energy surplus
+	nutNeutral = color.RGBA{14, 94, 155, 255}   // navy - no target to judge against
+)
+
+// NutritionSections is the member's logged nutrition and their daily targets:
+// a protein-per-day histogram and an energy-per-day histogram when a food app
+// is connected, then a small table of the ideal protein band and maintenance
+// energy when their body is known enough to work them out. Returned as its own
+// slice so the export drops the lot when there is neither.
+func NutritionSections(series *models.NutritionSeries, targets *models.NutritionTargets,
+	locale string) []programsheet.Section {
+	var sections []programsheet.Section
+	if series != nil && len(series.Days) > 0 {
+		sections = append(sections, proteinSection(*series, targets, locale))
+		sections = append(sections, energySection(*series, targets, locale))
+	}
+	if targets != nil && (targets.HasProtein() || targets.HasEnergy() || targets.NeedsHeight) {
+		if section := targetsSection(*targets, locale); section != nil {
+			sections = append(sections, *section)
+		}
+	}
+	return sections
+}
+
+// proteinSection is a bar a day of protein eaten, each coloured by whether it
+// met the minimum of the target band.
+func proteinSection(series models.NutritionSeries, targets *models.NutritionTargets,
+	locale string) programsheet.Section {
+	chart := &programsheet.Chart{}
+	min := 0.0
+	if targets != nil {
+		min = targets.ProteinMinG
+	}
+	for _, day := range series.Days {
+		colour := nutNeutral
+		if min > 0 {
+			if day.ProteinG >= min {
+				colour = nutMet
+			} else {
+				colour = nutShort
+			}
+		}
+		chart.Bars = append(chart.Bars, programsheet.Bar{
+			Label:   shortDate(day.Date),
+			Value:   day.ProteinG,
+			Caption: strconv.Itoa(int(day.ProteinG + 0.5)),
+			Color:   colour,
+		})
+	}
+	return programsheet.Section{Heading: programsheet.Heading(locale, "proteinChart"), Chart: chart}
+}
+
+// energySection is a bar a day of energy eaten, each coloured by where it fell
+// against maintenance - a deficit, maintenance, or a surplus.
+func energySection(series models.NutritionSeries, targets *models.NutritionTargets,
+	locale string) programsheet.Section {
+	chart := &programsheet.Chart{}
+	maintenance := 0.0
+	if targets != nil {
+		maintenance = targets.MaintenanceKcal
+	}
+	for _, day := range series.Days {
+		colour := nutNeutral
+		if maintenance > 0 {
+			switch {
+			case day.Kcal < maintenance*0.92:
+				colour = nutDeficit
+			case day.Kcal > maintenance*1.08:
+				colour = nutSurplus
+			default:
+				colour = nutMet
+			}
+		}
+		chart.Bars = append(chart.Bars, programsheet.Bar{
+			Label:   shortDate(day.Date),
+			Value:   day.Kcal,
+			Caption: formatInt(int64(day.Kcal + 0.5)),
+			Color:   colour,
+		})
+	}
+	return programsheet.Section{Heading: programsheet.Heading(locale, "kcalChart"), Chart: chart}
+}
+
+// targetsSection is the ideal protein band and maintenance energy as a small
+// table, or - when the height is missing and nothing could be computed - a
+// single line asking for it. A trailing note flags the whole thing as an
+// estimate when any input was guessed.
+func targetsSection(targets models.NutritionTargets, locale string) *programsheet.Section {
+	if targets.NeedsHeight {
+		return &programsheet.Section{
+			Columns: []programsheet.Column{{Header: programsheet.Heading(locale, "nutritionTargets"), Weight: 1}},
+			Rows:    []programsheet.Line{{Cells: []string{programsheet.Heading(locale, "nt.needHeight")}}},
+		}
+	}
+	rows := []programsheet.Line{}
+	if targets.HasProtein() {
+		rows = append(rows, programsheet.Line{Cells: []string{
+			programsheet.Heading(locale, "nt.idealProtein"),
+			fmt.Sprintf(programsheet.Heading(locale, "nt.proteinRange"),
+				strconv.Itoa(int(targets.ProteinMinG+0.5)), strconv.Itoa(int(targets.ProteinMaxG+0.5))),
+		}})
+	}
+	if targets.HasEnergy() {
+		rows = append(rows, programsheet.Line{Cells: []string{
+			programsheet.Heading(locale, "nt.maintenanceEnergy"),
+			fmt.Sprintf(programsheet.Heading(locale, "nt.energy"), formatInt(int64(targets.MaintenanceKcal+0.5))),
+		}})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	if targets.Estimated {
+		rows = append(rows, programsheet.Line{Cells: []string{programsheet.Heading(locale, "nt.estimate"), ""}})
+	}
+	return &programsheet.Section{
+		Heading: programsheet.Heading(locale, "nutritionTargets"),
+		Columns: []programsheet.Column{
+			{Header: programsheet.Heading(locale, "measure"), Weight: 1.8},
+			{Header: programsheet.Heading(locale, "value"), Weight: 1.2},
 		},
 		Rows: rows,
 	}

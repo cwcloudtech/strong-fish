@@ -133,16 +133,29 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
     if (widget.assignmentId.isEmpty || widget.setId.isEmpty) return;
     final messenger = ScaffoldMessenger.of(context);
     final t = ref.read(tProvider);
+    // The detected rep count, falling back to the per-rep series when the
+    // set-level field is missing, so a logged set carries the reps that were
+    // actually measured rather than none.
+    final reps = set.reps > 0 ? set.reps : set.repVelocities.length;
     try {
       await ref.read(apiProvider).logSet(
             widget.assignmentId,
             widget.setId,
-            actualReps: set.reps > 0 ? set.reps : null,
+            actualReps: reps > 0 ? reps : null,
             actualRpe: set.predictedRpe > 0 ? set.predictedRpe : null,
             actualLoad: set.weightKg > 0 ? set.weightKg : null,
             done: true,
           );
-      messenger.showSnackBar(SnackBar(content: Text(t('devices.barSpeed.savedToSet'))));
+      // A real notification of what was saved, in terms of bar speed: the reps
+      // detected, the mean concentric speed, and the measured RPE - whichever of
+      // them the capture produced - rather than a bare "saved".
+      final parts = <String>[
+        t('devices.barSpeed.detectedReps', {'count': '$reps'}),
+        if (set.meanVelocity > 0) '${set.meanVelocity.toStringAsFixed(2)} m/s',
+        if (set.predictedRpe > 0) t('devices.barSpeed.rpeReal', {'real': set.predictedRpe.toStringAsFixed(1)}),
+      ];
+      messenger.showSnackBar(
+          SnackBar(content: Text(t('devices.barSpeed.savedSummary', {'detail': parts.join(' · ')}))));
     } catch (error) {
       messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
     }
@@ -318,8 +331,12 @@ class _ResultView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(tProvider);
     final colors = AppColors.of(context);
+    // The number of reps the engine detected - the per-rep speeds are the proof
+    // of it, so when the set-level count is missing, their length is the count.
+    final reps = set.reps > 0 ? set.reps : set.repVelocities.length;
     final lines = <String>[
-      '${t('devices.lift.${set.lift}')} · ${set.reps} × ${set.weightKg.toStringAsFixed(0)} kg',
+      '${t('devices.lift.${set.lift}')} · ${t('devices.barSpeed.detectedReps', {'count': '$reps'})}'
+          '${set.weightKg > 0 ? ' × ${set.weightKg.toStringAsFixed(0)} kg' : ''}',
       if (set.meanVelocity > 0)
         '${t('devices.barSpeed.mean')}: ${set.meanVelocity.toStringAsFixed(2)} m/s',
       if (set.peakVelocity > 0)

@@ -187,14 +187,16 @@ export default function DeviceLinks() {
   if (connections.length === 0) return null;
 
   const activitySource = connections.find((connection) => connection.activitySource)?.provider;
-  // Whether there is anything to put in a document: steps, a scale reading or a
-  // tracked set. The one export button appears only when at least one of them
-  // is connected.
+  const nutritionSource = connections.find((connection) => connection.nutritionSource)?.provider;
+  // Whether there is anything to put in a document: steps, a scale reading, a
+  // food diary or a tracked set. The one export button appears only when at
+  // least one of them is connected.
   const exportable = connections.some(
     (connection) =>
       connection.connected &&
       (connection.activitySource ||
         connection.bodyCompositionSource ||
+        connection.nutritionSource ||
         connection.capabilities?.includes("bar-speed")),
   );
 
@@ -253,6 +255,12 @@ export default function DeviceLinks() {
           </div>
         );
       })}
+
+      {/* Nutrition, just under the activity and body data and before the bar
+          speed: the energy and protein the member logged, and their daily
+          targets. Rendered once - the panel loads the targets itself even when
+          no food app is connected, so a member still sees what to aim for. */}
+      <NutritionPanel provider={nutritionSource} range={range} onRange={setRange} />
 
       {/* Bar speed, once and consolidated: the most recent set of each lift
           across every source - what StrongFish captured itself, and what a
@@ -744,6 +752,237 @@ function BodyCompositionPanel({ provider }) {
             </div>
           ))}
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Protein bar tone: amber under the minimum of the band, green at or above it. */
+function proteinTone(grams, min) {
+  if (!min) return "sf-nut-neutral";
+  return grams >= min ? "sf-nut-ok" : "sf-nut-under";
+}
+
+/** Energy bar tone against maintenance: a deficit, maintenance, or a surplus. */
+function kcalTone(kcal, maintenance) {
+  if (!maintenance) return "sf-nut-neutral";
+  if (kcal < maintenance * 0.92) return "sf-nut-deficit";
+  if (kcal > maintenance * 1.08) return "sf-nut-surplus";
+  return "sf-nut-ok";
+}
+
+/**
+ * Logged nutrition and the member's daily targets.
+ *
+ * Two histograms - protein a day and energy a day - when a food app is
+ * connected, each bar coloured by where it fell against the target. Then the
+ * targets themselves: the ideal protein band and the maintenance energy,
+ * computed from the member's body and shown even when nothing is logged, so
+ * there is always something to aim for. A missing height is a prompt, not a
+ * blank: the one field that unlocks the rest.
+ */
+function NutritionPanel({ provider, range, onRange }) {
+  const { t } = useI18n();
+  const [series, setSeries] = useState(null);
+  const [targets, setTargets] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (provider) {
+        // The nutrition read carries the targets with it, so one call answers
+        // both "what did I eat" and "what should I aim for".
+        const data = await devicesApi.nutrition(provider, range);
+        setSeries(data);
+        setTargets(data.targets || null);
+      } else {
+        // No food app: the targets still stand on their own.
+        setSeries(null);
+        setTargets(await devicesApi.nutritionTargets());
+      }
+    } catch (err) {
+      setError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [provider, range]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const days = series?.days || [];
+  const hasSeries = days.length > 0;
+  const proteinPeak = Math.max(1, ...days.map((day) => day.proteinG));
+  const kcalPeak = Math.max(1, ...days.map((day) => day.kcal));
+  const hasTargets =
+    targets && (targets.proteinMaxG > 0 || targets.maintenanceKcal > 0 || targets.needsHeight);
+
+  // Nothing to show at all - no food logged, and no target computable.
+  if (!loading && !hasSeries && !hasTargets && !error) return null;
+
+  return (
+    <div style={{ marginTop: "1rem" }}>
+      <div className="sf-row" style={{ gap: "0.3rem" }}>
+        <strong>{t("devices.nutrition.title")}</strong>
+        <button
+          className="sf-button sf-button-ghost sf-button-sm"
+          onClick={load}
+          disabled={loading}
+          aria-label={t("common.refresh")}
+          title={t("common.refresh")}
+        >
+          <FiRefreshCw />
+        </button>
+      </div>
+
+      <ErrorMessage error={error} />
+      {loading && !hasSeries && !hasTargets ? <Spinner /> : null}
+
+      {provider && hasSeries ? (
+        <div className="sf-row" style={{ gap: "0.3rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+          {RANGES.map((name) => (
+            <button
+              key={name}
+              className={`sf-button sf-button-sm ${range === name ? "" : "sf-button-secondary"}`}
+              onClick={() => onRange(name)}
+            >
+              {t(`devices.range.${name}`)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {hasSeries ? (
+        <>
+          <div className="sf-row" style={{ gap: "1.4rem", marginTop: "0.7rem", flexWrap: "wrap" }}>
+            <div>
+              <div className="sf-muted">{t("devices.nutrition.avgProtein")}</div>
+              <strong className="sf-steps-figure">
+                {Math.round(series.avgProteinG).toLocaleString()}
+                <span className="sf-muted" style={{ fontSize: "0.8rem" }}>
+                  {" "}
+                  {t("devices.nutrition.gramsUnit")}
+                </span>
+              </strong>
+            </div>
+            <div>
+              <div className="sf-muted">{t("devices.nutrition.avgKcal")}</div>
+              <strong className="sf-steps-figure">
+                {Math.round(series.avgKcal).toLocaleString()}
+                <span className="sf-muted" style={{ fontSize: "0.8rem" }}>
+                  {" "}
+                  {t("devices.nutrition.kcalUnit")}
+                </span>
+              </strong>
+            </div>
+            <div>
+              <div className="sf-muted">{t("devices.nutrition.loggedDays")}</div>
+              <strong className="sf-steps-figure">{series.loggedDays}</strong>
+            </div>
+          </div>
+
+          <div className="sf-muted" style={{ marginTop: "0.8rem", fontSize: "0.8rem" }}>
+            {t("devices.nutrition.proteinChart")}
+          </div>
+          <div className="sf-steps-chart" aria-hidden="true">
+            {days.map((day) => (
+              <div
+                key={day.date}
+                className={`sf-steps-bar ${proteinTone(day.proteinG, targets?.proteinMinG)}`}
+                style={{ height: `${Math.round((day.proteinG / proteinPeak) * 100)}%` }}
+                title={`${day.date}: ${Math.round(day.proteinG)} ${t("devices.nutrition.gramsUnit")}`}
+              />
+            ))}
+          </div>
+
+          <div className="sf-muted" style={{ marginTop: "0.8rem", fontSize: "0.8rem" }}>
+            {t("devices.nutrition.kcalChart")}
+          </div>
+          <div className="sf-steps-chart" aria-hidden="true">
+            {days.map((day) => (
+              <div
+                key={day.date}
+                className={`sf-steps-bar ${kcalTone(day.kcal, targets?.maintenanceKcal)}`}
+                style={{ height: `${Math.round((day.kcal / kcalPeak) * 100)}%` }}
+                title={`${day.date}: ${Math.round(day.kcal).toLocaleString()} ${t("devices.nutrition.kcalUnit")}`}
+              />
+            ))}
+          </div>
+
+          <details style={{ marginTop: "0.5rem" }}>
+            <summary className="sf-muted">{t("devices.perDay")}</summary>
+            <div className="sf-table-wrapper">
+              <table className="sf-table">
+                <tbody>
+                  {days.map((day) => (
+                    <tr key={day.date}>
+                      <td>{day.date}</td>
+                      <td className="sf-table-num">
+                        {Math.round(day.proteinG)} {t("devices.nutrition.gramsUnit")}
+                      </td>
+                      <td className="sf-table-num">
+                        {Math.round(day.kcal).toLocaleString()} {t("devices.nutrition.kcalUnit")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </>
+      ) : null}
+
+      {hasTargets ? <NutritionTargets targets={targets} t={t} /> : null}
+    </div>
+  );
+}
+
+/**
+ * The ideal protein band and maintenance energy, or - when the height is the
+ * one thing missing - a prompt to fill it in. Estimated figures carry a plain
+ * warning that they are approximate.
+ */
+function NutritionTargets({ targets, t }) {
+  if (targets.needsHeight) {
+    return <p className="sf-muted" style={{ marginTop: "0.8rem" }}>{t("devices.nutrition.needHeight")}</p>;
+  }
+  return (
+    <div style={{ marginTop: "0.9rem" }}>
+      <strong>{t("devices.nutrition.targetsTitle")}</strong>
+      <div className="sf-body-grid" style={{ marginTop: "0.5rem" }}>
+        {targets.proteinMaxG > 0 ? (
+          <div className="sf-body-tile">
+            <div className="sf-muted">{t("devices.nutrition.idealProtein")}</div>
+            <strong className="sf-steps-figure">
+              {Math.round(targets.proteinMinG)}–{Math.round(targets.proteinMaxG)}
+              <span className="sf-muted" style={{ fontSize: "0.8rem" }}>
+                {" "}
+                {t("devices.nutrition.gramsUnit")}
+              </span>
+            </strong>
+          </div>
+        ) : null}
+        {targets.maintenanceKcal > 0 ? (
+          <div className="sf-body-tile">
+            <div className="sf-muted">{t("devices.nutrition.maintenance")}</div>
+            <strong className="sf-steps-figure">
+              {Math.round(targets.maintenanceKcal).toLocaleString()}
+              <span className="sf-muted" style={{ fontSize: "0.8rem" }}>
+                {" "}
+                {t("devices.nutrition.kcalUnit")}
+              </span>
+            </strong>
+          </div>
+        ) : null}
+      </div>
+      {targets.estimated ? (
+        <p className="sf-muted" style={{ marginTop: "0.5rem", fontSize: "0.8rem" }}>
+          {t("devices.nutrition.estimate")}
+        </p>
       ) : null}
     </div>
   );

@@ -27,6 +27,12 @@ var ErrNotLinked = errors.New("devicelink: account not linked at the provider")
 // retry.
 var ErrReauthorize = errors.New("devicelink: authorization no longer valid")
 
+// ErrRefused is an account-paired provider turning down the credentials at
+// pairing: a wrong email or password, which is the member's to fix rather than
+// a server fault. The handler answers it as a 401 at the pairing endpoint, the
+// same way Stance's own refusal is answered.
+var ErrRefused = errors.New("devicelink: credentials refused")
+
 // Token is one grant as a provider hands it over.
 type Token struct {
 	AccessToken  string
@@ -121,6 +127,31 @@ type ActivityProvider interface {
 	ActivityReader
 }
 
+// DayCalories is one day's active energy expenditure, as a tracker reports it:
+// the kilocalories burned by movement that day, over and above resting.
+type DayCalories struct {
+	Date string
+	// Kcal is the active calories for the day. A day the tracker has nothing
+	// for is absent rather than zero, the same rule steps and heart rate
+	// follow.
+	Kcal float64
+}
+
+// ActiveCaloriesReader is an activity provider that also reports how much
+// energy the member's movement burned each day.
+//
+// Optional on purpose, and separate from ActivityReader: steps and heart rate
+// are the two things every activity source has, while active calories are what
+// a watch with a calorie model adds. It feeds the one number that needs it -
+// the daily energy a member should eat to maintain weight, which is resting
+// expenditure plus what they moved - so a provider that cannot answer it costs
+// nothing but a slightly rougher target.
+type ActiveCaloriesReader interface {
+	// DailyActiveCalories returns one entry per day in [start, end] the tracker
+	// has an active-calorie figure for.
+	DailyActiveCalories(ctx context.Context, accessToken string, start, end time.Time) ([]DayCalories, error)
+}
+
 // BarSet is one completed set as a bar-speed provider reports it: what was
 // lifted, what the member rated it, and what the bar's speed said it really
 // was. Velocities are concentric, in m/s.
@@ -194,11 +225,41 @@ type BodyCompositionReader interface {
 	LatestBodyComposition(ctx context.Context, accessToken string) ([]BodyMeasure, error)
 }
 
+// NutritionDay is one day's consumed nutrition, as a food-logging app reports
+// it: the energy eaten and the protein in it.
+type NutritionDay struct {
+	Date string
+	// Kcal is the energy consumed that day. ProteinG is the protein in grams.
+	// A day with nothing logged is absent, not a day of zero eating - the same
+	// reason an unworn watch is a gap in the steps, not a day at zero.
+	Kcal     float64
+	ProteinG float64
+}
+
+// NutritionReader is a provider with a food diary behind it (Yazio,
+// MyFitnessPal): what the member ate, reduced to the two figures that matter to
+// a lifter - energy and protein - per day.
+type NutritionReader interface {
+	// MaxNutritionDays is the widest window it will return at once, which
+	// bounds the views the app offers.
+	MaxNutritionDays() int
+	// DailyNutrition returns one entry per day in [start, end] that has
+	// anything logged.
+	DailyNutrition(ctx context.Context, accessToken string, start, end time.Time) ([]NutritionDay, error)
+}
+
+// NutritionProvider is a provider that can be read for nutrition.
+type NutritionProvider interface {
+	Provider
+	NutritionReader
+}
+
 // What a provider can be read for, as the clients are told.
 const (
 	CapabilityActivity        = "activity"
 	CapabilityBodyComposition = "body-composition"
 	CapabilityBarSpeed        = "bar-speed"
+	CapabilityNutrition       = "nutrition"
 )
 
 // Capabilities lists what this provider can be read for, so a client draws
@@ -213,6 +274,9 @@ func Capabilities(provider Provider) []string {
 	}
 	if _, ok := provider.(BarSpeedReader); ok {
 		capabilities = append(capabilities, CapabilityBarSpeed)
+	}
+	if _, ok := provider.(NutritionReader); ok {
+		capabilities = append(capabilities, CapabilityNutrition)
 	}
 	return capabilities
 }
@@ -241,6 +305,20 @@ func ActivitySource(providers []Provider, connected map[string]bool) string {
 func BodyCompositionSource(providers []Provider, connected map[string]bool) string {
 	for _, provider := range providers {
 		if _, ok := provider.(BodyCompositionReader); ok && connected[provider.Name()] && provider.Enabled() {
+			return provider.Name()
+		}
+	}
+	return ""
+}
+
+// NutritionSource picks, among the providers a member connected, the one food
+// diary whose figures are shown - the first in registration order that can be
+// read for nutrition. The order is the priority, the same way ActivitySource
+// and BodyCompositionSource work: a member with two food apps connected sees
+// one histogram, not one per app, and the clients and the export agree on which.
+func NutritionSource(providers []Provider, connected map[string]bool) string {
+	for _, provider := range providers {
+		if _, ok := provider.(NutritionReader); ok && connected[provider.Name()] && provider.Enabled() {
 			return provider.Name()
 		}
 	}

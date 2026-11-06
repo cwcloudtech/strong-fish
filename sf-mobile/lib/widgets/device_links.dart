@@ -233,16 +233,19 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     // space leaves a member wondering whether the feature exists.
     if (connections == null || connections.isEmpty) return const SizedBox.shrink();
     String? activitySource;
+    String? nutritionSource;
     for (final connection in connections) {
       if (connection.activitySource) activitySource = connection.provider;
+      if (connection.nutritionSource) nutritionSource = connection.provider;
     }
-    // Whether there is anything to put in a document: steps, a scale reading or
-    // a tracked set. The one export button appears only when at least one is
-    // connected.
+    // Whether there is anything to put in a document: steps, a scale reading, a
+    // food diary or a tracked set. The one export button appears only when at
+    // least one is connected.
     final exportable = connections.any((connection) =>
         connection.connected &&
         (connection.activitySource ||
             connection.bodyCompositionSource ||
+            connection.nutritionSource ||
             connection.can('bar-speed')));
 
     return Card(
@@ -293,6 +296,15 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
               if (connection.bodyCompositionSource)
                 _BodyCompositionPanel(provider: connection.provider),
             ],
+          // Nutrition, just under the activity and body data and before the bar
+          // speed: the energy and protein logged, and the daily targets. Shown
+          // once - it loads its targets even when no food app is connected, so
+          // a member still sees what to aim for.
+          _NutritionPanel(
+            provider: nutritionSource,
+            range: _range,
+            onRange: (value) => setState(() => _range = value),
+          ),
           // Bar speed, once and consolidated: the most recent set of each lift
           // across every source - what StrongFish captured itself, and what a
           // connected tracker reports - not one panel per device.
@@ -996,6 +1008,301 @@ String _decimal(double value) {
   return rounded == rounded.truncateToDouble()
       ? _grouped(rounded.toInt())
       : rounded.toStringAsFixed(1);
+}
+
+/// The blue a deficit day reads as - the same low-effort blue the heart-rate
+/// light zone uses, so a cut day is recognised before the number is read.
+const Color _nutDeficitColor = Color(0xFF3B82F6);
+
+/// Protein bar tone: amber under the minimum of the band, green at or above it;
+/// navy when there is no target to judge against.
+Color _proteinTone(BuildContext context, double grams, double min) {
+  final colors = AppColors.of(context);
+  if (min <= 0) return colors.primary;
+  return grams >= min ? colors.success : colors.warning;
+}
+
+/// Energy bar tone against maintenance: blue for a deficit, green for
+/// maintenance, amber for a surplus; navy when there is no target.
+Color _kcalTone(BuildContext context, double kcal, double maintenance) {
+  final colors = AppColors.of(context);
+  if (maintenance <= 0) return colors.primary;
+  if (kcal < maintenance * 0.92) return _nutDeficitColor;
+  if (kcal > maintenance * 1.08) return colors.warning;
+  return colors.success;
+}
+
+/// Logged nutrition and the member's daily targets.
+///
+/// Two histograms - protein a day and energy a day - when a food app is
+/// connected, each bar coloured by where it fell against the target; then the
+/// targets themselves, computed from the member's body and shown even when
+/// nothing is logged. A missing height is a prompt, not a blank.
+class _NutritionPanel extends ConsumerStatefulWidget {
+  final String? provider;
+  final String range;
+  final ValueChanged<String> onRange;
+  const _NutritionPanel({required this.provider, required this.range, required this.onRange});
+
+  @override
+  ConsumerState<_NutritionPanel> createState() => _NutritionPanelState();
+}
+
+class _NutritionPanelState extends ConsumerState<_NutritionPanel> {
+  NutritionSeries? _series;
+  NutritionTargets? _targets;
+  String _error = '';
+  Object? _errorRaw;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NutritionPanel old) {
+    super.didUpdateWidget(old);
+    if (old.range != widget.range || old.provider != widget.provider) _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+    try {
+      if (widget.provider != null) {
+        // The nutrition read carries the targets with it, so one call answers
+        // both "what did I eat" and "what should I aim for".
+        final series = await ref.read(apiProvider).deviceNutrition(widget.provider!, widget.range);
+        if (mounted) {
+          setState(() {
+            _series = series;
+            _targets = series.targets;
+          });
+        }
+      } else {
+        final targets = await ref.read(apiProvider).deviceNutritionTargets();
+        if (mounted) {
+          setState(() {
+            _series = null;
+            _targets = targets;
+          });
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _errorRaw = error;
+          _error = ref.read(tErrorProvider)(error);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final series = _series;
+    final targets = _targets;
+    final small = Theme.of(context).textTheme.bodySmall;
+    final days = series?.days ?? const <NutritionDay>[];
+    final hasSeries = days.isNotEmpty;
+    final hasTargets = targets != null && !targets.isEmpty;
+
+    // Nothing to show at all - no food logged, and no target computable.
+    if (!_loading && !hasSeries && !hasTargets && _error.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 14),
+      Row(children: [
+        Expanded(
+          child: Text(t('devices.nutrition.title'),
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        IconButton(
+          onPressed: _loading ? null : _load,
+          tooltip: t('common.refresh'),
+          icon: const Icon(Icons.refresh, size: 20),
+          visualDensity: VisualDensity.compact,
+        ),
+      ]),
+      if (widget.provider != null && hasSeries)
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: [
+            for (final range in _ranges)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  selected: widget.range == range,
+                  label: Text(t('devices.range.$range')),
+                  onSelected: (_) => widget.onRange(range),
+                ),
+              ),
+          ]),
+        ),
+      if (_loading && !hasSeries && !hasTargets)
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      if (_error.isNotEmpty)
+        Padding(padding: const EdgeInsets.only(top: 10), child: _PanelError(_error, _errorRaw)),
+      if (hasSeries) ...[
+        const SizedBox(height: 12),
+        Wrap(spacing: 24, runSpacing: 8, children: [
+          _Figure(label: t('devices.nutrition.avgProtein'), value: series!.avgProteinG.round()),
+          _Figure(label: t('devices.nutrition.avgKcal'), value: series.avgKcal.round()),
+          _Figure(label: t('devices.nutrition.loggedDays'), value: series.loggedDays),
+        ]),
+        const SizedBox(height: 10),
+        Text(t('devices.nutrition.proteinChart'), style: small),
+        const SizedBox(height: 4),
+        _NutritionBars(
+          days: days,
+          protein: true,
+          min: targets?.proteinMinG ?? 0,
+          maintenance: 0,
+          unit: t('devices.nutrition.gramsUnit'),
+        ),
+        const SizedBox(height: 10),
+        Text(t('devices.nutrition.kcalChart'), style: small),
+        const SizedBox(height: 4),
+        _NutritionBars(
+          days: days,
+          protein: false,
+          min: 0,
+          maintenance: targets?.maintenanceKcal ?? 0,
+          unit: t('devices.nutrition.kcalUnit'),
+        ),
+      ],
+      if (hasTargets) _NutritionTargetsView(targets: targets),
+    ]);
+  }
+}
+
+/// A bar per day of one nutrient, coloured by where it fell against its target.
+class _NutritionBars extends StatelessWidget {
+  final List<NutritionDay> days;
+  final bool protein;
+  final double min;
+  final double maintenance;
+  final String unit;
+  const _NutritionBars({
+    required this.days,
+    required this.protein,
+    required this.min,
+    required this.maintenance,
+    required this.unit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (days.isEmpty) return const SizedBox.shrink();
+    final values = days.map((day) => protein ? day.proteinG : day.kcal).toList();
+    final peak = values.fold<double>(1, (a, b) => a > b ? a : b);
+
+    return Semantics(
+      label: [for (var i = 0; i < days.length; i++) '${days[i].date}: ${values[i].round()} $unit'].join(', '),
+      child: Container(
+        height: 90,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: AppColors.of(context).backgroundMuted,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var i = 0; i < days.length; i++)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1),
+                  child: Tooltip(
+                    message: '${days[i].date}: ${_grouped(values[i].round())} $unit',
+                    child: Container(
+                      height: (82 * values[i] / peak).clamp(2, 82).toDouble(),
+                      decoration: BoxDecoration(
+                        color: protein
+                            ? _proteinTone(context, values[i], min)
+                            : _kcalTone(context, values[i], maintenance),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The ideal protein band and maintenance energy, or a prompt for the height.
+class _NutritionTargetsView extends ConsumerWidget {
+  final NutritionTargets targets;
+  const _NutritionTargetsView({required this.targets});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(tProvider);
+    final small = Theme.of(context).textTheme.bodySmall;
+    if (targets.needsHeight) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Text(t('devices.nutrition.needHeight'), style: small),
+      );
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 12),
+      Text(t('devices.nutrition.targetsTitle'), style: const TextStyle(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        if (targets.hasProtein)
+          _targetTile(context, t('devices.nutrition.idealProtein'),
+              '${targets.proteinMinG.round()}–${targets.proteinMaxG.round()}',
+              t('devices.nutrition.gramsUnit')),
+        if (targets.hasEnergy)
+          _targetTile(context, t('devices.nutrition.maintenance'),
+              _grouped(targets.maintenanceKcal.round()), t('devices.nutrition.kcalUnit')),
+      ]),
+      if (targets.estimated)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(t('devices.nutrition.estimate'), style: small?.copyWith(fontSize: 11)),
+        ),
+    ]);
+  }
+
+  Widget _targetTile(BuildContext context, String label, String value, String unit) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    return Container(
+      width: 150,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.of(context).border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: small),
+        Text.rich(
+          TextSpan(children: [
+            TextSpan(text: value),
+            TextSpan(text: ' $unit', style: small),
+          ]),
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+      ]),
+    );
+  }
 }
 
 /// Signing in to an account-paired provider (Stance): an email and a password,

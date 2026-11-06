@@ -275,6 +275,68 @@ func (c *Client) DailySteps(ctx context.Context, accessToken string, start, end 
 	return days, nil
 }
 
+// DailyActiveCalories returns the active calories burned on each day over the
+// span, from the same daily summary as steps and heart rate: Withings reports
+// an active "calories" alongside the steps, so no extra call is needed.
+func (c *Client) DailyActiveCalories(ctx context.Context, accessToken string, start, end time.Time) ([]devicelink.DayCalories, error) {
+	start, end, ok := clampDays(start, end)
+	if !ok {
+		return nil, nil
+	}
+	calories, err := c.activeCalories(ctx, accessToken, start, end)
+	if err != nil {
+		return nil, err
+	}
+	days := []devicelink.DayCalories{}
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		key := day.Format("2006-01-02")
+		if kcal, ok := calories[key]; ok && kcal > 0 {
+			days = append(days, devicelink.DayCalories{Date: key, Kcal: kcal})
+		}
+	}
+	return days, nil
+}
+
+// activeCalories reads the daily active calories, keyed by date. A separate
+// call from activity() so the busy steps/heart path is untouched; the busiest
+// device wins the day, as with steps.
+func (c *Client) activeCalories(ctx context.Context, accessToken string, start, end time.Time) (map[string]float64, error) {
+	calories := map[string]float64{}
+	offset := 0
+	for page := 0; page < maxPages; page++ {
+		form := url.Values{
+			"action":       {"getactivity"},
+			"startdateymd": {start.Format("2006-01-02")},
+			"enddateymd":   {end.Format("2006-01-02")},
+			"data_fields":  {"calories"},
+		}
+		if offset > 0 {
+			form.Set("offset", strconv.Itoa(offset))
+		}
+		var parsed struct {
+			Activities []struct {
+				Date     string  `json:"date"`
+				Calories float64 `json:"calories"`
+			} `json:"activities"`
+			More   bool `json:"more"`
+			Offset int  `json:"offset"`
+		}
+		if err := c.call(ctx, "/v2/measure", accessToken, form, &parsed); err != nil {
+			return nil, err
+		}
+		for _, day := range parsed.Activities {
+			if day.Calories > calories[day.Date] {
+				calories[day.Date] = day.Calories
+			}
+		}
+		if !parsed.More || parsed.Offset == 0 {
+			break
+		}
+		offset = parsed.Offset
+	}
+	return calories, nil
+}
+
 // DailyHeartRate returns one entry per day over the same span. Withings' four
 // zones are mapped in order onto the four the app colours, and a day's zone is
 // the hardest one it spent any time in.

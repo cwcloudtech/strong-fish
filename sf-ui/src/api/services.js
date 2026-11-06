@@ -106,6 +106,15 @@ export const devices = {
   // The latest reading of each measure the scale takes; no range, since the
   // panel is "where am I now".
   bodyComposition: (provider) => body(client.get(`/users/me/devices/${provider}/body-composition`)),
+  // Logged energy and protein from a food diary (Yazio, MyFitnessPal), over the
+  // same named windows the steps use. The response carries the daily averages
+  // and the member's targets alongside the per-day series.
+  nutrition: (provider, range) =>
+    body(client.get(`/users/me/devices/${provider}/nutrition`, { params: { range } })),
+  // The member's ideal protein band and maintenance energy, computed from their
+  // body rather than any provider - so a member who tracks no food still has a
+  // target. NeedsHeight is set when a height is the one thing missing.
+  nutritionTargets: () => body(client.get("/users/me/devices/nutrition-targets")),
   // One export of everything connected - steps, heart rate, body composition,
   // bar speed and the AI reading - as a PNG or PDF. format is the route's own
   // extension, so the file arrives named the way its contents are; range is the

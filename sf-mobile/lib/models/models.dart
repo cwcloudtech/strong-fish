@@ -293,6 +293,10 @@ class DeviceConnection {
   /// single-source rule, so a member with two scales sees one panel, not two.
   final bool bodyCompositionSource;
 
+  /// Whether this is the one food diary whose nutrition is shown - the same
+  /// single-source rule again, so a member with two food apps sees one panel.
+  final bool nutritionSource;
+
   /// Whether this provider can be connected with an email and password, so the
   /// UI shows a sign-in form.
   final bool accountPaired;
@@ -317,6 +321,7 @@ class DeviceConnection {
     this.capabilities = const [],
     this.activitySource = false,
     this.bodyCompositionSource = false,
+    this.nutritionSource = false,
     this.accountPaired = false,
     this.oauth = false,
     this.googleClientId = '',
@@ -335,6 +340,7 @@ class DeviceConnection {
             : const [],
         activitySource: json['activitySource'] == true,
         bodyCompositionSource: json['bodyCompositionSource'] == true,
+        nutritionSource: json['nutritionSource'] == true,
         accountPaired: json['accountPaired'] == true,
         oauth: json['oauth'] == true,
         googleClientId: _toString(json['googleClientId']),
@@ -530,6 +536,109 @@ class StepSeries {
             .toList(),
         total: _toInt(json['total']),
         dailyAverage: _toInt(json['dailyAverage']),
+      );
+}
+
+/// One day's logged nutrition: the energy eaten and the protein in it.
+class NutritionDay {
+  final String date;
+  final double kcal;
+  final double proteinG;
+
+  const NutritionDay({this.date = '', this.kcal = 0, this.proteinG = 0});
+
+  factory NutritionDay.fromJson(Map<String, dynamic> json) => NutritionDay(
+        date: _toString(json['date']),
+        kcal: _toDouble(json['kcal']),
+        proteinG: _toDouble(json['proteinG']),
+      );
+}
+
+/// The member's ideal daily protein band and maintenance energy, with how each
+/// was derived so the UI can warn when a figure is estimated.
+class NutritionTargets {
+  final double proteinMinG;
+  final double proteinMaxG;
+  final double fatFreeMassKg;
+  final double maintenanceKcal;
+  final double restingKcal;
+  final double activityKcal;
+
+  /// True when any input was guessed rather than measured, so the UI shows a
+  /// plain "these are approximate" note.
+  final bool estimated;
+
+  /// True when nothing could be computed because the height is missing: the UI
+  /// turns it into a prompt to fill the profile rather than an empty panel.
+  final bool needsHeight;
+
+  const NutritionTargets({
+    this.proteinMinG = 0,
+    this.proteinMaxG = 0,
+    this.fatFreeMassKg = 0,
+    this.maintenanceKcal = 0,
+    this.restingKcal = 0,
+    this.activityKcal = 0,
+    this.estimated = false,
+    this.needsHeight = false,
+  });
+
+  bool get hasProtein => proteinMaxG > 0;
+  bool get hasEnergy => maintenanceKcal > 0;
+  bool get isEmpty => !hasProtein && !hasEnergy && !needsHeight;
+
+  factory NutritionTargets.fromJson(Map<String, dynamic> json) => NutritionTargets(
+        proteinMinG: _toDouble(json['proteinMinG']),
+        proteinMaxG: _toDouble(json['proteinMaxG']),
+        fatFreeMassKg: _toDouble(json['fatFreeMassKg']),
+        maintenanceKcal: _toDouble(json['maintenanceKcal']),
+        restingKcal: _toDouble(json['restingKcal']),
+        activityKcal: _toDouble(json['activityKcal']),
+        estimated: json['estimated'] == true,
+        needsHeight: json['needsHeight'] == true,
+      );
+}
+
+/// A range of days of logged nutrition, with the averages over the days that
+/// were logged and the member's targets. The averages come from the API, like
+/// the step average, so the phone and the web app cannot disagree.
+class NutritionSeries {
+  final String provider;
+  final String range;
+  final String from;
+  final String to;
+  final List<NutritionDay> days;
+  final double avgKcal;
+  final double avgProteinG;
+  final int loggedDays;
+  final NutritionTargets? targets;
+
+  const NutritionSeries({
+    this.provider = '',
+    this.range = '',
+    this.from = '',
+    this.to = '',
+    this.days = const [],
+    this.avgKcal = 0,
+    this.avgProteinG = 0,
+    this.loggedDays = 0,
+    this.targets,
+  });
+
+  factory NutritionSeries.fromJson(Map<String, dynamic> json) => NutritionSeries(
+        provider: _toString(json['provider']),
+        range: _toString(json['range']),
+        from: _toString(json['from']),
+        to: _toString(json['to']),
+        days: (json['days'] as List? ?? [])
+            .map((item) => NutritionDay.fromJson(Map<String, dynamic>.from(item as Map)))
+            .toList(),
+        avgKcal: _toDouble(json['avgKcal']),
+        avgProteinG: _toDouble(json['avgProteinG']),
+        loggedDays: _toInt(json['loggedDays']),
+        targets: json['targets'] == null
+            ? null
+            : NutritionTargets.fromJson(Map<String, dynamic>.from(json['targets'] as Map)),
       );
 }
 

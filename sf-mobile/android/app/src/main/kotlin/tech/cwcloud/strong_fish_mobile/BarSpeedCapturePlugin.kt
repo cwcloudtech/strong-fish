@@ -10,8 +10,10 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.os.ParcelUuid
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -63,6 +65,14 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
     private var connectedName: String? = null
     private var batteryPercent = -1
 
+    // The device the member wants connected, and how many unasked-for drops we
+    // have retried since the last good connection. desiredId is set on connect
+    // and cleared on an explicit disconnect, so a reconnect is attempted only
+    // while the member still wants the sensor on.
+    private var desiredId: String? = null
+    private var desiredName: String? = null
+    private var reconnectAttempts = 0
+
     // address -> {name, rssi}, insertion-ordered so the list stays stable as it
     // grows under the member's eyes.
     private val discovered = LinkedHashMap<String, Pair<String?, Int>>()
@@ -73,6 +83,13 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
         private const val STATE = "sf/bar_speed_capture/state"
         private const val SAMPLES = "sf/bar_speed_capture/samples"
         private val SERVICE_UUID: UUID = UUID.fromString("0000ffe5-0000-1000-8000-00805f9a34fb")
+        // Stance's own encoder advertises its own service. We filter the scan to
+        // the two services Stance's app does - the WitMotion service above and
+        // this one - so the list is sensors, not every phone and earbud in the
+        // room. StrongFish records over the WitMotion stream; a Stance encoder
+        // that advertises only this service is shown but cannot be read, which is
+        // why the WitMotion service is what a member's sensor is connected by.
+        private val STANCE_SERVICE_UUID: UUID = UUID.fromString("681236cc-6c02-4118-a610-a44f913fb61f")
         private val NOTIFY_UUID: UUID = UUID.fromString("0000ffe4-0000-1000-8000-00805f9a34fb")
         // The write characteristic, for vendor commands - here, reading the
         // battery register.
@@ -85,10 +102,28 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
         // sensor answers with a 0x55 0x71 register frame on the notify one.
         private val READ_BATTERY_REGISTER =
             byteArrayOf(0xFF.toByte(), 0xAA.toByte(), 0x27, 0x64, 0x00)
+        // On connect, tune the sensor the way Stance's own app does: a 200 Hz
+        // return rate (register 0x03 = 0x0B) and a 188 Hz bandwidth (register
+        // 0x1F = 0x02). The velocity engine assumes ~200 Hz, so a sensor left at
+        // its slower default streams too few samples and the rep count comes out
+        // wrong - this is what makes a 4-rep set read as 0. Sent a beat apart and
+        // after the stream is up, since the GATT serializes one write at a time.
+        private val SET_RETURN_RATE_200HZ =
+            byteArrayOf(0xFF.toByte(), 0xAA.toByte(), 0x03, 0x0B, 0x00)
+        private val SET_BANDWIDTH_188HZ =
+            byteArrayOf(0xFF.toByte(), 0xAA.toByte(), 0x1F, 0x02, 0x00)
+        private const val CONFIG_RETURN_RATE_MS = 800L
+        private const val CONFIG_BANDWIDTH_MS = 1200L
         // Battery moves slowly; a reading shortly after connecting and every
         // half-minute after is plenty, and keeps the radio quiet between.
         private const val BATTERY_INITIAL_MS = 1500L
         private const val BATTERY_POLL_MS = 30000L
+        // Keep the sensor connected: an unasked-for drop (it rolled out of
+        // range, the radio hiccuped) is retried a few times before the member is
+        // told it is gone. An explicit disconnect clears the intent, so it is
+        // not fought.
+        private const val RECONNECT_MAX = 5
+        private const val RECONNECT_DELAY_MS = 2000L
     }
 
     init {
@@ -158,10 +193,16 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
         val settings = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
+        // Filter to the two services Stance's own app scans for - the WitMotion
+        // sensor service and the Stance encoder service - so the list is sensors
+        // the member could actually use, not every Bluetooth device nearby. The
+        // same rule the Stance app uses, so the same hardware shows up.
+        val filters = listOf(
+            ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build(),
+            ScanFilter.Builder().setServiceUuid(ParcelUuid(STANCE_SERVICE_UUID)).build(),
+        )
         try {
-            // No filter on purpose: see the class note. We list everything and
-            // let the member pick their sensor.
-            scanner.startScan(null, settings, scanCallback)
+            scanner.startScan(filters, settings, scanCallback)
             scanning = true
             emitState("scanning")
         } catch (e: SecurityException) {
@@ -208,6 +249,11 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
             return
         }
         val name = try { device.name } catch (_: SecurityException) { null }
+        // Remember the member wants this one on, so an unasked-for drop is
+        // retried rather than surfaced as a dead end.
+        desiredId = address
+        desiredName = name
+        reconnectAttempts = 0
         emitState("connecting", deviceId = address, name = name)
         try {
             closeGatt()
@@ -218,8 +264,35 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
     }
 
     private fun disconnect() {
+        // An explicit disconnect clears the intent, so the drop that follows is
+        // not retried.
+        desiredId = null
+        desiredName = null
+        main.removeCallbacks(reconnect)
         closeGatt()
         emitState("disconnected")
+    }
+
+    // reconnect re-opens the GATT to the device the member still wants on, after
+    // an unasked-for drop. It does not reset desiredId - that is the member's
+    // intent, cleared only by an explicit disconnect - and it stops once the
+    // retries run out.
+    private val reconnect = Runnable {
+        val address = desiredId ?: return@Runnable
+        val adapter = manager()?.adapter ?: return@Runnable
+        val device = try {
+            adapter.getRemoteDevice(address)
+        } catch (_: IllegalArgumentException) {
+            emitState("disconnected", deviceId = address)
+            return@Runnable
+        }
+        emitState("connecting", deviceId = address, name = desiredName)
+        try {
+            closeGatt()
+            gatt = device.connectGatt(appContext, false, gattCallback)
+        } catch (_: SecurityException) {
+            emitState("disconnected", deviceId = address)
+        }
     }
 
     private fun closeGatt() {
@@ -252,14 +325,24 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
         main.postDelayed(batteryPoll, BATTERY_INITIAL_MS)
     }
 
+    private fun requestBattery() = writeCommand(READ_BATTERY_REGISTER)
+
+    // applySensorConfig tunes the return rate then the bandwidth, a beat apart
+    // so the two writes do not collide, once the stream is up. Guarded by
+    // writeCommand against a sensor that has since disconnected.
+    private fun applySensorConfig() {
+        main.postDelayed({ writeCommand(SET_RETURN_RATE_200HZ) }, CONFIG_RETURN_RATE_MS)
+        main.postDelayed({ writeCommand(SET_BANDWIDTH_188HZ) }, CONFIG_BANDWIDTH_MS)
+    }
+
     @Suppress("DEPRECATION") // characteristic.value + writeCharacteristic on this path
-    private fun requestBattery() {
+    private fun writeCommand(command: ByteArray) {
         val connection = gatt ?: return
         val characteristic = writeChar ?: return
         try {
-            characteristic.value = READ_BATTERY_REGISTER
-            // No response: it is a fire-and-forget request, and the sensor
-            // answers on the notify characteristic, not on the write ack.
+            characteristic.value = command
+            // No response: these are fire-and-forget writes, and any answer
+            // arrives on the notify characteristic, not on the write ack.
             characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             connection.writeCharacteristic(characteristic)
         } catch (_: SecurityException) {}
@@ -273,7 +356,18 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
                     try { gatt.discoverServices() } catch (_: SecurityException) {}
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     closeGatt()
-                    emitState("disconnected", deviceId = address)
+                    val want = desiredId
+                    if (want != null && reconnectAttempts < RECONNECT_MAX) {
+                        // An unasked-for drop while the member still wants the
+                        // sensor on: say "connecting" and try again shortly.
+                        reconnectAttempts++
+                        emitState("connecting", deviceId = want, name = desiredName)
+                        main.postDelayed(reconnect, RECONNECT_DELAY_MS)
+                    } else {
+                        desiredId = null
+                        desiredName = null
+                        emitState("disconnected", deviceId = address)
+                    }
                 }
             }
         }
@@ -303,7 +397,13 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
                 connectedId = address
                 connectedName = name
                 batteryPercent = -1
+                // Up and streaming: the reconnect budget is spent only on drops
+                // since the last good connection, so reset it here.
+                reconnectAttempts = 0
+                desiredId = address
+                desiredName = name
                 emitState("connected", deviceId = address, name = name)
+                applySensorConfig()
                 startBatteryPolling()
             } catch (_: SecurityException) {
                 emitState("failed", deviceId = address, name = name,

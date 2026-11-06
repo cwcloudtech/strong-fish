@@ -462,6 +462,7 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sections := healthsheet.AllSections(steps, heart,
+		h.exportNutrition(r, userID, exportRangeDays(r)), h.computeTargets(r, userID),
 		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale)
 	// The AI's reading of the same data, last, when it was asked recently
 	// enough to be about this sheet - from whichever provider it was generated
