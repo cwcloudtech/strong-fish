@@ -80,6 +80,7 @@ class RoleBadge extends ConsumerWidget {
     final (key, ink) = switch (role) {
       'superadmin' => ('profile.superadmin', _superadmin.of(brightness)),
       'coach' => ('profile.coach', colors.success),
+      'nutritionist' => ('profile.nutritionist', colors.warning),
       _ => ('profile.athlete', colors.primaryDark),
     };
     return _Badge(label: t(key), ink: ink);

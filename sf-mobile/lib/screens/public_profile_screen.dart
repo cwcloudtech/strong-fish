@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
 import '../widgets/common.dart';
+import '../widgets/device_links.dart';
 import '../widgets/profile_badges.dart';
 import '../widgets/strength_badges.dart';
 import '../widgets/social_share.dart';
@@ -208,6 +209,27 @@ class _PublicProfileScreenState extends ConsumerState<PublicProfileScreen> {
                               title: Text(best.label(ref.watch(localeProvider))),
                               trailing: Text('${best.value.round()} kg'),
                             ),
+                        ],
+                        // Fitness data, for a coach or nutritionist of a shared
+                        // club, or anyone when the member made it public. The
+                        // panel reads the athlete's data and only offers the AI
+                        // reading to someone who may spend on it.
+                        if (profile.canViewHealth) ...[
+                          const Divider(height: 32),
+                          Row(children: [
+                            Expanded(
+                              child: Text(t('profile.fitnessData'),
+                                  style: Theme.of(context).textTheme.titleMedium),
+                            ),
+                            if (profile.fitnessPublic)
+                              Text(t('profile.fitnessPublic'),
+                                  style: Theme.of(context).textTheme.bodySmall),
+                          ]),
+                          const SizedBox(height: 8),
+                          DeviceLinksSection(
+                            userId: profile.id,
+                            canGenerate: profile.canAdviseHealth,
+                          ),
                         ],
                         const Divider(height: 32),
                         Text(t('share.label'), style: Theme.of(context).textTheme.titleMedium),

@@ -36,9 +36,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _error;
   String? _notice;
   bool _showServer = false;
-  // "I'm a coach" on the sign-up form. It queues a request for a superadmin to
-  // confirm; the account is an athlete in the meantime.
-  bool _coach = false;
+  // The account type on the sign-up form: "athlete", "coach" or "nutritionist".
+  // The last two queue a request for a superadmin to confirm; the account is an
+  // athlete in the meantime.
+  String _accountType = 'athlete';
 
   @override
   void initState() {
@@ -91,19 +92,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               name: _name.text.trim(),
               surname: _surname.text.trim(),
               username: _username.text.trim(),
-              coach: _coach,
+              coach: _accountType == 'coach',
+              nutritionist: _accountType == 'nutritionist',
               locale: ref.read(localeProvider),
             );
+        final elevated = _accountType != 'athlete';
         // A new account starts disabled until it's activated - the very first
         // account on a fresh instance is the exception, and gets a session.
         if (result.token.isEmpty) {
           setState(() {
             _mode = _Mode.login;
-            _notice = _coach ? t('auth.coachRequestSent') : t('auth.checkEmail');
+            _notice = elevated ? t('auth.coachRequestSent') : t('auth.checkEmail');
           });
           return;
         }
-        if (_coach) _notice = t('auth.coachRequestSent');
+        if (elevated) _notice = t('auth.coachRequestSent');
         try {
           await ref.read(sessionProvider.notifier).completeLogin(result.token);
         } on Object catch (error) {
@@ -251,19 +254,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        // Which of the two this account is. Picking "coach" grants nothing on
-        // its own - it queues a request.
-        SegmentedButton<bool>(
+        // What this account is. Picking "coach" or "nutritionist" grants
+        // nothing on its own - it queues a request a superadmin confirms.
+        SegmentedButton<String>(
           segments: [
-            ButtonSegment(value: false, label: Text(t('auth.imAnAthlete'))),
-            ButtonSegment(value: true, label: Text(t('auth.imACoach'))),
+            ButtonSegment(value: 'athlete', label: Text(t('auth.imAnAthlete'))),
+            ButtonSegment(value: 'coach', label: Text(t('auth.imACoach'))),
+            ButtonSegment(value: 'nutritionist', label: Text(t('auth.imANutritionist'))),
           ],
-          selected: {_coach},
-          onSelectionChanged: (selection) => setState(() => _coach = selection.first),
+          selected: {_accountType},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) => setState(() => _accountType = selection.first),
         ),
         const SizedBox(height: 6),
         Text(
-          _coach ? t('auth.imACoachHelp') : t('auth.imAnAthleteHelp'),
+          _accountType == 'coach'
+              ? t('auth.imACoachHelp')
+              : _accountType == 'nutritionist'
+                  ? t('auth.imANutritionistHelp')
+                  : t('auth.imAnAthleteHelp'),
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 12),

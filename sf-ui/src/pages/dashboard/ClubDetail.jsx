@@ -424,6 +424,7 @@ function AddMemberModal({ club, onClose, onAdded }) {
         <select className="sf-select" value={role} onChange={(event) => setRole(event.target.value)}>
           <option value="member">{t("clubs.member")}</option>
           <option value="admin">{t("clubs.admin")}</option>
+          <option value="nutritionist">{t("clubs.nutritionist")}</option>
         </select>
       </div>
       <ErrorMessage error={error} />
@@ -714,6 +715,7 @@ function InviteModal({ club, onClose, onInvited }) {
           <select id="inviteRole" className="sf-select" value={form.role} onChange={set("role")}>
             <option value="member">{t("clubs.member")}</option>
             <option value="admin">{t("clubs.admin")}</option>
+            <option value="nutritionist">{t("clubs.nutritionist")}</option>
           </select>
         </div>
         <div className="sf-field">

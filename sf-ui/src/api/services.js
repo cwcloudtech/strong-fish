@@ -91,46 +91,56 @@ const programsBase = (clubId) => (clubId ? `/clubs/${clubId}/programs` : "/progr
  * where Fitbit data arrives now that the Fitbit Web API is switched off, and
  * that sentence has had a different subject before.
  */
+// deviceBase roots the fitness reads at /users/me for the member themselves, or
+// at /users/{userId} when a coach, a nutritionist or a public visitor is reading
+// another athlete's data from their profile. The connect/pair/disconnect writes
+// never take a userId - you only ever manage your own accounts.
+const deviceBase = (userId) => (userId ? `/users/${userId}/devices` : "/users/me/devices");
+
 export const devices = {
-  list: () => body(client.get("/users/me/devices")),
+  list: (userId) => body(client.get(deviceBase(userId))),
   // The consent URL, not a redirect: the caller decides whether that opens in
   // this tab or a new one.
   authorizeUrl: (provider) => body(client.get(`/users/me/devices/${provider}/authorize`)),
   disconnect: (provider) => body(client.delete(`/users/me/devices/${provider}`)),
   // range is one of 24h, 48h, week, month, 90d - the API names the windows so
-  // the clients cannot disagree about what "a month" means.
-  steps: (provider, range) =>
-    body(client.get(`/users/me/devices/${provider}/steps`, { params: { range } })),
-  heartRate: (provider, range) =>
-    body(client.get(`/users/me/devices/${provider}/heart-rate`, { params: { range } })),
+  // the clients cannot disagree about what "a month" means. userId, when given,
+  // reads another member's data (a coach or nutritionist on their profile).
+  steps: (provider, range, userId) =>
+    body(client.get(`${deviceBase(userId)}/${provider}/steps`, { params: { range } })),
+  heartRate: (provider, range, userId) =>
+    body(client.get(`${deviceBase(userId)}/${provider}/heart-rate`, { params: { range } })),
   // The latest reading of each measure the scale takes; no range, since the
   // panel is "where am I now".
-  bodyComposition: (provider) => body(client.get(`/users/me/devices/${provider}/body-composition`)),
+  bodyComposition: (provider, userId) =>
+    body(client.get(`${deviceBase(userId)}/${provider}/body-composition`)),
   // Logged energy and protein from a food diary (Yazio, MyFitnessPal), over the
   // same named windows the steps use. The response carries the daily averages
   // and the member's targets alongside the per-day series.
-  nutrition: (provider, range) =>
-    body(client.get(`/users/me/devices/${provider}/nutrition`, { params: { range } })),
+  nutrition: (provider, range, userId) =>
+    body(client.get(`${deviceBase(userId)}/${provider}/nutrition`, { params: { range } })),
   // The member's ideal protein band and maintenance energy, computed from their
   // body rather than any provider - so a member who tracks no food still has a
   // target. NeedsHeight is set when a height is the one thing missing.
-  nutritionTargets: () => body(client.get("/users/me/devices/nutrition-targets")),
+  nutritionTargets: (userId) => body(client.get(`${deviceBase(userId)}/nutrition-targets`)),
   // One export of everything connected - steps, heart rate, body composition,
   // bar speed and the AI reading - as a PNG or PDF. format is the route's own
   // extension, so the file arrives named the way its contents are; range is the
   // steps/heart window.
-  exportAll: ({ format = "png", range, locale } = {}) =>
+  exportAll: ({ format = "png", range, locale, userId } = {}) =>
     client
-      .get(`/users/me/devices/export.${format}`, {
+      .get(`${deviceBase(userId)}/export.${format}`, {
         params: { ...(range ? { range } : {}), ...(locale ? { locale } : {}) },
         responseType: "blob",
       })
       .then((response) => response.data),
   // What the AI made of the last ninety days. Kept, and askable again once a
   // day - the numbers underneath move that often at most.
-  healthFeedback: (provider) => body(client.get(`/users/me/devices/${provider}/feedback`)),
-  generateHealthFeedback: (provider, connectionId) =>
-    body(client.post(`/users/me/devices/${provider}/feedback`, null, {
+  healthFeedback: (provider, userId) => body(client.get(`${deviceBase(userId)}/${provider}/feedback`)),
+  // Generating a reading: for another member (userId) a coach or nutritionist
+  // spends their own subscription; the reading is saved for the athlete.
+  generateHealthFeedback: (provider, connectionId, userId) =>
+    body(client.post(`${deviceBase(userId)}/${provider}/feedback`, null, {
       params: connectionId ? { connectionId } : {},
     })),
   deleteHealthFeedback: (provider) => body(client.delete(`/users/me/devices/${provider}/feedback`)),

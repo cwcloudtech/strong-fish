@@ -274,9 +274,13 @@ func targetsSection(targets models.NutritionTargets, locale string) *programshee
 	}
 	rows := []programsheet.Line{}
 	if targets.HasProtein() {
+		// The rule first, then the kilograms it works out to: "1.6-2.2 g x 64 kg
+		// FFM = 102-141 g", so the member sees where the band comes from.
 		rows = append(rows, programsheet.Line{Cells: []string{
 			programsheet.Heading(locale, "nt.idealProtein"),
-			fmt.Sprintf(programsheet.Heading(locale, "nt.proteinRange"),
+			fmt.Sprintf(programsheet.Heading(locale, "nt.proteinFormula"),
+				trimFloat(targets.ProteinPerKgMin), trimFloat(targets.ProteinPerKgMax),
+				strconv.Itoa(int(targets.FatFreeMassKg+0.5)),
 				strconv.Itoa(int(targets.ProteinMinG+0.5)), strconv.Itoa(int(targets.ProteinMaxG+0.5))),
 		}})
 	}

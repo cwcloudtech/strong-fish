@@ -43,6 +43,7 @@ class SfApi {
     /// surname; the API refuses neither.
     String username = '',
     bool coach = false,
+    bool nutritionist = false,
   }) async {
     final response = await client.dio.post('/users', data: {
       'email': email,
@@ -51,6 +52,7 @@ class SfApi {
       'surname': surname,
       'username': username,
       'coach': coach,
+      'nutritionist': nutritionist,
       'locale': locale,
     });
     return LoginResult.fromJson(_map(response.data));
@@ -365,8 +367,15 @@ class SfApi {
 
   /// The outside accounts that count a member's steps, and which ones they
   /// have connected.
-  Future<List<DeviceConnection>> deviceConnections() async {
-    final response = await client.dio.get('/users/me/devices');
+  /// Fitness reads are rooted at /users/me for the member themselves, or at
+  /// /users/{userId} for a coach, nutritionist or public visitor reading
+  /// another athlete's data from their profile. Connect/pair writes never carry
+  /// a userId - you only manage your own accounts.
+  String _deviceBase(String userId) =>
+      userId.isEmpty ? '/users/me/devices' : '/users/$userId/devices';
+
+  Future<List<DeviceConnection>> deviceConnections({String userId = ''}) async {
+    final response = await client.dio.get(_deviceBase(userId));
     final data = response.data;
     if (data is! List) return const [];
     return data.map((item) => DeviceConnection.fromJson(_map(item))).toList();
@@ -444,9 +453,9 @@ class SfApi {
 
   /// [range] is one of 24h, 48h, week, month, 90d - the API names the windows,
   /// so the phone and the web app cannot mean different things by "a month".
-  Future<StepSeries> deviceSteps(String provider, String range) async {
+  Future<StepSeries> deviceSteps(String provider, String range, {String userId = ''}) async {
     final response = await client.dio.get(
-      '/users/me/devices/$provider/steps',
+      '${_deviceBase(userId)}/$provider/steps',
       queryParameters: {'range': range},
     );
     return StepSeries.fromJson(_map(response.data));
@@ -463,10 +472,11 @@ class SfApi {
     String format = 'png',
     String range = 'week',
     String locale = 'en',
+    String userId = '',
   }) async {
     final path = '$directory/$fileName';
     await client.dio.download(
-      '/users/me/devices/export.$format',
+      '${_deviceBase(userId)}/export.$format',
       path,
       queryParameters: {'range': range, 'locale': locale},
     );
@@ -474,9 +484,9 @@ class SfApi {
   }
 
   /// The same days of the same range, as heart rate.
-  Future<HeartSeries> deviceHeartRate(String provider, String range) async {
+  Future<HeartSeries> deviceHeartRate(String provider, String range, {String userId = ''}) async {
     final response = await client.dio.get(
-      '/users/me/devices/$provider/heart-rate',
+      '${_deviceBase(userId)}/$provider/heart-rate',
       queryParameters: {'range': range},
     );
     return HeartSeries.fromJson(_map(response.data));
@@ -485,9 +495,9 @@ class SfApi {
   /// Logged energy and protein from a food diary (Yazio, MyFitnessPal), over
   /// the same named windows the steps use. The response carries the daily
   /// averages and the member's targets alongside the per-day series.
-  Future<NutritionSeries> deviceNutrition(String provider, String range) async {
+  Future<NutritionSeries> deviceNutrition(String provider, String range, {String userId = ''}) async {
     final response = await client.dio.get(
-      '/users/me/devices/$provider/nutrition',
+      '${_deviceBase(userId)}/$provider/nutrition',
       queryParameters: {'range': range},
     );
     return NutritionSeries.fromJson(_map(response.data));
@@ -496,14 +506,14 @@ class SfApi {
   /// The member's ideal protein band and maintenance energy, computed from
   /// their body rather than any provider - so a member who tracks no food still
   /// gets a target. NeedsHeight is set when a height is the one thing missing.
-  Future<NutritionTargets> deviceNutritionTargets() async {
-    final response = await client.dio.get('/users/me/devices/nutrition-targets');
+  Future<NutritionTargets> deviceNutritionTargets({String userId = ''}) async {
+    final response = await client.dio.get('${_deviceBase(userId)}/nutrition-targets');
     return NutritionTargets.fromJson(_map(response.data));
   }
 
   /// The latest reading of each measure the member's scale takes.
-  Future<List<BodyMeasure>> deviceBodyComposition(String provider) async {
-    final response = await client.dio.get('/users/me/devices/$provider/body-composition');
+  Future<List<BodyMeasure>> deviceBodyComposition(String provider, {String userId = ''}) async {
+    final response = await client.dio.get('${_deviceBase(userId)}/$provider/body-composition');
     final measures = _map(response.data)['measures'];
     if (measures is! List) return const [];
     return measures.map((item) => BodyMeasure.fromJson(_map(item))).toList();
@@ -511,13 +521,13 @@ class SfApi {
 
   /// What the AI made of the last ninety days of health data. A 404 is the
   /// ordinary "nobody has asked yet", which the caller reads as no reading.
-  Future<HealthFeedback> healthFeedback(String provider) async =>
-      HealthFeedback.fromJson(_map((await client.dio.get('/users/me/devices/$provider/feedback')).data));
+  Future<HealthFeedback> healthFeedback(String provider, {String userId = ''}) async =>
+      HealthFeedback.fromJson(_map((await client.dio.get('${_deviceBase(userId)}/$provider/feedback')).data));
 
   Future<HealthFeedback> generateHealthFeedback(String provider,
-          {String connectionId = ''}) async =>
+          {String connectionId = '', String userId = ''}) async =>
       HealthFeedback.fromJson(_map((await client.dio.post(
-        '/users/me/devices/$provider/feedback',
+        '${_deviceBase(userId)}/$provider/feedback',
         queryParameters: {if (connectionId.isNotEmpty) 'connectionId': connectionId},
       ))
           .data));

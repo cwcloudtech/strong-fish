@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"strong-fish-api/internal/devicelink"
-	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/nutrition"
 	"strong-fish-api/internal/store"
@@ -32,7 +31,10 @@ const activeCaloriesWindow = 14
 // Nutrition returns a member's logged energy and protein for one of the named
 // ranges, with their daily targets.
 func (h *DeviceHandler) Nutrition(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
 
 	found, ok := h.provider(w, r)
 	if !ok {
@@ -93,7 +95,10 @@ func (h *DeviceHandler) Nutrition(w http.ResponseWriter, r *http.Request) {
 // decide whether to show the panel; NeedsHeight set when the one thing missing
 // is a height to fill in.
 func (h *DeviceHandler) NutritionTargets(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
 	if targets := h.computeTargets(r, userID); targets != nil {
 		writeJSON(w, http.StatusOK, *targets)
 		return

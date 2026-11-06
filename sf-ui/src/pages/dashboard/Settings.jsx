@@ -66,6 +66,7 @@ export default function Settings() {
         ])
       ),
       profileVisibility: user.profileVisibility || "private",
+      fitnessPublic: Boolean(user.fitnessPublic),
       birthdate: user.birthdate || "",
       password: "",
       confirmPassword: "",
@@ -291,6 +292,16 @@ export default function Settings() {
             />
             <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
               {t(`profile.visibilityHelp.${form.profileVisibility}`)}
+            </p>
+            {/* Fitness data on the public profile, off by default: a coach or
+                nutritionist of a shared club sees it regardless, this opens it
+                to everyone. */}
+            <label className="sf-checkbox" style={{ marginTop: "0.6rem" }}>
+              <input type="checkbox" checked={form.fitnessPublic} onChange={set("fitnessPublic")} />
+              <span>{t("profile.fitnessPublicToggle")}</span>
+            </label>
+            <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+              {t("profile.fitnessPublicHelp")}
             </p>
           </div>
 

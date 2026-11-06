@@ -217,10 +217,17 @@ func (s *InvitationStore) Accept(ctx context.Context, invitation models.Invitati
 
 // --- coach requests ---
 
-// RequestCoach records an account's claim to be a coach, made at signup.
-func (s *UserStore) RequestCoach(ctx context.Context, id string, requestedAt time.Time) (models.User, error) {
+// RequestRole records an account's claim to an elevated role - coach or
+// nutritionist - made at signup. The role is kept so approval grants the one
+// that was asked for.
+func (s *UserStore) RequestRole(ctx context.Context, id string, role models.GlobalRole, requestedAt time.Time) (models.User, error) {
+	if !models.IsRequestableRole(role) {
+		role = models.GlobalRoleCoach
+	}
 	return s.merge(ctx, id, map[string]any{
-		"coachRequest": models.CoachRequest{Status: models.CoachRequestPending, RequestedAt: &requestedAt},
+		"coachRequest": models.CoachRequest{
+			Status: models.CoachRequestPending, Role: role, RequestedAt: &requestedAt,
+		},
 	})
 }
 
@@ -235,16 +242,17 @@ func (s *UserStore) DecideCoachRequest(ctx context.Context, id, status, motive, 
 
 	patch := map[string]any{
 		"coachRequest": models.CoachRequest{
-			Status: status, Motive: motive,
+			Status: status, Role: user.CoachRequest.Role, Motive: motive,
 			RequestedAt: user.CoachRequest.RequestedAt,
 			DecidedAt:   &decidedAt, DecidedBy: decidedBy,
 		},
 	}
 	if status == models.CoachRequestApproved {
 		// Only a confirmed athlete is promoted: an account still waiting on its
-		// activation link keeps waiting, and a banned one stays banned.
+		// activation link keeps waiting, and a banned one stays banned. The role
+		// granted is the one that was asked for - coach or nutritionist.
 		if user.Role == models.GlobalRoleConfirmed {
-			patch["role"] = string(models.GlobalRoleCoach)
+			patch["role"] = string(user.CoachRequest.RequestedRole())
 		}
 	}
 	return s.merge(ctx, id, patch)

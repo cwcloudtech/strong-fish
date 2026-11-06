@@ -15,6 +15,7 @@ import { useI18n } from "../../i18n/I18nContext";
 const ROLES = {
   superadmin: { key: "profile.superadmin", className: "sf-badge-role-superadmin" },
   coach: { key: "profile.coach", className: "sf-badge-role-coach" },
+  nutritionist: { key: "profile.nutritionist", className: "sf-badge-role-nutritionist" },
   confirmed: { key: "profile.athlete", className: "sf-badge-role-confirmed" },
 };
 

@@ -202,6 +202,29 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 				r.Get("/me", h.User.Me)
 			})
 
+			// An athlete's fitness data read from their profile, keyed by
+			// {userId} - the same reads as /me/devices. OptionalAuth, not a
+			// session requirement: a coach or nutritionist of a shared club
+			// reads it signed in, and anyone reads it when the member made their
+			// fitness data public, even logged out, which is what a public
+			// profile link needs. The handler resolves {userId} and authorizes,
+			// answering 404 when the viewer may not see it. Reads only -
+			// generating the AI reading needs a session and lives below.
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.OptionalAuth(o.JWTSecret, o.ApiKeys))
+				r.Route("/{userId}/devices", func(r chi.Router) {
+					r.Get("/", h.Device.List)
+					r.Get("/export.png", h.Device.Export)
+					r.Get("/export.pdf", h.Device.Export)
+					r.Get("/nutrition-targets", h.Device.NutritionTargets)
+					r.Get("/{provider}/steps", h.Device.Steps)
+					r.Get("/{provider}/heart-rate", h.Device.HeartRate)
+					r.Get("/{provider}/body-composition", h.Device.BodyComposition)
+					r.Get("/{provider}/nutrition", h.Device.Nutrition)
+					r.Get("/{provider}/feedback", h.Device.HealthFeedback)
+				})
+			})
+
 			r.Group(authenticated(func(r chi.Router) {
 				r.Put("/me", h.User.UpdateProfile)
 				r.Put("/me/picture", h.User.UpdatePicture)
@@ -251,6 +274,13 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Post("/{provider}/pair-key", h.Device.PairDeviceKey)
 					r.Get("/{provider}/bar-speed", h.Device.BarSpeed)
 				})
+
+				// Generating the AI reading of another member's fitness data: a
+				// session is required so the reviewer's own subscription pays,
+				// which is why this is here and not among the OptionalAuth reads.
+				// The handler authorizes the {userId} as a coach or nutritionist
+				// of a shared club (or the member themselves).
+				r.Post("/{userId}/devices/{provider}/feedback", h.Device.GenerateHealthFeedback)
 
 				// Bar speed captured by StrongFish itself: any accelerometer -
 				// a phone over Bluetooth, a board over HTTP - posts the raw

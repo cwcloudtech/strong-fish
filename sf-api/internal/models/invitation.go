@@ -52,9 +52,22 @@ func IsValidCoachRequestStatus(status string) bool {
 	return status == CoachRequestApproved || status == CoachRequestRejected
 }
 
-// CoachRequest is one account's claim to be a coach, and what came of it.
+// IsRequestableRole reports whether role is one an account may ask for at
+// signup and a superadmin confirm: a coach or a nutritionist. Anything else is
+// not something you apply to be.
+func IsRequestableRole(role GlobalRole) bool {
+	return role == GlobalRoleCoach || role == GlobalRoleNutritionist
+}
+
+// CoachRequest is one account's claim to an elevated role - coach or
+// nutritionist - and what came of it. Named for its first use; Role says which
+// role was actually asked for.
 type CoachRequest struct {
 	Status string `json:"status,omitempty"`
+	// Role is the role asked for: GlobalRoleCoach or GlobalRoleNutritionist. A
+	// request stored before this field existed has it blank, which reads as a
+	// coach request (see RequestedRole).
+	Role GlobalRole `json:"role,omitempty"`
 	// Motive is why a request was rejected. It is shown to the applicant, so it
 	// is written for them rather than as an internal note.
 	Motive      string     `json:"motive,omitempty"`
@@ -66,6 +79,15 @@ type CoachRequest struct {
 // Pending reports whether this request is still waiting on a decision.
 func (c CoachRequest) Pending() bool {
 	return c.Status == CoachRequestPending
+}
+
+// RequestedRole is the role this request grants when approved, defaulting to
+// coach for a request stored before the role was recorded.
+func (c CoachRequest) RequestedRole() GlobalRole {
+	if c.Role == GlobalRoleNutritionist {
+		return GlobalRoleNutritionist
+	}
+	return GlobalRoleCoach
 }
 
 // CoachApplicant is one pending request as the superadmin's queue shows it.

@@ -98,7 +98,10 @@ func readingSection(stored models.HealthFeedback, locale string) *programsheet.S
 
 // HealthFeedback is the stored reading of the member's health data.
 func (h *DeviceHandler) HealthFeedback(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
 
 	provider, ok := h.provider(w, r)
 	if !ok {
@@ -141,7 +144,15 @@ func (h *DeviceHandler) DeleteHealthFeedback(w http.ResponseWriter, r *http.Requ
 // description of what a health sheet contains, so the reading cannot be about
 // something other than what the member can see.
 func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	// userID is whose data is read and whose reading is saved - the athlete.
+	// sessionID is who asked and whose AI subscription pays - the athlete, or a
+	// coach or nutritionist reviewing them out of their own key. adviseUserID
+	// refuses public access: a public profile is read-only, not generatable.
+	userID, ok := h.adviseUserID(w, r)
+	if !ok {
+		return
+	}
+	sessionID, _ := middleware.UserIDFromContext(r.Context())
 
 	found, ok := h.provider(w, r)
 	if !ok {
@@ -196,16 +207,24 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 		sections,
 		"")
 
-	answer, ok := h.ai.ask(w, r, userID, r.URL.Query().Get("connectionId"), "health", ai.Request{
-		System: templates.CoachSkill + "\n\n" + templates.HealthSkill +
-			"\n\n" + LanguageRule(locale),
+	// The member's profile, maxes and current block travel with the sheet, so a
+	// reading can weigh their strength against their bodyweight - which is what
+	// the cut/bulk and competition-category advice rests on.
+	system := templates.CoachSkill + "\n\n" + templates.HealthSkill
+	if context := h.ai.memberStrengthContext(r, userID, locale); context != "" {
+		system += "\n\n" + context
+	}
+	system += "\n\n" + LanguageRule(locale)
+
+	answer, ok := h.ai.ask(w, r, sessionID, r.URL.Query().Get("connectionId"), "health", ai.Request{
+		System:   system,
 		Messages: []models.ChatMessage{{Role: models.ChatRoleUser, Message: sheet}},
 	})
 	if !ok {
 		return
 	}
 
-	connection, _ := h.ai.usable(r, userID, r.URL.Query().Get("connectionId"))
+	connection, _ := h.ai.usable(r, sessionID, r.URL.Query().Get("connectionId"))
 	saved, err := h.ai.connections.SaveHealthFeedback(r.Context(), userID, models.HealthFeedback{
 		Source: provider.Name(), Content: answer.Message,
 		Provider: connection.Provider, Model: answer.Model, Days: days,

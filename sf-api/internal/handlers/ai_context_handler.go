@@ -66,6 +66,33 @@ func (h *AIHandler) memberContext(r *http.Request, userID, locale string) string
 	return out.String()
 }
 
+// memberStrengthContext is who the member is and what they lift, for a reading
+// that has to weigh their strength against their bodyweight - the fitness
+// feedback's cut/bulk and competition-category advice. The same profile, maxes
+// and current block the chat is given, without the 24-hour fitness snapshot:
+// the feedback already has the fuller ninety-day fitness sheet in front of it,
+// so repeating the day here would only be a second, shorter version of it.
+//
+// "" when there is nothing recorded about the member at all.
+func (h *AIHandler) memberStrengthContext(r *http.Request, userID, locale string) string {
+	user, err := h.users.FindByID(r.Context(), userID)
+	if err != nil {
+		return ""
+	}
+	var out strings.Builder
+	out.WriteString("# The member\n\n")
+	out.WriteString(profileLines(user))
+	if h.oneRMs != nil {
+		if maxes, err := h.oneRMs.ListForUser(r.Context(), userID); err == nil {
+			out.WriteString("\n" + maxLines(maxes, locale))
+		}
+	}
+	if block := h.currentBlock(r, userID, locale); block != "" {
+		out.WriteString("\n" + block)
+	}
+	return out.String()
+}
+
 // profileLines is the member themselves: the numbers a coach would know.
 func profileLines(user models.User) string {
 	var out strings.Builder

@@ -188,7 +188,10 @@ func main() {
 	// like. Wired here rather than in a constructor, because neither can be
 	// built with the other already in hand.
 	deviceHandler := handlers.NewDeviceHandler(devices, deviceLinkStore, userStore, cfg.JWTSecret,
-		cfg.APIBaseURL, cfg.UIBaseURL, aiHandler)
+		cfg.APIBaseURL, cfg.UIBaseURL, aiHandler).
+		// So a coach or nutritionist of a shared club - and a public visitor when
+		// the member opted in - can read an athlete's health data on their profile.
+		WithRelations(profileHandler.RelationTo)
 	aiHandler.WithHealth(deviceHandler.FitnessContext)
 
 	api := router.New(router.Handlers{

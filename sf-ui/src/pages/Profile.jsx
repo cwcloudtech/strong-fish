@@ -7,6 +7,7 @@ import Avatar from "../components/common/Avatar";
 import PostCard from "../components/feed/PostCard";
 import ShareButtons from "../components/common/ShareButtons";
 import { RoleBadge } from "../components/common/ProfileBadges";
+import DeviceLinks from "../components/devices/DeviceLinks";
 import StrengthBadges from "../components/strength/StrengthBadges";
 import StrengthTier from "../components/strength/StrengthTier";
 import { filledSocials } from "../utils/socialProfiles";
@@ -197,6 +198,24 @@ export default function Profile() {
           </p>
         ) : null}
       </div>
+
+      {/* Fitness data on the profile: shown to a coach or nutritionist of a
+          shared club, and to anyone when the member made it public. The panel
+          reads the athlete's data (userId) and only offers the AI reading to
+          someone who may spend on it (canAdviseHealth). */}
+      {profile.canViewHealth ? (
+        <>
+          <h2>
+            {t("profile.fitnessData")}
+            {profile.fitnessPublic ? (
+              <span className="sf-muted" style={{ fontSize: "0.8rem", marginLeft: "0.5rem" }}>
+                {t("profile.fitnessPublic")}
+              </span>
+            ) : null}
+          </h2>
+          <DeviceLinks userId={profile.id} canGenerate={profile.canAdviseHealth} />
+        </>
+      ) : null}
 
       <h2>{t("profile.posts")}</h2>
       {posts.length === 0 ? (

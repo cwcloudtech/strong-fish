@@ -133,8 +133,8 @@ func (h *ProgramHandler) resolveMember(w http.ResponseWriter, r *http.Request, c
 	}
 
 	role, _ := middleware.ClubRoleFromContext(r.Context())
-	if !models.CanManageClub(role) {
-		writeError(w, http.StatusForbidden, "Only a coach can view another member's program", CodeForbidden)
+	if !models.CanViewMemberData(role) {
+		writeError(w, http.StatusForbidden, "Only a coach or nutritionist can view another member's program", CodeForbidden)
 		return utils.EMPTY, false
 	}
 	if _, err := h.clubs.FindMembership(r.Context(), chi.URLParam(r, "clubId"), memberID); err != nil {

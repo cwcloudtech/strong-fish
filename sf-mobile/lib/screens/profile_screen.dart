@@ -98,6 +98,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'bio': user.bio,
       'locale': user.locale,
       'profileVisibility': user.profileVisibility,
+      'fitnessPublic': user.fitnessPublic,
       'birthdate': user.birthdate,
       'bodyweight': user.bodyweight,
       'height': user.height,
@@ -400,6 +401,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     }
                   },
                 ),
+              ),
+              // Fitness data on the public profile, off by default. A coach or
+              // nutritionist of a shared club sees it regardless; this opens it
+              // to everyone, even logged out.
+              SwitchListTile(
+                secondary: const Icon(Icons.monitor_heart_outlined),
+                title: Text(t('profile.fitnessPublicToggle')),
+                subtitle: Text(t('profile.fitnessPublicHelp')),
+                value: user.fitnessPublic,
+                onChanged: (value) async {
+                  try {
+                    await _patchProfile(user, {'fitnessPublic': value});
+                  } catch (error) {
+                    _toast(ref.read(tErrorProvider)(error));
+                  }
+                },
               ),
               // What the member calls themselves as a lifter. Picked, never
               // computed: a badge worked out from the three bests would leave

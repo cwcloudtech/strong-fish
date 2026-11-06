@@ -126,6 +126,18 @@ var routes = []struct{ method, path string }{
 	{"GET", "/v1/users/me/devices/yazio/nutrition"},
 	{"DELETE", "/v1/users/me/devices/withings"},
 	{"GET", "/v1/devices/withings/callback"},
+	// A coach/nutritionist/public reading another member's fitness data on
+	// their profile, keyed by {userId}.
+	{"GET", "/v1/users/user-1/devices"},
+	{"GET", "/v1/users/user-1/devices/export.png"},
+	{"GET", "/v1/users/user-1/devices/export.pdf"},
+	{"GET", "/v1/users/user-1/devices/nutrition-targets"},
+	{"GET", "/v1/users/user-1/devices/google-health/steps"},
+	{"GET", "/v1/users/user-1/devices/google-health/heart-rate"},
+	{"GET", "/v1/users/user-1/devices/google-health/body-composition"},
+	{"GET", "/v1/users/user-1/devices/google-health/nutrition"},
+	{"GET", "/v1/users/user-1/devices/google-health/feedback"},
+	{"POST", "/v1/users/user-1/devices/google-health/feedback"},
 	{"POST", "/v1/users/me/api-keys"},
 	{"DELETE", "/v1/users/me/api-keys/key-1"},
 	{"POST", "/v1/users/me/config/file"},

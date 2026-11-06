@@ -150,6 +150,8 @@ func Targets(in Input) models.NutritionTargets {
 	}
 	if ffm > 0 {
 		t.FatFreeMassKg = round1(ffm)
+		t.ProteinPerKgMin = ProteinPerKgFatFreeMassMin
+		t.ProteinPerKgMax = ProteinPerKgFatFreeMassMax
 		t.ProteinMinG = round1(ProteinPerKgFatFreeMassMin * ffm)
 		t.ProteinMaxG = round1(ProteinPerKgFatFreeMassMax * ffm)
 		if ffmMeasured {

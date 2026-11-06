@@ -15,18 +15,31 @@ const (
 	// RoleMember is an athlete: they run the programs assigned to them and
 	// post to the club feed.
 	RoleMember Role = "member"
+	// RoleNutritionist is a professional a coach invited to read the club's
+	// athletes - their training and their health data - the way the coach does,
+	// without the power to add/remove members or write programs. A read-only
+	// seat, so it is not a manager (see CanManageClub) but it can view member
+	// data (see CanViewMemberData).
+	RoleNutritionist Role = "nutritionist"
 )
 
 // IsValidRole reports whether role is a club role that can be assigned. Owner
 // is excluded: it's set once at creation and transferred, never granted.
 func IsValidRole(role Role) bool {
-	return role == RoleAdmin || role == RoleMember
+	return role == RoleAdmin || role == RoleMember || role == RoleNutritionist
 }
 
 // CanManageClub reports whether role may add/remove members and upload or
-// delete programs.
+// delete programs. A nutritionist cannot: they read, they do not run the club.
 func CanManageClub(role Role) bool {
 	return role == RoleOwner || role == RoleAdmin
+}
+
+// CanViewMemberData reports whether role may read another member's training and
+// health data in the club - the coaches who run it and the nutritionist they
+// invited to advise. The read counterpart of CanManageClub.
+func CanViewMemberData(role Role) bool {
+	return role == RoleOwner || role == RoleAdmin || role == RoleNutritionist
 }
 
 type Club struct {
