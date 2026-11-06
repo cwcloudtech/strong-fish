@@ -647,6 +647,7 @@ button {
 
 .sf-badge-role-confirmed { color: var(--sf-primary-dark); }
 .sf-badge-role-coach { color: var(--sf-success); }
+.sf-badge-role-nutritionist { color: var(--sf-warning); }
 .sf-badge-role-superadmin { color: var(--sf-role-superadmin); }
 
 .sf-badge-lift-squat { color: var(--sf-lift-squat); }

@@ -11,7 +11,7 @@ import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedb
 import { useAuth } from "../../context/AuthContext";
 import { useI18n } from "../../i18n/I18nContext";
 
-const ROLES = ["superadmin", "coach", "confirmed", "disabled", "ban"];
+const ROLES = ["superadmin", "coach", "nutritionist", "confirmed", "disabled", "ban"];
 const roleLabel = (t, role) => t(`admin.role${role[0].toUpperCase()}${role.slice(1)}`);
 
 /** The superadmin's console: accounts, clubs, and the moderation queue. */
@@ -399,6 +399,11 @@ function CoachRequestsTab() {
                 <strong>
                   {applicant.name} {applicant.surname}
                 </strong>
+                {/* Which role they applied for - coach or nutritionist - so the
+                    superadmin confirms the right one. */}
+                <span className="sf-badge" style={{ marginLeft: "0.4rem" }}>
+                  {t(`profile.${applicant.request?.role === "nutritionist" ? "nutritionist" : "coach"}`)}
+                </span>
                 <div className="sf-muted" style={{ fontSize: "0.85rem" }}>
                   {applicant.email}
                   {applicant.request?.requestedAt

@@ -67,8 +67,15 @@ function outcomeMessage(t, outcome) {
  * here with the outcome in the query string, since the window that consented
  * belongs to Google, not to this app.
  */
-export default function DeviceLinks() {
+// userId, when given, turns this into a read-only view of another member's
+// fitness data on their profile - a coach or nutritionist of a shared club, or
+// anyone when the member made it public. The data panels, the export and the AI
+// reading show the athlete's; the account controls that connect and disconnect
+// providers are the member's own and are hidden.
+export default function DeviceLinks({ userId, canGenerate = true }) {
   const { t, locale } = useI18n();
+  const member = userId || undefined;
+  const readOnly = Boolean(member);
   const [connections, setConnections] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState("");
@@ -84,7 +91,7 @@ export default function DeviceLinks() {
     setExporting(true);
     setError(null);
     try {
-      const blob = await devicesApi.exportAll({ format, range, locale });
+      const blob = await devicesApi.exportAll({ format, range, locale, userId: member });
       downloadBlob(blob, `fitness-data.${format}`);
     } catch (err) {
       setError(err);
@@ -95,12 +102,12 @@ export default function DeviceLinks() {
 
   const load = useCallback(async () => {
     try {
-      setConnections(await devicesApi.list());
+      setConnections(await devicesApi.list(member));
     } catch (err) {
       setError(err);
       setConnections([]);
     }
-  }, []);
+  }, [member]);
 
   useEffect(() => {
     load();
@@ -242,7 +249,7 @@ export default function DeviceLinks() {
         return (
           <div key={`data-${connection.provider}`}>
             {connection.activitySource ? (
-              <DataPanel provider={connection.provider} range={range} onRange={setRange} />
+              <DataPanel provider={connection.provider} range={range} onRange={setRange} userId={member} />
             ) : null}
             {activityNote ? (
               <p className="sf-muted" style={{ marginTop: "0.5rem" }}>
@@ -250,7 +257,7 @@ export default function DeviceLinks() {
               </p>
             ) : null}
             {connection.bodyCompositionSource ? (
-              <BodyCompositionPanel provider={connection.provider} />
+              <BodyCompositionPanel provider={connection.provider} userId={member} />
             ) : null}
           </div>
         );
@@ -260,23 +267,28 @@ export default function DeviceLinks() {
           speed: the energy and protein the member logged, and their daily
           targets. Rendered once - the panel loads the targets itself even when
           no food app is connected, so a member still sees what to aim for. */}
-      <NutritionPanel provider={nutritionSource} range={range} onRange={setRange} />
+      <NutritionPanel provider={nutritionSource} range={range} onRange={setRange} userId={member} />
 
-      {/* Bar speed, once and consolidated: the most recent set of each lift
-          across every source - what StrongFish captured itself, and what a
-          connected tracker reports - not one panel per device. */}
-      <BarSpeedPanel />
+      {/* Bar speed, once and consolidated. Self only: it reads the viewer's own
+          last sets, and there is no per-member bar-speed read - the athlete's
+          bar speed still rides along in the export and the AI reading. */}
+      {!readOnly ? <BarSpeedPanel /> : null}
 
       {/* The AI's reading of everything above, at the end of the data - one
           reading of the whole picture, not a comment on any single device. */}
-      {activitySource ? <HealthFeedbackPanel provider={activitySource} /> : null}
+      {activitySource ? (
+        <HealthFeedbackPanel provider={activitySource} userId={member} canGenerate={canGenerate} />
+      ) : null}
 
       {/* The accounts last: connecting and disconnecting sit under the data
-          they produce, not above it. */}
-      <h2 className="sf-subtitle" style={{ marginTop: "1.4rem", marginBottom: 0 }}>
-        {t("devices.accounts")}
-      </h2>
-      {connections.map((connection) => (
+          they produce, not above it. Only on your own page - you manage your
+          own accounts, not an athlete's. */}
+      {!readOnly ? (
+        <>
+          <h2 className="sf-subtitle" style={{ marginTop: "1.4rem", marginBottom: 0 }}>
+            {t("devices.accounts")}
+          </h2>
+          {connections.map((connection) => (
         <div key={`account-${connection.provider}`} style={{ marginTop: "0.8rem" }}>
           <div className="sf-row-between">
             <div>
@@ -334,7 +346,9 @@ export default function DeviceLinks() {
             />
           ) : null}
         </div>
-      ))}
+          ))}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -351,7 +365,7 @@ export default function DeviceLinks() {
  * date rather than a second record, so there is one, and deleting it is how
  * you ask for another.
  */
-function HealthFeedbackPanel({ provider }) {
+function HealthFeedbackPanel({ provider, userId, canGenerate = true }) {
   const { t, locale } = useI18n();
   const toastError = useToastError();
   const [feedback, setFeedback] = useState(null);
@@ -370,15 +384,15 @@ function HealthFeedbackPanel({ provider }) {
   useEffect(() => {
     // 404 is the ordinary case - nobody has asked yet - so it is not an error
     // to report, it is an empty panel with a button in it.
-    devicesApi.healthFeedback(provider).then(setFeedback).catch(() => setFeedback(null));
+    devicesApi.healthFeedback(provider, userId).then(setFeedback).catch(() => setFeedback(null));
     aiApi.connections().then(setConnections).catch(() => setConnections([]));
-  }, [provider]);
+  }, [provider, userId]);
 
   const generate = async (connectionId) => {
     setBusy(true);
     setError(null);
     try {
-      setFeedback(await devicesApi.generateHealthFeedback(provider, connectionId));
+      setFeedback(await devicesApi.generateHealthFeedback(provider, connectionId, userId));
     } catch (err) {
       setError(err);
       toastError(err);
@@ -405,30 +419,35 @@ function HealthFeedbackPanel({ provider }) {
         <strong>
           <FiCpu /> {t("devices.aiFeedback")}
         </strong>
-        <div className="sf-row" style={{ gap: "0.3rem" }}>
-          {/* Asked for as often as the member likes, through whichever
-              subscription they pick: the reading replaces the one before it,
-              since the ninety days it describes have moved on. */}
-          <AskButton
-            connections={connections}
-            onAsk={generate}
-            busy={busy}
-            label={feedback ? t("devices.aiFeedbackAgain") : t("devices.aiFeedbackAsk")}
-            tooltip={t("devices.aiFeedbackHelp")}
-          />
-          {feedback ? (
-            <button
-              type="button"
-              className="sf-button-ghost sf-button-sm"
-              onClick={() => setRemoving(true)}
-              disabled={busy}
-              aria-label={t("ai.deleteFeedback")}
-              title={t("ai.deleteFeedback")}
-            >
-              <FiTrash2 />
-            </button>
-          ) : null}
-        </div>
+        {/* The controls only for someone who may spend a subscription on this
+            reading - the member, or a coach or nutritionist reviewing them. A
+            public visitor reads the reading, they do not generate or delete it. */}
+        {canGenerate ? (
+          <div className="sf-row" style={{ gap: "0.3rem" }}>
+            {/* Asked for as often as the member likes, through whichever
+                subscription they pick: the reading replaces the one before it,
+                since the ninety days it describes have moved on. */}
+            <AskButton
+              connections={connections}
+              onAsk={generate}
+              busy={busy}
+              label={feedback ? t("devices.aiFeedbackAgain") : t("devices.aiFeedbackAsk")}
+              tooltip={t("devices.aiFeedbackHelp")}
+            />
+            {feedback && !userId ? (
+              <button
+                type="button"
+                className="sf-button-ghost sf-button-sm"
+                onClick={() => setRemoving(true)}
+                disabled={busy}
+                aria-label={t("ai.deleteFeedback")}
+                title={t("ai.deleteFeedback")}
+              >
+                <FiTrash2 />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {/* When the provider failed, the status and body under a copy button, so
@@ -478,7 +497,7 @@ function HealthFeedbackPanel({ provider }) {
  * offered, so there is nothing to be gained by asking for more than what is
  * being looked at.
  */
-function DataPanel({ provider, range, onRange }) {
+function DataPanel({ provider, range, onRange, userId }) {
   const { t } = useI18n();
   const [series, setSeries] = useState(null);
   const [heart, setHeart] = useState(null);
@@ -494,13 +513,13 @@ function DataPanel({ provider, range, onRange }) {
     // missing on the wider views - and a single failed call must never blank
     // the steps the member came for.
     try {
-      setSeries(await devicesApi.steps(provider, range));
+      setSeries(await devicesApi.steps(provider, range, userId));
     } catch (err) {
       setError(err);
       setSeries(null);
     }
     try {
-      setHeart(await devicesApi.heartRate(provider, range));
+      setHeart(await devicesApi.heartRate(provider, range, userId));
       setHeartError(null);
     } catch (err) {
       setHeart(null);
@@ -508,7 +527,7 @@ function DataPanel({ provider, range, onRange }) {
     } finally {
       setLoading(false);
     }
-  }, [provider, range]);
+  }, [provider, range, userId]);
 
   useEffect(() => {
     load();
@@ -687,7 +706,7 @@ function HeartSection({ heart, t }) {
  * own date, because a scale does not take every measure every time - fat is
  * only read barefoot - and a value from last month should say so.
  */
-function BodyCompositionPanel({ provider }) {
+function BodyCompositionPanel({ provider, userId }) {
   const { t } = useI18n();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -697,14 +716,14 @@ function BodyCompositionPanel({ provider }) {
     setLoading(true);
     setError(null);
     try {
-      setData(await devicesApi.bodyComposition(provider));
+      setData(await devicesApi.bodyComposition(provider, userId));
     } catch (err) {
       setError(err);
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [provider]);
+  }, [provider, userId]);
 
   useEffect(() => {
     load();
@@ -781,7 +800,7 @@ function kcalTone(kcal, maintenance) {
  * there is always something to aim for. A missing height is a prompt, not a
  * blank: the one field that unlocks the rest.
  */
-function NutritionPanel({ provider, range, onRange }) {
+function NutritionPanel({ provider, range, onRange, userId }) {
   const { t } = useI18n();
   const [series, setSeries] = useState(null);
   const [targets, setTargets] = useState(null);
@@ -795,20 +814,20 @@ function NutritionPanel({ provider, range, onRange }) {
       if (provider) {
         // The nutrition read carries the targets with it, so one call answers
         // both "what did I eat" and "what should I aim for".
-        const data = await devicesApi.nutrition(provider, range);
+        const data = await devicesApi.nutrition(provider, range, userId);
         setSeries(data);
         setTargets(data.targets || null);
       } else {
         // No food app: the targets still stand on their own.
         setSeries(null);
-        setTargets(await devicesApi.nutritionTargets());
+        setTargets(await devicesApi.nutritionTargets(userId));
       }
     } catch (err) {
       setError(err);
     } finally {
       setLoading(false);
     }
-  }, [provider, range]);
+  }, [provider, range, userId]);
 
   useEffect(() => {
     load();
@@ -957,6 +976,17 @@ function NutritionTargets({ targets, t }) {
         {targets.proteinMaxG > 0 ? (
           <div className="sf-body-tile">
             <div className="sf-muted">{t("devices.nutrition.idealProtein")}</div>
+            {/* The rule first - "1.6-2.2 g x 64 kg FFM" from the constants -
+                then the kilograms it works out to. */}
+            {targets.proteinPerKgMax > 0 && targets.fatFreeMassKg > 0 ? (
+              <div className="sf-muted" style={{ fontSize: "0.75rem" }}>
+                {t("devices.nutrition.proteinRule", {
+                  min: targets.proteinPerKgMin,
+                  max: targets.proteinPerKgMax,
+                  ffm: Math.round(targets.fatFreeMassKg),
+                })}
+              </div>
+            ) : null}
             <strong className="sf-steps-figure">
               {Math.round(targets.proteinMinG)}–{Math.round(targets.proteinMaxG)}
               <span className="sf-muted" style={{ fontSize: "0.8rem" }}>

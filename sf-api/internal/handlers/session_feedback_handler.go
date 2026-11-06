@@ -27,7 +27,7 @@ const feedbackContextSessions = 6
 // club the program belongs to, or a superadmin. A coach reads their athlete's
 // feedback the way they read their comments - it is part of the same record.
 func (h *TrainingHandler) SessionFeedback(w http.ResponseWriter, r *http.Request) {
-	assignment, ok := h.authorizeAssignment(w, r)
+	assignment, ok := h.authorizeAssignmentView(w, r)
 	if !ok {
 		return
 	}
@@ -75,7 +75,7 @@ func (h *TrainingHandler) DeleteSessionFeedback(w http.ResponseWriter, r *http.R
 func (h *TrainingHandler) GenerateSessionFeedback(w http.ResponseWriter, r *http.Request) {
 	callerID, _ := middleware.UserIDFromContext(r.Context())
 
-	assignment, ok := h.authorizeAssignment(w, r)
+	assignment, ok := h.authorizeAssignmentView(w, r)
 	if !ok {
 		return
 	}

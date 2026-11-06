@@ -78,9 +78,12 @@ var labels = map[string]map[string]string{
 		"nt.idealProtein":       "Ideal protein",
 		"nt.maintenanceEnergy":  "Maintenance energy",
 		"nt.proteinRange":       "%s - %s g",
-		"nt.energy":             "%s kcal",
-		"nt.estimate":           "Estimated from height and weight - approximate.",
-		"nt.needHeight":         "Fill in your height on your profile to see protein and energy targets.",
+		// The rule itself before the kilograms it works out to: "1.6-2.2 g x 64
+		// kg FFM = 102-141 g".
+		"nt.proteinFormula": "%s-%s g × %s kg FFM = %s-%s g",
+		"nt.energy":         "%s kcal",
+		"nt.estimate":       "Estimated from height and weight - approximate.",
+		"nt.needHeight":     "Fill in your height on your profile to see protein and energy targets.",
 		// The AI assistant's own words: a session reading inside a program
 		// sheet, and a conversation exported on its own.
 		"aiFeedback": "AI feedback",
@@ -159,6 +162,7 @@ var labels = map[string]map[string]string{
 		"nt.idealProtein":       "Protéines idéales",
 		"nt.maintenanceEnergy":  "Énergie de maintien",
 		"nt.proteinRange":       "%s - %s g",
+		"nt.proteinFormula":     "%s-%s g × %s kg MM = %s-%s g",
 		"nt.energy":             "%s kcal",
 		"nt.estimate":           "Estimé à partir de la taille et du poids - approximatif.",
 		"nt.needHeight":         "Renseignez votre taille dans votre profil pour voir les objectifs de protéines et d'énergie.",

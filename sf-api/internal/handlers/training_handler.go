@@ -63,9 +63,25 @@ type assignmentResponse struct {
 	Feedback map[string][]models.SessionFeedback `json:"feedback,omitempty"`
 }
 
-// authorizeAssignment loads an assignment the caller is allowed to see: their
-// own, or - for a coach - one belonging to a member of a club they manage.
+// authorizeAssignment loads an assignment the caller may act on: their own, or
+// one belonging to a member of a club they manage (owner/admin). Write paths
+// use this - only a coach changes an athlete's training.
 func (h *TrainingHandler) authorizeAssignment(w http.ResponseWriter, r *http.Request) (models.ProgramAssignment, bool) {
+	return h.authorizeAssignmentWith(w, r, models.CanManageClub)
+}
+
+// authorizeAssignmentView loads an assignment the caller may read: their own,
+// or one belonging to a member of a club they manage or advise (coach or
+// invited nutritionist). Read paths use this - a nutritionist sees the training
+// without being able to change it.
+func (h *TrainingHandler) authorizeAssignmentView(w http.ResponseWriter, r *http.Request) (models.ProgramAssignment, bool) {
+	return h.authorizeAssignmentWith(w, r, models.CanViewMemberData)
+}
+
+// authorizeAssignmentWith loads an assignment when the caller is its owner, a
+// superadmin, or a club member whose role passes allow.
+func (h *TrainingHandler) authorizeAssignmentWith(w http.ResponseWriter, r *http.Request,
+	allow func(models.Role) bool) (models.ProgramAssignment, bool) {
 	callerID, _ := middleware.UserIDFromContext(r.Context())
 
 	assignment, err := h.programs.FindAssignment(r.Context(), chi.URLParam(r, "assignmentId"))
@@ -78,7 +94,7 @@ func (h *TrainingHandler) authorizeAssignment(w http.ResponseWriter, r *http.Req
 	}
 
 	membership, err := h.clubs.FindMembership(r.Context(), assignment.ClubID, callerID)
-	if err == nil && models.CanManageClub(membership.Role) {
+	if err == nil && allow(membership.Role) {
 		return assignment, true
 	}
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
@@ -99,7 +115,7 @@ func (h *TrainingHandler) authorizeAssignment(w http.ResponseWriter, r *http.Req
 // Get returns one assigned program, fully resolved: every set carries the weight
 // this member should lift, recomputed from whatever 1RMs they last recorded.
 func (h *TrainingHandler) Get(w http.ResponseWriter, r *http.Request) {
-	assignment, ok := h.authorizeAssignment(w, r)
+	assignment, ok := h.authorizeAssignmentView(w, r)
 	if !ok {
 		return
 	}

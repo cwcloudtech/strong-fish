@@ -226,7 +226,7 @@ func scanMember(row pgx.Row) (models.ClubMember, error) {
 func (s *ClubStore) ListMembers(ctx context.Context, clubID string) ([]models.ClubMember, error) {
 	rows, err := s.pool.Query(ctx, memberSelect+`
 		WHERE cm.club_id = $1
-		ORDER BY CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, u.email
+		ORDER BY CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'nutritionist' THEN 2 ELSE 3 END, u.email
 	`, clubID)
 	if err != nil {
 		return nil, err
@@ -413,11 +413,12 @@ func (s *ClubStore) RelationTo(ctx context.Context, targetID, callerID string) (
 	err := s.pool.QueryRow(ctx, `
 		SELECT
 			count(*) > 0,
-			count(*) FILTER (WHERE caller.role IN ('owner', 'admin')) > 0
+			count(*) FILTER (WHERE caller.role IN ('owner', 'admin')) > 0,
+			count(*) FILTER (WHERE caller.role = 'nutritionist') > 0
 		FROM club_members target
 		JOIN club_members caller ON caller.club_id = target.club_id AND caller.user_id = $2
 		WHERE target.user_id = $1
-	`, targetID, callerID).Scan(&relation.SharesClub, &relation.ManagesClub)
+	`, targetID, callerID).Scan(&relation.SharesClub, &relation.ManagesClub, &relation.AdvisesClub)
 	if err != nil {
 		return models.ViewerRelation{}, err
 	}

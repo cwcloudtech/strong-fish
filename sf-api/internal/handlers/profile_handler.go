@@ -97,6 +97,14 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Whether to offer this profile's fitness data: the member, a superadmin, a
+	// coach or nutritionist of a club they are in, or anyone when the member
+	// made it public. The relation is one short query; the profile is not hot
+	// enough to cache it from resolveTarget.
+	relation, _ := h.RelationTo(r.Context(), target.ID, callerID)
+	canAdviseHealth := relation.Self || relation.Superadmin || relation.AdvisesOrManages()
+	canViewHealth := canAdviseHealth || target.FitnessPublic
+
 	// The profile is projected through DisplayName like every other surface:
 	// an anonymized member is their username here too.
 	name, surname := target.DisplayName()
@@ -109,7 +117,9 @@ func (h *ProfileHandler) Get(w http.ResponseWriter, r *http.Request) {
 		Birthdate: target.Birthdate,
 		Bests:     bests, Total: total, Followers: followers, Following: following,
 		Followed: followed, Clubs: clubs, CreatedAt: target.CreatedAt,
-		Strength: h.strengthFor(r, target.ID),
+		CanViewHealth: canViewHealth, CanAdviseHealth: canAdviseHealth,
+		FitnessPublic: target.FitnessPublic,
+		Strength:      h.strengthFor(r, target.ID),
 	})
 }
 

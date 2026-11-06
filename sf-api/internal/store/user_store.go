@@ -47,6 +47,7 @@ type userData struct {
 	// sensible, and never written.
 	PublicProfile     bool                  `json:"publicProfile,omitempty"`
 	ProfileVisibility string                `json:"profileVisibility,omitempty"`
+	FitnessPublic     bool                  `json:"fitnessPublic,omitempty"`
 	Birthdate         string                `json:"birthdate,omitempty"`
 	Gender            string                `json:"gender,omitempty"`
 	CoachRequest      *models.CoachRequest  `json:"coachRequest,omitempty"`
@@ -102,6 +103,7 @@ func scanUser(row pgx.Row) (models.User, error) {
 		}
 	}
 	u.ProfileVisibility = models.NormalizeProfileVisibility(u.ProfileVisibility)
+	u.FitnessPublic = d.FitnessPublic
 	u.Birthdate = d.Birthdate
 	if d.CoachRequest != nil {
 		u.CoachRequest = *d.CoachRequest
@@ -491,6 +493,7 @@ type ProfileFields struct {
 	Bio               string
 	Locale            string
 	ProfileVisibility string
+	FitnessPublic     bool
 	Birthdate         string
 	Bodyweight        float64
 	Height            float64
@@ -522,6 +525,7 @@ func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileField
 		"handle":            handle,
 		"bio":               f.Bio,
 		"profileVisibility": models.NormalizeProfileVisibility(f.ProfileVisibility),
+		"fitnessPublic":     f.FitnessPublic,
 		"birthdate":         f.Birthdate,
 		"bodyweight":        f.Bodyweight,
 		"height":            f.Height,

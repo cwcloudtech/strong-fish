@@ -73,6 +73,10 @@ class User {
   /// Who may read this profile: 'public', 'clubs' or 'private'. An unknown
   /// value reads as the narrowest, matching the API.
   final String profileVisibility;
+
+  /// Whether the member put their fitness data on their public profile for
+  /// everyone (off by default).
+  final bool fitnessPublic;
   final String birthdate;
   final double bodyweight;
 
@@ -104,6 +108,7 @@ class User {
     this.picture = '',
     this.locale = '',
     this.profileVisibility = 'private',
+    this.fitnessPublic = false,
     this.birthdate = '',
     this.bodyweight = 0,
     this.height = 0,
@@ -126,6 +131,7 @@ class User {
         picture: _toString(json['picture']),
         locale: _toString(json['locale']),
         profileVisibility: _toString(json['profileVisibility'], 'private'),
+        fitnessPublic: json['fitnessPublic'] == true,
         birthdate: _toString(json['birthdate']),
         bodyweight: _toDouble(json['bodyweight']),
         height: _toDouble(json['height']),
@@ -559,6 +565,11 @@ class NutritionDay {
 class NutritionTargets {
   final double proteinMinG;
   final double proteinMaxG;
+
+  /// The grams-per-kilogram-of-fat-free-mass constants the band came from (1.6
+  /// and 2.2), so the UI can print the rule before the kilograms.
+  final double proteinPerKgMin;
+  final double proteinPerKgMax;
   final double fatFreeMassKg;
   final double maintenanceKcal;
   final double restingKcal;
@@ -575,6 +586,8 @@ class NutritionTargets {
   const NutritionTargets({
     this.proteinMinG = 0,
     this.proteinMaxG = 0,
+    this.proteinPerKgMin = 0,
+    this.proteinPerKgMax = 0,
     this.fatFreeMassKg = 0,
     this.maintenanceKcal = 0,
     this.restingKcal = 0,
@@ -590,6 +603,8 @@ class NutritionTargets {
   factory NutritionTargets.fromJson(Map<String, dynamic> json) => NutritionTargets(
         proteinMinG: _toDouble(json['proteinMinG']),
         proteinMaxG: _toDouble(json['proteinMaxG']),
+        proteinPerKgMin: _toDouble(json['proteinPerKgMin']),
+        proteinPerKgMax: _toDouble(json['proteinPerKgMax']),
         fatFreeMassKg: _toDouble(json['fatFreeMassKg']),
         maintenanceKcal: _toDouble(json['maintenanceKcal']),
         restingKcal: _toDouble(json['restingKcal']),
@@ -1012,6 +1027,10 @@ class CoachApplicant {
   final String picture;
   final DateTime? requestedAt;
 
+  /// Which role they applied for: 'coach' or 'nutritionist'. A request stored
+  /// before the role was recorded reads as coach.
+  final String role;
+
   const CoachApplicant({
     required this.id,
     this.email = '',
@@ -1020,6 +1039,7 @@ class CoachApplicant {
     this.handle = '',
     this.picture = '',
     this.requestedAt,
+    this.role = 'coach',
   });
 
   factory CoachApplicant.fromJson(Map<String, dynamic> json) {
@@ -1034,6 +1054,7 @@ class CoachApplicant {
       handle: _toString(json['handle']),
       picture: _toString(json['picture']),
       requestedAt: _optionalDate(request['requestedAt']),
+      role: _toString(request['role'], 'coach') == 'nutritionist' ? 'nutritionist' : 'coach',
     );
   }
 
@@ -1521,6 +1542,15 @@ class PublicProfile {
   final int following;
   final bool followed;
 
+  /// Whether to offer this profile's fitness data (charts, export, AI reading):
+  /// the member, a superadmin, a coach or nutritionist of a shared club, or
+  /// anyone when the member made it public. [canAdviseHealth] is the narrower
+  /// right to generate the AI reading (not a public visitor), and
+  /// [fitnessPublic] says the data is open to everyone.
+  final bool canViewHealth;
+  final bool canAdviseHealth;
+  final bool fitnessPublic;
+
   /// What their own maxes are worth. Null for somebody who has not weighed in
   /// or entered no lifts: a profile with nothing to measure wears nothing.
   final StrengthResult? strength;
@@ -1540,6 +1570,9 @@ class PublicProfile {
     this.followers = 0,
     this.following = 0,
     this.followed = false,
+    this.canViewHealth = false,
+    this.canAdviseHealth = false,
+    this.fitnessPublic = false,
     this.strength,
   });
 
@@ -1564,6 +1597,9 @@ class PublicProfile {
         followers: _toInt(json['followers']),
         following: _toInt(json['following']),
         followed: json['followed'] == true,
+        canViewHealth: json['canViewHealth'] == true,
+        canAdviseHealth: json['canAdviseHealth'] == true,
+        fitnessPublic: json['fitnessPublic'] == true,
       );
 
   String get fullName => '$name $surname'.trim();

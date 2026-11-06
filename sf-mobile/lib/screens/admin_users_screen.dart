@@ -239,7 +239,9 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                     target: applicant.handle.isNotEmpty ? applicant.handle : applicant.id,
                   ),
                   title: Text(applicant.fullName),
-                  subtitle: Text(applicant.email),
+                  // The role they applied for - coach or nutritionist - so the
+                  // superadmin confirms the right one.
+                  subtitle: Text('${applicant.email} · ${t('profile.${applicant.role}')}'),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -307,7 +309,7 @@ class _AdminUsersScreenState extends ConsumerState<AdminUsersScreen> {
                             }
                           },
                           itemBuilder: (context) => [
-                            for (final role in const ['confirmed', 'coach', 'disabled', 'ban'])
+                            for (final role in const ['confirmed', 'coach', 'nutritionist', 'disabled', 'ban'])
                               if (role != user.role)
                                 PopupMenuItem(
                                   value: role,

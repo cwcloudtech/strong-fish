@@ -60,6 +60,12 @@ type NutritionTargets struct {
 	// per-kilogram constants (see internal/nutrition) times the fat-free mass.
 	ProteinMinG float64 `json:"proteinMinG,omitempty"`
 	ProteinMaxG float64 `json:"proteinMaxG,omitempty"`
+	// ProteinPerKgMin and ProteinPerKgMax are the grams-per-kilogram-of-fat-free-
+	// mass constants the band was computed from (1.6 and 2.2 today). Carried so
+	// the clients can print the rule itself - "1.6-2.2 g x fat-free mass" -
+	// before the kilograms it works out to, rather than hard-coding the numbers.
+	ProteinPerKgMin float64 `json:"proteinPerKgMin,omitempty"`
+	ProteinPerKgMax float64 `json:"proteinPerKgMax,omitempty"`
 	// FatFreeMassKg is the fat-free mass the band was computed from, shown so
 	// the member sees what the dose is per.
 	FatFreeMassKg float64 `json:"fatFreeMassKg,omitempty"`

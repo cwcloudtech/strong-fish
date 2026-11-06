@@ -46,6 +46,11 @@ type DeviceHandler struct {
 	// of the member's health data. Reused rather than rebuilt so a connection
 	// is resolved, spent and reported on in exactly one place.
 	ai *AIHandler
+	// relationTo resolves what a viewer is to a profile's owner - coach,
+	// nutritionist, superadmin - so a coach or nutritionist of a shared club can
+	// read an athlete's health data. nil until WithRelations is called, in which
+	// case only self-access works. Wired to ProfileHandler.RelationTo.
+	relationTo func(ctx context.Context, targetID, callerID string) (models.ViewerRelation, error)
 }
 
 func NewDeviceHandler(providers []devicelink.Provider, links *store.DeviceLinkStore,
@@ -55,6 +60,85 @@ func NewDeviceHandler(providers []devicelink.Provider, links *store.DeviceLinkSt
 		providers: providers, links: links, users: users, jwtSecret: jwtSecret,
 		apiBaseURL: apiBaseURL, uiBaseURL: uiBaseURL, ai: aiHandler,
 	}
+}
+
+// WithRelations wires the viewer→owner relation resolver, which is what lets a
+// coach or nutritionist of a shared club read an athlete's health data.
+func (h *DeviceHandler) WithRelations(
+	relationTo func(ctx context.Context, targetID, callerID string) (models.ViewerRelation, error)) *DeviceHandler {
+	h.relationTo = relationTo
+	return h
+}
+
+// readUserID is whose health data a read is about: the session user for a
+// /me route, or the {userId} in the path for a coach, a nutritionist or a
+// public visitor reading someone's profile. It authorizes the latter and
+// answers 404 (not 403) when refused, so a profile's existence is not leaked by
+// the health endpoints any more than by the profile itself.
+func (h *DeviceHandler) readUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	sessionID, _ := middleware.UserIDFromContext(r.Context())
+	memberID := chi.URLParam(r, "userId")
+	if memberID == "" || memberID == sessionID {
+		if sessionID == "" {
+			writeError(w, http.StatusUnauthorized, "Sign in to see your fitness data", CodeNotFound)
+			return "", false
+		}
+		return sessionID, true
+	}
+	if h.canViewHealth(r.Context(), sessionID, memberID) {
+		return memberID, true
+	}
+	writeError(w, http.StatusNotFound, "Not found", CodeNotFound)
+	return "", false
+}
+
+// adviseUserID is whose data an action that spends an AI subscription is about:
+// the session user, or a {userId} they coach or advise. Unlike readUserID it
+// requires a session and refuses public access - a public profile lets anyone
+// read a reading, not generate one on the athlete's behalf.
+func (h *DeviceHandler) adviseUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	sessionID, _ := middleware.UserIDFromContext(r.Context())
+	if sessionID == "" {
+		writeError(w, http.StatusUnauthorized, "Sign in first", CodeNotFound)
+		return "", false
+	}
+	memberID := chi.URLParam(r, "userId")
+	if memberID == "" || memberID == sessionID {
+		return sessionID, true
+	}
+	if h.relationTo != nil {
+		if relation, err := h.relationTo(r.Context(), memberID, sessionID); err == nil &&
+			(relation.Superadmin || relation.AdvisesOrManages()) {
+			return memberID, true
+		}
+	}
+	writeError(w, http.StatusNotFound, "Not found", CodeNotFound)
+	return "", false
+}
+
+// canViewHealth decides whether viewerID (possibly "" for a logged-out visitor)
+// may read targetID's fitness data: the member themselves, a provider the
+// member made public, a superadmin, or a coach or nutritionist of a club the
+// member is in.
+func (h *DeviceHandler) canViewHealth(ctx context.Context, viewerID, targetID string) bool {
+	if viewerID != "" && viewerID == targetID {
+		return true
+	}
+	target, err := h.users.FindByID(ctx, targetID)
+	if err != nil {
+		return false
+	}
+	if target.FitnessPublic {
+		return true
+	}
+	if viewerID == "" || h.relationTo == nil {
+		return false
+	}
+	relation, err := h.relationTo(ctx, targetID, viewerID)
+	if err != nil {
+		return false
+	}
+	return relation.Self || relation.Superadmin || relation.AdvisesOrManages()
 }
 
 // memberName is who the export belongs to, or blank when that cannot be
@@ -82,7 +166,10 @@ func (h *DeviceHandler) redirectURI(provider string) string {
 // whether the feature exists, and a support answer of "it is not switched on
 // here" is a better one than silence.
 func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
 
 	connected, err := h.links.ListProviders(r.Context(), userID)
 	if err != nil {
@@ -303,7 +390,10 @@ var stepRanges = map[string]int{
 
 // Steps returns a member's daily step counts for one of the named ranges.
 func (h *DeviceHandler) Steps(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
 
 	provider, link, days, rangeName, ok := h.readable(w, r, userID)
 	if !ok {
@@ -347,7 +437,10 @@ func (h *DeviceHandler) Steps(w http.ResponseWriter, r *http.Request) {
 // HeartRate returns a member's daily heart rate for one of the named ranges,
 // with the zone each day reached.
 func (h *DeviceHandler) HeartRate(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
 
 	provider, link, days, rangeName, ok := h.readable(w, r, userID)
 	if !ok {
@@ -423,7 +516,10 @@ func (h *DeviceHandler) HeartRate(w http.ResponseWriter, r *http.Request) {
 // chart. The same two formats the programs offer, for the same two reasons: an
 // image is what gets pasted into a conversation, a PDF is what gets kept.
 func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
 	locale := sheetLocale(r)
 
 	connectedNames, err := h.links.ListProviders(r.Context(), userID)
@@ -524,7 +620,10 @@ func exportRangeDays(r *http.Request) int {
 // how current that is - a scale that measures fat but was last stepped on
 // with bare feet a month ago says so, rather than being averaged away.
 func (h *DeviceHandler) BodyComposition(w http.ResponseWriter, r *http.Request) {
-	userID, _ := middleware.UserIDFromContext(r.Context())
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
 
 	found, ok := h.provider(w, r)
 	if !ok {

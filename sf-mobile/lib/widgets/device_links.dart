@@ -70,7 +70,13 @@ final ButtonStyle _compactButton = ButtonStyle(
 /// of somebody's daily counts would be a second source of truth to keep in
 /// step with the watch that actually recorded them.
 class DeviceLinksSection extends ConsumerStatefulWidget {
-  const DeviceLinksSection({super.key});
+  /// When set, a read-only view of another member's fitness data on their
+  /// profile - a coach or nutritionist of a shared club, or anyone when the
+  /// member made it public. The account controls are hidden; [canGenerate] says
+  /// whether the viewer may spend on the AI reading.
+  final String? userId;
+  final bool canGenerate;
+  const DeviceLinksSection({super.key, this.userId, this.canGenerate = true});
 
   @override
   ConsumerState<DeviceLinksSection> createState() => _DeviceLinksSectionState();
@@ -80,6 +86,9 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
   List<DeviceConnection>? _connections;
   String _busy = '';
   bool _exporting = false;
+
+  String get _member => widget.userId ?? '';
+  bool get _readOnly => _member.isNotEmpty;
   // The steps/heart window, owned here so the one export button at the top
   // sends the same range the chart below it shows.
   String _range = 'week';
@@ -112,7 +121,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
 
   Future<void> _load() async {
     try {
-      final connections = await ref.read(apiProvider).deviceConnections();
+      final connections = await ref.read(apiProvider).deviceConnections(userId: _member);
       if (mounted) setState(() => _connections = connections);
     } catch (_) {
       if (mounted) setState(() => _connections = const []);
@@ -197,6 +206,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
             format: format.extension,
             range: _range,
             locale: ref.read(localeProvider),
+            userId: _member,
           );
       if (mounted) await openExported(context, ref, path);
     } catch (error) {
@@ -282,6 +292,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   provider: connection.provider,
                   range: _range,
                   onRange: (value) => setState(() => _range = value),
+                  userId: _member,
                 ),
               if (!connection.activitySource &&
                   activitySource != null &&
@@ -294,7 +305,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                   ),
                 ),
               if (connection.bodyCompositionSource)
-                _BodyCompositionPanel(provider: connection.provider),
+                _BodyCompositionPanel(provider: connection.provider, userId: _member),
             ],
           // Nutrition, just under the activity and body data and before the bar
           // speed: the energy and protein logged, and the daily targets. Shown
@@ -304,16 +315,24 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
             provider: nutritionSource,
             range: _range,
             onRange: (value) => setState(() => _range = value),
+            userId: _member,
           ),
-          // Bar speed, once and consolidated: the most recent set of each lift
-          // across every source - what StrongFish captured itself, and what a
-          // connected tracker reports - not one panel per device.
-          const _BarSpeedPanel(),
+          // Bar speed, once and consolidated. Self only: it reads the viewer's
+          // own last sets, and there is no per-member bar-speed read - the
+          // athlete's bar speed still rides along in the export and AI reading.
+          if (!_readOnly) const _BarSpeedPanel(),
           // The AI's reading of everything above, at the end of the data - one
           // reading of the whole picture, not a comment on any single device.
-          if (activitySource != null) _HealthFeedbackPanel(provider: activitySource),
+          if (activitySource != null)
+            _HealthFeedbackPanel(
+              provider: activitySource,
+              userId: _member,
+              canGenerate: widget.canGenerate,
+            ),
           // The accounts last: connecting and disconnecting sit under the data
-          // they produce, not above it.
+          // they produce, not above it. Only on your own page - you manage your
+          // own accounts, not an athlete's.
+          if (!_readOnly) ...[
           const SizedBox(height: 18),
           Text(t('devices.accounts'), style: Theme.of(context).textTheme.titleSmall),
           for (final connection in connections) ...[
@@ -388,6 +407,7 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
                 onPair: (apiKey) => _pairKey(connection.provider, apiKey),
               ),
           ],
+          ],
         ]),
       ),
     );
@@ -401,7 +421,8 @@ class _StepPanel extends ConsumerStatefulWidget {
   final String provider;
   final String range;
   final ValueChanged<String> onRange;
-  const _StepPanel({required this.provider, required this.range, required this.onRange});
+  final String userId;
+  const _StepPanel({required this.provider, required this.range, required this.onRange, this.userId = ''});
 
   @override
   ConsumerState<_StepPanel> createState() => _StepPanelState();
@@ -423,7 +444,7 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
   @override
   void didUpdateWidget(_StepPanel old) {
     super.didUpdateWidget(old);
-    if (old.range != widget.range) _load();
+    if (old.range != widget.range || old.userId != widget.userId) _load();
   }
 
   Future<void> _load() async {
@@ -437,7 +458,7 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
     // the steps the member came for.
     final api = ref.read(apiProvider);
     try {
-      final steps = await api.deviceSteps(widget.provider, widget.range);
+      final steps = await api.deviceSteps(widget.provider, widget.range, userId: widget.userId);
       if (mounted) setState(() => _series = steps);
     } catch (error) {
       if (mounted) {
@@ -449,7 +470,7 @@ class _StepPanelState extends ConsumerState<_StepPanel> {
       }
     }
     try {
-      final heart = await api.deviceHeartRate(widget.provider, widget.range);
+      final heart = await api.deviceHeartRate(widget.provider, widget.range, userId: widget.userId);
       if (mounted) setState(() => _heart = heart);
     } catch (_) {
       if (mounted) setState(() => _heart = null);
@@ -712,7 +733,13 @@ class _HeartSection extends ConsumerWidget {
 /// rather than refusing when pressed.
 class _HealthFeedbackPanel extends ConsumerStatefulWidget {
   final String provider;
-  const _HealthFeedbackPanel({required this.provider});
+  final String userId;
+
+  /// Whether the viewer may spend a subscription on this reading - the member,
+  /// or a coach or nutritionist reviewing them. A public visitor reads the
+  /// reading but does not generate one.
+  final bool canGenerate;
+  const _HealthFeedbackPanel({required this.provider, this.userId = '', this.canGenerate = true});
 
   @override
   ConsumerState<_HealthFeedbackPanel> createState() => _HealthFeedbackPanelState();
@@ -739,7 +766,7 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
   /// panel empty with a button in it rather than reporting a failure.
   Future<void> _load() async {
     try {
-      final feedback = await ref.read(apiProvider).healthFeedback(widget.provider);
+      final feedback = await ref.read(apiProvider).healthFeedback(widget.provider, userId: widget.userId);
       if (mounted) setState(() => _feedback = feedback);
     } catch (_) {
       if (mounted) setState(() => _feedback = null);
@@ -762,7 +789,7 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
     try {
       final feedback = await ref
           .read(apiProvider)
-          .generateHealthFeedback(widget.provider, connectionId: connectionId);
+          .generateHealthFeedback(widget.provider, connectionId: connectionId, userId: widget.userId);
       if (mounted) setState(() => _feedback = feedback);
     } catch (error) {
       if (!mounted) return;
@@ -839,7 +866,9 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
             child: Text(t('devices.aiFeedback'),
                 style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
-          if (feedback != null)
+          // Delete only on your own reading - a reviewer reads and regenerates,
+          // they do not remove the athlete's stored reading.
+          if (feedback != null && widget.userId.isEmpty)
             IconButton(
               onPressed: _busy ? null : _confirmDelete,
               tooltip: t('ai.deleteFeedback'),
@@ -880,14 +909,16 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
         const SizedBox(height: 8),
         // Asked for as often as the member likes, through whichever
         // subscription they pick: the reading replaces the one before it,
-        // since the ninety days it describes have moved on.
-        AiAskButton(
-          connections: _connections,
-          busy: _busy,
-          label: feedback == null ? t('devices.aiFeedbackAsk') : t('devices.aiFeedbackAgain'),
-          tooltip: t('devices.aiFeedbackHelp'),
-          onAsk: _generate,
-        ),
+        // since the ninety days it describes have moved on. Only for someone
+        // who may spend on it - a public visitor just reads the reading.
+        if (widget.canGenerate)
+          AiAskButton(
+            connections: _connections,
+            busy: _busy,
+            label: feedback == null ? t('devices.aiFeedbackAsk') : t('devices.aiFeedbackAgain'),
+            tooltip: t('devices.aiFeedbackHelp'),
+            onAsk: _generate,
+          ),
       ]),
     );
   }
@@ -895,7 +926,8 @@ class _HealthFeedbackPanelState extends ConsumerState<_HealthFeedbackPanel> {
 
 class _BodyCompositionPanel extends ConsumerStatefulWidget {
   final String provider;
-  const _BodyCompositionPanel({required this.provider});
+  final String userId;
+  const _BodyCompositionPanel({required this.provider, this.userId = ''});
 
   @override
   ConsumerState<_BodyCompositionPanel> createState() => _BodyCompositionPanelState();
@@ -913,13 +945,19 @@ class _BodyCompositionPanelState extends ConsumerState<_BodyCompositionPanel> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(_BodyCompositionPanel old) {
+    super.didUpdateWidget(old);
+    if (old.userId != widget.userId || old.provider != widget.provider) _load();
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
       _error = '';
     });
     try {
-      final measures = await ref.read(apiProvider).deviceBodyComposition(widget.provider);
+      final measures = await ref.read(apiProvider).deviceBodyComposition(widget.provider, userId: widget.userId);
       if (mounted) setState(() => _measures = measures);
     } catch (error) {
       if (mounted) {
@@ -1042,7 +1080,8 @@ class _NutritionPanel extends ConsumerStatefulWidget {
   final String? provider;
   final String range;
   final ValueChanged<String> onRange;
-  const _NutritionPanel({required this.provider, required this.range, required this.onRange});
+  final String userId;
+  const _NutritionPanel({required this.provider, required this.range, required this.onRange, this.userId = ''});
 
   @override
   ConsumerState<_NutritionPanel> createState() => _NutritionPanelState();
@@ -1064,7 +1103,11 @@ class _NutritionPanelState extends ConsumerState<_NutritionPanel> {
   @override
   void didUpdateWidget(covariant _NutritionPanel old) {
     super.didUpdateWidget(old);
-    if (old.range != widget.range || old.provider != widget.provider) _load();
+    if (old.range != widget.range ||
+        old.provider != widget.provider ||
+        old.userId != widget.userId) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -1076,7 +1119,8 @@ class _NutritionPanelState extends ConsumerState<_NutritionPanel> {
       if (widget.provider != null) {
         // The nutrition read carries the targets with it, so one call answers
         // both "what did I eat" and "what should I aim for".
-        final series = await ref.read(apiProvider).deviceNutrition(widget.provider!, widget.range);
+        final series =
+            await ref.read(apiProvider).deviceNutrition(widget.provider!, widget.range, userId: widget.userId);
         if (mounted) {
           setState(() {
             _series = series;
@@ -1084,7 +1128,7 @@ class _NutritionPanelState extends ConsumerState<_NutritionPanel> {
           });
         }
       } else {
-        final targets = await ref.read(apiProvider).deviceNutritionTargets();
+        final targets = await ref.read(apiProvider).deviceNutritionTargets(userId: widget.userId);
         if (mounted) {
           setState(() {
             _series = null;
@@ -1269,7 +1313,15 @@ class _NutritionTargetsView extends ConsumerWidget {
         if (targets.hasProtein)
           _targetTile(context, t('devices.nutrition.idealProtein'),
               '${targets.proteinMinG.round()}–${targets.proteinMaxG.round()}',
-              t('devices.nutrition.gramsUnit')),
+              t('devices.nutrition.gramsUnit'),
+              // The rule first - "1.6-2.2 g x 64 kg FFM" - then the kilograms.
+              subtitle: targets.proteinPerKgMax > 0 && targets.fatFreeMassKg > 0
+                  ? t('devices.nutrition.proteinRule', {
+                      'min': _decimal(targets.proteinPerKgMin),
+                      'max': _decimal(targets.proteinPerKgMax),
+                      'ffm': '${targets.fatFreeMassKg.round()}',
+                    })
+                  : null),
         if (targets.hasEnergy)
           _targetTile(context, t('devices.nutrition.maintenance'),
               _grouped(targets.maintenanceKcal.round()), t('devices.nutrition.kcalUnit')),
@@ -1282,10 +1334,10 @@ class _NutritionTargetsView extends ConsumerWidget {
     ]);
   }
 
-  Widget _targetTile(BuildContext context, String label, String value, String unit) {
+  Widget _targetTile(BuildContext context, String label, String value, String unit, {String? subtitle}) {
     final small = Theme.of(context).textTheme.bodySmall;
     return Container(
-      width: 150,
+      width: 170,
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         border: Border.all(color: AppColors.of(context).border),
@@ -1293,6 +1345,7 @@ class _NutritionTargetsView extends ConsumerWidget {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(label, style: small),
+        if (subtitle != null) Text(subtitle, style: small?.copyWith(fontSize: 11)),
         Text.rich(
           TextSpan(children: [
             TextSpan(text: value),

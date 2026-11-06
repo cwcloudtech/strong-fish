@@ -52,9 +52,21 @@ type ViewerRelation struct {
 	// ManagesClub is true when the caller owns or administers a club the
 	// profile's owner belongs to - their coach.
 	ManagesClub bool
+	// AdvisesClub is true when the caller is a nutritionist a coach invited into
+	// a club the profile's owner belongs to. Like a coach they may read the
+	// member, but they do not run the club.
+	AdvisesClub bool
 }
 
-// CanSeeProfile applies the visibility rules.
+// AdvisesOrManages reports whether the caller is a coach or an invited
+// nutritionist of a club the owner is in - the two who may read the member's
+// training and health data.
+func (r ViewerRelation) AdvisesOrManages() bool {
+	return r.ManagesClub || r.AdvisesClub
+}
+
+// CanSeeProfile applies the visibility rules. A nutritionist who advises a club
+// the owner is in reads a private profile the same as the coach who manages it.
 func CanSeeProfile(visibility string, relation ViewerRelation) bool {
 	if relation.Self || relation.Superadmin {
 		return true
@@ -65,7 +77,7 @@ func CanSeeProfile(visibility string, relation ViewerRelation) bool {
 	case ProfileVisibilityClubs:
 		return relation.SharesClub
 	default:
-		return relation.ManagesClub
+		return relation.ManagesClub || relation.AdvisesClub
 	}
 }
 

@@ -13,6 +13,12 @@ const (
 	// GlobalRoleCoach can create clubs, upload programs and add exercises to
 	// the shared catalog. A coach owns the clubs they create.
 	GlobalRoleCoach GlobalRole = "coach"
+	// GlobalRoleNutritionist is a confirmed professional who reads, rather than
+	// writes, training: invited by a coach into a club, they see that club's
+	// athletes' training and health data the way the coach does, but do not
+	// create clubs or write programs. Confirmed by a superadmin at signup, the
+	// same way a coach is.
+	GlobalRoleNutritionist GlobalRole = "nutritionist"
 	// GlobalRoleConfirmed is a plain athlete: they join clubs, run the
 	// programs assigned to them and post.
 	GlobalRoleConfirmed GlobalRole = "confirmed"
@@ -30,7 +36,8 @@ const (
 // IsValidGlobalRole reports whether role is one a superadmin may assign.
 func IsValidGlobalRole(role GlobalRole) bool {
 	switch role {
-	case GlobalRoleSuperadmin, GlobalRoleCoach, GlobalRoleConfirmed, GlobalRoleDisabled, GlobalRoleBan:
+	case GlobalRoleSuperadmin, GlobalRoleCoach, GlobalRoleNutritionist,
+		GlobalRoleConfirmed, GlobalRoleDisabled, GlobalRoleBan:
 		return true
 	}
 	return false
@@ -78,6 +85,13 @@ type User struct {
 	// the members of the owner's clubs, or only their coaches (see
 	// CanSeeProfile).
 	ProfileVisibility string `json:"profileVisibility"`
+	// FitnessPublic lets the member put their fitness data - steps, heart rate,
+	// body composition, nutrition and the bar-speed charts - on their public
+	// profile for anyone to read, signed in or not. Off by default: health data
+	// is the most personal thing here, so it is shown to a coach or nutritionist
+	// of a shared club regardless, but to the wider world only when the member
+	// opts in.
+	FitnessPublic bool `json:"fitnessPublic"`
 	// Birthdate is optional, stored as YYYY-MM-DD. When set it becomes a
 	// calendar entry for the people who may see the profile.
 	Birthdate string `json:"birthdate,omitempty"`
@@ -170,7 +184,10 @@ type UserMeResponse struct {
 	PictureY          float64    `json:"pictureY"`
 	Locale            string     `json:"locale,omitempty"`
 	ProfileVisibility string     `json:"profileVisibility"`
-	Birthdate         string     `json:"birthdate,omitempty"`
+	// FitnessPublic is the account's own view of whether its fitness data is on
+	// its public profile for everyone (off by default).
+	FitnessPublic bool   `json:"fitnessPublic"`
+	Birthdate     string `json:"birthdate,omitempty"`
 	// CoachRequest is the account's own view of its coach application: whether
 	// it is still waiting, and - if it was turned down - why.
 	CoachRequest CoachRequest `json:"coachRequest,omitempty"`
@@ -222,7 +239,19 @@ type PublicProfile struct {
 	// anonymous visitor.
 	Followed  bool          `json:"followed"`
 	Clubs     []ProfileClub `json:"clubs"`
-	CreatedAt time.Time     `json:"createdAt"`
+	// CanViewHealth tells the client whether to offer this profile's fitness
+	// data (the charts, the export, the AI reading): true for the member
+	// themselves, a superadmin, a coach or nutritionist of a club they are in,
+	// or anyone at all when the member made their fitness data public.
+	CanViewHealth bool `json:"canViewHealth"`
+	// CanAdviseHealth is the narrower right to spend on this profile's data -
+	// generate the AI reading: the member, a superadmin, or a coach or
+	// nutritionist of a shared club, but not a public visitor.
+	CanAdviseHealth bool `json:"canAdviseHealth"`
+	// FitnessPublic says the member put their fitness data on their profile for
+	// everyone, so a client can label the section as public.
+	FitnessPublic bool      `json:"fitnessPublic"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 // ProfileBest is one lift's current 1RM on a public profile.

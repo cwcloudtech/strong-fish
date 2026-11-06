@@ -16,9 +16,10 @@ export default function SignUp() {
 
   const [form, setForm] = useState({
     name: "", surname: "", username: "", email: "", password: "", confirmPassword: "",
-    // A claim, not a grant: choosing "coach" queues the account for a
-    // superadmin to confirm, and it stays an athlete until they do.
-    coach: false,
+    // A claim, not a grant: choosing "coach" or "nutritionist" queues the
+    // account for a superadmin to confirm, and it stays an athlete until they
+    // do. One of "athlete", "coach", "nutritionist".
+    accountType: "athlete",
   });
   const [busy, setBusy] = useState(false);
 
@@ -42,7 +43,8 @@ export default function SignUp() {
         name: form.name,
         surname: form.surname,
         username: form.username,
-        coach: form.coach,
+        coach: form.accountType === "coach",
+        nutritionist: form.accountType === "nutritionist",
         locale,
       });
       // A brand-new account is disabled until it's activated (by email link or
@@ -53,11 +55,11 @@ export default function SignUp() {
           config?.activationMode === "email" ? t("auth.checkEmail") : t("errors.accountDisabledAdmin"),
           toastOptions
         );
-        if (form.coach) toast.info(t("auth.coachRequestSent"), toastOptions);
+        if (form.accountType !== "athlete") toast.info(t("auth.coachRequestSent"), toastOptions);
         navigate("/login");
         return;
       }
-      if (form.coach && response.coachRequest?.status === "pending") {
+      if (form.accountType !== "athlete" && response.coachRequest?.status === "pending") {
         toast.info(t("auth.coachRequestSent"), toastOptions);
       }
       await login(response);
@@ -116,18 +118,19 @@ export default function SignUp() {
             <span className="sf-label">{t("auth.accountType")}</span>
             <div className="sf-choice-row">
               {[
-                { value: false, label: t("auth.imAnAthlete"), help: t("auth.imAnAthleteHelp") },
-                { value: true, label: t("auth.imACoach"), help: t("auth.imACoachHelp") },
+                { value: "athlete", label: t("auth.imAnAthlete"), help: t("auth.imAnAthleteHelp") },
+                { value: "coach", label: t("auth.imACoach"), help: t("auth.imACoachHelp") },
+                { value: "nutritionist", label: t("auth.imANutritionist"), help: t("auth.imANutritionistHelp") },
               ].map((option) => (
                 <label
-                  key={String(option.value)}
-                  className={`sf-choice ${form.coach === option.value ? "selected" : ""}`}
+                  key={option.value}
+                  className={`sf-choice ${form.accountType === option.value ? "selected" : ""}`}
                 >
                   <input
                     type="radio"
                     name="accountType"
-                    checked={form.coach === option.value}
-                    onChange={() => setForm((current) => ({ ...current, coach: option.value }))}
+                    checked={form.accountType === option.value}
+                    onChange={() => setForm((current) => ({ ...current, accountType: option.value }))}
                   />
                   <span>
                     <strong>{option.label}</strong>

@@ -60,6 +60,22 @@ type registerPayload struct {
 	// never a grant: coaching means writing other people's training, so the
 	// role waits on a superadmin (see models.CoachRequest).
 	Coach bool `json:"coach"`
+	// Nutritionist is the sibling claim: a professional who reads a club's
+	// training and health data without writing programs. Like Coach it records a
+	// claim a superadmin confirms. Coach wins if somehow both are set.
+	Nutritionist bool `json:"nutritionist"`
+}
+
+// requestedRole is the elevated role this signup is applying for, or "" when it
+// is a plain athlete signup. Coach takes precedence if both boxes are set.
+func (p registerPayload) requestedRole() models.GlobalRole {
+	switch {
+	case p.Coach:
+		return models.GlobalRoleCoach
+	case p.Nutritionist:
+		return models.GlobalRoleNutritionist
+	}
+	return ""
 }
 
 // Register opens an account. Anyone can subscribe: the very first account ever
@@ -136,17 +152,17 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if p.Coach {
-		// The very first account is the superadmin and already outranks a
-		// coach, so it has nothing to apply for.
+	if role := p.requestedRole(); role != "" {
+		// The very first account is the superadmin and already outranks a coach
+		// or a nutritionist, so it has nothing to apply for.
 		if user.Role != models.GlobalRoleSuperadmin {
-			if updated, err := h.users.RequestCoach(r.Context(), user.ID, time.Now().UTC()); err == nil {
+			if updated, err := h.users.RequestRole(r.Context(), user.ID, role, time.Now().UTC()); err == nil {
 				user = updated
 				h.notifyCoachRequest(r, user)
 			} else {
 				// The account exists and works; it just isn't queued for
 				// review. Failing the registration over it would be worse.
-				slog.Error("failed to record coach request", "userId", user.ID, "error", err)
+				slog.Error("failed to record role request", "userId", user.ID, "role", role, "error", err)
 			}
 		}
 	}
@@ -275,6 +291,7 @@ type updateProfilePayload struct {
 	Bio               string  `json:"bio"`
 	Locale            string  `json:"locale"`
 	ProfileVisibility string  `json:"profileVisibility"`
+	FitnessPublic     bool    `json:"fitnessPublic"`
 	Birthdate         string  `json:"birthdate"`
 	Bodyweight        float64 `json:"bodyweight"`
 	Height            float64 `json:"height"`
@@ -370,7 +387,8 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	user, err := h.users.UpdateProfile(r.Context(), userID, store.ProfileFields{
 		Name: p.Name, Surname: p.Surname, Username: username, Anonymous: p.Anonymous,
 		Bio: p.Bio, Locale: p.Locale,
-		ProfileVisibility: p.ProfileVisibility, Birthdate: birthdate,
+		ProfileVisibility: p.ProfileVisibility, FitnessPublic: p.FitnessPublic,
+		Birthdate:  birthdate,
 		Bodyweight: p.Bodyweight, Height: p.Height,
 		Gender:       string(strength.NormalizeGender(p.Gender)),
 		Socials:      p.Socials,

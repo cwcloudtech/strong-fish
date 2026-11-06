@@ -243,7 +243,7 @@ func sheetFileName(name, format string) string {
 // a dozen pages, a week is one, and a session is what gets discussed the
 // evening it was trained - the smallest thing worth sending somebody.
 func (h *TrainingHandler) ExportAssignment(w http.ResponseWriter, r *http.Request) {
-	assignment, ok := h.authorizeAssignment(w, r)
+	assignment, ok := h.authorizeAssignmentView(w, r)
 	if !ok {
 		return
 	}
