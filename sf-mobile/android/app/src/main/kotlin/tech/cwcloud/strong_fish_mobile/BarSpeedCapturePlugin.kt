@@ -277,7 +277,7 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
     // an unasked-for drop. It does not reset desiredId - that is the member's
     // intent, cleared only by an explicit disconnect - and it stops once the
     // retries run out.
-    private val reconnect = Runnable {
+    private val reconnect: Runnable = Runnable {
         val address = desiredId ?: return@Runnable
         val adapter = manager()?.adapter ?: return@Runnable
         val device = try {
@@ -348,7 +348,7 @@ class BarSpeedCapturePlugin(private val activity: Activity, messenger: BinaryMes
         } catch (_: SecurityException) {}
     }
 
-    private val gattCallback = object : BluetoothGattCallback() {
+    private val gattCallback: BluetoothGattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             val address = gatt.device?.address ?: ""
             when (newState) {
