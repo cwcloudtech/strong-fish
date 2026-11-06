@@ -9,6 +9,7 @@ import '../api/services.dart';
 import '../i18n/app_localizations.dart';
 import '../models/models.dart';
 import '../models/session_config.dart';
+import '../native/bar_speed_capture.dart';
 
 /// The default API URL. It's overridable at runtime (see [SessionNotifier.setApiUrl])
 /// because a club typically runs its own server, so a single build has to be
@@ -259,6 +260,26 @@ final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeMo
 /// as a lost connection and explains nothing.
 final serverConfigProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   return ref.watch(apiProvider).config();
+});
+
+/// Whether this device can capture bar speed from a sensor at all - a native BLE
+/// transport that exists only on a real phone. Resolved once: it does not change
+/// while the app runs, and a per-widget check would hit the channel needlessly.
+final barSpeedCaptureAvailableProvider = FutureProvider<bool>((ref) {
+  return BarSpeedCapture.isAvailable();
+});
+
+/// The one sensor the app talks to, and where it is in the connect dance -
+/// shared, so the device sheet, the record screen and the fitness-data panel all
+/// read the same connection rather than each opening their own.
+final barSpeedConnectionProvider = StreamProvider<BarSpeedConnection>((ref) {
+  return BarSpeedCapture.instance.connectionState();
+});
+
+/// The sensors a running scan has turned up. Auto-disposed: the stream matters
+/// only while the device sheet is open and scanning.
+final barSpeedDevicesProvider = StreamProvider.autoDispose<List<BleDevice>>((ref) {
+  return BarSpeedCapture.instance.devices();
 });
 
 /// The largest video this deployment accepts, in bytes, or 0 when the config

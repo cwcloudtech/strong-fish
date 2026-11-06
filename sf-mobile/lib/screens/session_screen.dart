@@ -11,6 +11,7 @@ import '../widgets/export_menu.dart';
 import '../widgets/ai_ask_button.dart';
 import '../widgets/long_date.dart';
 import '../widgets/markdown_text.dart';
+import 'record_bar_speed_screen.dart';
 
 /// One assigned program, session by session - the screen a member actually uses
 /// in the gym.
@@ -516,6 +517,25 @@ class _DoneToggle extends StatelessWidget {
 /// to 10 - the half-point precision only starts where the hard sets are.
 const _perceivedRpe = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0];
 
+/// The three lifts the bar-speed engine reads.
+const _barSpeedLifts = {'squat', 'bench', 'deadlift'};
+
+/// Which bar-speed movement a set maps to, or null when it is not one of the
+/// three the engine reads (an accessory, a bodyweight move - the record button
+/// then stays off). The 1RM reference is the clean signal: a squat variation is
+/// programmed off the squat, so its reference is "squat". The slug is a fallback
+/// for a main lift whose reference did not come through.
+String? _barSpeedMovement(ProgramSet set) {
+  if (set.isBodyweight) return null;
+  final ref = set.exerciseOneRmRef.trim().toLowerCase();
+  if (_barSpeedLifts.contains(ref)) return ref;
+  final slug = set.exerciseSlug.toLowerCase();
+  if (slug.contains('squat')) return 'squat';
+  if (slug.contains('bench')) return 'bench';
+  if (slug.contains('dead')) return 'deadlift';
+  return null;
+}
+
 class _SetTile extends ConsumerWidget {
   final ProgramSet set;
   final String assignmentId;
@@ -528,6 +548,11 @@ class _SetTile extends ConsumerWidget {
     final t = ref.watch(tProvider);
     final scheme = Theme.of(context).colorScheme;
     final logged = set.log?.done == true;
+
+    // The sensor record button, for a main lift on a phone that can capture: it
+    // opens the recorder with this lift and its prescribed load already filled.
+    final movement = _barSpeedMovement(set);
+    final canCapture = ref.watch(barSpeedCaptureAvailableProvider).valueOrNull ?? false;
 
     // What was actually done, and what the row reads because of it: a logged
     // rep count and a logged load stand in for the ones the program asked for.
@@ -606,6 +631,16 @@ class _SetTile extends ConsumerWidget {
           // the rest of the session is re-resolved against the max that effort
           // demonstrates.
           _PerceivedRpe(set: set, assignmentId: assignmentId),
+          // Record this set's bar speed from the connected sensor, pre-filled
+          // with the lift and the load on the bar.
+          if (canCapture && movement != null)
+            IconButton(
+              icon: const Icon(Icons.speed),
+              iconSize: 20,
+              tooltip: t('session.recordBarSpeed'),
+              visualDensity: VisualDensity.compact,
+              onPressed: () => _openRecord(context, movement),
+            ),
           // Done or not done, and nothing else: the two states a set is in
           // while a session is being run.
           _DoneToggle(
@@ -661,6 +696,18 @@ class _SetTile extends ConsumerWidget {
       ),
     );
     if (saved == true) ref.invalidate(assignmentProvider(assignmentId));
+  }
+
+  /// Opens the recorder for this set, with the lift it maps to and the load on
+  /// the bar already filled - the member confirms or changes both, then records.
+  /// Prefers a logged load over the prescription, since that is what was lifted.
+  Future<void> _openRecord(BuildContext context, String movement) async {
+    final load = set.log?.actualLoad ?? (set.loadKnown && set.roundedLoad > 0 ? set.roundedLoad : 0.0);
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RecordBarSpeedScreen(initialMovement: movement, initialLoad: load),
+      ),
+    );
   }
 }
 

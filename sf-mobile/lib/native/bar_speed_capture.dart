@@ -39,21 +39,95 @@ class BarSpeedSample {
       };
 }
 
-/// Captures a set from a Bluetooth bar-speed sensor and hands back its samples,
-/// to be posted to the velocity endpoint.
+/// A sensor seen during a scan: its address, the name it advertises (blank for a
+/// device that advertises none), and how strong its signal is - the nearer one
+/// is the one on the bar in front of you.
+class BleDevice {
+  final String id;
+  final String name;
+  final int rssi;
+
+  const BleDevice({required this.id, required this.name, this.rssi = 0});
+
+  /// What to show when the device advertises no name: its address is better
+  /// than nothing to tell two unnamed ones apart.
+  String get label => name.trim().isEmpty ? id : name.trim();
+}
+
+/// Where a sensor is in the connect dance, so a screen can show "connecting…",
+/// "connected" or "disconnected" rather than guessing from whether samples are
+/// arriving.
+enum BleConnectionState { idle, scanning, connecting, connected, disconnected, failed }
+
+/// A snapshot of the one sensor the app talks to: its state, which device it is,
+/// and the reason it failed when it did.
+class BarSpeedConnection {
+  final BleConnectionState state;
+  final String deviceId;
+  final String deviceName;
+  final String error;
+
+  const BarSpeedConnection({
+    this.state = BleConnectionState.idle,
+    this.deviceId = '',
+    this.deviceName = '',
+    this.error = '',
+  });
+
+  bool get isConnected => state == BleConnectionState.connected;
+  bool get isBusy => state == BleConnectionState.connecting || state == BleConnectionState.scanning;
+
+  static BleConnectionState _stateOf(String? name) {
+    switch (name) {
+      case 'scanning':
+        return BleConnectionState.scanning;
+      case 'connecting':
+        return BleConnectionState.connecting;
+      case 'connected':
+        return BleConnectionState.connected;
+      case 'disconnected':
+        return BleConnectionState.disconnected;
+      case 'failed':
+        return BleConnectionState.failed;
+      default:
+        return BleConnectionState.idle;
+    }
+  }
+
+  factory BarSpeedConnection.fromMap(Map<dynamic, dynamic> map) => BarSpeedConnection(
+        state: _stateOf(map['state'] as String?),
+        deviceId: (map['deviceId'] as String?) ?? '',
+        deviceName: (map['name'] as String?) ?? '',
+        error: (map['error'] as String?) ?? '',
+      );
+}
+
+/// Talks to a bar-speed sensor over Bluetooth: scan for what is nearby, connect
+/// to one, and read its motion stream - the same arrangement a brand's own app
+/// uses (a device you pair once and then record set after set against).
 ///
 /// The transport is native: scanning, connecting and parsing the sensor's BLE
-/// frames (a WitMotion-class serial IMU exposes its stream on the 0xFFE4/FFE5/
-/// FFE9 characteristics) happen in Kotlin and Swift behind these channels,
-/// because Dart cannot speak BLE. This file is the **contract** the UI codes
-/// against; the per-platform native implementation is written and validated
-/// against real hardware (it cannot be exercised in CI).
+/// frames (a WitMotion-class serial IMU streams on 0xFFE4 under service 0xFFE5)
+/// happen in Kotlin and Swift behind these channels, because Dart cannot speak
+/// BLE. This file is the **contract** the UI codes against; the per-platform
+/// native side is written and validated against real hardware and cannot be
+/// exercised in CI.
 ///
-/// Until a native implementation is present, [isAvailable] returns false, so a
-/// screen can fall back to another source rather than fail.
+/// One sensor at a time, so this is a singleton ([instance]): the connection is
+/// app-wide, and the device list and the record screen share it rather than each
+/// opening their own.
 class BarSpeedCapture {
+  BarSpeedCapture._();
+  static final BarSpeedCapture instance = BarSpeedCapture._();
+
   static const MethodChannel _control = MethodChannel('sf/bar_speed_capture');
-  static const EventChannel _stream = EventChannel('sf/bar_speed_capture/samples');
+  static const EventChannel _devicesChannel = EventChannel('sf/bar_speed_capture/devices');
+  static const EventChannel _stateChannel = EventChannel('sf/bar_speed_capture/state');
+  static const EventChannel _samplesChannel = EventChannel('sf/bar_speed_capture/samples');
+
+  Stream<List<BleDevice>>? _devices;
+  Stream<BarSpeedConnection>? _state;
+  Stream<BarSpeedSample>? _samples;
 
   /// Whether a native capture implementation is present on this platform. False
   /// on web, and false until the native side is wired, so the caller can degrade
@@ -67,11 +141,36 @@ class BarSpeedCapture {
     }
   }
 
-  /// Starts a capture and streams samples until [stop] is called. Each native
-  /// event is a map of the sample's fields, mapped here to a [BarSpeedSample].
-  Stream<BarSpeedSample> start() {
-    _control.invokeMethod('start');
-    return _stream.receiveBroadcastStream().map((event) {
+  /// The sensors seen so far in the running scan, re-emitted as a whole list
+  /// every time a new one appears. Call [startScan] to begin; the stream is
+  /// empty until then.
+  Stream<List<BleDevice>> devices() {
+    return _devices ??= _devicesChannel.receiveBroadcastStream().map((event) {
+      final list = (event as List).cast<dynamic>();
+      return [
+        for (final entry in list)
+          if (entry is Map)
+            BleDevice(
+              id: (entry['id'] as String?) ?? '',
+              name: (entry['name'] as String?) ?? '',
+              rssi: (entry['rssi'] as num?)?.toInt() ?? 0,
+            ),
+      ];
+    });
+  }
+
+  /// The connection's state, pushed whenever it changes. Shared: every screen
+  /// that watches it sees the one sensor the app is talking to.
+  Stream<BarSpeedConnection> connectionState() {
+    return _state ??= _stateChannel
+        .receiveBroadcastStream()
+        .map((event) => BarSpeedConnection.fromMap((event as Map).cast<dynamic, dynamic>()));
+  }
+
+  /// The motion stream from the connected sensor. It flows whenever a sensor is
+  /// connected; a recording is simply a window of it the caller keeps.
+  Stream<BarSpeedSample> samples() {
+    return _samples ??= _samplesChannel.receiveBroadcastStream().map((event) {
       final map = (event as Map).cast<String, dynamic>();
       double at(String key) => (map[key] as num?)?.toDouble() ?? 0;
       return BarSpeedSample(
@@ -87,10 +186,30 @@ class BarSpeedCapture {
     });
   }
 
-  /// Stops the capture. Safe to call when nothing is running.
-  Future<void> stop() async {
+  /// Begins scanning for nearby sensors. Broad on purpose - a sensor that does
+  /// not advertise its service UUID (many do not) would never appear behind a
+  /// service filter, which is the usual reason one "will not pair".
+  Future<void> startScan() async {
     try {
-      await _control.invokeMethod('stop');
+      await _control.invokeMethod('startScan');
+    } catch (_) {}
+  }
+
+  Future<void> stopScan() async {
+    try {
+      await _control.invokeMethod('stopScan');
+    } catch (_) {}
+  }
+
+  /// Connects to the sensor with this address, enabling its motion stream.
+  Future<void> connect(String deviceId) async {
+    await _control.invokeMethod('connect', {'deviceId': deviceId});
+  }
+
+  /// Drops the current connection. Safe to call when nothing is connected.
+  Future<void> disconnect() async {
+    try {
+      await _control.invokeMethod('disconnect');
     } catch (_) {}
   }
 }
