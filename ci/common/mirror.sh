@@ -3,5 +3,6 @@
 REPO_PATH="${PROJECT_HOME}/strong-fish/"
 
 cd "${REPO_PATH}"
+git pull --rebase
 git push -f github main
 exit 0
