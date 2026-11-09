@@ -23,7 +23,14 @@ client.interceptors.response.use(
     // Clearing it here means every screen reacts the same way rather than each
     // having to notice. The login page itself is exempt: a wrong password
     // there is a 401 too, and reloading would swallow the error message.
-    if (error?.response?.status === 401 && !error.config?.url?.includes("/login")) {
+    //
+    // One 401 must never sign the member out: a connected device whose grant
+    // expired. That is about one partner, not the StrongFish session - the API
+    // now marks it (424 + errors.deviceReauthorize), and this guard is the
+    // belt-and-braces so it can never log the whole account out even if some
+    // path still answered 401.
+    const isDeviceReauth = error?.response?.data?.i18n_code === "errors.deviceReauthorize";
+    if (error?.response?.status === 401 && !isDeviceReauth && !error.config?.url?.includes("/login")) {
       clearToken();
       if (!window.location.pathname.startsWith("/login")) {
         window.location.assign("/login?expired=1");
