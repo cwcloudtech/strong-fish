@@ -462,6 +462,20 @@ func barSpeedHeading(set models.BarSet, locale string) string {
 		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedLoss"),
 			strconv.Itoa(int(loss+0.5))))
 	}
+	// The descriptive tags last, so a reader - and the AI - knows what the set
+	// was: a top set's speed is the effort signal, a warm-up's is not, and a
+	// tempo/paused variation is slow on purpose, not from fatigue.
+	switch models.NormalizeSetType(set.SetType) {
+	case models.SetTypeTopset:
+		parts = append(parts, programsheet.Heading(locale, "barSpeedSetTypeTopset"))
+	case models.SetTypeBackoff:
+		parts = append(parts, programsheet.Heading(locale, "barSpeedSetTypeBackoff"))
+	default:
+		parts = append(parts, programsheet.Heading(locale, "barSpeedSetTypeWarmup"))
+	}
+	if set.TempoVariation {
+		parts = append(parts, programsheet.Heading(locale, "barSpeedTempo"))
+	}
 	return strings.Join(parts, "  -  ")
 }
 

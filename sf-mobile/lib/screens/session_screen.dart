@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme.dart';
+import '../utils/set_metadata.dart';
 import '../widgets/common.dart';
 import '../widgets/export_menu.dart';
 import '../widgets/ai_ask_button.dart';
@@ -715,6 +716,10 @@ class _SetTile extends ConsumerWidget {
   /// Prefers a logged load over the prescription, since that is what was lifted.
   Future<void> _openRecord(BuildContext context, WidgetRef ref, String movement) async {
     final load = set.log?.actualLoad ?? (set.loadKnown && set.roundedLoad > 0 ? set.roundedLoad : 0.0);
+    // Pre-fill the set-type and tempo tags from the prescription - the exercise
+    // name and the coach's notes, where a "paused", "2CT" or "3:3:0" cue lives.
+    // The member confirms or overrides them on the record screen.
+    final cues = [set.exerciseSlug, ...set.exerciseLabels.values, set.notes].join(' ');
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => RecordBarSpeedScreen(
@@ -724,6 +729,8 @@ class _SetTile extends ConsumerWidget {
           // measured RPE straight back here.
           assignmentId: assignmentId,
           setId: set.id,
+          initialSetType: detectSetType(cues),
+          initialTempoVariation: detectTempoVariation(cues),
         ),
       ),
     );

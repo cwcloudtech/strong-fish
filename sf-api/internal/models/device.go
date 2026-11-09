@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // DeviceLink is a member's grant to an outside account that counts something
 // for them - the steps their watch already recorded, today through Google
@@ -108,6 +111,44 @@ type BarSet struct {
 	RepVelocities     []float64 `json:"repVelocities,omitempty"`
 	RepPeakVelocities []float64 `json:"repPeakVelocities,omitempty"`
 	PerformedAt       time.Time `json:"performedAt,omitempty"`
+	// SetType is "warmup", "topset" or "backoff" - what the set was for. A top
+	// set is the effort signal; a warm-up is not, and the AI reading weighs them
+	// differently. Defaults to "warmup". Stored in the recording's JSONB data.
+	SetType string `json:"setType,omitempty"`
+	// TempoVariation marks a set done to a tempo or with a pause (a "2CT" or
+	// "paused" cue, a "3:3:0" prescription, a spotto press...). The bar moves
+	// slower for a prescribed reason, so the AI is told not to read that slower
+	// speed as fatigue or a grind. Stored in the recording's JSONB data.
+	TempoVariation bool `json:"tempoVariation,omitempty"`
+}
+
+// BarSetMetadata is the JSONB-stored, extensible side of a bar-speed recording:
+// the descriptive tags that ride along for the panel and the AI, kept out of the
+// fixed columns so a new one needs a key, not a migration.
+type BarSetMetadata struct {
+	SetType        string `json:"setType,omitempty"`
+	TempoVariation bool   `json:"tempoVariation,omitempty"`
+}
+
+// Bar-speed set types. Warmup is the default a recording takes when none is
+// given, and what older rows were migrated to.
+const (
+	SetTypeWarmup  = "warmup"
+	SetTypeTopset  = "topset"
+	SetTypeBackoff = "backoff"
+)
+
+// NormalizeSetType lowercases and validates a set type, falling back to warmup
+// for anything unknown or empty - the clients default to warmup too.
+func NormalizeSetType(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case SetTypeTopset:
+		return SetTypeTopset
+	case SetTypeBackoff:
+		return SetTypeBackoff
+	default:
+		return SetTypeWarmup
+	}
 }
 
 // StepDay is one day's step count.

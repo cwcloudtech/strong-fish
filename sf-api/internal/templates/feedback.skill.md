@@ -30,6 +30,13 @@ Three short paragraphs, no headings, no bullet list:
 
 ## Rules
 
+- **Read the prescription for tempo and set-type cues.** A set written as a tempo
+  or pause variation - "2CT", "paused", a "3:3:0" tempo, a "spotto" press - moves
+  the bar slowly *on purpose*. A lower speed, a higher RPE for the load and a
+  bigger velocity loss there are the cost of the tempo, not a grind or poor
+  recovery, so never flag a paused/tempo set as a bad day; compare it only to
+  other sets done the same way. A "top set" is the day's real effort reading; a
+  warm-up or back-off is not, so do not judge the session on them.
 - If a set was logged beltless, or with a different load than prescribed, that is information - read it, do not scold.
 - A missed rep at RPE 10 is not a failure, it is data.
 - If this is the first session of the block, say that there is nothing to compare against yet rather than inventing a trend.

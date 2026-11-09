@@ -375,6 +375,13 @@ class StanceSet {
   /// mean one - the two lines the bar-speed app itself plots.
   final List<double> repPeakVelocities;
 
+  /// What the set was for - "warmup", "topset" or "backoff". Descriptive only.
+  final String setType;
+
+  /// Whether the set was a tempo or paused variation (the bar slowed on
+  /// purpose), so a reader does not mistake the slower speed for fatigue.
+  final bool tempoVariation;
+
   const StanceSet({
     this.lift = '',
     this.source = '',
@@ -386,6 +393,8 @@ class StanceSet {
     this.peakVelocity = 0,
     this.repVelocities = const [],
     this.repPeakVelocities = const [],
+    this.setType = 'warmup',
+    this.tempoVariation = false,
   });
 
   factory StanceSet.fromJson(Map<String, dynamic> json) => StanceSet(
@@ -403,6 +412,10 @@ class StanceSet {
         repPeakVelocities: (json['repPeakVelocities'] as List? ?? const [])
             .map((v) => _toDouble(v))
             .toList(),
+        setType: _toString(json['setType']).isEmpty
+            ? 'warmup'
+            : _toString(json['setType']),
+        tempoVariation: json['tempoVariation'] == true,
       );
 }
 

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"time"
 
@@ -40,14 +41,22 @@ func (s *BarSpeedStore) Save(ctx context.Context, userID string, set models.BarS
 		source = "strongfish"
 	}
 
+	meta, err := json.Marshal(models.BarSetMetadata{
+		SetType:        models.NormalizeSetType(set.SetType),
+		TempoVariation: set.TempoVariation,
+	})
+	if err != nil {
+		return err
+	}
+
 	var id string
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO bar_speed_recordings
-			(user_id, lift, weight_kg, given_rpe, predicted_rpe, mean_velocity, peak_velocity, source, performed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			(user_id, lift, weight_kg, given_rpe, predicted_rpe, mean_velocity, peak_velocity, source, performed_at, data)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id::text`,
 		userID, set.Lift, set.WeightKg, set.GivenRpe, set.PredictedRpe,
-		set.MeanVelocity, set.PeakVelocity, source, performed).Scan(&id); err != nil {
+		set.MeanVelocity, set.PeakVelocity, source, performed, meta).Scan(&id); err != nil {
 		return err
 	}
 
@@ -72,7 +81,7 @@ func (s *BarSpeedStore) LastSets(ctx context.Context, userID string) ([]models.B
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT ON (lift)
 			id::text, lift, weight_kg, given_rpe, predicted_rpe,
-			mean_velocity, peak_velocity, source, performed_at
+			mean_velocity, peak_velocity, source, performed_at, data
 		FROM bar_speed_recordings
 		WHERE user_id = $1
 		ORDER BY lift, performed_at DESC`, userID)
@@ -86,10 +95,19 @@ func (s *BarSpeedStore) LastSets(ctx context.Context, userID string) ([]models.B
 	for rows.Next() {
 		var id string
 		var set models.BarSet
+		var meta []byte
 		if err := rows.Scan(&id, &set.Lift, &set.WeightKg, &set.GivenRpe, &set.PredictedRpe,
-			&set.MeanVelocity, &set.PeakVelocity, &set.Source, &set.PerformedAt); err != nil {
+			&set.MeanVelocity, &set.PeakVelocity, &set.Source, &set.PerformedAt, &meta); err != nil {
 			return nil, err
 		}
+		// Older rows predate the tags; the migration backfilled them to the
+		// warm-up default, and an unreadable blob falls back the same way.
+		var md models.BarSetMetadata
+		if len(meta) > 0 {
+			_ = json.Unmarshal(meta, &md)
+		}
+		set.SetType = models.NormalizeSetType(md.SetType)
+		set.TempoVariation = md.TempoVariation
 		indexByID[id] = len(sets)
 		sets = append(sets, set)
 	}

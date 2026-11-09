@@ -1261,6 +1261,12 @@ function BarSpeedSet({ set, t }) {
             · {barSpeedSource(t, set.source)}
           </span>
         ) : null}
+        <span className="sf-badge" style={{ marginLeft: "0.4rem" }}>
+          {t(`devices.barSpeed.setType_${set.setType || "warmup"}`)}
+        </span>
+        {set.tempoVariation ? (
+          <span className="sf-badge" style={{ marginLeft: "0.3rem" }}>{t("devices.barSpeed.tempoVariation")}</span>
+        ) : null}
       </div>
 
       <div className="sf-row" style={{ gap: "1.4rem", marginTop: "0.4rem", flexWrap: "wrap" }}>

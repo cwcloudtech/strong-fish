@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import { FiSave, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
-import { exercises as exercisesApi, oneRms as oneRmsApi } from "../../api/services";
+import { devices as devicesApi, exercises as exercisesApi, oneRms as oneRmsApi } from "../../api/services";
 import { ConfirmModal } from "../../components/common/Modal";
 import Tooltip from "../../components/common/Tooltip";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
@@ -24,6 +24,10 @@ export default function OneRms() {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(null);
   const [confirming, setConfirming] = useState(null);
+  // The last bar-speed set of each lift, to show its reps and per-rep speeds
+  // under the matching max. Best-effort and optional: a member with no tracker
+  // just sees the maxes, so a failed read must never blank the page.
+  const [barSets, setBarSets] = useState([]);
 
   const load = useCallback(async () => {
     try {
@@ -34,6 +38,11 @@ export default function OneRms() {
     } catch (err) {
       setError(err);
     }
+    try {
+      setBarSets(await devicesApi.barSpeedList());
+    } catch {
+      setBarSets([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -41,6 +50,11 @@ export default function OneRms() {
   }, [load]);
 
   const byExercise = useMemo(() => new Map((maxes || []).map((max) => [max.exerciseId, max])), [maxes]);
+  // Keyed by lift (squat/bench/deadlift), which is a main lift's own category.
+  const barByLift = useMemo(
+    () => new Map((barSets || []).filter((set) => set.repVelocities?.length).map((set) => [set.lift, set])),
+    [barSets],
+  );
 
   // The three competition lifts come first and are always listed, even without a
   // value: they're what most prescriptions resolve against, so an empty one is
@@ -98,8 +112,12 @@ export default function OneRms() {
 
   const renderRow = (exercise) => {
     const current = byExercise.get(exercise.id);
+    // A competition lift's recorded set, keyed by its category (squat/bench/
+    // deadlift). Shown under the max as its reps and each rep's speed.
+    const set = exercise.main ? barByLift.get(exercise.category) : null;
     return (
-      <tr key={exercise.id}>
+      <Fragment key={exercise.id}>
+      <tr>
         <td>
           {label(exercise, locale)}
           {exercise.main ? <span className="sf-badge" style={{ marginLeft: "0.4rem" }}>{t(`exercises.category${exercise.category[0].toUpperCase()}${exercise.category.slice(1)}`)}</span> : null}
@@ -156,6 +174,21 @@ export default function OneRms() {
           </div>
         </td>
       </tr>
+      {set ? (
+        <tr>
+          <td colSpan={5} className="sf-muted" style={{ fontSize: "0.85rem", paddingTop: 0, borderTop: "none" }}>
+            <strong>{t("devices.barSpeed.title")}</strong>
+            {" · "}
+            {t("devices.barSpeed.detectedReps", { count: set.reps })}
+            {" · "}
+            {set.repVelocities.map((velocity) => velocity.toFixed(2)).join(", ")} m/s
+            {" · "}
+            {t(`devices.barSpeed.setType_${set.setType || "warmup"}`)}
+            {set.tempoVariation ? ` · ${t("devices.barSpeed.tempoVariation")}` : ""}
+          </td>
+        </tr>
+      ) : null}
+      </Fragment>
     );
   };
 

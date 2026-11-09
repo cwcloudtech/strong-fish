@@ -438,6 +438,8 @@ class SfApi {
     String unit = 'kg',
     double sampleRateHz = 200,
     double givenRpe = 0,
+    String setType = 'warmup',
+    bool tempoVariation = false,
   }) async {
     final response = await client.dio.post('/users/me/bar-speed/analyze', data: {
       'movement': movement,
@@ -445,6 +447,8 @@ class SfApi {
       'unit': unit,
       'sampleRateHz': sampleRateHz,
       if (givenRpe > 0) 'givenRpe': givenRpe,
+      'setType': setType,
+      'tempoVariation': tempoVariation,
       'samples': samples,
     });
     return StanceSet.fromJson(_map(response.data));

@@ -74,6 +74,12 @@ type analyzePayload struct {
 	// GivenRpe is what the member rated the set, 0 when they did not. It is kept
 	// and, over time, is what the predicted RPE of later sets is read against.
 	GivenRpe float64 `json:"givenRpe"`
+	// SetType is the member's pick on the record screen - warmup, topset or
+	// backoff, defaulting to warmup. TempoVariation is their yes/no, auto-filled
+	// from a session's tempo or pause cues and overridable. Both are descriptive
+	// and ride along to the panel and the AI; neither changes the maths.
+	SetType        string `json:"setType"`
+	TempoVariation bool   `json:"tempoVariation"`
 }
 
 // List is the member's last set of each lift, consolidated across sources: our
@@ -155,6 +161,8 @@ func (h *BarSpeedHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 	})
 	set := barSpeedSet(movement, barSpeedKg(p.Load, p.Unit), result)
 	set.GivenRpe = p.GivenRpe
+	set.SetType = models.NormalizeSetType(p.SetType)
+	set.TempoVariation = p.TempoVariation
 
 	// Keep a real set (one the engine found reps in) for the authenticated
 	// member. Best-effort: a store that is briefly down must not cost the
