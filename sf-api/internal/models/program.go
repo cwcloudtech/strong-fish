@@ -249,6 +249,9 @@ type BarSetVBT struct {
 	MeanVelocity float64 `json:"meanVelocity,omitempty"`
 	PeakVelocity float64 `json:"peakVelocity,omitempty"`
 	VelocityLoss float64 `json:"velocityLoss,omitempty"`
+	// RepVelocities is each rep's mean concentric speed in order, so the export
+	// (and the AI reading it) can show the set rep by rep, not just its summary.
+	RepVelocities []float64 `json:"repVelocities,omitempty"`
 }
 
 // SetFeedback is one member's logged set joined with enough of its

@@ -116,5 +116,8 @@ func legendLabel(chart programsheet.Chart, bar programsheet.Bar) string {
 // escape keeps a cell inside its cell: a pipe in a value would otherwise open
 // a column that is not there.
 func escape(value string) string {
-	return strings.ReplaceAll(strings.TrimSpace(value), "|", "\\|")
+	v := strings.ReplaceAll(strings.TrimSpace(value), "|", "\\|")
+	// A multi-line cell (the VBT column's per-rep speeds) keeps its line breaks
+	// as <br>, which a markdown table renders - and the AI reads - as lines.
+	return strings.ReplaceAll(v, "\n", "<br>")
 }

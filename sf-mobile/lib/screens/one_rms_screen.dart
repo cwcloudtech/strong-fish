@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
-import '../utils/set_metadata.dart';
 import '../widgets/common.dart';
 
 /// The member's maxes - the single input every prescribed load is computed
@@ -198,18 +197,15 @@ class _OneRmRowState extends ConsumerState<_OneRmRow> {
                 ),
               ],
             ),
-            // The lift's last recorded set, under the max: its reps and each
-            // rep's concentric speed, plus the set-type and tempo tags.
+            // The lift's last recorded set, under the max: VBT, the rep count and
+            // the velocity loss - the same summary the export shows. Read-only:
+            // it never touches the max the member typed above.
             if (set != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
-                  [
-                    t('devices.barSpeed.detectedReps', {'count': '${set.reps}'}),
-                    '${set.repVelocities.map((v) => v.toStringAsFixed(2)).join(', ')} m/s',
-                    t('devices.barSpeed.setType_${normalizeSetType(set.setType)}'),
-                    if (set.tempoVariation) t('devices.barSpeed.tempoVariation'),
-                  ].join('  ·  '),
+                  'VBT - ${t('devices.barSpeed.detectedReps', {'count': '${set.reps}'})}'
+                  ' - ${_velocityLoss(set.repVelocities)}%',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -340,3 +336,13 @@ class _AddLiftDialogState extends ConsumerState<_AddLiftDialog> {
 }
 
 String _fmt(double value) => value % 1 == 0 ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
+
+/// Velocity loss across the set, as a whole percent: how much the fastest rep
+/// slowed to the last - the same figure the export's VBT column shows.
+int _velocityLoss(List<double> velocities) {
+  if (velocities.length < 2) return 0;
+  final best = velocities.reduce((a, b) => a > b ? a : b);
+  final last = velocities.last;
+  if (best <= 0 || last >= best) return 0;
+  return ((best - last) / best * 100).round();
+}

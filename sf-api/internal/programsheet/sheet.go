@@ -122,19 +122,26 @@ func Row(set models.ProgramSet, feedback bool, locale string) []string {
 }
 
 // formatVBT is the export's VBT cell: what the velocity tracker read for the
-// set - mean speed, peak, and velocity loss - or empty when none did.
+// set. The headline first - velocity loss, then mean and peak speed - and then
+// each rep's concentric speed on its own line, so the sheet (and the AI reading
+// it) has the set rep by rep, not just its summary. Empty when nothing recorded.
 func formatVBT(vbt *models.BarSetVBT, locale string) string {
 	if vbt == nil || vbt.MeanVelocity <= 0 {
 		return ""
 	}
-	parts := []string{fmt.Sprintf(Heading(locale, "vbtMean"), fmt.Sprintf("%.2f", vbt.MeanVelocity))}
-	if vbt.PeakVelocity > 0 {
-		parts = append(parts, fmt.Sprintf(Heading(locale, "vbtPeak"), fmt.Sprintf("%.2f", vbt.PeakVelocity)))
-	}
+	var head []string
 	if vbt.VelocityLoss > 0 {
-		parts = append(parts, fmt.Sprintf(Heading(locale, "vbtLoss"), fmt.Sprintf("%.0f", vbt.VelocityLoss)))
+		head = append(head, fmt.Sprintf(Heading(locale, "vbtLoss"), fmt.Sprintf("%.0f", vbt.VelocityLoss)))
 	}
-	return strings.Join(parts, " · ")
+	head = append(head, fmt.Sprintf(Heading(locale, "vbtMean"), fmt.Sprintf("%.2f", vbt.MeanVelocity)))
+	if vbt.PeakVelocity > 0 {
+		head = append(head, fmt.Sprintf(Heading(locale, "vbtPeak"), fmt.Sprintf("%.2f", vbt.PeakVelocity)))
+	}
+	lines := []string{strings.Join(head, " · ")}
+	for i, v := range vbt.RepVelocities {
+		lines = append(lines, fmt.Sprintf(Heading(locale, "vbtRep"), i+1, fmt.Sprintf("%.2f", v)))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Line is one set as a row of cells, plus whether the member ticked it off.
