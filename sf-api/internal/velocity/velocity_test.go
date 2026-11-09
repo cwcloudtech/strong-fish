@@ -106,6 +106,50 @@ func TestAnalyzeConfidenceHigherForRegularReps(t *testing.T) {
 	}
 }
 
+// ramp appends a linear segment from `from` to `to` lasting `sec` at `dt`.
+func ramp(v []float64, from, to, sec, dt float64) []float64 {
+	n := int(math.Round(sec / dt))
+	for i := 0; i < n; i++ {
+		v = append(v, from+(to-from)*(float64(i)/float64(n)))
+	}
+	return v
+}
+
+// A squat often grinds through a sticking point: mid-ascent the bar nearly
+// stalls - velocity dips toward zero - but never reverses downward. That is one
+// rep. Before the fix the sub-threshold stall cut the single concentric in two,
+// so a 3-rep squat came back as 6.
+func TestDetectRepsMergesStickingPoint(t *testing.T) {
+	dt := 0.005
+	var v []float64
+	v = ramp(v, 0, 0.6, 0.30, dt)    // drive up
+	v = ramp(v, 0.6, 0.02, 0.20, dt) // slow into the sticking point
+	v = ramp(v, 0.02, 0.02, 0.25, dt) // stall, still rising (never negative)
+	v = ramp(v, 0.02, 0.5, 0.20, dt) // grind through
+	v = ramp(v, 0.5, 0, 0.30, dt)    // finish
+	reps := detectReps(v, v, dt, movementProfile("squat"))
+	if len(reps) != 1 {
+		t.Fatalf("a sticking-point ascent is one rep, got %d", len(reps))
+	}
+}
+
+// Reps truly apart are separated by a real eccentric - the bar going clearly
+// negative - and must stay two reps, so the merge above never glues real reps.
+func TestDetectRepsSeparatesRepsAcrossEccentric(t *testing.T) {
+	dt := 0.005
+	var v []float64
+	v = ramp(v, 0, 0.6, 0.30, dt)  // rep 1 concentric
+	v = ramp(v, 0.6, 0, 0.30, dt)
+	v = ramp(v, 0, -0.5, 0.25, dt) // the bar is lowered: a clear reversal
+	v = ramp(v, -0.5, 0, 0.25, dt)
+	v = ramp(v, 0, 0.6, 0.30, dt)  // rep 2 concentric
+	v = ramp(v, 0.6, 0, 0.30, dt)
+	reps := detectReps(v, v, dt, movementProfile("squat"))
+	if len(reps) != 2 {
+		t.Fatalf("two reps split by an eccentric, got %d", len(reps))
+	}
+}
+
 func TestMovementProfileBounds(t *testing.T) {
 	// The deadlift allows longer reps than the bench.
 	if movementProfile("deadlift").maxRepDurationSec <= movementProfile("bench").maxRepDurationSec {

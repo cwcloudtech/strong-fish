@@ -32,7 +32,7 @@ class RecordBarSpeedScreen extends ConsumerStatefulWidget {
 
   const RecordBarSpeedScreen({
     super.key,
-    this.initialMovement = 'deadlift',
+    this.initialMovement = 'squat',
     this.initialLoad = 0,
     this.assignmentId = '',
     this.setId = '',
@@ -46,7 +46,7 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   final BarSpeedCapture _capture = BarSpeedCapture.instance;
   final TextEditingController _load = TextEditingController();
   late String _movement =
-      _movements.contains(widget.initialMovement) ? widget.initialMovement : 'deadlift';
+      _movements.contains(widget.initialMovement) ? widget.initialMovement : 'squat';
 
   StreamSubscription<BarSpeedSample>? _sub;
   final List<Map<String, double>> _samples = [];
