@@ -879,7 +879,12 @@ func (h *DeviceHandler) writeProviderError(w http.ResponseWriter, err error, pro
 	case errors.Is(err, devicelink.ErrNotLinked):
 		writeError(w, http.StatusConflict, "Account not linked at the provider", CodeDeviceNotLinked)
 	case errors.Is(err, devicelink.ErrReauthorize):
-		writeError(w, http.StatusUnauthorized, "Connect the account again", CodeDeviceReauthorize)
+		// Not 401: a provider's expired grant must never read as the member's
+		// own StrongFish session being gone, or the clients log the whole
+		// account out (their 401 handler) when all that's needed is to
+		// reconnect one connected device. 424 says "a dependency - the device
+		// authorization - has to be re-established", which is exactly the case.
+		writeError(w, http.StatusFailedDependency, "Connect the account again", CodeDeviceReauthorize)
 	default:
 		slog.Error("device provider call failed", "provider", provider, "error", err)
 		writeJSON(w, http.StatusBadGateway, errorBody{

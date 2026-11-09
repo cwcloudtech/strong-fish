@@ -9,7 +9,7 @@ import downloadBlob from "../../utils/downloadBlob";
 import longDate from "../../utils/longDate";
 import { ConfirmModal } from "../common/Modal";
 import AskButton from "../ai/AskButton";
-import useToastError from "../../utils/useToast";
+import useToastError, { useReauthToast, isReauthorizeError } from "../../utils/useToast";
 import { DebugConsole, ErrorMessage, Spinner } from "../common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
 
@@ -499,6 +499,7 @@ function HealthFeedbackPanel({ provider, userId, canGenerate = true }) {
  */
 function DataPanel({ provider, range, onRange, userId }) {
   const { t } = useI18n();
+  const reauthToast = useReauthToast();
   const [series, setSeries] = useState(null);
   const [heart, setHeart] = useState(null);
   const [heartError, setHeartError] = useState(null);
@@ -517,6 +518,9 @@ function DataPanel({ provider, range, onRange, userId }) {
     } catch (err) {
       setError(err);
       setSeries(null);
+      // Reconnect-the-partner toast, never a sign-out. Only on the steps read:
+      // the same expired grant fails heart rate too, and one toast is enough.
+      if (isReauthorizeError(err)) reauthToast(provider);
     }
     try {
       setHeart(await devicesApi.heartRate(provider, range, userId));
@@ -527,7 +531,7 @@ function DataPanel({ provider, range, onRange, userId }) {
     } finally {
       setLoading(false);
     }
-  }, [provider, range, userId]);
+  }, [provider, range, userId, reauthToast]);
 
   useEffect(() => {
     load();
@@ -708,6 +712,7 @@ function HeartSection({ heart, t }) {
  */
 function BodyCompositionPanel({ provider, userId }) {
   const { t } = useI18n();
+  const reauthToast = useReauthToast();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -720,10 +725,13 @@ function BodyCompositionPanel({ provider, userId }) {
     } catch (err) {
       setError(err);
       setData(null);
+      // An expired provider grant is not a lost session: surface it as a
+      // "reconnect this partner" toast, never a sign-out.
+      if (isReauthorizeError(err)) reauthToast(provider);
     } finally {
       setLoading(false);
     }
-  }, [provider, userId]);
+  }, [provider, userId, reauthToast]);
 
   useEffect(() => {
     load();
@@ -802,6 +810,7 @@ function kcalTone(kcal, maintenance) {
  */
 function NutritionPanel({ provider, range, onRange, userId }) {
   const { t } = useI18n();
+  const reauthToast = useReauthToast();
   const [series, setSeries] = useState(null);
   const [targets, setTargets] = useState(null);
   const [error, setError] = useState(null);
@@ -824,10 +833,12 @@ function NutritionPanel({ provider, range, onRange, userId }) {
       }
     } catch (err) {
       setError(err);
+      // Reconnect-the-partner toast, never a sign-out.
+      if (isReauthorizeError(err)) reauthToast(provider);
     } finally {
       setLoading(false);
     }
-  }, [provider, range, userId]);
+  }, [provider, range, userId, reauthToast]);
 
   useEffect(() => {
     load();

@@ -35,3 +35,30 @@ export function useToastSuccess() {
 
   return useCallback((key, vars) => toast.success(t(key, vars), toastOptions), [t]);
 }
+
+/**
+ * The i18n code the API returns when a connected provider's grant has expired
+ * and the member must reconnect it. A device read that fails this way is about
+ * one partner, not the member's StrongFish session - it must never be treated
+ * like a sign-out.
+ */
+export const DEVICE_REAUTHORIZE_CODE = "errors.deviceReauthorize";
+
+export function isReauthorizeError(error) {
+  return error?.response?.data?.i18n_code === DEVICE_REAUTHORIZE_CODE;
+}
+
+/**
+ * A single de-duplicated toast asking the member to reconnect a provider. One
+ * expired grant fails several panels at once (steps, body composition,
+ * nutrition); keying the toast by provider collapses them into one message.
+ */
+export function useReauthToast() {
+  const { t } = useI18n();
+
+  return useCallback(
+    (provider) =>
+      toast.error(t(DEVICE_REAUTHORIZE_CODE), { ...toastOptions, toastId: `reauth-${provider || "device"}` }),
+    [t]
+  );
+}
