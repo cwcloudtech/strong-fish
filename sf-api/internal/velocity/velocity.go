@@ -104,6 +104,14 @@ const (
 	// deadlift are each measured against their own top speed.
 	phaseThresholdFraction = 0.15
 	phaseThresholdFloor    = 0.05
+
+	// Two concentric phases are the same rep unless the bar reversed between
+	// them - went below this speed downward (m/s). An absolute floor, not a
+	// fraction of the peak: a slow or paused descent still crosses it, where a
+	// peak-relative bar missed controlled benches and merged the whole set into
+	// one phase. A sticking point grinds upward and never goes negative, so it
+	// stays one rep.
+	reversalFloor = 0.05
 )
 
 // Analyze reads one set's stream into its reps and velocities. An empty or
@@ -302,7 +310,15 @@ func detectReps(vel, smooth []float64, dt float64, prof profile) []Rep {
 		// lowered. The small-gap glue stays as a floor for brief noise dips.
 		if len(spans) > 0 {
 			prevEnd := spans[len(spans)-1].end
-			reversed := minValue(smooth, prevEnd, start) < -threshold
+			// A real rep boundary is the bar reversing direction - the next rep's
+			// descent, where the velocity goes clearly negative. A sticking point
+			// (the bar grinding slowly upward) stays positive and must not split a
+			// rep, which is what made a 3-rep squat read as 6. The bar only has to
+			// cross a small floor below zero, not a fraction of the peak: a slow
+			// or paused descent still reverses, and keying off the peak missed it,
+			// merging a whole set into one phase that the duration filter then
+			// dropped - the "0 reps" on a controlled bench.
+			reversed := minValue(smooth, prevEnd, start) < -reversalFloor
 			if start-prevEnd < minGap || !reversed {
 				spans[len(spans)-1].end = end
 				continue
@@ -311,15 +327,16 @@ func detectReps(vel, smooth []float64, dt float64, prof profile) []Rep {
 		spans = append(spans, span{start, end})
 	}
 
-	// Drop a leading lift-off (the un-rack / walk-out). On squat and bench a real
-	// rep's ascent is always preceded by its descent, so the first ascent of a
-	// racked set - standing the bar out of the hooks, an ascent with no descent
-	// before it - is not a rep. That is the stray count a member sees as "8 reps,
-	// shows 9". Only when a descent genuinely precedes the first ascent (there is
-	// lead before it and the bar went clearly negative) is it kept; a deadlift,
-	// concentric-first, never drops its first phase.
-	if prof.eccentricFirst && len(spans) > 0 && spans[0].start > 0 &&
-		minValue(smooth, 0, spans[0].start) >= -threshold {
+	// Drop a leading lift-off. Standing the bar out of the rack is an ascent with
+	// no descent before it, so on squat and bench the first concentric is a rep
+	// only when the bar actually descended into it. The test uses the same small
+	// reversal floor as the merge, not a fraction of the peak - keying off the
+	// peak here treated a slow first-rep descent as "no descent" and dropped a
+	// real rep (and with the over-merge, the whole bench). Never the only span: a
+	// lone rep is a real single, not a lift-off. Deadlift pulls from the floor,
+	// so its first phase is always a rep.
+	if prof.eccentricFirst && len(spans) > 1 && spans[0].start > 0 &&
+		minValue(smooth, 0, spans[0].start) >= -reversalFloor {
 		spans = spans[1:]
 	}
 

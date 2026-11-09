@@ -212,6 +212,46 @@ func TestDetectRepsKeepsDeadliftFirstPull(t *testing.T) {
 	}
 }
 
+// A controlled bench - a slow, nearly-paused descent whose velocity never
+// reaches a fraction of the peak - still has to detect every rep. Keying the
+// rep boundary off the peak merged the whole set into one phase that the
+// duration filter then dropped: the "0 reps" regression.
+func TestDetectRepsBenchSlowDescentNotZero(t *testing.T) {
+	dt := 0.005
+	var v []float64
+	v = ramp(v, 0, 0, 0.25, dt)    // on the hooks
+	v = ramp(v, 0, 0.55, 0.25, dt) // lift-off
+	v = ramp(v, 0.55, 0, 0.30, dt)
+	for i := 0; i < 4; i++ {
+		v = ramp(v, 0, -0.08, 0.5, dt) // slow, controlled descent
+		v = ramp(v, -0.08, 0, 0.5, dt)
+		v = ramp(v, 0, 0.55, 0.30, dt)
+		v = ramp(v, 0.55, 0, 0.30, dt)
+	}
+	reps := detectReps(v, v, dt, movementProfile("bench"))
+	if len(reps) != 4 {
+		t.Fatalf("a controlled bench must detect its reps, want 4, got %d", len(reps))
+	}
+}
+
+// A clean odd-rep set (a triple, a five) has no lift-off and must not lose a
+// rep - the trap a plain even-parity de-rack falls into, dropping one from every
+// clean triple.
+func TestDetectRepsCleanOddSetKept(t *testing.T) {
+	dt := 0.005
+	var v []float64
+	for i := 0; i < 3; i++ {
+		v = ramp(v, 0, -0.3, 0.3, dt) // descent first, no lift-off
+		v = ramp(v, -0.3, 0, 0.3, dt)
+		v = ramp(v, 0, 0.55, 0.3, dt)
+		v = ramp(v, 0.55, 0, 0.3, dt)
+	}
+	reps := detectReps(v, v, dt, movementProfile("squat"))
+	if len(reps) != 3 {
+		t.Fatalf("a clean 3-rep squat stays 3 (no de-rack), got %d", len(reps))
+	}
+}
+
 func TestMovementProfileBounds(t *testing.T) {
 	// The deadlift allows longer reps than the bench.
 	if movementProfile("deadlift").maxRepDurationSec <= movementProfile("bench").maxRepDurationSec {
