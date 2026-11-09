@@ -641,6 +641,8 @@ const fr = {
       savedToSet: "Enregistré sur votre série",
       detectedReps: "{{count}} rép",
       savedSummary: "Enregistré : {{detail}}",
+      editReps: "Réps",
+      saveToSet: "Enregistrer la série",
     },
     sensor: {
       title: "Capteur de vitesse",

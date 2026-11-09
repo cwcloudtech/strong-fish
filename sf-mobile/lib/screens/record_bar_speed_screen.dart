@@ -64,6 +64,10 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   bool _recording = false;
   bool _busy = false;
   StanceSet? _result;
+  // The reviewed rep count (correcting what the engine detected) and whether the
+  // reviewed set has been written back to its training-session set yet.
+  final TextEditingController _reps = TextEditingController();
+  bool _savedToSet = false;
   String _error = '';
 
   // The troubleshoot console: the most recent raw samples, shown live when the
@@ -120,6 +124,7 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   void dispose() {
     _sub?.cancel();
     _load.dispose();
+    _reps.dispose();
     super.dispose();
   }
 
@@ -140,11 +145,13 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
     setState(() => _recording = false);
     _fireCallbacks('stop');
 
-    // Nothing to compute when no sensor was streaming: a callback-only recording
-    // is the member's device doing the capture on its own, so Stop just ends
-    // the window and signals it.
-    final connected = ref.read(barSpeedConnectionProvider).valueOrNull?.isConnected ?? false;
-    if (!connected || _samples.isEmpty) return;
+    // Analyse whenever the sensor actually streamed samples - even if the BLE
+    // link reads as dropped at the instant Stop is pressed, which it often does.
+    // The only case with nothing to compute is a callback-only recording, where
+    // the member's own device captured the set and no samples reached the phone.
+    // (The earlier `!connected` guard here swallowed the whole set - no result
+    // shown, nothing persisted - whenever the link blipped on stop.)
+    if (_samples.isEmpty) return;
 
     setState(() => _busy = true);
     try {
@@ -157,8 +164,12 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
             tempoVariation: _tempo,
           );
       if (!mounted) return;
-      setState(() => _result = set);
-      await _saveToSet(set);
+      final reps = set.reps > 0 ? set.reps : set.repVelocities.length;
+      setState(() {
+        _result = set;
+        _reps.text = '$reps';
+        _savedToSet = false;
+      });
     } catch (error) {
       if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
     } finally {
@@ -166,18 +177,21 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
     }
   }
 
-  /// Writes a recorded set back to the training-session set it was opened from:
-  /// its reps, the load that was on the bar and the measured RPE, marked done -
-  /// so recording a set logs it rather than leaving it to be typed in again.
-  /// Does nothing for a standalone recording (no set to write to).
-  Future<void> _saveToSet(StanceSet set) async {
-    if (widget.assignmentId.isEmpty || widget.setId.isEmpty) return;
+  /// Writes the reviewed set back to the training-session set it was opened
+  /// from: the rep count the member confirmed (correcting what the engine
+  /// detected), the load that was on the bar and the measured RPE, marked done.
+  /// Explicit, on the Save button - the member sees the numbers first and fixes
+  /// the rep count before anything is logged. Standalone recordings have no set
+  /// to write to; the recording itself is already kept by the analyse call.
+  Future<void> _saveToSet() async {
+    final set = _result;
+    if (set == null || widget.assignmentId.isEmpty || widget.setId.isEmpty) return;
     final messenger = ScaffoldMessenger.of(context);
     final t = ref.read(tProvider);
-    // The detected rep count, falling back to the per-rep series when the
-    // set-level field is missing, so a logged set carries the reps that were
-    // actually measured rather than none.
-    final reps = set.reps > 0 ? set.reps : set.repVelocities.length;
+    // The member's corrected count, falling back to what was detected.
+    final reps = int.tryParse(_reps.text.trim()) ??
+        (set.reps > 0 ? set.reps : set.repVelocities.length);
+    setState(() => _busy = true);
     try {
       await ref.read(apiProvider).logSet(
             widget.assignmentId,
@@ -186,9 +200,19 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
             actualRpe: set.predictedRpe > 0 ? set.predictedRpe : null,
             actualLoad: set.weightKg > 0 ? set.weightKg : null,
             done: true,
+            // The sensor's reading, for the export's VBT column.
+            vbt: {
+              'reps': reps,
+              if (set.meanVelocity > 0) 'meanVelocity': set.meanVelocity,
+              if (set.peakVelocity > 0) 'peakVelocity': set.peakVelocity,
+              if (_velocityLoss(set.repVelocities) > 0)
+                'velocityLoss': _velocityLoss(set.repVelocities),
+            },
           );
+      if (!mounted) return;
+      setState(() => _savedToSet = true);
       // A real notification of what was saved, in terms of bar speed: the reps
-      // detected, the mean concentric speed, and the measured RPE - whichever of
+      // kept, the mean concentric speed, and the measured RPE - whichever of
       // them the capture produced - rather than a bare "saved".
       final parts = <String>[
         t('devices.barSpeed.detectedReps', {'count': '$reps'}),
@@ -198,7 +222,9 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
       messenger.showSnackBar(
           SnackBar(content: Text(t('devices.barSpeed.savedSummary', {'detail': parts.join(' · ')}))));
     } catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -410,6 +436,30 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
               style: const TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
           _ResultView(set: _result!),
+          // Review before it is logged: the engine's rep count is a starting
+          // point the member can correct, then Save writes it to the session set.
+          if (widget.assignmentId.isNotEmpty && widget.setId.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(children: [
+              SizedBox(
+                width: 120,
+                child: TextField(
+                  controller: _reps,
+                  enabled: !_busy,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(labelText: t('devices.barSpeed.editReps')),
+                ),
+              ),
+              const Spacer(),
+              FilledButton.icon(
+                onPressed: _busy ? null : _saveToSet,
+                icon: Icon(_savedToSet ? Icons.check : Icons.save),
+                label: Text(_savedToSet
+                    ? t('devices.barSpeed.savedToSet')
+                    : t('devices.barSpeed.saveToSet')),
+              ),
+            ]),
+          ],
         ],
       ]),
     );
@@ -457,6 +507,16 @@ class _ResultView extends ConsumerWidget {
 /// samples as they arrive, newest at the bottom. Shown only when the bug icon
 /// is on. The numbers are the acceleration in m/s² and the quaternion the
 /// sensor sent; if nothing scrolls, the sensor is not streaming.
+/// How much the bar slowed across the set, as a percentage of the fastest rep -
+/// the same velocity-loss the panel and the export show.
+double _velocityLoss(List<double> velocities) {
+  if (velocities.length < 2) return 0;
+  final best = velocities.reduce((a, b) => a > b ? a : b);
+  final last = velocities.last;
+  if (best <= 0 || last >= best) return 0;
+  return (best - last) / best * 100;
+}
+
 class _DebugConsole extends ConsumerWidget {
   final List<BarSpeedSample> samples;
   const _DebugConsole({required this.samples});

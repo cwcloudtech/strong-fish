@@ -1025,13 +1025,14 @@ func (s *ProgramStore) Unassign(ctx context.Context, id string) error {
 
 // setLogData is the JSONB payload of the set_logs table.
 type setLogData struct {
-	ActualReps  *int       `json:"actualReps,omitempty"`
-	ActualRPE   *float64   `json:"actualRpe,omitempty"`
-	ActualLoad  *float64   `json:"actualLoad,omitempty"`
-	Beltless    bool       `json:"beltless,omitempty"`
-	Comment     string     `json:"comment,omitempty"`
-	Done        bool       `json:"done"`
-	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	ActualReps  *int              `json:"actualReps,omitempty"`
+	ActualRPE   *float64          `json:"actualRpe,omitempty"`
+	ActualLoad  *float64          `json:"actualLoad,omitempty"`
+	Beltless    bool              `json:"beltless,omitempty"`
+	Comment     string            `json:"comment,omitempty"`
+	Done        bool              `json:"done"`
+	CompletedAt *time.Time        `json:"completedAt,omitempty"`
+	VBT         *models.BarSetVBT `json:"vbt,omitempty"`
 }
 
 const setLogSelect = `SELECT id, assignment_id, set_id, user_id, data, created_at, updated_at FROM set_logs`
@@ -1056,6 +1057,7 @@ func scanSetLog(row pgx.Row) (models.SetLog, error) {
 	l.Comment = d.Comment
 	l.Done = d.Done
 	l.CompletedAt = d.CompletedAt
+	l.VBT = d.VBT
 	return l, nil
 }
 
@@ -1067,13 +1069,14 @@ type SetLogFields struct {
 	Beltless   bool
 	Comment    string
 	Done       bool
+	VBT        *models.BarSetVBT
 }
 
 // LogSet records (or replaces) what a member did on a set.
 func (s *ProgramStore) LogSet(ctx context.Context, assignmentID, setID, userID string, f SetLogFields) (models.SetLog, error) {
 	payload := setLogData{
 		ActualReps: f.ActualReps, ActualRPE: f.ActualRPE, ActualLoad: f.ActualLoad,
-		Beltless: f.Beltless, Comment: f.Comment, Done: f.Done,
+		Beltless: f.Beltless, Comment: f.Comment, Done: f.Done, VBT: f.VBT,
 	}
 	if f.Done {
 		now := time.Now().UTC()
@@ -1224,6 +1227,7 @@ func (s *ProgramStore) ListFeedbackForClub(ctx context.Context, clubID string, p
 		f.Comment = d.Comment
 		f.Done = d.Done
 		f.CompletedAt = d.CompletedAt
+		f.VBT = d.VBT
 		if prescribedRPE != nil {
 			if parsed, err := parseFloat(*prescribedRPE); err == nil {
 				f.PrescribedRPE = &parsed

@@ -73,7 +73,8 @@ func Columns(locale string, feedback bool) []Column {
 		Column{Header: Heading(locale, "repsDone"), Weight: 0.9},
 		Column{Header: Heading(locale, "rpeFelt"), Weight: 0.9},
 		Column{Header: Heading(locale, "e1rm"), Weight: 1.0},
-		Column{Header: Heading(locale, "comment"), Weight: 2.2},
+		Column{Header: Heading(locale, "vbt"), Weight: 1.6},
+		Column{Header: Heading(locale, "comment"), Weight: 2.0},
 	)
 }
 
@@ -109,14 +110,31 @@ func Row(set models.ProgramSet, feedback bool, locale string) []string {
 	if log == nil {
 		// A set with no log at all still gets its cells, empty: a gap in the
 		// week is what the coach is looking for.
-		return append(cells, "", "", "", "")
+		return append(cells, "", "", "", "", "")
 	}
 	return append(cells,
 		repsDone(*log, locale),
 		formatFloatPtr(log.ActualRPE),
 		formatKg(log.E1RM),
+		formatVBT(log.VBT, locale),
 		log.Comment,
 	)
+}
+
+// formatVBT is the export's VBT cell: what the velocity tracker read for the
+// set - mean speed, peak, and velocity loss - or empty when none did.
+func formatVBT(vbt *models.BarSetVBT, locale string) string {
+	if vbt == nil || vbt.MeanVelocity <= 0 {
+		return ""
+	}
+	parts := []string{fmt.Sprintf(Heading(locale, "vbtMean"), fmt.Sprintf("%.2f", vbt.MeanVelocity))}
+	if vbt.PeakVelocity > 0 {
+		parts = append(parts, fmt.Sprintf(Heading(locale, "vbtPeak"), fmt.Sprintf("%.2f", vbt.PeakVelocity)))
+	}
+	if vbt.VelocityLoss > 0 {
+		parts = append(parts, fmt.Sprintf(Heading(locale, "vbtLoss"), fmt.Sprintf("%.0f", vbt.VelocityLoss)))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // Line is one set as a row of cells, plus whether the member ticked it off.

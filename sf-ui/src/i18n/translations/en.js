@@ -630,6 +630,8 @@ const en = {
       savedToSet: "Saved to your set",
       detectedReps: "{{count}} reps",
       savedSummary: "Saved: {{detail}}",
+      editReps: "Reps",
+      saveToSet: "Save to set",
     },
     sensor: {
       title: "Bar-speed sensor",

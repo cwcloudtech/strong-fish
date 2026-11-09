@@ -64,16 +64,22 @@ type profile struct {
 	phaseThresholdFraction float64
 	minRepDurationSec      float64
 	maxRepDurationSec      float64
+	// eccentricFirst is true for lifts whose rep begins with the descent (squat,
+	// bench): the ascent that counts is always preceded by a descent, so a
+	// leading ascent with none before it is the lift-off out of the rack, not a
+	// rep. Deadlift is concentric-first (the pull off the floor), so its first
+	// phase is a real rep and must never be dropped.
+	eccentricFirst bool
 }
 
 func movementProfile(movement string) profile {
 	switch movement {
 	case "deadlift":
-		return profile{phaseThresholdFraction: 0.15, minRepDurationSec: 0.30, maxRepDurationSec: 6.0}
+		return profile{phaseThresholdFraction: 0.15, minRepDurationSec: 0.30, maxRepDurationSec: 6.0, eccentricFirst: false}
 	case "bench":
-		return profile{phaseThresholdFraction: 0.18, minRepDurationSec: 0.15, maxRepDurationSec: 4.0}
+		return profile{phaseThresholdFraction: 0.18, minRepDurationSec: 0.15, maxRepDurationSec: 4.0, eccentricFirst: true}
 	case "squat":
-		return profile{phaseThresholdFraction: 0.15, minRepDurationSec: 0.25, maxRepDurationSec: 5.0}
+		return profile{phaseThresholdFraction: 0.15, minRepDurationSec: 0.25, maxRepDurationSec: 5.0, eccentricFirst: true}
 	}
 	return profile{phaseThresholdFraction: phaseThresholdFraction, minRepDurationSec: 0.20, maxRepDurationSec: 6.0}
 }
@@ -303,6 +309,18 @@ func detectReps(vel, smooth []float64, dt float64, prof profile) []Rep {
 			}
 		}
 		spans = append(spans, span{start, end})
+	}
+
+	// Drop a leading lift-off (the un-rack / walk-out). On squat and bench a real
+	// rep's ascent is always preceded by its descent, so the first ascent of a
+	// racked set - standing the bar out of the hooks, an ascent with no descent
+	// before it - is not a rep. That is the stray count a member sees as "8 reps,
+	// shows 9". Only when a descent genuinely precedes the first ascent (there is
+	// lead before it and the bar went clearly negative) is it kept; a deadlift,
+	// concentric-first, never drops its first phase.
+	if prof.eccentricFirst && len(spans) > 0 && spans[0].start > 0 &&
+		minValue(smooth, 0, spans[0].start) >= -threshold {
+		spans = spans[1:]
 	}
 
 	var reps []Rep

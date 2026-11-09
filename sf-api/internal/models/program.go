@@ -233,9 +233,22 @@ type SetLog struct {
 	// E1RM is the max this performance estimates, derived from the logged
 	// load/reps/RPE - the spreadsheet's e1RM column, computed from what
 	// actually happened rather than from what was prescribed.
-	E1RM      float64   `json:"e1rm,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	E1RM float64 `json:"e1rm,omitempty"`
+	// VBT is what a velocity tracker read for this set, when one recorded it -
+	// carried so the session export can show a "VBT" column.
+	VBT       *BarSetVBT `json:"vbt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+}
+
+// BarSetVBT is the velocity-tracker summary of a logged set: what the sensor
+// read, kept on the set log so a session export can show it beside the reps and
+// RPE. The measured RPE itself rides on the log's ActualRPE.
+type BarSetVBT struct {
+	Reps         int     `json:"reps,omitempty"`
+	MeanVelocity float64 `json:"meanVelocity,omitempty"`
+	PeakVelocity float64 `json:"peakVelocity,omitempty"`
+	VelocityLoss float64 `json:"velocityLoss,omitempty"`
 }
 
 // SetFeedback is one member's logged set joined with enough of its

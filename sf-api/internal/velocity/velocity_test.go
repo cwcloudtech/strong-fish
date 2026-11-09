@@ -122,6 +122,8 @@ func ramp(v []float64, from, to, sec, dt float64) []float64 {
 func TestDetectRepsMergesStickingPoint(t *testing.T) {
 	dt := 0.005
 	var v []float64
+	v = ramp(v, 0, -0.5, 0.25, dt)   // the rep's descent (squat is eccentric-first)
+	v = ramp(v, -0.5, 0, 0.25, dt)
 	v = ramp(v, 0, 0.6, 0.30, dt)    // drive up
 	v = ramp(v, 0.6, 0.02, 0.20, dt) // slow into the sticking point
 	v = ramp(v, 0.02, 0.02, 0.25, dt) // stall, still rising (never negative)
@@ -138,6 +140,8 @@ func TestDetectRepsMergesStickingPoint(t *testing.T) {
 func TestDetectRepsSeparatesRepsAcrossEccentric(t *testing.T) {
 	dt := 0.005
 	var v []float64
+	v = ramp(v, 0, -0.5, 0.25, dt) // rep 1 descent (eccentric-first)
+	v = ramp(v, -0.5, 0, 0.25, dt)
 	v = ramp(v, 0, 0.6, 0.30, dt)  // rep 1 concentric
 	v = ramp(v, 0.6, 0, 0.30, dt)
 	v = ramp(v, 0, -0.5, 0.25, dt) // the bar is lowered: a clear reversal
@@ -147,6 +151,64 @@ func TestDetectRepsSeparatesRepsAcrossEccentric(t *testing.T) {
 	reps := detectReps(v, v, dt, movementProfile("squat"))
 	if len(reps) != 2 {
 		t.Fatalf("two reps split by an eccentric, got %d", len(reps))
+	}
+}
+
+// A racked squat begins with the lift-off: an ascent (standing the bar out of
+// the hooks) with no descent before it, then the reps. That lift-off is not a
+// rep - it is the "8 done, 9 shown" stray count - so it is dropped.
+func TestDetectRepsDropsSquatUnrack(t *testing.T) {
+	dt := 0.005
+	var v []float64
+	v = ramp(v, 0, 0, 0.30, dt)      // standing under the bar
+	v = ramp(v, 0, 0.6, 0.30, dt)    // un-rack: ascent, no descent before it
+	v = ramp(v, 0.6, 0, 0.30, dt)
+	v = ramp(v, 0, 0, 0.30, dt)      // walk-out
+	for i := 0; i < 2; i++ {         // two real reps: descend then ascend
+		v = ramp(v, 0, -0.5, 0.25, dt)
+		v = ramp(v, -0.5, 0, 0.25, dt)
+		v = ramp(v, 0, 0.6, 0.30, dt)
+		v = ramp(v, 0.6, 0, 0.30, dt)
+	}
+	reps := detectReps(v, v, dt, movementProfile("squat"))
+	if len(reps) != 2 {
+		t.Fatalf("un-rack should be dropped, want 2 reps, got %d", len(reps))
+	}
+}
+
+// When a descent genuinely precedes the first ascent (no un-rack captured, or a
+// member who started recording already standing and dropped straight in), the
+// first ascent is a real rep and must be kept.
+func TestDetectRepsKeepsFirstRepWhenDescentPrecedes(t *testing.T) {
+	dt := 0.005
+	var v []float64
+	for i := 0; i < 2; i++ {
+		v = ramp(v, 0, -0.5, 0.25, dt) // descent first
+		v = ramp(v, -0.5, 0, 0.25, dt)
+		v = ramp(v, 0, 0.6, 0.30, dt)
+		v = ramp(v, 0.6, 0, 0.30, dt)
+	}
+	reps := detectReps(v, v, dt, movementProfile("squat"))
+	if len(reps) != 2 {
+		t.Fatalf("first ascent preceded by a descent is a rep, want 2, got %d", len(reps))
+	}
+}
+
+// Deadlift is concentric-first: the pull off the floor is a real rep with no
+// descent before it, so the un-rack rule must never touch it.
+func TestDetectRepsKeepsDeadliftFirstPull(t *testing.T) {
+	dt := 0.005
+	var v []float64
+	v = ramp(v, 0, 0, 0.30, dt) // bar on the floor
+	for i := 0; i < 2; i++ {
+		v = ramp(v, 0, 0.6, 0.30, dt) // pull up (concentric first)
+		v = ramp(v, 0.6, 0, 0.30, dt)
+		v = ramp(v, 0, -0.5, 0.25, dt) // lower
+		v = ramp(v, -0.5, 0, 0.25, dt)
+	}
+	reps := detectReps(v, v, dt, movementProfile("deadlift"))
+	if len(reps) != 2 {
+		t.Fatalf("deadlift first pull must be kept, want 2, got %d", len(reps))
 	}
 }
 
