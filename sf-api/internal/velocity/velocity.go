@@ -285,11 +285,22 @@ func detectReps(vel, smooth []float64, dt float64, prof profile) []Rep {
 			i++
 		}
 		end := i // exclusive
-		// Glue to the previous phase when the gap between them is too small to
-		// be a real pause between reps.
-		if len(spans) > 0 && start-spans[len(spans)-1].end < minGap {
-			spans[len(spans)-1].end = end
-			continue
+		// Two concentric phases belong to the same rep unless the bar actually
+		// reversed between them - dipped into a clear eccentric, velocity below
+		// -threshold. Squat and bench are each one down-then-up cycle, so the
+		// slow patch in the middle of a grinding ascent (a sticking point, where
+		// the bar nearly stalls but never descends) must read as one rep, not
+		// two - which is what made a 3-rep squat come back as 6. Reps that are
+		// genuinely apart are separated by the next rep's descent, seen here as
+		// the reversal; deadlift reps are likewise split by the bar being
+		// lowered. The small-gap glue stays as a floor for brief noise dips.
+		if len(spans) > 0 {
+			prevEnd := spans[len(spans)-1].end
+			reversed := minValue(smooth, prevEnd, start) < -threshold
+			if start-prevEnd < minGap || !reversed {
+				spans[len(spans)-1].end = end
+				continue
+			}
 		}
 		spans = append(spans, span{start, end})
 	}
@@ -315,6 +326,18 @@ func detectReps(vel, smooth []float64, dt float64, prof profile) []Rep {
 		})
 	}
 	return reps
+}
+
+// minValue is the smallest value in data over [lo, hi); +Inf for an empty range,
+// so two phases with no samples between them read as "no reversal" and merge.
+func minValue(data []float64, lo, hi int) float64 {
+	min := math.Inf(1)
+	for i := lo; i < hi && i < len(data); i++ {
+		if data[i] < min {
+			min = data[i]
+		}
+	}
+	return min
 }
 
 // uniformSmooth is a centred moving average of odd window length, for taking the
