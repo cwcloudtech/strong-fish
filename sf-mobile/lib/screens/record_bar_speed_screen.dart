@@ -200,13 +200,15 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
             actualRpe: set.predictedRpe > 0 ? set.predictedRpe : null,
             actualLoad: set.weightKg > 0 ? set.weightKg : null,
             done: true,
-            // The sensor's reading, for the export's VBT column.
+            // The sensor's reading, for the export's VBT column - the summary
+            // and each rep's speed, so the export can list the set rep by rep.
             vbt: {
               'reps': reps,
               if (set.meanVelocity > 0) 'meanVelocity': set.meanVelocity,
               if (set.peakVelocity > 0) 'peakVelocity': set.peakVelocity,
               if (_velocityLoss(set.repVelocities) > 0)
                 'velocityLoss': _velocityLoss(set.repVelocities),
+              if (set.repVelocities.isNotEmpty) 'repVelocities': set.repVelocities,
             },
           );
       if (!mounted) return;

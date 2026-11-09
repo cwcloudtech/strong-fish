@@ -11,6 +11,16 @@ import { useI18n } from "../../i18n/I18nContext";
 
 const label = (item, locale) => item.labels?.[locale] || item.labels?.en || item.slug;
 
+// Velocity loss across the set, as a whole percent: how much the fastest rep
+// slowed to the last - the same figure the export's VBT column shows.
+function velocityLoss(velocities) {
+  const vs = velocities || [];
+  if (vs.length < 2) return 0;
+  const best = Math.max(...vs);
+  const last = vs[vs.length - 1];
+  return best > 0 && last < best ? Math.round(((best - last) / best) * 100) : 0;
+}
+
 /**
  * The member's maxes. This is the single input the whole training side hangs
  * off: every prescribed load is computed from these, so changing one here
@@ -177,14 +187,11 @@ export default function OneRms() {
       {set ? (
         <tr>
           <td colSpan={5} className="sf-muted" style={{ fontSize: "0.85rem", paddingTop: 0, borderTop: "none" }}>
-            <strong>{t("devices.barSpeed.title")}</strong>
-            {" · "}
+            <strong>VBT</strong>
+            {" - "}
             {t("devices.barSpeed.detectedReps", { count: set.reps })}
-            {" · "}
-            {set.repVelocities.map((velocity) => velocity.toFixed(2)).join(", ")} m/s
-            {" · "}
-            {t(`devices.barSpeed.setType_${set.setType || "warmup"}`)}
-            {set.tempoVariation ? ` · ${t("devices.barSpeed.tempoVariation")}` : ""}
+            {" - "}
+            {velocityLoss(set.repVelocities)}%
           </td>
         </tr>
       ) : null}

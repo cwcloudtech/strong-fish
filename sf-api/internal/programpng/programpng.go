@@ -392,7 +392,21 @@ func textWidth(s string, face font.Face) int {
 // wrap breaks a cell's text to the width it has. A word longer than the column
 // is cut rather than allowed to run into the next cell, which is the one
 // failure that loses information instead of merely looking wrong.
+// wrap turns a cell into display lines: explicit line breaks first (a multi-line
+// cell, such as the VBT column's per-rep speeds), then each of those width-
+// wrapped to fit the column.
 func wrap(s string, face font.Face, maxWidth int) []string {
+	var lines []string
+	for _, segment := range strings.Split(s, "\n") {
+		lines = append(lines, wrapLine(segment, face, maxWidth)...)
+	}
+	if len(lines) == 0 {
+		return []string{""}
+	}
+	return lines
+}
+
+func wrapLine(s string, face font.Face, maxWidth int) []string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return []string{""}
