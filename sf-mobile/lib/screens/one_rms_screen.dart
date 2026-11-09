@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
+import '../utils/set_metadata.dart';
 import '../widgets/common.dart';
 
 /// The member's maxes - the single input every prescribed load is computed
@@ -34,6 +35,13 @@ class OneRmsScreen extends ConsumerWidget {
 
     final catalog = exercises.value ?? const <Exercise>[];
     final byExercise = {for (final max in maxes.value ?? const <OneRm>[]) max.exerciseId: max};
+    // The last bar-speed set of each lift, keyed by lift (a main lift's own
+    // category). Optional: a member with no tracker just sees the maxes.
+    final barSets = ref.watch(barSpeedListProvider).value ?? const <StanceSet>[];
+    final barByLift = {
+      for (final set in barSets)
+        if (set.repVelocities.isNotEmpty) set.lift: set,
+    };
 
     // The competition lifts are always listed, even without a value: they're
     // what most prescriptions resolve against, so an empty one is exactly the
@@ -55,7 +63,12 @@ class OneRmsScreen extends ConsumerWidget {
           Text(t('oneRms.mainLifts'), style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           for (final exercise in mainLifts)
-            _OneRmRow(exercise: exercise, current: byExercise[exercise.id], locale: locale),
+            _OneRmRow(
+              exercise: exercise,
+              current: byExercise[exercise.id],
+              locale: locale,
+              barSet: barByLift[exercise.category],
+            ),
           if (others.isNotEmpty) ...[
             const SizedBox(height: 20),
             Text(t('oneRms.otherLifts'), style: Theme.of(context).textTheme.titleMedium),
@@ -79,8 +92,16 @@ class _OneRmRow extends ConsumerStatefulWidget {
   final Exercise exercise;
   final OneRm? current;
   final String locale;
+  // The lift's last recorded set, when there is one - shown under the max as
+  // its reps and each rep's speed.
+  final StanceSet? barSet;
 
-  const _OneRmRow({required this.exercise, required this.current, required this.locale});
+  const _OneRmRow({
+    required this.exercise,
+    required this.current,
+    required this.locale,
+    this.barSet,
+  });
 
   @override
   ConsumerState<_OneRmRow> createState() => _OneRmRowState();
@@ -135,41 +156,63 @@ class _OneRmRowState extends ConsumerState<_OneRmRow> {
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
 
+    final set = widget.barSet;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(widget.exercise.label(widget.locale)),
-                  if (widget.current != null)
-                    Text(
-                      '${t('oneRms.updated')}: ${widget.current!.updatedAt.toLocal().toString().split(' ').first}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                ],
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.exercise.label(widget.locale)),
+                      if (widget.current != null)
+                        Text(
+                          '${t('oneRms.updated')}: ${widget.current!.updatedAt.toLocal().toString().split(' ').first}',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: 92,
+                  child: TextField(
+                    controller: _value,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.right,
+                    decoration: InputDecoration(suffixText: t('common.kg')),
+                    onSubmitted: (_) => _save(),
+                  ),
+                ),
+                IconButton(
+                  icon: _busy
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.check),
+                  tooltip: t('common.save'),
+                  onPressed: _busy ? null : _save,
+                ),
+              ],
+            ),
+            // The lift's last recorded set, under the max: its reps and each
+            // rep's concentric speed, plus the set-type and tempo tags.
+            if (set != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  [
+                    t('devices.barSpeed.detectedReps', {'count': '${set.reps}'}),
+                    '${set.repVelocities.map((v) => v.toStringAsFixed(2)).join(', ')} m/s',
+                    t('devices.barSpeed.setType_${normalizeSetType(set.setType)}'),
+                    if (set.tempoVariation) t('devices.barSpeed.tempoVariation'),
+                  ].join('  ·  '),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
-            ),
-            SizedBox(
-              width: 92,
-              child: TextField(
-                controller: _value,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                textAlign: TextAlign.right,
-                decoration: InputDecoration(suffixText: t('common.kg')),
-                onSubmitted: (_) => _save(),
-              ),
-            ),
-            IconButton(
-              icon: _busy
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.check),
-              tooltip: t('common.save'),
-              onPressed: _busy ? null : _save,
-            ),
           ],
         ),
       ),

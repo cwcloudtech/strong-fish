@@ -11,6 +11,7 @@ import '../providers/providers.dart';
 import '../screens/record_bar_speed_screen.dart';
 import '../api/api_exception.dart';
 import '../theme.dart';
+import '../utils/set_metadata.dart';
 import 'ai_ask_button.dart';
 import 'export_menu.dart';
 import 'long_date.dart';
@@ -1651,6 +1652,8 @@ class _BarSpeedSet extends ConsumerWidget {
     } else if (set.predictedRpe > 0) {
       rest.add(t('devices.barSpeed.rpeReal', {'real': _fmt(set.predictedRpe)}));
     }
+    rest.add(t('devices.barSpeed.setType_${normalizeSetType(set.setType)}'));
+    if (set.tempoVariation) rest.add(t('devices.barSpeed.tempoVariation'));
 
     final loss = _velocityLoss(set.repVelocities);
     final stats = <Widget>[];

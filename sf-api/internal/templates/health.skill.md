@@ -55,6 +55,25 @@ measured RPE is built from. Read it like this:
   the last means the set cost a lot even if the load looks modest; almost no
   drop means they left the set with speed in reserve.
 
+### Read the set's tags before you read its speed
+
+Each bar-speed set carries two tags that change what its numbers mean. Read them
+first.
+
+- **Set type - warm-up, top set or back-off.** Only the **top set** is the day's
+  effort signal; read its last-rep speed and measured RPE as the real reading. A
+  **warm-up** is sub-maximal by design - a fast bar there says nothing about how
+  hard the day is, so do not call a fast warm-up "easy". A **back-off** is lighter
+  volume after the top set; judge it against other back-offs, not the top set.
+- **Tempo / paused variation.** When a set is tagged as a tempo or paused
+  variation (a "2CT" or "paused" cue, a "3:3:0" prescription, a spotto press),
+  the bar is **slow on purpose**. Its concentric speed will be lower and its
+  velocity loss higher than a touch-and-go set at the same effort, because a
+  pause kills the stretch rebound and a slow eccentric pre-fatigues the rep -
+  **not** because the member is grinding or under-recovered. Never read a tempo
+  set's low speed as fatigue, and never compare its velocity loss to a normal
+  set's or to the member's own normal-tempo history.
+
 ### The deadlift reads slower than the others
 
 The deadlift pull is long and starts from a dead stop, with no rebound out of a

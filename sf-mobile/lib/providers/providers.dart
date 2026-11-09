@@ -330,6 +330,13 @@ final oneRmsProvider = FutureProvider<List<OneRm>>((ref) async {
   return ref.watch(apiProvider).oneRms();
 });
 
+/// The member's last bar-speed set of each lift, across sources. Used on the
+/// maxes screen to show a lift's recorded reps and per-rep speeds under its max.
+final barSpeedListProvider = FutureProvider<List<StanceSet>>((ref) async {
+  ref.watch(sessionProvider.select((session) => session.user?.id));
+  return ref.watch(apiProvider).barSpeedList();
+});
+
 final assignmentsProvider = FutureProvider<List<Assignment>>((ref) async {
   ref.watch(sessionProvider.select((session) => session.user?.id));
   return ref.watch(apiProvider).assignments();

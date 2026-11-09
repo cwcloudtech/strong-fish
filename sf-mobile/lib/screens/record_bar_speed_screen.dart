@@ -8,6 +8,7 @@ import '../native/bar_speed_capture.dart';
 import '../providers/providers.dart';
 import '../services/callback_trigger.dart';
 import '../theme.dart';
+import '../utils/set_metadata.dart';
 import '../widgets/battery_badge.dart';
 import '../widgets/sensor_sheet.dart';
 
@@ -29,6 +30,11 @@ class RecordBarSpeedScreen extends ConsumerStatefulWidget {
   // rather than being entered twice. Blank when recording stands alone.
   final String assignmentId;
   final String setId;
+  // Pre-filled from a training session's prescription (auto-detected), the
+  // default warm-up / no-tempo otherwise. The member confirms both before
+  // recording.
+  final String initialSetType;
+  final bool initialTempoVariation;
 
   const RecordBarSpeedScreen({
     super.key,
@@ -36,6 +42,8 @@ class RecordBarSpeedScreen extends ConsumerStatefulWidget {
     this.initialLoad = 0,
     this.assignmentId = '',
     this.setId = '',
+    this.initialSetType = 'warmup',
+    this.initialTempoVariation = false,
   });
 
   @override
@@ -47,6 +55,8 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   final TextEditingController _load = TextEditingController();
   late String _movement =
       _movements.contains(widget.initialMovement) ? widget.initialMovement : 'squat';
+  late String _setType = normalizeSetType(widget.initialSetType);
+  late bool _tempo = widget.initialTempoVariation;
 
   StreamSubscription<BarSpeedSample>? _sub;
   final List<Map<String, double>> _samples = [];
@@ -143,6 +153,8 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
             movement: _movement,
             load: load,
             samples: List.of(_samples),
+            setType: _setType,
+            tempoVariation: _tempo,
           );
       if (!mounted) return;
       setState(() => _result = set);
@@ -325,6 +337,42 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(labelText: t('devices.barSpeed.recordLoad')),
         ),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              initialValue: _setType,
+              isExpanded: true,
+              decoration: InputDecoration(labelText: t('devices.barSpeed.setType')),
+              items: [
+                for (final type in barSpeedSetTypes)
+                  DropdownMenuItem(
+                    value: type,
+                    child: Text(t('devices.barSpeed.setType_$type')),
+                  ),
+              ],
+              onChanged: (_recording || _busy)
+                  ? null
+                  : (value) => setState(() => _setType = value ?? 'warmup'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: DropdownButtonFormField<bool>(
+              initialValue: _tempo,
+              isExpanded: true,
+              decoration:
+                  InputDecoration(labelText: t('devices.barSpeed.tempoVariation')),
+              items: [
+                DropdownMenuItem(value: false, child: Text(t('common.no'))),
+                DropdownMenuItem(value: true, child: Text(t('common.yes'))),
+              ],
+              onChanged: (_recording || _busy)
+                  ? null
+                  : (value) => setState(() => _tempo = value ?? false),
+            ),
+          ),
+        ]),
         const SizedBox(height: 18),
         FilledButton.icon(
           onPressed: (!canStart || _busy) ? null : (_recording ? _stop : _start),
