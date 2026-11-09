@@ -19,6 +19,7 @@ import (
 
 	"github.com/go-pdf/fpdf"
 
+	"strong-fish-api/internal/assets"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/programpng"
 	"strong-fish-api/internal/programsheet"
@@ -71,6 +72,9 @@ func Render(program models.Program, days []models.ProgramDay, options Options) (
 
 	for _, week := range programsheet.Weeks(days) {
 		pdf.AddPage()
+		if pdf.PageNo() == 1 {
+			placeLogo(pdf)
+		}
 		drawWeekHeader(pdf, translate, program, week.Number, options)
 
 		for _, day := range week.Days {
@@ -83,6 +87,7 @@ func Render(program models.Program, days []models.ProgramDay, options Options) (
 	// like the export broke.
 	if pdf.PageNo() == 0 {
 		pdf.AddPage()
+		placeLogo(pdf)
 		drawWeekHeader(pdf, translate, program, 0, options)
 	}
 
@@ -91,6 +96,23 @@ func Render(program models.Program, days []models.ProgramDay, options Options) (
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// placeLogo stamps the StrongFish logo in the top-right corner of the current
+// page - the letterhead every export shares, the way cwclock's invoices carry
+// theirs. Absolute-positioned (flow off) so it floats over the corner without
+// moving the cursor; call it once, on the first page, right after AddPage.
+func placeLogo(pdf *fpdf.Fpdf) {
+	const logoHeight = 34.0 // pt
+	options := fpdf.ImageOptions{ImageType: "PNG"}
+	info := pdf.RegisterImageOptionsReader("sf-logo", options, bytes.NewReader(assets.LogoPNG))
+	if info == nil || info.Height() == 0 {
+		return
+	}
+	width := info.Width() * (logoHeight / info.Height())
+	pageWidth, _ := pdf.GetPageSize()
+	_, top, right, _ := pdf.GetMargins()
+	pdf.ImageOptions("sf-logo", pageWidth-right-width, top-6, width, logoHeight, false, options, 0, "")
 }
 
 // RenderTables lays titled tables out as a PDF, one after the other.
@@ -117,6 +139,7 @@ func RenderTables(title, subtitle string, sections []programsheet.Section, foote
 	}
 
 	pdf.AddPage()
+	placeLogo(pdf)
 	pdf.SetFont("Helvetica", "B", titleSizePt)
 	pdf.CellFormat(0, 20, translate(title), "", 1, "L", false, 0, "")
 	if subtitle != "" {

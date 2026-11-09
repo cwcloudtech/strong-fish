@@ -177,6 +177,9 @@ type logSetPayload struct {
 	Beltless bool   `json:"beltless"`
 	Comment  string `json:"comment"`
 	Done     bool   `json:"done"`
+	// VBT is the velocity-tracker summary, when this set was logged from a
+	// bar-speed recording - carried onto the log for the export's VBT column.
+	VBT *models.BarSetVBT `json:"vbt"`
 }
 
 // LogSet records what the member actually did on a prescribed set: the RPE they
@@ -227,7 +230,7 @@ func (h *TrainingHandler) LogSet(w http.ResponseWriter, r *http.Request) {
 
 	log, err := h.programs.LogSet(r.Context(), assignment.ID, setID, callerID, store.SetLogFields{
 		ActualReps: p.ActualReps, ActualRPE: p.ActualRPE, ActualLoad: p.ActualLoad,
-		Beltless: p.Beltless, Comment: p.Comment, Done: p.Done,
+		Beltless: p.Beltless, Comment: p.Comment, Done: p.Done, VBT: p.VBT,
 	})
 	if err != nil {
 		writeStoreError(w, err)

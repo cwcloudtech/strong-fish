@@ -283,6 +283,7 @@ class SfApi {
     bool beltless = false,
     String comment = '',
     bool done = true,
+    Map<String, dynamic>? vbt,
   }) async {
     final response = await client.dio.put('/training/$assignmentId/sets/$setId/log', data: {
       'actualReps': actualReps,
@@ -291,6 +292,7 @@ class SfApi {
       'beltless': beltless,
       'comment': comment,
       'done': done,
+      'vbt': ?vbt,
     });
     return SetLog.fromJson(_map(response.data));
   }

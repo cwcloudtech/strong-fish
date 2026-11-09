@@ -638,6 +638,8 @@ const ar = {
       savedToSet: "تم الحفظ في مجموعتك",
       detectedReps: "{{count}} تكرار",
       savedSummary: "تم الحفظ: {{detail}}",
+      editReps: "التكرارات",
+      saveToSet: "حفظ المجموعة",
     },
     sensor: {
       title: "مستشعر السرعة",

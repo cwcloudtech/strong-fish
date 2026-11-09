@@ -19,12 +19,14 @@ import (
 	"image/png"
 	"strings"
 
+	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
 	"golang.org/x/image/math/fixed"
 
+	"strong-fish-api/internal/assets"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/programsheet"
 )
@@ -113,6 +115,7 @@ func RenderTables(title, subtitle string, sections []programsheet.Section, foote
 
 	draw := func(c *canvas) {
 		c.y = padding
+		c.logo()
 		c.text(padding, title, c.faces.title, colText)
 		c.y += titleSize + 10
 		if subtitle != "" {
@@ -163,6 +166,7 @@ func RenderTables(title, subtitle string, sections []programsheet.Section, foote
 // have to agree.
 func layout(c *canvas, program models.Program, days []models.ProgramDay, options Options) {
 	c.y = padding
+	c.logo()
 
 	c.text(padding, program.Name, c.faces.title, colText)
 	c.y += titleSize + 10
@@ -225,6 +229,24 @@ type canvas struct {
 	width int
 	y     int
 	dry   bool
+}
+
+// logo stamps the StrongFish logo in the top-right corner - the same letterhead
+// the PDF export (and cwclock's invoices) carry. It draws at c.y without moving
+// it: the mark sits in the title's band, above where the first table starts, so
+// it needs no reserved height and nothing to do on the measuring pass.
+func (c *canvas) logo() {
+	if c.dry || c.img == nil {
+		return
+	}
+	src, err := png.Decode(bytes.NewReader(assets.LogoPNG))
+	if err != nil {
+		return
+	}
+	const h = 50
+	w := src.Bounds().Dx() * h / src.Bounds().Dy()
+	x0 := c.width - padding - w
+	xdraw.CatmullRom.Scale(c.img, image.Rect(x0, c.y, x0+w, c.y+h), src, src.Bounds(), xdraw.Over, nil)
 }
 
 func (c *canvas) text(x int, s string, face font.Face, col color.Color) {
