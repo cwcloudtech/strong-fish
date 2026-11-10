@@ -138,7 +138,7 @@ func newStyles(file *excelize.File) (styles, error) {
 
 func writeWeek(file *excelize.File, sheet string, program models.Program,
 	week programsheet.Week, options Options, styles styles) error {
-	columns := programsheet.Columns(options.Locale, options.Feedback)
+	columns := programsheet.Columns(options.Locale, options.Feedback, options.EffortMetric)
 	if err := setWidths(file, sheet, columns); err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func writeWeek(file *excelize.File, sheet string, program models.Program,
 		}
 		row++
 
-		for _, line := range programsheet.Lines(sets, options.Feedback, options.Locale) {
+		for _, line := range programsheet.Lines(sets, options.Feedback, options.Locale, options.EffortMetric) {
 			style := styles.cell
 			if line.Done {
 				style = styles.cellDone

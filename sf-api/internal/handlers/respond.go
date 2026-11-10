@@ -260,8 +260,9 @@ func meResponse(user models.User, activationMode string) models.UserMeResponse {
 		ProfileVisibility: user.ProfileVisibility, FitnessPublic: user.FitnessPublic,
 		Birthdate:    user.Birthdate,
 		CoachRequest: user.CoachRequest, Bodyweight: user.Bodyweight, Height: user.Height,
-		Gender:     string(strength.NormalizeGender(user.Gender)),
-		Socials:    models.NormalizeSocials(user.Socials),
+		Gender:       string(strength.NormalizeGender(user.Gender)),
+		EffortMetric: models.NormalizeEffortMetric(user.EffortMetric),
+		Socials:      models.NormalizeSocials(user.Socials),
 		MFAEnabled: user.MFAEnabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
 		I18nCode: models.I18nCodeForRole(user.Role, activationMode),
 	}

@@ -151,6 +151,16 @@ func (h *DeviceHandler) memberName(ctx context.Context, userID string) string {
 	return strings.TrimSpace(user.Name + " " + user.Surname)
 }
 
+// effortMetric is how the member wants effort shown on their exported sheet -
+// their own setting, or RPE when it cannot be read.
+func (h *DeviceHandler) effortMetric(ctx context.Context, userID string) string {
+	user, err := h.users.FindByID(ctx, userID)
+	if err != nil {
+		return models.EffortMetricRPE
+	}
+	return models.NormalizeEffortMetric(user.EffortMetric)
+}
+
 // redirectURI is both where the provider sends the browser back and what is
 // echoed during the code exchange; the two must match exactly, so there is one
 // function that builds it.
@@ -559,7 +569,8 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 
 	sections := healthsheet.AllSections(steps, heart,
 		h.exportNutrition(r, userID, exportRangeDays(r)), h.computeTargets(r, userID),
-		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale)
+		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale,
+		h.effortMetric(r.Context(), userID))
 	// The AI's reading of the same data, last, when it was asked recently
 	// enough to be about this sheet - from whichever provider it was generated
 	// under (see recentReadingAny).

@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"strong-fish-api/internal/models"
+	"strong-fish-api/internal/velocity"
 )
 
 // Options is everything a sheet needs that is not the program itself.
@@ -34,6 +35,9 @@ type Options struct {
 	// Feedback adds what the member actually did beside what was prescribed:
 	// the sheet a lifter sends their coach at the end of a week.
 	Feedback bool
+	// EffortMetric is how effort is shown on this sheet - "rpe" (the default) or
+	// "rir". It only flips the display; effort is always computed as RPE.
+	EffortMetric string
 	// Readings is what the AI said about a session, by day id - one entry per
 	// reading, since a session may be read more than once. Printed under the
 	// table they are about: a reading filed separately from the week it
@@ -58,7 +62,7 @@ type Column struct {
 // page on numbers rather than on columns: the one Load column carries what was
 // actually lifted (see Row), and whether a set was ticked off is the row's
 // colour (see Line) rather than a column of crosses.
-func Columns(locale string, feedback bool) []Column {
+func Columns(locale string, feedback bool, metric string) []Column {
 	columns := []Column{
 		{Header: Heading(locale, "exercise"), Weight: 3.4},
 		{Header: Heading(locale, "reps"), Weight: 0.8},
@@ -71,11 +75,20 @@ func Columns(locale string, feedback bool) []Column {
 	}
 	return append(columns,
 		Column{Header: Heading(locale, "repsDone"), Weight: 0.9},
-		Column{Header: Heading(locale, "rpeFelt"), Weight: 0.9},
+		Column{Header: effortHeading(locale, metric), Weight: 0.9},
 		Column{Header: Heading(locale, "e1rm"), Weight: 1.0},
 		Column{Header: Heading(locale, "vbt"), Weight: 1.6},
 		Column{Header: Heading(locale, "comment"), Weight: 2.0},
 	)
+}
+
+// effortHeading names the logged-effort column in the member's chosen scale -
+// "RPE felt" or, for a member who reads in reps-in-reserve, "RIR left".
+func effortHeading(locale, metric string) string {
+	if models.NormalizeEffortMetric(metric) == models.EffortMetricRIR {
+		return Heading(locale, "rirLeft")
+	}
+	return Heading(locale, "rpeFelt")
 }
 
 // Row is one set as a line of cells, in the order Columns gives.
@@ -85,7 +98,7 @@ func Columns(locale string, feedback bool) []Column {
 // nobody lifted: a blank there says the set was run without a weight being
 // recorded, which is a different fact from "you were asked for 122.5 kg" - and
 // the prescription is still on the row, in Reps and Intensity.
-func Row(set models.ProgramSet, feedback bool, locale string) []string {
+func Row(set models.ProgramSet, feedback bool, locale, metric string) []string {
 	log := set.Log
 
 	load := FormatLoad(set)
@@ -114,18 +127,31 @@ func Row(set models.ProgramSet, feedback bool, locale string) []string {
 	}
 	return append(cells,
 		repsDone(*log, locale),
-		formatFloatPtr(log.ActualRPE),
+		formatEffortPtr(log.ActualRPE, metric),
 		formatKg(log.E1RM),
-		formatVBT(log.VBT, locale),
+		formatVBT(log.VBT, set.ExerciseOneRMRef, metric, locale),
 		log.Comment,
 	)
+}
+
+// formatEffortPtr writes a logged RPE in the member's chosen scale: the RPE as
+// stored, or the reps-in-reserve it implies (10 - RPE) when they read in RIR.
+// Blank when nothing was logged.
+func formatEffortPtr(rpe *float64, metric string) string {
+	if rpe == nil {
+		return ""
+	}
+	if models.NormalizeEffortMetric(metric) == models.EffortMetricRIR {
+		return TrimFloat(models.RIRFromRPE(*rpe))
+	}
+	return TrimFloat(*rpe)
 }
 
 // formatVBT is the export's VBT cell: what the velocity tracker read for the
 // set. The headline first - velocity loss, then mean and peak speed - and then
 // each rep's concentric speed on its own line, so the sheet (and the AI reading
 // it) has the set rep by rep, not just its summary. Empty when nothing recorded.
-func formatVBT(vbt *models.BarSetVBT, locale string) string {
+func formatVBT(vbt *models.BarSetVBT, movement, metric, locale string) string {
 	if vbt == nil || vbt.MeanVelocity <= 0 {
 		return ""
 	}
@@ -137,11 +163,42 @@ func formatVBT(vbt *models.BarSetVBT, locale string) string {
 	if vbt.PeakVelocity > 0 {
 		head = append(head, fmt.Sprintf(Heading(locale, "vbtPeak"), fmt.Sprintf("%.2f", vbt.PeakVelocity)))
 	}
+	// The velocity-based effort estimate, read per movement off the last rep's
+	// speed - the headline, right after the loss, since it is the one number a
+	// reader wants from the velocities. Nothing when the movement is not one of
+	// the three lifts (no model to read it against).
+	if effort := EffortLine(movement, lastRep(vbt), metric, locale); effort != "" {
+		head = append(head, effort)
+	}
 	lines := []string{strings.Join(head, " · ")}
 	for i, v := range vbt.RepVelocities {
 		lines = append(lines, fmt.Sprintf(Heading(locale, "vbtRep"), i+1, fmt.Sprintf("%.2f", v)))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// lastRep is the set's effort signal: its last (slowest) rep's mean velocity,
+// or the set mean when the per-rep series was not carried.
+func lastRep(vbt *models.BarSetVBT) float64 {
+	if n := len(vbt.RepVelocities); n > 0 {
+		return vbt.RepVelocities[n-1]
+	}
+	return vbt.MeanVelocity
+}
+
+// EffortLine is the velocity-based effort estimate as one labelled cell - "est.
+// RPE 7" or, for a member who reads in reps-in-reserve, "est. RIR 3". Blank when
+// the movement has no model or the velocity is unreadable, so a caller can add
+// it unconditionally.
+func EffortLine(movement string, lastRepVelocity float64, metric, locale string) string {
+	estimate, ok := velocity.EstimateEffort(movement, lastRepVelocity)
+	if !ok {
+		return ""
+	}
+	if models.NormalizeEffortMetric(metric) == models.EffortMetricRIR {
+		return fmt.Sprintf(Heading(locale, "vbtEffortRir"), TrimFloat(estimate.RIR))
+	}
+	return fmt.Sprintf(Heading(locale, "vbtEffortRpe"), TrimFloat(estimate.RPE))
 }
 
 // Line is one set as a row of cells, plus whether the member ticked it off.
@@ -196,11 +253,11 @@ type LegendEntry struct {
 }
 
 // Lines is a session's sets as rows, in the order they are performed.
-func Lines(sets []models.ProgramSet, feedback bool, locale string) []Line {
+func Lines(sets []models.ProgramSet, feedback bool, locale, metric string) []Line {
 	lines := make([]Line, 0, len(sets))
 	for _, set := range sets {
 		lines = append(lines, Line{
-			Cells: Row(set, feedback, locale),
+			Cells: Row(set, feedback, locale, metric),
 			Done:  feedback && set.Log != nil && set.Log.Done,
 		})
 	}

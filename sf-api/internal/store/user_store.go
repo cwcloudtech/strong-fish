@@ -50,6 +50,7 @@ type userData struct {
 	FitnessPublic     bool                  `json:"fitnessPublic,omitempty"`
 	Birthdate         string                `json:"birthdate,omitempty"`
 	Gender            string                `json:"gender,omitempty"`
+	EffortMetric      string                `json:"effortMetric,omitempty"`
 	CoachRequest      *models.CoachRequest  `json:"coachRequest,omitempty"`
 	IPs               []models.ConnectionIP `json:"ips,omitempty"`
 	Bodyweight        float64               `json:"bodyweight,omitempty"`
@@ -112,6 +113,7 @@ func scanUser(row pgx.Row) (models.User, error) {
 	u.Bodyweight = d.Bodyweight
 	u.Height = d.Height
 	u.Gender = d.Gender
+	u.EffortMetric = models.NormalizeEffortMetric(d.EffortMetric)
 	if d.Socials != nil {
 		u.Socials = models.NormalizeSocials(*d.Socials)
 	}
@@ -499,6 +501,8 @@ type ProfileFields struct {
 	Height            float64
 	// Gender is "male" or "female", and drives the strength coefficients.
 	Gender string
+	// EffortMetric is "rpe" or "rir" - how the member wants effort shown.
+	EffortMetric string
 	// Socials replaces the stored accounts wholesale, so a form that sends a
 	// field blank clears it.
 	Socials      models.Socials
@@ -530,6 +534,7 @@ func (s *UserStore) UpdateProfile(ctx context.Context, id string, f ProfileField
 		"bodyweight":        f.Bodyweight,
 		"height":            f.Height,
 		"gender":            f.Gender,
+		"effortMetric":      models.NormalizeEffortMetric(f.EffortMetric),
 		// Written as a whole object rather than field by field: the payload
 		// merge is shallow, so this key replaces what was there, which is what
 		// makes clearing one account work.

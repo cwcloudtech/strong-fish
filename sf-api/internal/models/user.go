@@ -100,6 +100,10 @@ type User struct {
 	// unisex variant of any of them. Male by default, which is what an account
 	// that has never been asked reads as.
 	Gender string `json:"gender,omitempty"`
+	// EffortMetric is how the member wants effort shown - "rpe" (the default) or
+	// "rir". Effort is always stored and computed as RPE; this only flips the
+	// display to reps-in-reserve (see RIRFromRPE). Blank reads as RPE.
+	EffortMetric string `json:"effortMetric,omitempty"`
 	// Bodyweight, in kg, shown on the public profile next to the member's
 	// bests. Zero means "not stated".
 	Bodyweight float64 `json:"bodyweight,omitempty"`
@@ -192,8 +196,11 @@ type UserMeResponse struct {
 	// it is still waiting, and - if it was turned down - why.
 	CoachRequest CoachRequest `json:"coachRequest,omitempty"`
 	Gender       string       `json:"gender,omitempty"`
-	Bodyweight   float64      `json:"bodyweight,omitempty"`
-	Height       float64      `json:"height,omitempty"`
+	// EffortMetric is the account's own view of its effort-scale choice - "rpe"
+	// (default) or "rir" - the setting this screen edits.
+	EffortMetric string  `json:"effortMetric,omitempty"`
+	Bodyweight   float64 `json:"bodyweight,omitempty"`
+	Height       float64 `json:"height,omitempty"`
 	// Socials, likewise, is the form's own view of what it will edit.
 	Socials    Socials   `json:"socials"`
 	MFAEnabled bool      `json:"mfaEnabled"`

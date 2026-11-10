@@ -69,9 +69,10 @@ func (h *ProgramHandler) ExportPDF(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeProgramSheet(w, exportFormat(r), program, days, programsheet.Options{
-		MemberName: h.memberName(r, memberID),
-		Locale:     sheetLocale(r),
-		Footer:     fmt.Sprintf("%s - %s", program.Name, h.uiBaseURL),
+		MemberName:   h.memberName(r, memberID),
+		Locale:       sheetLocale(r),
+		EffortMetric: h.effortMetric(r, callerID),
+		Footer:       fmt.Sprintf("%s - %s", program.Name, h.uiBaseURL),
 	})
 }
 
@@ -198,6 +199,21 @@ func (h *ProgramHandler) memberName(r *http.Request, memberID string) string {
 	return strings.TrimSpace(user.Name + " " + user.Surname)
 }
 
+// effortMetric is how the reader wants effort shown on the sheet - their own
+// setting, defaulting to RPE for a blank id (a public export) or one that
+// cannot be read. It is the reader's choice, not the member's: a coach exporting
+// an athlete's week reads it in the scale they themselves think in.
+func (h *ProgramHandler) effortMetric(r *http.Request, readerID string) string {
+	if utils.IsBlank(readerID) {
+		return models.EffortMetricRPE
+	}
+	user, err := h.users.FindByID(r.Context(), readerID)
+	if err != nil {
+		return models.EffortMetricRPE
+	}
+	return models.NormalizeEffortMetric(user.EffortMetric)
+}
+
 // sheetLocale reads the language the caller is reading the app in, so the
 // sheet's headings match the screen it was printed from. Named apart from
 // localeOf, which picks the language somebody's *email* is sent in.
@@ -309,12 +325,14 @@ func (h *TrainingHandler) ExportAssignment(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
+	callerID, _ := middleware.UserIDFromContext(r.Context())
 	writeProgramSheet(w, exportFormat(r), program, days, programsheet.Options{
-		MemberName: h.sets.memberName(r, assignment.UserID),
-		Locale:     locale,
-		Feedback:   true,
-		Readings:   readings,
-		Footer:     fmt.Sprintf("%s - %s", program.Name, h.sets.uiBaseURL),
+		MemberName:   h.sets.memberName(r, assignment.UserID),
+		Locale:       locale,
+		Feedback:     true,
+		EffortMetric: h.sets.effortMetric(r, callerID),
+		Readings:     readings,
+		Footer:       fmt.Sprintf("%s - %s", program.Name, h.sets.uiBaseURL),
 	})
 }
 

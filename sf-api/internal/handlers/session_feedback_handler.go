@@ -242,7 +242,9 @@ func anyLogged(day models.ProgramDay) bool {
 func feedbackSheet(program models.Program, subject models.ProgramDay,
 	earlier []models.ProgramDay, locale string) string {
 	sections := make([]programsheet.Section, 0, len(earlier)+1)
-	columns := programsheet.Columns(locale, true)
+	// The AI reads effort in RPE (see aiLines), whatever the member's own display
+	// is set to.
+	columns := programsheet.Columns(locale, true, models.EffortMetricRPE)
 
 	for _, day := range earlier {
 		sections = append(sections, programsheet.Section{

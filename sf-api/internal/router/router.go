@@ -289,6 +289,10 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 				// keeping the most recent set of each lift.
 				r.Get("/me/bar-speed", h.BarSpeed.List)
 				r.Post("/me/bar-speed/analyze", h.BarSpeed.Analyze)
+				// The reusable velocity-to-effort calculator: a movement and one
+				// rep's velocity in, the estimated RPE/RIR out. Stores nothing, so
+				// a client can read an effort estimate for any measured set.
+				r.Post("/me/bar-speed/effort", h.BarSpeed.Effort)
 
 				// The invitations waiting for this account's address. They are
 				// matched by email, not by user id, so one that arrived before

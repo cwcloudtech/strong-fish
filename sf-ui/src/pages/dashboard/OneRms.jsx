@@ -8,6 +8,8 @@ import { ConfirmModal } from "../../components/common/Modal";
 import Tooltip from "../../components/common/Tooltip";
 import { EmptyState, ErrorMessage, Spinner } from "../../components/common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
+import { useAuth } from "../../context/AuthContext";
+import { estimateEffort, formatEffort, isRir, lastRepVelocity } from "../../utils/effort";
 
 const label = (item, locale) => item.labels?.[locale] || item.labels?.en || item.slug;
 
@@ -28,6 +30,7 @@ function velocityLoss(velocities) {
  */
 export default function OneRms() {
   const { t, locale } = useI18n();
+  const { user } = useAuth();
   const [catalog, setCatalog] = useState(null);
   const [maxes, setMaxes] = useState(null);
   const [drafts, setDrafts] = useState({});
@@ -192,6 +195,12 @@ export default function OneRms() {
             {t("devices.barSpeed.detectedReps", { count: set.reps })}
             {" - "}
             {velocityLoss(set.repVelocities)}%
+            {(() => {
+              const effort = estimateEffort(set.lift, lastRepVelocity(set.repVelocities));
+              if (!effort) return null;
+              const key = isRir(user?.effortMetric) ? "estRir" : "estRpe";
+              return ` - ${t(`devices.barSpeed.${key}`, { value: formatEffort(effort.rpe, user?.effortMetric) })}`;
+            })()}
           </td>
         </tr>
       ) : null}

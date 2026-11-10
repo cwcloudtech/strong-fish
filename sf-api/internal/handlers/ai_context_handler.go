@@ -200,7 +200,11 @@ func (h *AIHandler) currentBlock(r *http.Request, userID, locale string) string 
 		byDay[set.DayID] = append(byDay[set.DayID], set)
 	}
 
-	columns := programsheet.Columns(locale, true)
+	// The AI always reads effort in RPE - the scale the whole app computes in -
+	// whatever the member set their own display to; a model asked to reason in
+	// reps-in-reserve is a needless translation. The velocity-based "est. RPE"
+	// line rides along in the VBT cell either way.
+	columns := programsheet.Columns(locale, true, models.EffortMetricRPE)
 	sections := make([]programsheet.Section, 0, len(days))
 	for _, day := range days {
 		day.Sets = programsheet.SortedSets(models.ProgramDay{Sets: byDay[day.ID]})
@@ -249,7 +253,7 @@ func trimFloat(value float64) string {
 // answer it can give in kilos, and the whole point of this app is that the
 // kilos are computed.
 func aiLines(sets []models.ProgramSet, locale string) []programsheet.Line {
-	lines := programsheet.Lines(sets, true, locale)
+	lines := programsheet.Lines(sets, true, locale, models.EffortMetricRPE)
 	for index, set := range sets {
 		if index >= len(lines) || len(lines[index].Cells) <= loadColumn {
 			continue

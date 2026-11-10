@@ -104,7 +104,7 @@ A measure your scale does not take simply does not appear. Each one has its own 
 
 ### Bar speed
 
-With Stance paired, a **Bar speed** panel shows your last set of each of the three lifts - squat, bench and deadlift. Each set is a column per rep: the filled bar is that rep's **mean** speed and the tick above it its **peak** - the two lines the tracker's own app draws, the gap between them the rep's acceleration. Above the chart sit the set's mean and peak speed, how much the bar **slowed across the set** (velocity loss, the usual fatigue reading), and the two RPEs: the one you gave, and the one Stance measured from the bar.
+With Stance paired, a **Bar speed** panel shows your last set of each of the three lifts - squat, bench and deadlift. This is **velocity-based training** (VBT): reading effort from how fast the bar moves. Each set is a column per rep: the filled bar is that rep's **mean** speed and the tick above it its **peak** - the two lines the tracker's own app draws, the gap between them the rep's acceleration. Above the chart sit the set's mean and peak speed, how much the bar **slowed across the set** (velocity loss, the usual fatigue reading), the two RPEs - the one you gave and the one Stance measured from the bar - and StrongFish's own velocity-based estimate.
 
 Only the most recent set of each lift is shown - the point is the shape of your last effort, not a log. Record a new set and it takes the old one's place, and a lift you have not tracked simply does not appear.
 
@@ -112,7 +112,7 @@ On the phone, a **Record a set** button opens the Stance app so you can track th
 
 ### How the measured RPE is worked out
 
-The measured RPE comes from the bar's speed: the slower a rep runs compared with how fast that load usually moves for you, the closer the set is to failure. Stance works it out from your set, and StrongFish reads and charts the result - it does none of the estimation itself. For the method behind it, written as plain sports science rather than anything tied to one tracker, see **[Velocity-based effort](./velocity-based-rpe.md)**.
+The measured RPE comes from the bar's speed: the slower a rep runs compared with how fast that load usually moves for you, the closer the set is to failure. Stance works it out from your set and StrongFish reads and charts that result; StrongFish also shows its **own** VBT estimate beside it, read per lift from the last rep's speed with no history needed, so you see a number even on a brand-new tracker. You can have either number shown as **RPE** or as **RIR** (reps in reserve) - the effort scale on your profile. For the method behind both, written as plain sports science rather than anything tied to one tracker, see **[Velocity-based effort (VBT)](./velocity-based-rpe.md)**.
 
 ## Exporting
 

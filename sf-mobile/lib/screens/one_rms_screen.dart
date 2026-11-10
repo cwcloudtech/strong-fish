@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../effort.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../widgets/common.dart';
@@ -154,8 +155,21 @@ class _OneRmRowState extends ConsumerState<_OneRmRow> {
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
+    final metric = ref.watch(sessionProvider.select((s) => s.user?.effortMetric));
 
     final set = widget.barSet;
+    // The velocity-based effort estimate for the last recorded set, read per
+    // lift off its last rep - shown in the member's chosen scale, blank for a
+    // lift with no model.
+    String effortSuffix = '';
+    if (set != null) {
+      final estimate = estimateEffort(set.lift, lastRepVelocity(set.repVelocities));
+      if (estimate != null) {
+        effortSuffix = ' - ${t(isRir(metric) ? 'devices.barSpeed.estRir' : 'devices.barSpeed.estRpe', {
+              'value': formatEffort(estimate.rpe, metric),
+            })}';
+      }
+    }
 
     return Card(
       child: Padding(
@@ -205,7 +219,7 @@ class _OneRmRowState extends ConsumerState<_OneRmRow> {
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
                   'VBT - ${t('devices.barSpeed.detectedReps', {'count': '${set.reps}'})}'
-                  ' - ${_velocityLoss(set.repVelocities)}%',
+                  ' - ${_velocityLoss(set.repVelocities)}%$effortSuffix',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),

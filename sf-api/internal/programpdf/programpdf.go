@@ -221,9 +221,9 @@ func drawDay(pdf *fpdf.Fpdf, translate func(string) string, day models.ProgramDa
 	}
 
 	sets := programsheet.SortedSets(day)
-	rows := programsheet.Lines(sets, options.Feedback, options.Locale)
+	rows := programsheet.Lines(sets, options.Feedback, options.Locale, options.EffortMetric)
 
-	drawTable(pdf, translate, programsheet.Columns(options.Locale, options.Feedback), rows)
+	drawTable(pdf, translate, programsheet.Columns(options.Locale, options.Feedback, options.EffortMetric), rows)
 	drawReading(pdf, translate, day, options)
 }
 

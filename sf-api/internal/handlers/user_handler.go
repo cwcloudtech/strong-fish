@@ -298,6 +298,9 @@ type updateProfilePayload struct {
 	// Gender drives the strength coefficients. Anything but "female" reads as
 	// male, which is the default an account has never been asked about.
 	Gender string `json:"gender"`
+	// EffortMetric is "rpe" or "rir" - how effort is shown. Normalized in the
+	// store, so anything unknown falls back to RPE rather than erroring.
+	EffortMetric string `json:"effortMetric"`
 	// Socials are the accounts to show on the profile, normalized rather than
 	// validated: somebody pasting their profile URL should get a working link,
 	// not an error (see models.NormalizeSocialAccount).
@@ -391,6 +394,7 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		Birthdate:  birthdate,
 		Bodyweight: p.Bodyweight, Height: p.Height,
 		Gender:       string(strength.NormalizeGender(p.Gender)),
+		EffortMetric: models.NormalizeEffortMetric(p.EffortMetric),
 		Socials:      p.Socials,
 		PasswordHash: passwordHash,
 	})

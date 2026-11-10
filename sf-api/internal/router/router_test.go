@@ -164,6 +164,7 @@ var routes = []struct{ method, path string }{
 	{"GET", "/v1/users/me/devices/google_health/bar-speed"},
 	{"GET", "/v1/users/me/bar-speed"},
 	{"POST", "/v1/users/me/bar-speed/analyze"},
+	{"POST", "/v1/users/me/bar-speed/effort"},
 	{"GET", "/v1/ai/providers"},
 	{"GET", "/v1/ai/conversations"},
 	{"POST", "/v1/ai/conversations/delete"},

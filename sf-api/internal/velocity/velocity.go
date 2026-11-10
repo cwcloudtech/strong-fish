@@ -64,22 +64,16 @@ type profile struct {
 	phaseThresholdFraction float64
 	minRepDurationSec      float64
 	maxRepDurationSec      float64
-	// eccentricFirst is true for lifts whose rep begins with the descent (squat,
-	// bench): the ascent that counts is always preceded by a descent, so a
-	// leading ascent with none before it is the lift-off out of the rack, not a
-	// rep. Deadlift is concentric-first (the pull off the floor), so its first
-	// phase is a real rep and must never be dropped.
-	eccentricFirst bool
 }
 
 func movementProfile(movement string) profile {
 	switch movement {
 	case "deadlift":
-		return profile{phaseThresholdFraction: 0.15, minRepDurationSec: 0.30, maxRepDurationSec: 6.0, eccentricFirst: false}
+		return profile{phaseThresholdFraction: 0.15, minRepDurationSec: 0.30, maxRepDurationSec: 6.0}
 	case "bench":
-		return profile{phaseThresholdFraction: 0.18, minRepDurationSec: 0.15, maxRepDurationSec: 4.0, eccentricFirst: true}
+		return profile{phaseThresholdFraction: 0.18, minRepDurationSec: 0.15, maxRepDurationSec: 4.0}
 	case "squat":
-		return profile{phaseThresholdFraction: 0.15, minRepDurationSec: 0.25, maxRepDurationSec: 5.0, eccentricFirst: true}
+		return profile{phaseThresholdFraction: 0.15, minRepDurationSec: 0.25, maxRepDurationSec: 5.0}
 	}
 	return profile{phaseThresholdFraction: phaseThresholdFraction, minRepDurationSec: 0.20, maxRepDurationSec: 6.0}
 }
@@ -87,9 +81,16 @@ func movementProfile(movement string) profile {
 const (
 	gravity = 9.80665
 
-	// Concentric phases closer than this are the same rep, not two. The
-	// per-rep duration bounds are per-movement (see profile).
-	minGapSec = 0.15
+	// Two concentric phases this close together are the same rep, not two: the
+	// bar dipped below the threshold only briefly - a grind's momentary stall at
+	// the sticking point, or a patch of noise - and never actually came back
+	// down. A real next rep is separated by the bar being lowered, which keeps it
+	// under the threshold far longer than this. Keying the split off the gap's
+	// length is what a controlled bench needs: its descent never crossed a
+	// velocity floor cleanly, so reading the gap beats reading a reversal out of
+	// a drifting integrated velocity. The per-rep duration bounds are per-movement
+	// (see profile).
+	minGapSec = 0.4
 
 	// The velocity is smoothed over this window before reps are cut out of it,
 	// so a single noisy sample does not open or close a phase.
@@ -104,14 +105,6 @@ const (
 	// deadlift are each measured against their own top speed.
 	phaseThresholdFraction = 0.15
 	phaseThresholdFloor    = 0.05
-
-	// Two concentric phases are the same rep unless the bar reversed between
-	// them - went below this speed downward (m/s). An absolute floor, not a
-	// fraction of the peak: a slow or paused descent still crosses it, where a
-	// peak-relative bar missed controlled benches and merged the whole set into
-	// one phase. A sticking point grinds upward and never goes negative, so it
-	// stays one rep.
-	reversalFloor = 0.05
 )
 
 // Analyze reads one set's stream into its reps and velocities. An empty or
@@ -299,45 +292,20 @@ func detectReps(vel, smooth []float64, dt float64, prof profile) []Rep {
 			i++
 		}
 		end := i // exclusive
-		// Two concentric phases belong to the same rep unless the bar actually
-		// reversed between them - dipped into a clear eccentric, velocity below
-		// -threshold. Squat and bench are each one down-then-up cycle, so the
-		// slow patch in the middle of a grinding ascent (a sticking point, where
-		// the bar nearly stalls but never descends) must read as one rep, not
-		// two - which is what made a 3-rep squat come back as 6. Reps that are
-		// genuinely apart are separated by the next rep's descent, seen here as
-		// the reversal; deadlift reps are likewise split by the bar being
-		// lowered. The small-gap glue stays as a floor for brief noise dips.
-		if len(spans) > 0 {
-			prevEnd := spans[len(spans)-1].end
-			// A real rep boundary is the bar reversing direction - the next rep's
-			// descent, where the velocity goes clearly negative. A sticking point
-			// (the bar grinding slowly upward) stays positive and must not split a
-			// rep, which is what made a 3-rep squat read as 6. The bar only has to
-			// cross a small floor below zero, not a fraction of the peak: a slow
-			// or paused descent still reverses, and keying off the peak missed it,
-			// merging a whole set into one phase that the duration filter then
-			// dropped - the "0 reps" on a controlled bench.
-			reversed := minValue(smooth, prevEnd, start) < -reversalFloor
-			if start-prevEnd < minGap || !reversed {
-				spans[len(spans)-1].end = end
-				continue
-			}
+		// Only brief sub-threshold gaps belong to the same rep: a sticking point
+		// where the bar nearly stalls mid-ascent, or a patch of noise. A real next
+		// rep is separated by the bar being lowered, which stays under the
+		// threshold far longer than minGap, so it starts a new span. This is the
+		// whole of the splitting rule now - no reversal test and no lift-off
+		// removal, which read a drifting integrated velocity and merged a
+		// controlled bench down to zero reps. StrongFish counts the concentric
+		// phases, the way the tracker's own algorithm is trusted to; a stray
+		// un-rack is corrected on the review screen, not guessed at here.
+		if len(spans) > 0 && start-spans[len(spans)-1].end < minGap {
+			spans[len(spans)-1].end = end
+			continue
 		}
 		spans = append(spans, span{start, end})
-	}
-
-	// Drop a leading lift-off. Standing the bar out of the rack is an ascent with
-	// no descent before it, so on squat and bench the first concentric is a rep
-	// only when the bar actually descended into it. The test uses the same small
-	// reversal floor as the merge, not a fraction of the peak - keying off the
-	// peak here treated a slow first-rep descent as "no descent" and dropped a
-	// real rep (and with the over-merge, the whole bench). Never the only span: a
-	// lone rep is a real single, not a lift-off. Deadlift pulls from the floor,
-	// so its first phase is always a rep.
-	if prof.eccentricFirst && len(spans) > 1 && spans[0].start > 0 &&
-		minValue(smooth, 0, spans[0].start) >= -reversalFloor {
-		spans = spans[1:]
 	}
 
 	var reps []Rep
@@ -361,18 +329,6 @@ func detectReps(vel, smooth []float64, dt float64, prof profile) []Rep {
 		})
 	}
 	return reps
-}
-
-// minValue is the smallest value in data over [lo, hi); +Inf for an empty range,
-// so two phases with no samples between them read as "no reversal" and merge.
-func minValue(data []float64, lo, hi int) float64 {
-	min := math.Inf(1)
-	for i := lo; i < hi && i < len(data); i++ {
-		if data[i] < min {
-			min = data[i]
-		}
-	}
-	return min
 }
 
 // uniformSmooth is a centred moving average of odd window length, for taking the

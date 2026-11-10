@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../effort.dart';
 import '../models/models.dart';
 import '../native/bar_speed_capture.dart';
 import '../providers/providers.dart';
@@ -1639,6 +1640,8 @@ class _BarSpeedSet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = ref.watch(tProvider);
+    final metric = ref.watch(sessionProvider.select((s) => s.user?.effortMetric));
+    final rir = isRir(metric);
     final small = Theme.of(context).textTheme.bodySmall;
     final liftInk = _liftInk(set.lift, Theme.of(context).brightness) ?? AppColors.of(context).primary;
 
@@ -1646,11 +1649,19 @@ class _BarSpeedSet extends ConsumerWidget {
     if (set.weightKg > 0 && set.reps > 0) {
       rest.add(t('devices.barSpeed.load', {'weight': _fmt(set.weightKg), 'reps': '${set.reps}'}));
     }
+    // The tracker's measured effort, in the member's chosen scale.
     if (set.givenRpe > 0 && set.predictedRpe > 0) {
-      rest.add(t('devices.barSpeed.rpePair',
-          {'given': _fmt(set.givenRpe), 'real': _fmt(set.predictedRpe)}));
+      rest.add(t('devices.barSpeed.${rir ? 'rirPair' : 'rpePair'}',
+          {'given': formatEffort(set.givenRpe, metric), 'real': formatEffort(set.predictedRpe, metric)}));
     } else if (set.predictedRpe > 0) {
-      rest.add(t('devices.barSpeed.rpeReal', {'real': _fmt(set.predictedRpe)}));
+      rest.add(t('devices.barSpeed.${rir ? 'rirReal' : 'rpeReal'}',
+          {'real': formatEffort(set.predictedRpe, metric)}));
+    }
+    // StrongFish's own velocity-based estimate, read per lift off the last rep.
+    final estimate = estimateEffort(set.lift, lastRepVelocity(set.repVelocities));
+    if (estimate != null) {
+      rest.add(t('devices.barSpeed.${rir ? 'estRir' : 'estRpe'}',
+          {'value': formatEffort(estimate.rpe, metric)}));
     }
     rest.add(t('devices.barSpeed.setType_${normalizeSetType(set.setType)}'));
     if (set.tempoVariation) rest.add(t('devices.barSpeed.tempoVariation'));

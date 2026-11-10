@@ -56,6 +56,7 @@ export default function Settings() {
       bodyweight: user.bodyweight || "",
       height: user.height || "",
       gender: user.gender || "male",
+      effortMetric: user.effortMetric || "rpe",
       // One key per entry in the table, plus the rank the one entry that has
       // it carries. Built from the table so a network added there needs
       // nothing here.
@@ -238,6 +239,24 @@ export default function Settings() {
               onChange={setLocale}
             />
           </div>
+        </div>
+
+        {/* How effort reads across the app: RPE, or the reps-in-reserve it
+            implies. A display choice only - effort is stored and computed as RPE
+            and shown as 10 - RPE when RIR is picked. */}
+        <div className="sf-field" style={{ maxWidth: 340 }}>
+          <label className="sf-label">{t("profile.effortMetric")}</label>
+          <Select
+            options={[
+              { value: "rpe", label: t("profile.effortMetricRpe") },
+              { value: "rir", label: t("profile.effortMetricRir") },
+            ]}
+            value={form.effortMetric}
+            onChange={(effortMetric) => setForm((current) => ({ ...current, effortMetric }))}
+          />
+          <p className="sf-muted" style={{ fontSize: "0.82rem", marginBottom: 0 }}>
+            {t("profile.effortMetricHelp")}
+          </p>
         </div>
 
         {/* Generated from the table in utils/socialProfiles.js: the label, the

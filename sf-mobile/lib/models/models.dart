@@ -89,6 +89,10 @@ class User {
   /// Powerlifting fits DOTS, Wilks and IPF GL separately, and there is no
   /// unisex variant of any of them. Male is the default.
   final String gender;
+  /// How the member wants effort shown: 'rpe' (default) or 'rir'. Effort is
+  /// always computed and stored as RPE; this only flips the display to
+  /// reps-in-reserve (10 - RPE).
+  final String effortMetric;
   /// The accounts the member chose to show, keyed as the API names them (see
   /// socials.dart). Values are names on the service, never whole URLs.
   final Map<String, String> socials;
@@ -113,6 +117,7 @@ class User {
     this.bodyweight = 0,
     this.height = 0,
     this.gender = 'male',
+    this.effortMetric = 'rpe',
     this.socials = const {},
     this.mfaEnabled = false,
     this.i18nCode = '',
@@ -136,6 +141,7 @@ class User {
         bodyweight: _toDouble(json['bodyweight']),
         height: _toDouble(json['height']),
         gender: _toString(json['gender'], 'male'),
+        effortMetric: _toString(json['effortMetric'], 'rpe'),
         socials: _toLabels(json['socials']),
         mfaEnabled: json['mfaEnabled'] == true,
         i18nCode: _toString(json['i18nCode']),
