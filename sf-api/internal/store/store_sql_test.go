@@ -1085,6 +1085,99 @@ func TestSetDayDoneKeepsWhatWasLogged(t *testing.T) {
 	}
 }
 
+// TestLogSetKeepsVBTAcrossEdits pins the one thing a plain `data = $4` upsert
+// gets wrong: a set logged from a bar-speed recording carries a VBT summary, and
+// editing that set afterwards - adding a comment, correcting the reps - re-sends
+// the log without the reading, because the clients only attach a VBT straight
+// off a recording. A full replace then wipes it from the export. Only a fresh
+// recording, which does send a VBT, may replace it. Invisible to the compiler
+// and to any test that does not run the SQL.
+func TestLogSetKeepsVBTAcrossEdits(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	programs := NewProgramStore(pool)
+	exercises := NewExerciseStore(pool)
+	member := seedUser(t, pool, "vbt-persist@example.com")
+
+	squat, err := exercises.FindBySlug(ctx, "squat")
+	if err != nil {
+		t.Fatalf("the seeded catalog has no squat: %v", err)
+	}
+	rpe := 8.0
+	program, err := programs.Create(ctx, NewProgram{
+		AuthorID: member, Name: "VBT persist", Visibility: models.ProgramVisibilityPrivate,
+		Days: []NewDay{{Week: 1, Day: 1, Sets: []NewSet{
+			{ExerciseID: squat.ID, Position: 0, Reps: 5, RPE: &rpe, LoadMode: "rpe"},
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("creating the program: %v", err)
+	}
+	t.Cleanup(func() { _ = programs.Delete(context.Background(), program.ID) })
+
+	days, err := programs.ListDays(ctx, program.ID)
+	if err != nil || len(days) != 1 {
+		t.Fatalf("listing days: %v (%d days)", err, len(days))
+	}
+	sets, err := programs.ListSetsForDay(ctx, days[0].ID)
+	if err != nil || len(sets) != 1 {
+		t.Fatalf("listing sets: %v (%d sets)", err, len(sets))
+	}
+	assignment, err := programs.Assign(ctx, program.ID, member, "", "")
+	if err != nil {
+		t.Fatalf("assigning: %v", err)
+	}
+	setID := sets[0].ID
+
+	// Logged from a recording: the set carries a VBT summary.
+	five, three := 5, 3
+	vbt := &models.BarSetVBT{
+		Reps: 5, MeanVelocity: 0.42, PeakVelocity: 0.55, VelocityLoss: 18,
+		RepVelocities: []float64{0.52, 0.48, 0.45, 0.43, 0.41},
+	}
+	if _, err := programs.LogSet(ctx, assignment.ID, setID, member, SetLogFields{
+		ActualReps: &five, VBT: vbt,
+	}); err != nil {
+		t.Fatalf("logging the recorded set: %v", err)
+	}
+
+	// Editing the set - a comment, no recording - must not wipe the VBT.
+	if _, err := programs.LogSet(ctx, assignment.ID, setID, member, SetLogFields{
+		ActualReps: &five, Comment: "felt smooth", VBT: nil,
+	}); err != nil {
+		t.Fatalf("editing the set: %v", err)
+	}
+	logs, err := programs.ListLogsForAssignment(ctx, assignment.ID)
+	if err != nil {
+		t.Fatalf("re-reading the logs: %v", err)
+	}
+	kept := logs[setID]
+	if kept.Comment != "felt smooth" {
+		t.Errorf("the comment edit did not take: %q", kept.Comment)
+	}
+	if kept.VBT == nil {
+		t.Fatal("editing the set wiped the VBT summary from the log")
+	}
+	if kept.VBT.MeanVelocity != vbt.MeanVelocity || len(kept.VBT.RepVelocities) != len(vbt.RepVelocities) {
+		t.Errorf("the VBT summary changed on an edit: %+v", kept.VBT)
+	}
+
+	// A fresh recording is the one thing that replaces it.
+	newVBT := &models.BarSetVBT{Reps: 3, MeanVelocity: 0.30, RepVelocities: []float64{0.34, 0.31, 0.25}}
+	if _, err := programs.LogSet(ctx, assignment.ID, setID, member, SetLogFields{
+		ActualReps: &three, VBT: newVBT,
+	}); err != nil {
+		t.Fatalf("re-recording the set: %v", err)
+	}
+	logs, err = programs.ListLogsForAssignment(ctx, assignment.ID)
+	if err != nil {
+		t.Fatalf("re-reading after re-record: %v", err)
+	}
+	if replaced := logs[setID]; replaced.VBT == nil || replaced.VBT.Reps != 3 || len(replaced.VBT.RepVelocities) != 3 {
+		t.Errorf("a fresh recording did not replace the VBT: %+v", replaced.VBT)
+	}
+}
+
 // TestStorageSharing covers the access list a shared bucket hangs off.
 //
 // Every question this feature asks is a query - who may upload here, who may
