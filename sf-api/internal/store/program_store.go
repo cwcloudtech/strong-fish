@@ -1087,10 +1087,23 @@ func (s *ProgramStore) LogSet(ctx context.Context, assignmentID, setID, userID s
 		return models.SetLog{}, err
 	}
 
+	// The VBT summary survives an edit. Logging a comment or correcting the
+	// reps re-sends the log without the velocity reading (the clients only carry
+	// it straight off a recording), and a plain `data = $4` would then wipe it
+	// from the export. So when the incoming payload has no vbt, the existing
+	// one is carried over; the only thing that replaces it is a fresh recording,
+	// which does send a vbt. `?` tests key presence, and the field is omitempty,
+	// so the key is there exactly when a reading was sent.
 	var id string
 	if err := s.pool.QueryRow(ctx, `
 		INSERT INTO set_logs (assignment_id, set_id, user_id, data) VALUES ($1, $2, $3, $4)
-		ON CONFLICT (assignment_id, set_id) DO UPDATE SET data = $4, updated_at = now()
+		ON CONFLICT (assignment_id, set_id) DO UPDATE SET data =
+			CASE
+				WHEN $4::jsonb ? 'vbt' THEN $4::jsonb
+				WHEN set_logs.data ? 'vbt' THEN $4::jsonb || jsonb_build_object('vbt', set_logs.data -> 'vbt')
+				ELSE $4::jsonb
+			END,
+			updated_at = now()
 		RETURNING id
 	`, assignmentID, setID, userID, data).Scan(&id); err != nil {
 		return models.SetLog{}, err
