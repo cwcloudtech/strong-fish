@@ -183,6 +183,46 @@ func (h *BarSpeedHandler) Analyze(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, set)
 }
 
+type effortPayload struct {
+	Movement string `json:"movement"`
+	// Velocity is the effort rep's mean concentric speed in m/s - the set's last
+	// (slowest) rep, which is the one the velocity-based estimate reads.
+	Velocity float64 `json:"velocity"`
+}
+
+// Effort is the reusable velocity-to-effort calculator: given a movement and one
+// rep's mean concentric velocity, it returns the estimated RPE and the RIR it
+// implies, per the movement's own MVT and k (see internal/velocity.EstimateEffort).
+//
+// It stores nothing and reads no history - it is a pure function behind an
+// endpoint, so a client (or an export) can show an effort estimate for any
+// measured set, the member's own or a connected tracker's, without a round of
+// persistence. The scale shown (RPE or RIR) is a display choice the caller
+// makes from the pair.
+func (h *BarSpeedHandler) Effort(w http.ResponseWriter, r *http.Request) {
+	var p effortPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	movement := strings.ToLower(strings.TrimSpace(p.Movement))
+	if !barSpeedMovements[movement] {
+		writeError(w, http.StatusBadRequest,
+			"movement must be squat, bench or deadlift", CodeInvalidRequestBody)
+		return
+	}
+	if p.Velocity <= 0 {
+		writeError(w, http.StatusBadRequest, "velocity must be positive", CodeInvalidRequestBody)
+		return
+	}
+	estimate, ok := velocity.EstimateEffort(movement, p.Velocity)
+	if !ok {
+		writeError(w, http.StatusUnprocessableEntity,
+			"no effort estimate for this input", CodeInvalidRequestBody)
+		return
+	}
+	writeJSON(w, http.StatusOK, estimate)
+}
+
 // barSpeedKg normalises the load to kilograms; a pound unit is converted, and
 // anything else is taken as already in kilograms.
 func barSpeedKg(load float64, unit string) float64 {

@@ -12,6 +12,8 @@ import AskButton from "../ai/AskButton";
 import useToastError, { useReauthToast, isReauthorizeError } from "../../utils/useToast";
 import { DebugConsole, ErrorMessage, Spinner } from "../common/Feedback";
 import { useI18n } from "../../i18n/I18nContext";
+import { useAuth } from "../../context/AuthContext";
+import { estimateEffort, formatEffort, isRir, lastRepVelocity } from "../../utils/effort";
 
 /** The windows the API offers, in the order they widen. */
 const RANGES = ["24h", "48h", "week", "14d", "month", "90d"];
@@ -1178,6 +1180,7 @@ function AccountPairForm({ provider, busy, onPair }) {
  */
 function BarSpeedPanel() {
   const { t } = useI18n();
+  const { user } = useAuth();
   const [sets, setSets] = useState(null);
   const [error, setError] = useState(null);
 
@@ -1211,7 +1214,7 @@ function BarSpeedPanel() {
       </div>
 
       {sets.map((set) => (
-        <BarSpeedSet key={set.lift} set={set} t={t} />
+        <BarSpeedSet key={set.lift} set={set} t={t} metric={user?.effortMetric} />
       ))}
     </div>
   );
@@ -1233,7 +1236,7 @@ function velocityLoss(velocities) {
  */
 const LIFT_KEYS = new Set(["squat", "bench", "deadlift"]);
 
-function BarSpeedSet({ set, t }) {
+function BarSpeedSet({ set, t, metric }) {
   const means = set.repVelocities || [];
   const peaks = set.repPeakVelocities || [];
   // Mean and peak share one scale, so the gap between the bar and its tick is
@@ -1243,12 +1246,24 @@ function BarSpeedSet({ set, t }) {
   // One colour per lift - squat yellow, bench red, deadlift green - so the
   // three charts read apart, the same inks the export uses.
   const liftInk = LIFT_KEYS.has(set.lift) ? `var(--sf-lift-${set.lift})` : "var(--sf-primary)";
+  // The tracker's measured effort, in the member's chosen scale - RPE, or the
+  // reps-in-reserve it implies.
+  const rir = isRir(metric);
   const rpe =
     set.givenRpe && set.predictedRpe
-      ? t("devices.barSpeed.rpePair", { given: fmt(set.givenRpe), real: fmt(set.predictedRpe) })
+      ? t(`devices.barSpeed.${rir ? "rirPair" : "rpePair"}`, {
+          given: formatEffort(set.givenRpe, metric),
+          real: formatEffort(set.predictedRpe, metric),
+        })
       : set.predictedRpe
-        ? t("devices.barSpeed.rpeReal", { real: fmt(set.predictedRpe) })
+        ? t(`devices.barSpeed.${rir ? "rirReal" : "rpeReal"}`, { real: formatEffort(set.predictedRpe, metric) })
         : "";
+  // The velocity-based estimate, read per lift off the last rep - shown beside
+  // the measured one, and available with no rated history.
+  const estimate = estimateEffort(set.lift, lastRepVelocity(means));
+  const est = estimate
+    ? t(`devices.barSpeed.${rir ? "estRir" : "estRpe"}`, { value: formatEffort(estimate.rpe, metric) })
+    : "";
 
   return (
     <div style={{ marginTop: "0.9rem" }}>
@@ -1256,6 +1271,7 @@ function BarSpeedSet({ set, t }) {
         <strong style={{ color: liftInk }}>{t(`devices.lift.${set.lift}`)}</strong>
         {set.weightKg ? ` · ${t("devices.barSpeed.load", { weight: fmt(set.weightKg), reps: set.reps })}` : ""}
         {rpe ? ` · ${rpe}` : ""}
+        {est ? ` · ${est}` : ""}
         {set.source ? (
           <span style={{ marginLeft: "0.4rem", fontSize: "0.72rem", opacity: 0.75 }}>
             · {barSpeedSource(t, set.source)}

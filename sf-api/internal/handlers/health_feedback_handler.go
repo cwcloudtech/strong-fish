@@ -200,7 +200,7 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 	// bar-speed charts - not just the activity numbers.
 	sections := healthsheet.AllSections(steps, heart,
 		h.exportNutrition(r, userID, days), h.computeTargets(r, userID),
-		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale)
+		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale, models.EffortMetricRPE)
 	sheet := programmd.RenderTables(
 		healthsheet.Title(h.memberName(r.Context(), userID), locale),
 		healthsheet.Subtitle(steps, heart, locale),
@@ -284,7 +284,7 @@ func (h *DeviceHandler) FitnessContext(r *http.Request, userID, locale string) s
 
 	sections := healthsheet.AllSections(steps, heart,
 		h.exportNutrition(r, userID, nutritionContextDays), h.computeTargets(r, userID),
-		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale)
+		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale, models.EffortMetricRPE)
 	if len(sections) == 0 {
 		return ""
 	}

@@ -103,6 +103,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'bodyweight': user.bodyweight,
       'height': user.height,
       'gender': user.gender,
+      'effortMetric': user.effortMetric,
       'socials': user.socials,
       ...changes,
     });
@@ -299,6 +300,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   onSelectionChanged: (selection) async {
                     try {
                       await _patchProfile(user, {'gender': selection.first});
+                    } catch (error) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
+              // How effort reads across the app: RPE, or the reps-in-reserve it
+              // implies. A display choice only - effort is stored and computed
+              // as RPE and shown as 10 - RPE when RIR is picked.
+              ListTile(
+                leading: const Icon(Icons.speed_outlined),
+                title: Text(t('profile.effortMetric')),
+                subtitle: Text(t('profile.effortMetricHelp')),
+                trailing: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'rpe', label: Text('RPE')),
+                    ButtonSegment(value: 'rir', label: Text('RIR')),
+                  ],
+                  selected: {user.effortMetric.isEmpty ? 'rpe' : user.effortMetric},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (selection) async {
+                    try {
+                      await _patchProfile(user, {'effortMetric': selection.first});
                     } catch (error) {
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(

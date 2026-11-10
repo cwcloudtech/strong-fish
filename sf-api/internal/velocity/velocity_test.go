@@ -154,10 +154,13 @@ func TestDetectRepsSeparatesRepsAcrossEccentric(t *testing.T) {
 	}
 }
 
-// A racked squat begins with the lift-off: an ascent (standing the bar out of
-// the hooks) with no descent before it, then the reps. That lift-off is not a
-// rep - it is the "8 done, 9 shown" stray count - so it is dropped.
-func TestDetectRepsDropsSquatUnrack(t *testing.T) {
+// With the lift-off removal dropped, a racked squat's un-rack counts as a
+// concentric phase like any other: the engine counts what it sees and leaves a
+// stray un-rack to be corrected on the review screen, the way the tracker's own
+// algorithm is trusted rather than second-guessed. Trying to read the lift-off
+// out of a drifting integrated velocity is what merged a controlled bench to
+// zero, so the guess is gone.
+func TestDetectRepsCountsUnrackNoDerack(t *testing.T) {
 	dt := 0.005
 	var v []float64
 	v = ramp(v, 0, 0, 0.30, dt)      // standing under the bar
@@ -171,8 +174,8 @@ func TestDetectRepsDropsSquatUnrack(t *testing.T) {
 		v = ramp(v, 0.6, 0, 0.30, dt)
 	}
 	reps := detectReps(v, v, dt, movementProfile("squat"))
-	if len(reps) != 2 {
-		t.Fatalf("un-rack should be dropped, want 2 reps, got %d", len(reps))
+	if len(reps) != 3 {
+		t.Fatalf("un-rack now counts (no de-rack), want 3 phases, got %d", len(reps))
 	}
 }
 
@@ -213,9 +216,11 @@ func TestDetectRepsKeepsDeadliftFirstPull(t *testing.T) {
 }
 
 // A controlled bench - a slow, nearly-paused descent whose velocity never
-// reaches a fraction of the peak - still has to detect every rep. Keying the
-// rep boundary off the peak merged the whole set into one phase that the
-// duration filter then dropped: the "0 reps" regression.
+// reaches a fraction of the peak - must detect every rep and, above all, never
+// collapse to zero. The old reversal/peak test merged the whole set into one
+// over-long phase the duration filter then dropped: the "0 reps" regression.
+// The gap-length split keeps the reps apart; the lift-off counts too (no
+// de-rack), so the four presses read as five phases - five, never zero.
 func TestDetectRepsBenchSlowDescentNotZero(t *testing.T) {
 	dt := 0.005
 	var v []float64
@@ -229,8 +234,8 @@ func TestDetectRepsBenchSlowDescentNotZero(t *testing.T) {
 		v = ramp(v, 0.55, 0, 0.30, dt)
 	}
 	reps := detectReps(v, v, dt, movementProfile("bench"))
-	if len(reps) != 4 {
-		t.Fatalf("a controlled bench must detect its reps, want 4, got %d", len(reps))
+	if len(reps) != 5 {
+		t.Fatalf("a controlled bench detects its reps and the lift-off, want 5, got %d", len(reps))
 	}
 }
 

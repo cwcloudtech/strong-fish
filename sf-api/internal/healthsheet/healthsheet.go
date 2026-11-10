@@ -78,7 +78,7 @@ func Sections(steps models.StepSeries, heart *models.HeartSeries,
 // or maintain.
 func AllSections(steps models.StepSeries, heart *models.HeartSeries,
 	nutrition *models.NutritionSeries, targets *models.NutritionTargets,
-	body *models.BodyComposition, barSets []models.BarSet, locale string) []programsheet.Section {
+	body *models.BodyComposition, barSets []models.BarSet, locale, metric string) []programsheet.Section {
 	var sections []programsheet.Section
 	if len(steps.Days) > 0 {
 		sections = append(sections, StepsSection(steps, locale))
@@ -90,7 +90,7 @@ func AllSections(steps models.StepSeries, heart *models.HeartSeries,
 	if body != nil && len(body.Measures) > 0 {
 		sections = append(sections, BodySection(*body, locale))
 	}
-	sections = append(sections, BarSpeedSections(barSets, locale)...)
+	sections = append(sections, BarSpeedSections(barSets, locale, metric)...)
 	return sections
 }
 
@@ -413,7 +413,7 @@ func liftBarColor(lift string) color.RGBA {
 //
 // Returned as its own slice so the export appends it after steps and heart
 // rate, and skips it whole when the member tracks no bar speed.
-func BarSpeedSections(sets []models.BarSet, locale string) []programsheet.Section {
+func BarSpeedSections(sets []models.BarSet, locale, metric string) []programsheet.Section {
 	sections := make([]programsheet.Section, 0, len(sets))
 	for _, set := range sets {
 		if len(set.RepVelocities) == 0 {
@@ -430,7 +430,7 @@ func BarSpeedSections(sets []models.BarSet, locale string) []programsheet.Sectio
 			})
 		}
 		sections = append(sections, programsheet.Section{
-			Heading: barSpeedHeading(set, locale),
+			Heading: barSpeedHeading(set, locale, metric),
 			Chart:   chart,
 		})
 	}
@@ -438,21 +438,40 @@ func BarSpeedSections(sets []models.BarSet, locale string) []programsheet.Sectio
 }
 
 // barSpeedHeading says what the set was, so the chart reads without a legend:
-// the lift, the load and reps, the given vs predicted RPE when both are there
-// (the whole point of the tracker is the gap between them), and the peak speed
-// and velocity loss the bars alone cannot show.
-func barSpeedHeading(set models.BarSet, locale string) string {
+// the lift, the load and reps, the given vs measured RPE when both are there
+// (the whole point of the tracker is the gap between them), the velocity-based
+// effort estimate read off the last rep, and the peak speed and velocity loss
+// the bars alone cannot show. Effort is shown in the member's chosen scale -
+// RPE, or the reps-in-reserve it implies.
+func barSpeedHeading(set models.BarSet, locale, metric string) string {
+	rir := models.NormalizeEffortMetric(metric) == models.EffortMetricRIR
 	parts := []string{LiftLabel(locale, set.Lift)}
 	if set.WeightKg > 0 && set.Reps > 0 {
 		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedLoad"),
 			trimFloat(set.WeightKg), set.Reps))
 	}
 	if set.GivenRpe > 0 && set.PredictedRpe > 0 {
-		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedRpePair"),
-			trimFloat(set.GivenRpe), trimFloat(set.PredictedRpe)))
+		pairKey := "barSpeedRpePair"
+		given, measured := set.GivenRpe, set.PredictedRpe
+		if rir {
+			pairKey = "barSpeedRirPair"
+			given, measured = models.RIRFromRPE(given), models.RIRFromRPE(measured)
+		}
+		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, pairKey),
+			trimFloat(given), trimFloat(measured)))
 	} else if set.PredictedRpe > 0 {
-		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedRpeReal"),
-			trimFloat(set.PredictedRpe)))
+		realKey, measured := "barSpeedRpeReal", set.PredictedRpe
+		if rir {
+			realKey, measured = "barSpeedRirReal", models.RIRFromRPE(measured)
+		}
+		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, realKey),
+			trimFloat(measured)))
+	}
+	// The velocity-based estimate, read per lift off the last rep's speed - the
+	// stateless reading that needs no rated history, shown beside the measured
+	// one. Blank for a lift with no model.
+	if effort := programsheet.EffortLine(set.Lift, lastRepVelocity(set.RepVelocities), metric, locale); effort != "" {
+		parts = append(parts, effort)
 	}
 	if set.PeakVelocity > 0 {
 		parts = append(parts, fmt.Sprintf(programsheet.Heading(locale, "barSpeedPeak"),
@@ -477,6 +496,16 @@ func barSpeedHeading(set models.BarSet, locale string) string {
 		parts = append(parts, programsheet.Heading(locale, "barSpeedTempo"))
 	}
 	return strings.Join(parts, "  -  ")
+}
+
+// lastRepVelocity is the set's effort signal: the last (slowest) rep's mean
+// concentric speed, which the velocity-based estimate reads against. 0 for an
+// empty series, where there is nothing to estimate.
+func lastRepVelocity(repVelocities []float64) float64 {
+	if n := len(repVelocities); n > 0 {
+		return repVelocities[n-1]
+	}
+	return 0
 }
 
 // VelocityLoss is how much the bar slowed across the set, as a percentage of

@@ -192,8 +192,8 @@ func layout(c *canvas, program models.Program, days []models.ProgramDay, options
 			}
 
 			sets := programsheet.SortedSets(day)
-			c.table(programsheet.Columns(options.Locale, options.Feedback),
-				programsheet.Lines(sets, options.Feedback, options.Locale))
+			c.table(programsheet.Columns(options.Locale, options.Feedback, options.EffortMetric),
+				programsheet.Lines(sets, options.Feedback, options.Locale, options.EffortMetric))
 			c.y += 22
 			c.reading(programsheet.ReadingOf(options, day.ID), options.Locale)
 		}

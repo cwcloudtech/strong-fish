@@ -6,11 +6,14 @@ sidebar_position: 9
 
 StrongFish computes bar speed from a raw accelerometer stream, server-side, so
 **any** device that can reach the API can be a bar-speed sensor — not just one
-brand's. This is a maker's guide to building one from a cheap **ESP32** and an
-accelerometer, with a little **MicroPython** on the board. You clip it to the
-bar, it posts a set's raw motion to StrongFish, and the computed set — reps,
-per-rep mean and peak velocity, velocity loss, and a predicted RPE once you have
-a history — shows up in your **Fitness data**, beside anything else you track.
+brand's. This is **velocity-based training** (VBT): reading effort from how fast
+the bar moves. This is a maker's guide to building a sensor from a cheap
+**ESP32** and an accelerometer, with a little **MicroPython** on the board. You
+clip it to the bar, it posts a set's raw motion to StrongFish, and the computed
+set — reps, per-rep mean and peak velocity, velocity loss, and a velocity-based
+RPE/RIR estimate — shows up in your **Fitness data**, beside anything else you
+track. For the sports science behind the numbers, see
+**[Velocity-based effort (VBT)](./velocity-based-rpe.md)**.
 
 ## How it works
 

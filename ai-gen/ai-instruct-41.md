@@ -10,3 +10,5 @@ I'd like you to add in the exports session training in VBT column, the estimated
 
 Update [the documentation](../sf-wiki/docs/tutorials/velocity-based-rpe.md) as well.
 Also mention the term "VBT" in the various tutorials because it's the official name (and its meaning).
+
+Avoid to store this estimation, I'd prefer to be calculated with algorithm per movements with a reusable endpoint that takes the value as inputs.
