@@ -14,7 +14,7 @@ import '../native/bar_speed_capture.dart';
 /// The default API URL. It's overridable at runtime (see [SessionNotifier.setApiUrl])
 /// because a club typically runs its own server, so a single build has to be
 /// able to point anywhere.
-const String defaultApiUrl = String.fromEnvironment('SF_API_URL', defaultValue: 'https://api.strong-fish.app');
+const String defaultApiUrl = String.fromEnvironment('SF_API_URL', defaultValue: 'https://api.strong-fish.com');
 
 const _tokenKey = 'sf.token';
 const _apiKeyKey = 'sf.apiKey';
