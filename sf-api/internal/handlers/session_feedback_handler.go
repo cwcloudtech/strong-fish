@@ -125,10 +125,10 @@ func (h *TrainingHandler) GenerateSessionFeedback(w http.ResponseWriter, r *http
 	answer, ok := h.ai.ask(w, r, callerID, connectionID, "session", ai.Request{
 		// Both skills: how a coach answers at all, then what a session review
 		// specifically is. Kept apart so the common half is edited once. The
-		// language is pinned here because nothing in a session table tells the
-		// model which one to answer in.
+		// language follows the athlete's own comments on the sets, falling back
+		// to their configured language when they left none.
 		System: templates.CoachSkill + "\n\n" + templates.FeedbackSkill +
-			"\n\n" + LanguageRule(locale),
+			"\n\n" + SessionLanguageRule(locale),
 		Messages: []models.ChatMessage{
 			{Role: models.ChatRoleUser, Message: sheet},
 		},

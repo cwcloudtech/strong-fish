@@ -623,6 +623,7 @@ const ar = {
       legendMean: "المتوسط",
       legendPeak: "الذروة",
       sourceSelf: "StrongFish",
+      sourceSession: "جلسة تدريب",
       setType: "نوع المجموعة",
       setType_warmup: "إحماء",
       setType_topset: "المجموعة الرئيسية",

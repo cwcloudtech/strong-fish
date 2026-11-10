@@ -30,6 +30,10 @@ type BarSpeedHandler struct {
 	// bar-speed tracker (Stance), tagged by source, or nil. Injected so this
 	// handler need not know about device links.
 	trackerSets func(*http.Request, string) []models.BarSet
+	// sessionSets reads the last set of each lift the member recorded inside a
+	// training session (the set logs' vbt subtree), or nil. Injected so this
+	// handler need not depend on the program store.
+	sessionSets func(*http.Request, string) []models.BarSet
 }
 
 func NewBarSpeedHandler(barSpeed *store.BarSpeedStore) *BarSpeedHandler {
@@ -40,6 +44,13 @@ func NewBarSpeedHandler(barSpeed *store.BarSpeedStore) *BarSpeedHandler {
 // with our own recordings.
 func (h *BarSpeedHandler) WithTracker(f func(*http.Request, string) []models.BarSet) *BarSpeedHandler {
 	h.trackerSets = f
+	return h
+}
+
+// WithSessionSets wires in the training-session recordings (the set logs' vbt
+// subtree) the consolidated list merges with the rest.
+func (h *BarSpeedHandler) WithSessionSets(f func(*http.Request, string) []models.BarSet) *BarSpeedHandler {
+	h.sessionSets = f
 	return h
 }
 
@@ -97,7 +108,14 @@ func (h *BarSpeedHandler) List(w http.ResponseWriter, r *http.Request) {
 	if h.trackerSets != nil {
 		tracker = h.trackerSets(r, userID)
 	}
-	writeJSON(w, http.StatusOK, mergeBarSets(ours, tracker))
+	var session []models.BarSet
+	if h.sessionSets != nil {
+		session = h.sessionSets(r, userID)
+	}
+	// Newest reading of each lift wins across all three sources - a set recorded
+	// in a session, a connected tracker, a direct fitness-data recording - by
+	// when it was performed (see mergeBarSets).
+	writeJSON(w, http.StatusOK, mergeBarSets(ours, tracker, session))
 }
 
 // mergeBarSets keeps, for each lift, the most recent set across every source,

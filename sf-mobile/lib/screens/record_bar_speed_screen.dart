@@ -193,22 +193,21 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
         (set.reps > 0 ? set.reps : set.repVelocities.length);
     setState(() => _busy = true);
     try {
-      await ref.read(apiProvider).logSet(
+      // Only the vbt subtree is written - the sensor's own load, reps and
+      // velocities. The member's Load column and rep count are theirs and are
+      // never touched by a recording; the two are shown side by side.
+      await ref.read(apiProvider).logSetVBT(
             widget.assignmentId,
             widget.setId,
-            actualReps: reps > 0 ? reps : null,
-            actualRpe: set.predictedRpe > 0 ? set.predictedRpe : null,
-            actualLoad: set.weightKg > 0 ? set.weightKg : null,
-            done: true,
-            // The sensor's reading, for the export's VBT column - the summary
-            // and each rep's speed, so the export can list the set rep by rep.
-            vbt: {
+            {
               'reps': reps,
+              if (set.weightKg > 0) 'weightKg': set.weightKg,
               if (set.meanVelocity > 0) 'meanVelocity': set.meanVelocity,
               if (set.peakVelocity > 0) 'peakVelocity': set.peakVelocity,
               if (_velocityLoss(set.repVelocities) > 0)
                 'velocityLoss': _velocityLoss(set.repVelocities),
               if (set.repVelocities.isNotEmpty) 'repVelocities': set.repVelocities,
+              'recordedAt': DateTime.now().toUtc().toIso8601String(),
             },
           );
       if (!mounted) return;

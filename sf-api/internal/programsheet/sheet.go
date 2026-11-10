@@ -156,6 +156,12 @@ func formatVBT(vbt *models.BarSetVBT, movement, metric, locale string) string {
 		return ""
 	}
 	var head []string
+	// The load and reps the sensor itself recorded, when it carried them - its
+	// own number, shown here rather than in the Load column, which stays the
+	// weight the member was prescribed or typed.
+	if vbt.WeightKg > 0 && vbt.Reps > 0 {
+		head = append(head, fmt.Sprintf(Heading(locale, "vbtLoad"), TrimFloat(vbt.WeightKg), vbt.Reps))
+	}
 	if vbt.VelocityLoss > 0 {
 		head = append(head, fmt.Sprintf(Heading(locale, "vbtLoss"), fmt.Sprintf("%.0f", vbt.VelocityLoss)))
 	}

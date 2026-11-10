@@ -626,6 +626,7 @@ const fr = {
       legendMean: "moyenne",
       legendPeak: "pic",
       sourceSelf: "StrongFish",
+      sourceSession: "Séance d'entraînement",
       setType: "Type de série",
       setType_warmup: "Échauffement",
       setType_topset: "Top set",

@@ -575,6 +575,9 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Get("/", h.Training.Get)
 					r.Put("/status", h.Training.SetStatus)
 					r.Put("/sets/{setId}/log", h.Training.LogSet)
+					// A sensor recording written onto a set: only the vbt subtree,
+					// never the member's own load or rep count.
+					r.Put("/sets/{setId}/vbt", h.Training.LogSetVBT)
 					r.Delete("/sets/{setId}/log", h.Training.DeleteLog)
 					// A whole session ticked off in one go.
 					r.Put("/days/{dayId}/log", h.Training.SetDayDone)
