@@ -105,6 +105,20 @@ const (
 	// deadlift are each measured against their own top speed.
 	phaseThresholdFraction = 0.15
 	phaseThresholdFloor    = 0.05
+
+	// For a BRIEF gap only, the tie-breaker between "same rep" and "next rep":
+	// the bar either stalled (a sticking point, velocity stays positive) or was
+	// dropped between touch-and-go reps (velocity goes clearly negative). A long
+	// gap is a new rep regardless, so this never has to read a slow, drift-prone
+	// descent - only a fast one, which is far too negative to be noise.
+	reversalFloor = 0.1
+
+	// When a span is longer than a single rep can be, it is re-cut at valleys
+	// below this fraction of its own peak: the dips between reps the first pass
+	// did not separate, either because the drop was too brief to be a gap or
+	// because drift never let the bar fall below the phase threshold. Half the
+	// peak sits well under a rep's own speed and well above the dip between two.
+	valleyFraction = 0.5
 )
 
 // Analyze reads one set's stream into its reps and velocities. An empty or
@@ -292,43 +306,117 @@ func detectReps(vel, smooth []float64, dt float64, prof profile) []Rep {
 			i++
 		}
 		end := i // exclusive
-		// Only brief sub-threshold gaps belong to the same rep: a sticking point
-		// where the bar nearly stalls mid-ascent, or a patch of noise. A real next
-		// rep is separated by the bar being lowered, which stays under the
-		// threshold far longer than minGap, so it starts a new span. This is the
-		// whole of the splitting rule now - no reversal test and no lift-off
-		// removal, which read a drifting integrated velocity and merged a
-		// controlled bench down to zero reps. StrongFish counts the concentric
-		// phases, the way the tracker's own algorithm is trusted to; a stray
-		// un-rack is corrected on the review screen, not guessed at here.
-		if len(spans) > 0 && start-spans[len(spans)-1].end < minGap {
-			spans[len(spans)-1].end = end
-			continue
+		// Two concentric phases are the same rep only when the bar neither paused
+		// long nor came down between them. A LONG gap is the bar being lowered -
+		// a new rep - whatever the velocity did, which is drift-immune and is what
+		// keeps a slow, controlled bench from merging into one phase (the earlier
+		// "0 reps"). A BRIEF gap is ambiguous, so the tie-breaker is whether the
+		// bar actually went down: a sticking-point stall stays positive and is the
+		// same rep, a fast drop between touch-and-go reps goes clearly negative and
+		// is the next one. No lift-off removal - a stray un-rack is corrected on the
+		// review screen, not guessed at here.
+		if len(spans) > 0 {
+			prevEnd := spans[len(spans)-1].end
+			brief := start-prevEnd < minGap
+			cameDown := minValue(smooth, prevEnd, start) < -reversalFloor
+			if brief && !cameDown {
+				spans[len(spans)-1].end = end
+				continue
+			}
 		}
 		spans = append(spans, span{start, end})
 	}
 
 	var reps []Rep
 	for _, s := range spans {
-		if s.end-s.start < minLen || s.end-s.start > maxLen {
-			continue
-		}
-		var sum, max float64
-		for j := s.start; j < s.end; j++ {
-			sum += vel[j]
-			if vel[j] > max {
-				max = vel[j]
-			}
-		}
-		count := float64(s.end - s.start)
-		reps = append(reps, Rep{
-			MeanMps:  sum / count,
-			PeakMps:  max,
-			StartSec: float64(s.start) * dt,
-			EndSec:   float64(s.end) * dt,
-		})
+		reps = append(reps, repsFromSpan(vel, smooth, s.start, s.end, dt, minLen, maxLen, minGap)...)
 	}
 	return reps
+}
+
+// repsFromSpan turns one above-threshold span into reps. A span no longer than
+// a single rep is one rep. A longer one - touch-and-go reps whose drop was too
+// brief to separate, or a set whose drift never let the bar dip below the phase
+// threshold between reps - is re-cut at its own deeper valleys (below half its
+// peak), so a whole set is never dropped as "0 reps". If even that finds
+// nothing, the span still counts once rather than vanishing.
+func repsFromSpan(vel, smooth []float64, start, end int, dt float64, minLen, maxLen, minGap int) []Rep {
+	if end-start < minLen {
+		return nil
+	}
+	if end-start <= maxLen {
+		return []Rep{makeRep(vel, start, end, dt)}
+	}
+
+	var peak float64
+	for j := start; j < end; j++ {
+		if smooth[j] > peak {
+			peak = smooth[j]
+		}
+	}
+	level := valleyFraction * peak
+
+	var subs [][2]int
+	i := start
+	for i < end {
+		if smooth[i] <= level {
+			i++
+			continue
+		}
+		s := i
+		for i < end && smooth[i] > level {
+			i++
+		}
+		// Glue a brief dip below the level back on: it is a wobble inside a rep,
+		// not the valley between two.
+		if len(subs) > 0 && s-subs[len(subs)-1][1] < minGap {
+			subs[len(subs)-1][1] = i
+			continue
+		}
+		subs = append(subs, [2]int{s, i})
+	}
+
+	var reps []Rep
+	for _, sp := range subs {
+		if sp[1]-sp[0] >= minLen {
+			reps = append(reps, makeRep(vel, sp[0], sp[1], dt))
+		}
+	}
+	if len(reps) == 0 {
+		reps = append(reps, makeRep(vel, start, end, dt))
+	}
+	return reps
+}
+
+// makeRep reads one span's concentric speed: its mean and peak velocity, and
+// when it ran.
+func makeRep(vel []float64, start, end int, dt float64) Rep {
+	var sum, max float64
+	for j := start; j < end; j++ {
+		sum += vel[j]
+		if vel[j] > max {
+			max = vel[j]
+		}
+	}
+	count := float64(end - start)
+	return Rep{
+		MeanMps:  sum / count,
+		PeakMps:  max,
+		StartSec: float64(start) * dt,
+		EndSec:   float64(end) * dt,
+	}
+}
+
+// minValue is the smallest value in data over [lo, hi); +Inf for an empty range,
+// so two phases with no samples between them read as "no reversal" and merge.
+func minValue(data []float64, lo, hi int) float64 {
+	min := math.Inf(1)
+	for i := lo; i < hi && i < len(data); i++ {
+		if data[i] < min {
+			min = data[i]
+		}
+	}
+	return min
 }
 
 // uniformSmooth is a centred moving average of odd window length, for taking the
