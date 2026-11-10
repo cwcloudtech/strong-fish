@@ -257,6 +257,47 @@ func TestDetectRepsCleanOddSetKept(t *testing.T) {
 	}
 }
 
+// A touch-and-go deadlift drops the bar fast between reps - the gap below the
+// threshold is too brief to split the reps by its length alone, and a plain
+// gap rule merged them into one over-long span the duration filter then dropped
+// to zero. The bar clearly comes down (velocity goes well negative), so each rep
+// is kept; six of them put the merged span past the cap, which is how it read as
+// 0 reps before.
+func TestDetectRepsTouchAndGoKept(t *testing.T) {
+	dt := 0.005
+	var v []float64
+	v = ramp(v, 0, 0, 0.3, dt) // bar on the floor
+	for i := 0; i < 6; i++ {
+		v = ramp(v, 0, 0.7, 0.6, dt)   // pull
+		v = ramp(v, 0.7, 0, 0.6, dt)   // decelerate at lockout
+		v = ramp(v, 0, -0.9, 0.12, dt) // fast drop between touch-and-go reps
+		v = ramp(v, -0.9, 0, 0.12, dt)
+	}
+	reps := detectReps(v, v, dt, movementProfile("deadlift"))
+	if len(reps) != 6 {
+		t.Fatalf("touch-and-go reps must each be kept, want 6, got %d", len(reps))
+	}
+}
+
+// When drift keeps the velocity above the threshold between reps, the whole set
+// is one continuous span - there is no gap to split on - and a span longer than
+// a rep used to be dropped as "0 reps". It is re-cut at its own valleys instead,
+// so the reps are recovered.
+func TestDetectRepsDriftContinuousSpanNotZero(t *testing.T) {
+	dt := 0.005
+	var v []float64
+	v = ramp(v, 0, 0, 0.3, dt)
+	for i := 0; i < 5; i++ {
+		v = ramp(v, 0.15, 0.8, 0.5, dt) // the bar never falls back to 0 between reps
+		v = ramp(v, 0.8, 0.15, 0.5, dt)
+		v = ramp(v, 0.15, 0.15, 0.4, dt)
+	}
+	reps := detectReps(v, v, dt, movementProfile("deadlift"))
+	if len(reps) != 5 {
+		t.Fatalf("a drifting set must still read its reps, want 5, got %d", len(reps))
+	}
+}
+
 func TestMovementProfileBounds(t *testing.T) {
 	// The deadlift allows longer reps than the bench.
 	if movementProfile("deadlift").maxRepDurationSec <= movementProfile("bench").maxRepDurationSec {
