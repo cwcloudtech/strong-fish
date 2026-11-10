@@ -1629,6 +1629,7 @@ Color? _liftInk(String lift, Brightness brightness) {
 /// Where a set came from, in the reader's language: StrongFish, or a provider.
 String _barSpeedSource(String Function(String, [Map<String, String>?]) t, String source) {
   if (source == 'strongfish') return t('devices.barSpeed.sourceSelf');
+  if (source == 'session') return t('devices.barSpeed.sourceSession');
   final label = t('devices.provider.$source');
   return label == 'devices.provider.$source' ? source : label;
 }

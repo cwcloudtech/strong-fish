@@ -1346,6 +1346,7 @@ function fmt(value) {
 /** Where a set came from, in the reader's language: StrongFish, or a provider. */
 function barSpeedSource(t, source) {
   if (source === "strongfish") return t("devices.barSpeed.sourceSelf");
+  if (source === "session") return t("devices.barSpeed.sourceSession");
   const label = t(`devices.provider.${source}`);
   return label === `devices.provider.${source}` ? source : label;
 }

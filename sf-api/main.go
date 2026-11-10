@@ -22,6 +22,7 @@ import (
 	"strong-fish-api/internal/handlers"
 	"strong-fish-api/internal/metrics"
 	"strong-fish-api/internal/middleware"
+	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/oidc"
 	"strong-fish-api/internal/router"
 	"strong-fish-api/internal/stance"
@@ -228,7 +229,14 @@ func main() {
 		AI:       aiHandler,
 		Device:   deviceHandler,
 		BarSpeed: handlers.NewBarSpeedHandler(store.NewBarSpeedStore(pool)).
-			WithTracker(deviceHandler.BarSpeedSets),
+			WithTracker(deviceHandler.BarSpeedSets).
+			WithSessionSets(func(r *http.Request, userID string) []models.BarSet {
+				sets, err := programStore.SessionBarSets(r.Context(), userID)
+				if err != nil {
+					return nil
+				}
+				return sets
+			}),
 		Callback:   handlers.NewCallbackHandler(callbackStore),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),

@@ -643,6 +643,7 @@ const Map<String, dynamic> en = {
       'legendMean': 'mean',
       'legendPeak': 'peak',
       'sourceSelf': 'StrongFish',
+      'sourceSession': 'Training session',
       'setType': 'Set type',
       'setType_warmup': 'Warm-up',
       'setType_topset': 'Top set',

@@ -297,6 +297,13 @@ class SfApi {
     return SetLog.fromJson(_map(response.data));
   }
 
+  /// Writes a sensor recording onto a set - only the vbt subtree (its own load,
+  /// reps and velocities), never the member's Load or rep columns.
+  Future<SetLog> logSetVBT(String assignmentId, String setId, Map<String, dynamic> vbt) async {
+    final response = await client.dio.put('/training/$assignmentId/sets/$setId/vbt', data: vbt);
+    return SetLog.fromJson(_map(response.data));
+  }
+
   /// Exchanges the address of an object in a private bucket for one a player
   /// can actually open.
   ///

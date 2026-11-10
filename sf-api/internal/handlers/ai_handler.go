@@ -452,7 +452,7 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	locale := h.localeOf(r, userID)
 	answer, ok := h.ask(w, r, userID, p.ConnectionID, "chat", ai.Request{
 		System: templates.CoachSkill + "\n\n" + h.memberContext(r, userID, locale) +
-			"\n\n" + LanguageRule(locale),
+			"\n\n" + ChatLanguageRule(locale),
 		Messages:  history,
 		MaxTokens: p.Settings.MaxTokens,
 	})
@@ -541,11 +541,30 @@ func (h *AIHandler) localeOf(r *http.Request, userID string) string {
 	return localeOf(user, r)
 }
 
-// LanguageRule is that instruction for a locale, shared with the session
-// reading - which is generated from a button rather than from a question, so
-// there is nothing in it for the model to take a language from at all.
+// LanguageRule pins a single language, named for the model. It is the fitness
+// reading's rule: that one is generated from a button, with nothing in it for
+// the model to take a language from, so it answers in the member's configured
+// language outright.
 func LanguageRule(locale string) string {
 	return "Answer in " + languageName(locale) + "."
+}
+
+// ChatLanguageRule lets the member's own words lead: answer in the language of
+// their latest message, and fall back to their configured language only when
+// that is unclear (a one-word question, an emoji). The prompt comes first, the
+// account setting second.
+func ChatLanguageRule(locale string) string {
+	return "Answer in the language of the member's latest message. " +
+		"If that is unclear, answer in " + languageName(locale) + "."
+}
+
+// SessionLanguageRule lets the athlete's own comments lead: answer in the
+// language they wrote their set comments in, and fall back to their configured
+// language only when they left none. The feedback detected in the session comes
+// first, the account setting second.
+func SessionLanguageRule(locale string) string {
+	return "Answer in the language the athlete wrote their set comments in. " +
+		"If they left no comments, answer in " + languageName(locale) + "."
 }
 
 // languageName is the locale's language, named in English because that is the

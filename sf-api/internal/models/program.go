@@ -245,13 +245,25 @@ type SetLog struct {
 // read, kept on the set log so a session export can show it beside the reps and
 // RPE. The measured RPE itself rides on the log's ActualRPE.
 type BarSetVBT struct {
-	Reps         int     `json:"reps,omitempty"`
+	Reps int `json:"reps,omitempty"`
+	// WeightKg is the load the sensor recorded this set at - its own number, kept
+	// here rather than written onto the log's ActualLoad, so recording a set
+	// never overwrites the weight the member typed. The two sit side by side: the
+	// Load column is what was programmed or logged, the VBT column is what the
+	// sensor saw.
+	WeightKg     float64 `json:"weightKg,omitempty"`
 	MeanVelocity float64 `json:"meanVelocity,omitempty"`
 	PeakVelocity float64 `json:"peakVelocity,omitempty"`
 	VelocityLoss float64 `json:"velocityLoss,omitempty"`
 	// RepVelocities is each rep's mean concentric speed in order, so the export
 	// (and the AI reading it) can show the set rep by rep, not just its summary.
 	RepVelocities []float64 `json:"repVelocities,omitempty"`
+	// RecordedAt is when the sensor captured this set, ISO. It is how the fitness
+	// page decides which reading of a lift is the most recent across the three
+	// sources it merges (a session recording, a connected tracker, a direct
+	// fitness-data recording), so a set recorded inside a training session can
+	// win over an older tracker one. Zero for rows written before it existed.
+	RecordedAt time.Time `json:"recordedAt,omitempty"`
 }
 
 // SetFeedback is one member's logged set joined with enough of its

@@ -1178,6 +1178,95 @@ func TestLogSetKeepsVBTAcrossEdits(t *testing.T) {
 	}
 }
 
+// TestSetVBTKeepsManualFields pins the whole point of the separate vbt write:
+// recording a set at the sensor's own load and rep count must not touch the
+// weight the member typed or the reps they logged. And the recording must then
+// surface on the fitness page as a bar set for its lift.
+func TestSetVBTKeepsManualFields(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	programs := NewProgramStore(pool)
+	exercises := NewExerciseStore(pool)
+	member := seedUser(t, pool, "vbt-fields@example.com")
+
+	squat, err := exercises.FindBySlug(ctx, "squat")
+	if err != nil {
+		t.Fatalf("the seeded catalog has no squat: %v", err)
+	}
+	rpe := 8.0
+	program, err := programs.Create(ctx, NewProgram{
+		AuthorID: member, Name: "VBT fields", Visibility: models.ProgramVisibilityPrivate,
+		Days: []NewDay{{Week: 1, Day: 1, Sets: []NewSet{
+			{ExerciseID: squat.ID, Position: 0, Reps: 5, RPE: &rpe, LoadMode: "rpe"},
+		}}},
+	})
+	if err != nil {
+		t.Fatalf("creating the program: %v", err)
+	}
+	t.Cleanup(func() { _ = programs.Delete(context.Background(), program.ID) })
+
+	days, _ := programs.ListDays(ctx, program.ID)
+	sets, _ := programs.ListSetsForDay(ctx, days[0].ID)
+	assignment, err := programs.Assign(ctx, program.ID, member, "", "")
+	if err != nil {
+		t.Fatalf("assigning: %v", err)
+	}
+	setID := sets[0].ID
+
+	// The member logged the set at 70 kg for 5.
+	seventy, five := 70.0, 5
+	if _, err := programs.LogSet(ctx, assignment.ID, setID, member, SetLogFields{
+		ActualLoad: &seventy, ActualReps: &five, Comment: "last set",
+	}); err != nil {
+		t.Fatalf("logging the set: %v", err)
+	}
+
+	// Then recorded it with the sensor at 60 kg, which read 4 reps.
+	recorded := time.Now().UTC()
+	if _, err := programs.SetVBT(ctx, assignment.ID, setID, member, models.BarSetVBT{
+		Reps: 4, WeightKg: 60, MeanVelocity: 0.42, VelocityLoss: 18,
+		RepVelocities: []float64{0.5, 0.46, 0.43, 0.40}, RecordedAt: recorded,
+	}); err != nil {
+		t.Fatalf("recording the set: %v", err)
+	}
+
+	logs, err := programs.ListLogsForAssignment(ctx, assignment.ID)
+	if err != nil {
+		t.Fatalf("re-reading: %v", err)
+	}
+	log := logs[setID]
+	if log.ActualLoad == nil || *log.ActualLoad != 70 {
+		t.Errorf("the recording overwrote the manual load: %+v", log.ActualLoad)
+	}
+	if log.ActualReps == nil || *log.ActualReps != 5 {
+		t.Errorf("the recording overwrote the manual reps: %+v", log.ActualReps)
+	}
+	if log.Comment != "last set" {
+		t.Errorf("the recording overwrote the comment: %q", log.Comment)
+	}
+	if log.VBT == nil || log.VBT.WeightKg != 60 || log.VBT.Reps != 4 {
+		t.Fatalf("the vbt subtree is wrong: %+v", log.VBT)
+	}
+
+	// And it surfaces as the squat's bar set on the fitness page.
+	barSets, err := programs.SessionBarSets(ctx, member)
+	if err != nil {
+		t.Fatalf("reading session bar sets: %v", err)
+	}
+	var squatSet *models.BarSet
+	for i := range barSets {
+		if barSets[i].Lift == "squat" {
+			squatSet = &barSets[i]
+		}
+	}
+	if squatSet == nil {
+		t.Fatal("the recorded session set did not surface as a squat bar set")
+	}
+	if squatSet.WeightKg != 60 || squatSet.Reps != 4 || squatSet.Source != "session" {
+		t.Errorf("the session bar set is wrong: %+v", squatSet)
+	}
+}
+
 // TestStorageSharing covers the access list a shared bucket hangs off.
 //
 // Every question this feature asks is a query - who may upload here, who may

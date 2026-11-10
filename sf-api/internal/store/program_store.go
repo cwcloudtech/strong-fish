@@ -1111,6 +1111,83 @@ func (s *ProgramStore) LogSet(ctx context.Context, assignmentID, setID, userID s
 	return scanSetLog(s.pool.QueryRow(ctx, setLogSelect+` WHERE id = $1`, id))
 }
 
+// SetVBT writes only the velocity-tracker reading onto a set's log, leaving
+// every other field - the reps, the load, the comment, whether it is done -
+// exactly as it was. Recording a set is a statement about the bar's speed, not
+// about the weight the member typed or the reps they counted, so it touches the
+// vbt subtree alone (and creates a log carrying just that when there was none).
+func (s *ProgramStore) SetVBT(ctx context.Context, assignmentID, setID, userID string, vbt models.BarSetVBT) (models.SetLog, error) {
+	raw, err := json.Marshal(vbt)
+	if err != nil {
+		return models.SetLog{}, err
+	}
+	var id string
+	if err := s.pool.QueryRow(ctx, `
+		INSERT INTO set_logs (assignment_id, set_id, user_id, data)
+		VALUES ($1, $2, $3, jsonb_build_object('vbt', $4::jsonb))
+		ON CONFLICT (assignment_id, set_id) DO UPDATE
+		SET data = set_logs.data || jsonb_build_object('vbt', $4::jsonb), updated_at = now()
+		RETURNING id
+	`, assignmentID, setID, userID, raw).Scan(&id); err != nil {
+		return models.SetLog{}, err
+	}
+	return scanSetLog(s.pool.QueryRow(ctx, setLogSelect+` WHERE id = $1`, id))
+}
+
+// SessionBarSets is the most recent velocity reading of each competition lift
+// the member recorded inside a training session, shaped as bar sets the fitness
+// page merges with its other sources (a connected tracker, a direct fitness-data
+// recording). The lift is the set's exercise category, so only the three main
+// lifts surface; recency is when the sensor read the set, newest kept per lift.
+func (s *ProgramStore) SessionBarSets(ctx context.Context, userID string) ([]models.BarSet, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT sl.data->'vbt',
+		       e.data->>'category',
+		       COALESCE((sl.data->'vbt'->>'recordedAt')::timestamptz, sl.updated_at)
+		FROM set_logs sl
+		JOIN program_sets ps ON ps.id = sl.set_id
+		JOIN exercises e ON e.id = ps.exercise_id
+		WHERE sl.user_id = $1
+		  AND sl.data ? 'vbt'
+		  AND e.data->>'category' IN ('squat', 'bench', 'deadlift')
+		ORDER BY COALESCE((sl.data->'vbt'->>'recordedAt')::timestamptz, sl.updated_at) DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	seen := map[string]bool{}
+	var sets []models.BarSet
+	for rows.Next() {
+		var raw []byte
+		var lift string
+		var at time.Time
+		if err := rows.Scan(&raw, &lift, &at); err != nil {
+			return nil, err
+		}
+		var vbt models.BarSetVBT
+		if err := json.Unmarshal(raw, &vbt); err != nil || len(vbt.RepVelocities) == 0 {
+			continue
+		}
+		if seen[lift] {
+			continue
+		}
+		seen[lift] = true
+		sets = append(sets, models.BarSet{
+			Lift:          lift,
+			Source:        "session",
+			WeightKg:      vbt.WeightKg,
+			Reps:          vbt.Reps,
+			MeanVelocity:  vbt.MeanVelocity,
+			PeakVelocity:  vbt.PeakVelocity,
+			RepVelocities: vbt.RepVelocities,
+			PerformedAt:   at,
+		})
+	}
+	return sets, rows.Err()
+}
+
 // SetDayDone marks every set of one session done, or not done.
 //
 // It writes the flag and nothing else: an RPE the member already picked, the

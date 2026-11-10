@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -247,6 +248,55 @@ func (h *TrainingHandler) LogSet(w http.ResponseWriter, r *http.Request) {
 	if resolved, _, err := h.sets.resolveSets(r.Context(), []models.ProgramSet{prescribed},
 		assignment.UserID, map[string]models.SetLog{setID: log}); err == nil && resolved[0].Log != nil {
 		log = *resolved[0].Log
+	}
+	writeJSON(w, http.StatusOK, log)
+}
+
+// LogSetVBT writes only the velocity-tracker reading onto a set, from a
+// recording. It never touches the weight the member typed or the reps they
+// counted - those are their own columns - so recording a set at a sensor-read
+// load does not overwrite the programmed Load, and a corrected rep count is not
+// clobbered by the detected one. The reading, with its own load and reps, lives
+// in the set's vbt subtree.
+func (h *TrainingHandler) LogSetVBT(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := middleware.UserIDFromContext(r.Context())
+	setID := chi.URLParam(r, "setId")
+
+	assignment, err := h.programs.FindAssignment(r.Context(), chi.URLParam(r, "assignmentId"))
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if assignment.UserID != callerID {
+		writeError(w, http.StatusForbidden, "You can only log your own sets", CodeForbidden)
+		return
+	}
+
+	var vbt models.BarSetVBT
+	if !decodeJSON(w, r, &vbt) {
+		return
+	}
+
+	prescribed, err := h.programs.FindSet(r.Context(), setID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if prescribed.ProgramID != assignment.ProgramID {
+		writeError(w, http.StatusBadRequest, "This set is not part of the assigned program", CodeInvalidSet)
+		return
+	}
+
+	// Stamp when the sensor read it when the client did not, so the fitness page
+	// can rank this reading against its other sources by recency.
+	if vbt.RecordedAt.IsZero() {
+		vbt.RecordedAt = time.Now().UTC()
+	}
+
+	log, err := h.programs.SetVBT(r.Context(), assignment.ID, setID, callerID, vbt)
+	if err != nil {
+		writeStoreError(w, err)
+		return
 	}
 	writeJSON(w, http.StatusOK, log)
 }
