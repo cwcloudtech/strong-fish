@@ -479,48 +479,79 @@ func (c *Client) LatestBodyComposition(ctx context.Context, accessToken string) 
 	return results, nil
 }
 
-// sleepBody is Withings' /v2/sleep action=get response: the night as a run of
-// stages. state 0 is awake; 1 light, 2 deep, 3 REM are all asleep.
-type sleepBody struct {
+// sleepSummaryBody is Withings' /v2/sleep action=getsummary response: one entry
+// per night, with the stage durations in seconds. The night is dated by the day
+// the member woke. Light + deep + REM is the time actually asleep; the wake-up
+// duration is left out, the same way the other providers report asleep minutes.
+type sleepSummaryBody struct {
 	Series []struct {
-		StartDate int64 `json:"startdate"`
-		EndDate   int64 `json:"enddate"`
-		State     int   `json:"state"`
+		Date string `json:"date"`
+		Data struct {
+			Light int `json:"lightsleepduration"`
+			Deep  int `json:"deepsleepduration"`
+			REM   int `json:"remsleepduration"`
+		} `json:"data"`
 	} `json:"series"`
+	More   int `json:"more"`
+	Offset int `json:"offset"`
 }
 
-// LastNightSleep reads the member's most recent night from a Withings sleep
-// tracker (a Sleep Analyzer, or a watch), as the stages between falling asleep
-// and waking. Covered by the user.activity scope the integration already asks
-// for.
-func (c *Client) LastNightSleep(ctx context.Context, accessToken string) (devicelink.SleepNight, error) {
-	now := time.Now().UTC()
-	// From yesterday noon to now: wide enough to hold one night whenever it was
-	// slept, narrow enough that it is only the last one.
-	start := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
-	form := url.Values{
-		"action":    {"get"},
-		"startdate": {strconv.FormatInt(start.Unix(), 10)},
-		"enddate":   {strconv.FormatInt(now.Unix(), 10)},
+// sleepSummaryFields is the stage durations read for each night; summed, they are
+// the minutes actually slept.
+const sleepSummaryFields = "lightsleepduration,deepsleepduration,remsleepduration"
+
+// SleepDays reads the member's nights over [start, end] from a Withings sleep
+// tracker (a Sleep Analyzer, or a watch), one entry per morning woken with the
+// minutes actually slept. Covered by the user.activity scope the integration
+// already asks for.
+func (c *Client) SleepDays(ctx context.Context, accessToken string, start, end time.Time) ([]devicelink.SleepDay, error) {
+	start, end, ok := clampDays(start, end)
+	if !ok {
+		return nil, nil
 	}
 
-	var parsed sleepBody
-	if err := c.call(ctx, "/v2/sleep", accessToken, form, &parsed); err != nil {
-		return devicelink.SleepNight{}, err
-	}
-
-	segments := make([]devicelink.SleepSegment, 0, len(parsed.Series))
-	for _, stage := range parsed.Series {
-		if stage.EndDate <= stage.StartDate {
-			continue
+	byDate := map[string]int{}
+	offset := 0
+	for page := 0; page < maxPages; page++ {
+		form := url.Values{
+			"action":       {"getsummary"},
+			"startdateymd": {start.Format("2006-01-02")},
+			"enddateymd":   {end.Format("2006-01-02")},
+			"data_fields":  {sleepSummaryFields},
 		}
-		segments = append(segments, devicelink.SleepSegment{
-			Start: time.Unix(stage.StartDate, 0).UTC(),
-			End:   time.Unix(stage.EndDate, 0).UTC(),
-			Awake: stage.State == 0,
-		})
+		if offset > 0 {
+			form.Set("offset", strconv.Itoa(offset))
+		}
+
+		var parsed sleepSummaryBody
+		if err := c.call(ctx, "/v2/sleep", accessToken, form, &parsed); err != nil {
+			return nil, err
+		}
+		for _, night := range parsed.Series {
+			minutes := (night.Data.Light + night.Data.Deep + night.Data.REM) / 60
+			if night.Date == "" || minutes <= 0 {
+				continue
+			}
+			// A night can be reported in parts (a nap and the main sleep); the
+			// longest keeps the date, as the other providers' reads do.
+			if minutes > byDate[night.Date] {
+				byDate[night.Date] = minutes
+			}
+		}
+		if parsed.More == 0 || parsed.Offset == 0 {
+			break
+		}
+		offset = parsed.Offset
 	}
-	return devicelink.SleepFromSegments(segments), nil
+
+	days := []devicelink.SleepDay{}
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		key := day.Format("2006-01-02")
+		if minutes, ok := byDate[key]; ok {
+			days = append(days, devicelink.SleepDay{Date: key, AsleepMin: minutes})
+		}
+	}
+	return days, nil
 }
 
 type measureBody struct {

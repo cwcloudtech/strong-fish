@@ -718,10 +718,8 @@ const ar = {
     activityFrom: "الخطوات ونبض القلب المعروضة مصدرها {{provider}}.",
     sleep: {
       title: "النوم",
-      empty: "لا يوجد نوم مسجّل الليلة الماضية.",
-      summary: "{{asleep}} نوم · {{awake}} استيقاظ",
-      asleep: "نائم",
-      awake: "مستيقظ",
+      subtitle: "آخر 7 ليالٍ",
+      empty: "لا يوجد نوم مسجّل هذا الأسبوع.",
       status: { good: "جيد", fair: "متوسط", poor: "ضعيف" },
     },
     bodyComposition: {

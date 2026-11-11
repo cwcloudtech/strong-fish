@@ -1078,14 +1078,59 @@ Color _kcalTone(BuildContext context, double kcal, double maintenance) {
   return colors.success;
 }
 
-const _sleepAsleepInk = Color(0xFF4F46E5);
-const _sleepAwakeInk = Color(0xFFF59E0B);
+// Traffic-light inks for the week: green a good night, amber a fair one, red a
+// short one - the three values the chart shows.
+const _sleepGoodInk = Color(0xFF22C55E);
+const _sleepFairInk = Color(0xFFF59E0B);
+const _sleepPoorInk = Color(0xFFEF4444);
 
 String _sleepHM(int minutes) => '${minutes ~/ 60}h${(minutes % 60).toString().padLeft(2, '0')}';
 
-/// Last night, from the one connected provider the server picked: the
-/// good/fair/poor read, the hours slept, and a bar an hour from 21:00 to 09:00 -
-/// indigo for asleep, amber for awake in bed.
+Color _sleepStatusColor(String status) {
+  switch (status) {
+    case 'good':
+      return _sleepGoodInk;
+    case 'fair':
+      return _sleepFairInk;
+    default:
+      return _sleepPoorInk;
+  }
+}
+
+/// Three bar heights, so the week reads good/fair/poor at a glance rather than as
+/// raw hours.
+int _sleepStatusRank(String status) {
+  switch (status) {
+    case 'good':
+      return 3;
+    case 'fair':
+      return 2;
+    case 'poor':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+/// Three-letter weekday labels for the chart, indexed by DateTime.weekday
+/// (Monday 1 .. Sunday 7).
+const _sleepWeekdayShort = <String, List<String>>{
+  'en': ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  'fr': ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'],
+  'ar': ['الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت', 'الأحد'],
+};
+
+String _sleepWeekday(String date, String locale) {
+  final when = DateTime.tryParse(date);
+  if (when == null) return date;
+  final names = _sleepWeekdayShort[locale] ?? _sleepWeekdayShort['en']!;
+  return names[when.weekday - 1];
+}
+
+/// The last seven nights, from the one connected provider the server picked (a
+/// watch's before a scale's): a bar a night read good/fair/poor - green, amber or
+/// red - with the hours slept on a long-press. A night with nothing recorded is
+/// an empty slot, so the week always shows seven days.
 class _SleepPanel extends ConsumerStatefulWidget {
   final String provider;
   final String userId;
@@ -1096,7 +1141,7 @@ class _SleepPanel extends ConsumerStatefulWidget {
 }
 
 class _SleepPanelState extends ConsumerState<_SleepPanel> {
-  SleepNight? _night;
+  SleepWeek? _week;
   String _error = '';
   Object? _errorRaw;
   bool _loading = false;
@@ -1119,12 +1164,12 @@ class _SleepPanelState extends ConsumerState<_SleepPanel> {
       _error = '';
     });
     try {
-      final night = await ref.read(apiProvider).deviceSleep(widget.provider, userId: widget.userId);
-      if (mounted) setState(() => _night = night);
+      final week = await ref.read(apiProvider).deviceSleep(widget.provider, userId: widget.userId);
+      if (mounted) setState(() => _week = week);
     } catch (error) {
       if (mounted) {
         setState(() {
-          _night = null;
+          _week = null;
           _errorRaw = error;
           _error = ref.read(tErrorProvider)(error);
         });
@@ -1134,23 +1179,13 @@ class _SleepPanelState extends ConsumerState<_SleepPanel> {
     }
   }
 
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'good':
-        return const Color(0xFF16A34A);
-      case 'fair':
-        return _sleepAwakeInk;
-      default:
-        return const Color(0xFFDC2626);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
-    final night = _night;
+    final locale = ref.watch(localeProvider);
+    final week = _week;
     final small = Theme.of(context).textTheme.bodySmall;
-    final recorded = night != null && night.recorded;
+    final recorded = week != null && week.recorded;
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 14),
@@ -1158,14 +1193,10 @@ class _SleepPanelState extends ConsumerState<_SleepPanel> {
         Expanded(
           child: Text(t('devices.sleep.title'), style: const TextStyle(fontWeight: FontWeight.w600)),
         ),
-        if (recorded)
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: Text(
-              t('devices.sleep.status.${night.status}'),
-              style: TextStyle(color: _statusColor(night.status), fontWeight: FontWeight.w600, fontSize: 13),
-            ),
-          ),
+        Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: Text(t('devices.sleep.subtitle'), style: small),
+        ),
         IconButton(
           onPressed: _loading ? null : _load,
           tooltip: t('common.refresh'),
@@ -1173,26 +1204,22 @@ class _SleepPanelState extends ConsumerState<_SleepPanel> {
           visualDensity: VisualDensity.compact,
         ),
       ]),
-      if (_loading && night == null)
+      if (_loading && week == null)
         const Padding(
           padding: EdgeInsets.all(16),
           child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
         ),
       if (_error.isNotEmpty) _PanelError(_error, _errorRaw),
-      if (night != null && !recorded) Text(t('devices.sleep.empty'), style: small),
+      if (week != null && !recorded) Text(t('devices.sleep.empty'), style: small),
       if (recorded) ...[
-        Text(
-          '${t('devices.sleep.summary', {'asleep': _sleepHM(night.asleepMin), 'awake': _sleepHM(night.awakeMin)})}'
-          ' · ${t('devices.provider.${night.provider}')}',
-          style: small,
-        ),
+        Text(t('devices.provider.${week.provider}'), style: small),
         const SizedBox(height: 8),
-        _SleepChart(hours: night.hours),
+        _SleepChart(days: week.days, locale: locale),
         const SizedBox(height: 6),
-        Row(children: [
-          _sleepLegend(context, _sleepAsleepInk, t('devices.sleep.asleep')),
-          const SizedBox(width: 16),
-          _sleepLegend(context, _sleepAwakeInk, t('devices.sleep.awake')),
+        Wrap(spacing: 16, runSpacing: 4, children: [
+          _sleepLegend(context, _sleepGoodInk, t('devices.sleep.status.good')),
+          _sleepLegend(context, _sleepFairInk, t('devices.sleep.status.fair')),
+          _sleepLegend(context, _sleepPoorInk, t('devices.sleep.status.poor')),
         ]),
       ],
     ]);
@@ -1211,41 +1238,40 @@ Widget _sleepLegend(BuildContext context, Color color, String label) {
   ]);
 }
 
-/// Twelve hourly bars from 21:00 to 09:00: each as tall as the minutes asleep in
-/// it and indigo, or - for an hour awake in bed - amber.
+/// Seven bars, a night each, read good/fair/poor: green a good night, amber a
+/// fair one, red a short one - three heights, and an empty slot for a night the
+/// tracker had nothing for.
 class _SleepChart extends StatelessWidget {
-  final List<SleepHour> hours;
-  const _SleepChart({required this.hours});
+  final List<SleepDay> days;
+  final String locale;
+  const _SleepChart({required this.days, required this.locale});
 
   @override
   Widget build(BuildContext context) {
-    var peak = 60;
-    for (final hour in hours) {
-      peak = [peak, hour.asleepMin, hour.inBedMin].reduce((a, b) => a > b ? a : b);
-    }
     final small = Theme.of(context).textTheme.bodySmall;
     return SizedBox(
       height: 84,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          for (final hour in hours)
+          for (final day in days)
             Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Container(
-                    height: (hour.asleepMin > 0 ? hour.asleepMin : hour.inBedMin) / peak * 62,
-                    margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                    decoration: BoxDecoration(
-                      color: hour.asleepMin > 0
-                          ? _sleepAsleepInk
-                          : (hour.inBedMin > 0 ? _sleepAwakeInk : Colors.transparent),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                  Tooltip(
+                    message: day.asleepMin > 0 ? _sleepHM(day.asleepMin) : '',
+                    child: Container(
+                      height: _sleepStatusRank(day.status) / 3 * 62,
+                      margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                      decoration: BoxDecoration(
+                        color: day.status.isEmpty ? Colors.transparent : _sleepStatusColor(day.status),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 2),
-                  Text(hour.hour.toString().padLeft(2, '0'), style: small?.copyWith(fontSize: 9)),
+                  Text(_sleepWeekday(day.date, locale), style: small?.copyWith(fontSize: 9)),
                 ],
               ),
             ),

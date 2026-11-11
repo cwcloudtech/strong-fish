@@ -818,62 +818,30 @@ function kcalTone(kcal, maintenance) {
  */
 // --- sleep ---
 
-/** good/fair/poor from minutes asleep, the same thresholds the API uses. */
-function sleepStatus(asleepMin) {
-  if (asleepMin >= 7 * 60) return "good";
-  if (asleepMin >= 6 * 60) return "fair";
-  return "poor";
-}
-
 /** Minutes as "7h12". */
 function formatSleepHM(minutes) {
   return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
 }
 
-function overlapMinutes(a1, a2, b1, b2) {
-  const start = Math.max(a1, b1);
-  const end = Math.min(a2, b2);
-  return end > start ? Math.round((end - start) / 60000) : 0;
+/** The weekday a night's morning falls on, in the browser's locale ("Mon"). */
+function sleepWeekday(date) {
+  const [y, m, d] = String(date).split("-").map(Number);
+  if (!y || !m || !d) return date;
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short" });
 }
 
-/**
- * The twelve one-hour buckets from 21:00 to 09:00, each with minutes in bed and
- * asleep - the chart, mirrored from the API's own breakdown. Bucketed in UTC,
- * which is how the providers report the times.
- */
-function sleepHours(night) {
-  const start = Date.parse(night.start);
-  const end = Date.parse(night.end);
-  if (!start || !end || end <= start) return [];
-  const asleepSpans = (night.segments || [])
-    .filter((segment) => !segment.awake)
-    .map((segment) => [Date.parse(segment.start), Date.parse(segment.end)]);
-
-  const bed = new Date(start);
-  let evening = Date.UTC(bed.getUTCFullYear(), bed.getUTCMonth(), bed.getUTCDate(), 21, 0, 0);
-  if (bed.getUTCHours() < 21) evening -= 24 * 3600 * 1000;
-
-  const hours = [];
-  for (let h = 0; h < 12; h += 1) {
-    const bucketStart = evening + h * 3600 * 1000;
-    const bucketEnd = bucketStart + 3600 * 1000;
-    const inBedMin = overlapMinutes(start, end, bucketStart, bucketEnd);
-    let asleepMin = 0;
-    asleepSpans.forEach(([s, e]) => {
-      asleepMin += overlapMinutes(s, e, bucketStart, bucketEnd);
-    });
-    hours.push({ hour: (21 + h) % 24, inBedMin, asleepMin: Math.min(asleepMin, inBedMin) });
-  }
-  return hours;
-}
-
-const SLEEP_ASLEEP_INK = "#4f46e5";
-const SLEEP_AWAKE_INK = "#f59e0b";
+// Traffic-light inks for the week: green a good night, amber a fair one, red a
+// short one - the three values the chart shows.
+const SLEEP_STATUS_INK = { good: "#22c55e", fair: "#f59e0b", poor: "#ef4444" };
+// Three bar heights, so the week reads good/fair/poor at a glance rather than as
+// raw hours.
+const SLEEP_STATUS_RANK = { good: 3, fair: 2, poor: 1 };
 
 /**
- * Last night, from the one connected provider the server picked (a watch's
- * before a scale's): the good/fair/poor read, the hours slept, and a bar an hour
- * from 21:00 to 09:00 - indigo for asleep, amber for awake in bed.
+ * The last seven nights, from the one connected provider the server picked (a
+ * watch's before a scale's): a bar a night read good/fair/poor - green, amber or
+ * red - with the hours slept on hover. A night with nothing recorded is an empty
+ * slot, so the week always shows seven days.
  */
 function SleepPanel({ provider, userId }) {
   const { t } = useI18n();
@@ -900,18 +868,14 @@ function SleepPanel({ provider, userId }) {
     load();
   }, [load]);
 
-  const recorded = data && data.date && data.asleepMin > 0;
-  const status = recorded ? sleepStatus(data.asleepMin) : null;
-  const hours = recorded ? sleepHours(data) : [];
-  const peak = Math.max(60, ...hours.map((h) => Math.max(h.asleepMin, h.inBedMin)));
+  const days = (data && data.days) || [];
+  const recorded = days.some((day) => day.asleepMin > 0);
 
   return (
     <div style={{ marginTop: "1rem" }}>
       <div className="sf-row" style={{ gap: "0.4rem", alignItems: "center" }}>
         <strong>{t("devices.sleep.title")}</strong>
-        {status ? (
-          <span className={`sf-badge sf-sleep-${status}`}>{t(`devices.sleep.status.${status}`)}</span>
-        ) : null}
+        <span className="sf-muted" style={{ fontSize: "0.8rem" }}>{t("devices.sleep.subtitle")}</span>
         <button
           className="sf-button sf-button-ghost sf-button-sm"
           onClick={load}
@@ -930,54 +894,50 @@ function SleepPanel({ provider, userId }) {
       {recorded ? (
         <>
           <div className="sf-muted" style={{ fontSize: "0.85rem", marginTop: "0.2rem" }}>
-            {t("devices.sleep.summary", {
-              asleep: formatSleepHM(data.asleepMin),
-              awake: formatSleepHM(data.awakeMin || 0),
-            })}
-            {" · "}
             {barSpeedSource(t, data.provider)}
           </div>
 
           <div
             aria-hidden="true"
-            style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "72px", marginTop: "0.5rem" }}
+            style={{ display: "flex", alignItems: "flex-end", gap: "4px", height: "72px", marginTop: "0.5rem" }}
           >
-            {hours.map((hour, index) => {
-              const asleep = hour.asleepMin > 0;
-              const value = asleep ? hour.asleepMin : hour.inBedMin;
-              const ink = asleep ? SLEEP_ASLEEP_INK : hour.inBedMin > 0 ? SLEEP_AWAKE_INK : "transparent";
+            {days.map((day, index) => {
+              const ink = SLEEP_STATUS_INK[day.status] || "transparent";
+              const rank = SLEEP_STATUS_RANK[day.status] || 0;
               return (
                 <div
                   key={index}
                   style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end" }}
-                  title={`${String(hour.hour).padStart(2, "0")}h`}
+                  title={day.asleepMin > 0 ? `${day.date} · ${formatSleepHM(day.asleepMin)} (${t(`devices.sleep.status.${day.status}`)})` : day.date}
                 >
                   <div
                     style={{
                       width: "100%",
-                      height: `${Math.round((value / peak) * 100)}%`,
+                      height: `${(rank / 3) * 100}%`,
                       background: ink,
                       borderRadius: "2px 2px 0 0",
-                      minHeight: value > 0 ? "2px" : 0,
+                      minHeight: rank > 0 ? "3px" : 0,
                     }}
                   />
                   <span className="sf-muted" style={{ fontSize: "0.6rem", marginTop: "2px" }}>
-                    {String(hour.hour).padStart(2, "0")}
+                    {sleepWeekday(day.date)}
                   </span>
                 </div>
               );
             })}
           </div>
 
-          <div className="sf-row" style={{ gap: "1rem", marginTop: "0.3rem" }}>
-            <span className="sf-muted" style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem" }}>
-              <i style={{ background: SLEEP_ASLEEP_INK, width: 10, height: 10, display: "inline-block", borderRadius: 2 }} />
-              {t("devices.sleep.asleep")}
-            </span>
-            <span className="sf-muted" style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem" }}>
-              <i style={{ background: SLEEP_AWAKE_INK, width: 10, height: 10, display: "inline-block", borderRadius: 2 }} />
-              {t("devices.sleep.awake")}
-            </span>
+          <div className="sf-row" style={{ gap: "1rem", marginTop: "0.3rem", flexWrap: "wrap" }}>
+            {["good", "fair", "poor"].map((status) => (
+              <span
+                key={status}
+                className="sf-muted"
+                style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem" }}
+              >
+                <i style={{ background: SLEEP_STATUS_INK[status], width: 10, height: 10, display: "inline-block", borderRadius: 2 }} />
+                {t(`devices.sleep.status.${status}`)}
+              </span>
+            ))}
           </div>
         </>
       ) : null}

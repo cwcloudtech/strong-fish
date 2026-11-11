@@ -532,11 +532,11 @@ class SfApi {
     return measures.map((item) => BodyMeasure.fromJson(_map(item))).toList();
   }
 
-  /// Last night's sleep from the chosen provider: the good/fair/poor read and
-  /// the asleep/awake stretches the chart draws.
-  Future<SleepNight> deviceSleep(String provider, {String userId = ''}) async {
+  /// The last seven nights from the chosen provider: a bar a night, each read
+  /// good/fair/poor from how long was slept.
+  Future<SleepWeek> deviceSleep(String provider, {String userId = ''}) async {
     final response = await client.dio.get('${_deviceBase(userId)}/$provider/sleep');
-    return SleepNight.fromJson(_map(response.data));
+    return SleepWeek.fromJson(_map(response.data));
   }
 
   /// What the AI made of the last ninety days of health data. A 404 is the

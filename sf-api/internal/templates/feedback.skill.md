@@ -44,7 +44,7 @@ Three short paragraphs, no headings, no bullet list:
 
 ## Sleep
 
-When last night's sleep is given, read the session against it: a slow, heavy, or cut-short session after a poor night (under about six hours, or broken) is often the night, not a loss of form or poor programming - say that rather than marking it a bad day. Do not over-read a single strong session after a great night either, and never diagnose a sleep problem.
+When the athlete's recent sleep is given - the last seven nights, each read good, fair or poor - read the session against it: a slow, heavy, or cut-short session after a poor night (under about six hours) or a run of them is often the sleep, not a loss of form or poor programming - say that rather than marking it a bad day. Do not over-read a single strong session after a good night either, and never diagnose a sleep problem.
 
 ## Language
 

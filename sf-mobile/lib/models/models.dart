@@ -366,100 +366,41 @@ class DeviceConnection {
       );
 }
 
-/// One stretch of a night asleep or awake.
-class SleepSegment {
-  final DateTime? start;
-  final DateTime? end;
-  final bool awake;
-  const SleepSegment({this.start, this.end, this.awake = false});
+/// One night in a week of sleep as the phone renders it: the morning woken, how
+/// long was slept, and the good/fair/poor read a glance wants. A night with
+/// nothing recorded has asleepMin 0 and no status, so the week still shows seven
+/// bars.
+class SleepDay {
+  final String date;
+  final int asleepMin;
+  final String status;
+  const SleepDay({this.date = '', this.asleepMin = 0, this.status = ''});
 
-  factory SleepSegment.fromJson(Map<String, dynamic> json) => SleepSegment(
-        start: _toDate(json['start']),
-        end: _toDate(json['end']),
-        awake: json['awake'] == true,
+  factory SleepDay.fromJson(Map<String, dynamic> json) => SleepDay(
+        date: _toString(json['date']),
+        asleepMin: _toInt(json['asleepMin']),
+        status: _toString(json['status']),
       );
 }
 
-/// One hour of the chart window: the clock hour, and how much of it was in bed
-/// and asleep.
-class SleepHour {
-  final int hour;
-  final int inBedMin;
-  final int asleepMin;
-  const SleepHour(this.hour, this.inBedMin, this.asleepMin);
-}
-
-/// Last night's sleep as the phone renders it: when it ran, how long was slept,
-/// and the stretches in between - with the good/fair/poor read a glance wants.
-class SleepNight {
+/// The last seven nights from one provider - a bar a night read good/fair/poor,
+/// the way the step and nutrition charts show a week rather than one reading.
+class SleepWeek {
   final String provider;
-  final String date;
-  final DateTime? start;
-  final DateTime? end;
-  final int asleepMin;
-  final int awakeMin;
-  final List<SleepSegment> segments;
+  final List<SleepDay> days;
+  const SleepWeek({this.provider = '', this.days = const []});
 
-  const SleepNight({
-    this.provider = '',
-    this.date = '',
-    this.start,
-    this.end,
-    this.asleepMin = 0,
-    this.awakeMin = 0,
-    this.segments = const [],
-  });
-
-  factory SleepNight.fromJson(Map<String, dynamic> json) => SleepNight(
+  factory SleepWeek.fromJson(Map<String, dynamic> json) => SleepWeek(
         provider: _toString(json['provider']),
-        date: _toString(json['date']),
-        start: _toDate(json['start']),
-        end: _toDate(json['end']),
-        asleepMin: _toInt(json['asleepMin']),
-        awakeMin: _toInt(json['awakeMin']),
-        segments: json['segments'] is List
-            ? (json['segments'] as List)
-                .map((item) => SleepSegment.fromJson(item as Map<String, dynamic>))
+        days: json['days'] is List
+            ? (json['days'] as List)
+                .map((item) => SleepDay.fromJson(item as Map<String, dynamic>))
                 .toList()
             : const [],
       );
 
-  bool get recorded => date.isNotEmpty && asleepMin > 0;
-
-  /// good/fair/poor, the same thresholds the API uses.
-  String get status {
-    if (asleepMin >= 7 * 60) return 'good';
-    if (asleepMin >= 6 * 60) return 'fair';
-    return 'poor';
-  }
-
-  /// The twelve one-hour buckets from 21:00 to 09:00, in order, each with its
-  /// minutes in bed and asleep. Bucketed in UTC, how the providers report times.
-  List<SleepHour> get hours {
-    final result = <SleepHour>[];
-    if (start == null || end == null) return result;
-    final bed = start!.toUtc();
-    var evening = DateTime.utc(bed.year, bed.month, bed.day, 21);
-    if (bed.hour < 21) evening = evening.subtract(const Duration(days: 1));
-    final asleepSpans = segments.where((s) => !s.awake && s.start != null && s.end != null);
-    for (var h = 0; h < 12; h++) {
-      final bucketStart = evening.add(Duration(hours: h));
-      final bucketEnd = bucketStart.add(const Duration(hours: 1));
-      final inBed = _overlapMinutes(start!, end!, bucketStart, bucketEnd);
-      var asleep = 0;
-      for (final span in asleepSpans) {
-        asleep += _overlapMinutes(span.start!, span.end!, bucketStart, bucketEnd);
-      }
-      result.add(SleepHour((21 + h) % 24, inBed, asleep > inBed ? inBed : asleep));
-    }
-    return result;
-  }
-}
-
-int _overlapMinutes(DateTime a1, DateTime a2, DateTime b1, DateTime b2) {
-  final start = a1.isAfter(b1) ? a1 : b1;
-  final end = a2.isBefore(b2) ? a2 : b2;
-  return end.isAfter(start) ? end.difference(start).inMinutes : 0;
+  /// Whether any night in the week has sleep to show.
+  bool get recorded => days.any((day) => day.asleepMin > 0);
 }
 
 /// One completed barbell-velocity set, as the phone renders it.

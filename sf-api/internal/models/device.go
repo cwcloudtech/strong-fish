@@ -69,10 +69,9 @@ type DeviceConnection struct {
 	// app. Decided here, like the other two sources, so the clients and the
 	// export never pick differently.
 	NutritionSource bool `json:"nutritionSource"`
-	// SleepSource marks the one connected provider whose last night is shown.
-	// The priority is the member's own: a watch's night (Google Health/Fitbit,
-	// then Garmin) over a scale's (Withings), decided here so the clients and the
-	// export agree.
+	// SleepSource marks the one connected provider whose week of sleep is shown.
+	// The priority is the member's own: a watch's nights (Google Health/Fitbit)
+	// over a scale's (Withings), decided here so the clients and the export agree.
 	SleepSource bool `json:"sleepSource"`
 	// AccountPaired is true for a provider that can be connected with an email
 	// and password (Stance), so a client offers a sign-in form.
@@ -252,114 +251,48 @@ const (
 	sleepFairMinutes = 6 * 60
 )
 
-// The chart window: twelve hours from 21:00 to 09:00, the night a sleep app
-// draws.
-const (
-	sleepWindowStartHour = 21
-	sleepWindowHours     = 12
-)
-
-// SleepSegment is one stretch of the night in a single state.
-type SleepSegment struct {
-	Start time.Time `json:"start"`
-	End   time.Time `json:"end"`
-	// Awake is true for a stretch spent awake in bed, false for one asleep.
-	Awake bool `json:"awake"`
+// SleepDay is one night in a week of sleep as the clients render it: the morning
+// woken, how long was actually slept, and the good/fair/poor read a glance wants.
+// A night the tracker has nothing for is present with AsleepMin 0 and no status,
+// so the week still shows seven bars.
+type SleepDay struct {
+	Date      string `json:"date"`
+	AsleepMin int    `json:"asleepMin"`
+	Status    string `json:"status,omitempty"`
 }
 
-// SleepNight is last night's sleep as the clients render it: when it ran, how
-// long was actually slept, and the stretches in between - with the good/fair/poor
-// read a glance wants.
-type SleepNight struct {
+// SleepWeek is the last seven nights from one provider - a bar a night read
+// good/fair/poor, the way the step and nutrition charts show a week rather than a
+// single reading.
+type SleepWeek struct {
 	Provider string `json:"provider"`
-	// Date is the morning they woke, YYYY-MM-DD. Blank for "no recent night".
-	Date      string         `json:"date,omitempty"`
-	Start     time.Time      `json:"start"`
-	End       time.Time      `json:"end"`
-	AsleepMin int            `json:"asleepMin"`
-	AwakeMin  int            `json:"awakeMin"`
-	Segments  []SleepSegment `json:"segments,omitempty"`
+	// From and To are the first and last mornings covered, YYYY-MM-DD.
+	From string     `json:"from,omitempty"`
+	To   string     `json:"to,omitempty"`
+	Days []SleepDay `json:"days"`
 }
 
-// Recorded is whether there is a night to show at all.
-func (n SleepNight) Recorded() bool { return n.Date != "" && n.AsleepMin > 0 }
-
-// Status is the good/fair/poor read of the night, from how long was slept.
-func (n SleepNight) Status() string {
+// SleepStatusFor is the good/fair/poor read of one night, from how long was
+// slept. A night with nothing recorded (0 minutes) has no status.
+func SleepStatusFor(asleepMin int) string {
 	switch {
-	case n.AsleepMin >= sleepGoodMinutes:
+	case asleepMin >= sleepGoodMinutes:
 		return SleepStatusGood
-	case n.AsleepMin >= sleepFairMinutes:
+	case asleepMin >= sleepFairMinutes:
 		return SleepStatusFair
-	default:
+	case asleepMin > 0:
 		return SleepStatusPoor
+	default:
+		return ""
 	}
 }
 
-// SleepHour is one hour of the chart window: the clock hour, and how much of it
-// was spent in bed and asleep.
-type SleepHour struct {
-	Hour      int
-	InBedMin  int
-	AsleepMin int
-}
-
-// Hours breaks the night into the twelve one-hour buckets from 21:00 to 09:00,
-// in order, for the chart - each one's minutes in bed and minutes asleep. The
-// window is anchored on the evening the night began, in the reading's own
-// timezone, so a member who went to bed after midnight still reads under the
-// right hours.
-func (n SleepNight) Hours() []SleepHour {
-	hours := make([]SleepHour, sleepWindowHours)
-	loc := time.UTC
-	if !n.Start.IsZero() && n.Start.Location() != nil {
-		loc = n.Start.Location()
-	}
-	evening := sleepEveningAnchor(n.Start, loc)
-	for h := 0; h < sleepWindowHours; h++ {
-		bucketStart := evening.Add(time.Duration(h) * time.Hour)
-		bucketEnd := bucketStart.Add(time.Hour)
-		hours[h].Hour = (sleepWindowStartHour + h) % 24
-		hours[h].InBedMin = overlapMinutes(n.Start, n.End, bucketStart, bucketEnd)
-		for _, segment := range n.Segments {
-			if !segment.Awake {
-				hours[h].AsleepMin += overlapMinutes(segment.Start, segment.End, bucketStart, bucketEnd)
-			}
-		}
-		if hours[h].AsleepMin > hours[h].InBedMin {
-			hours[h].AsleepMin = hours[h].InBedMin
+// Recorded is whether any night in the week has sleep to show.
+func (w SleepWeek) Recorded() bool {
+	for _, day := range w.Days {
+		if day.AsleepMin > 0 {
+			return true
 		}
 	}
-	return hours
-}
-
-// sleepEveningAnchor is the 21:00 the chart window hangs off: the start's own
-// evening when the member was already up past nine, the evening before when they
-// went to bed after midnight.
-func sleepEveningAnchor(start time.Time, loc *time.Location) time.Time {
-	if start.IsZero() {
-		return start
-	}
-	start = start.In(loc)
-	evening := time.Date(start.Year(), start.Month(), start.Day(), sleepWindowStartHour, 0, 0, 0, loc)
-	if start.Hour() < sleepWindowStartHour {
-		evening = evening.AddDate(0, 0, -1)
-	}
-	return evening
-}
-
-// overlapMinutes is how many minutes [aStart, aEnd) and [bStart, bEnd) share.
-func overlapMinutes(aStart, aEnd, bStart, bEnd time.Time) int {
-	start := aStart
-	if bStart.After(start) {
-		start = bStart
-	}
-	end := aEnd
-	if bEnd.Before(end) {
-		end = bEnd
-	}
-	if !end.After(start) {
-		return 0
-	}
-	return int(end.Sub(start).Minutes())
+	return false
 }

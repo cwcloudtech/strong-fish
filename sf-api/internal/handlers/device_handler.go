@@ -813,8 +813,20 @@ func (h *DeviceHandler) exportBodyComposition(r *http.Request, userID string) *m
 	return &result
 }
 
-// Sleep returns the member's last night from one provider: the good/fair/poor
-// read and the stretches the chart draws.
+// sleepWindowDays is how many nights the sleep chart shows: a week, a bar a
+// night, the way the step and nutrition charts show a window rather than one
+// reading.
+const sleepWindowDays = 7
+
+// sleepWindow is the span of mornings the sleep week covers - the last seven,
+// ending today.
+func sleepWindow() (time.Time, time.Time) {
+	end := time.Now().UTC()
+	return end.AddDate(0, 0, -(sleepWindowDays - 1)), end
+}
+
+// Sleep returns the member's last week of sleep from one provider: a bar a
+// night, each read good/fair/poor from how long was slept.
 func (h *DeviceHandler) Sleep(w http.ResponseWriter, r *http.Request) {
 	userID, ok := h.readUserID(w, r)
 	if !ok {
@@ -848,39 +860,44 @@ func (h *DeviceHandler) Sleep(w http.ResponseWriter, r *http.Request) {
 		h.writeProviderError(w, err, found.Name())
 		return
 	}
-	night, err := reader.LastNightSleep(r.Context(), accessToken)
+	start, end := sleepWindow()
+	days, err := reader.SleepDays(r.Context(), accessToken, start, end)
 	if err != nil {
 		h.writeProviderError(w, err, found.Name())
 		return
 	}
-	writeJSON(w, http.StatusOK, sleepNight(found.Name(), night))
+	writeJSON(w, http.StatusOK, sleepWeek(found.Name(), start, end, days))
 }
 
-// sleepNight maps a provider's night into the shape the clients and the export
-// read.
-func sleepNight(provider string, night devicelink.SleepNight) models.SleepNight {
-	out := models.SleepNight{
-		Provider:  provider,
-		Date:      night.Date,
-		Start:     night.Start,
-		End:       night.End,
-		AsleepMin: night.AsleepMin,
-		AwakeMin:  night.AwakeMin,
+// sleepWeek maps a provider's nights into the week the clients and the export
+// read: one entry per morning in the window, present with no sleep for a night
+// the tracker had nothing for, so the chart always shows seven bars.
+func sleepWeek(provider string, start, end time.Time, days []devicelink.SleepDay) models.SleepWeek {
+	byDate := map[string]int{}
+	for _, day := range days {
+		byDate[day.Date] = day.AsleepMin
 	}
-	for _, segment := range night.Segments {
-		out.Segments = append(out.Segments, models.SleepSegment{
-			Start: segment.Start, End: segment.End, Awake: segment.Awake,
+	week := models.SleepWeek{
+		Provider: provider,
+		From:     start.Format("2006-01-02"),
+		To:       end.Format("2006-01-02"),
+	}
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		key := day.Format("2006-01-02")
+		minutes := byDate[key]
+		week.Days = append(week.Days, models.SleepDay{
+			Date: key, AsleepMin: minutes, Status: models.SleepStatusFor(minutes),
 		})
 	}
-	return out
+	return week
 }
 
-// exportSleep is last night for an export or an AI reading, from the one source
-// the screen shows too - SleepSources' priority (Google Health/Fitbit, then
-// Withings). Optional, like the rest: a tracker that will not answer must not
-// cost the member the document. The sources are tried in order, so a first one
-// with nothing recent falls through to the next.
-func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.SleepNight {
+// exportSleep is the week of sleep for an export or an AI reading, from the one
+// source the screen shows too - SleepSources' priority (Google Health/Fitbit,
+// then Withings). Optional, like the rest: a tracker that will not answer must
+// not cost the member the document. The sources are tried in order, so a first
+// one with no recorded night falls through to the next.
+func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.SleepWeek {
 	connected, err := h.links.ListProviders(r.Context(), userID)
 	if err != nil {
 		return nil
@@ -889,6 +906,7 @@ func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.Slee
 	for _, name := range connected {
 		linked[name] = true
 	}
+	start, end := sleepWindow()
 	for _, name := range devicelink.SleepSources(h.providers, linked) {
 		found, ok := devicelink.Find(h.providers, name)
 		if !ok {
@@ -907,16 +925,16 @@ func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.Slee
 			slog.Warn("health export: sleep unavailable", "provider", name, "error", err)
 			continue
 		}
-		night, err := reader.LastNightSleep(r.Context(), accessToken)
+		days, err := reader.SleepDays(r.Context(), accessToken, start, end)
 		if err != nil {
 			slog.Warn("health export: sleep unavailable", "provider", name, "error", err)
 			continue
 		}
-		if night.Date == "" {
+		week := sleepWeek(name, start, end, days)
+		if !week.Recorded() {
 			continue
 		}
-		result := sleepNight(name, night)
-		return &result
+		return &week
 	}
 	return nil
 }

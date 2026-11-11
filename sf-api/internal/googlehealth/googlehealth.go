@@ -35,15 +35,19 @@ const Provider = "google-health"
 
 // Scope is what consent asks for, read only.
 //
-// Two families, because Google splits them where the screen does not: steps
-// and the heart rate zones earned by training are "activity and fitness",
-// while the beats per minute behind them are a "health metric". Showing a BPM
-// coloured by its zone needs one of each.
+// Three families, because Google splits them where the screen does not: steps
+// and the heart rate zones earned by training are "activity and fitness", the
+// beats per minute behind them are a "health metric", and sleep is its own
+// family again. Showing a BPM coloured by its zone needs one of the first two;
+// the week of nights needs the third.
 //
-// Nothing beyond that. A member handing over sleep or weight to an app that
-// displays neither would be giving away more than it asked them for.
+// Each is a scope Google publishes, so it is safe to ask for - an unrecognised
+// scope is what breaks a consent screen, not an extra real one. A member who
+// linked before sleep was added has to reconnect to grant it (prompt=consent
+// re-asks), which is what a MISSING_OAUTH_SCOPE on the sleep read tells them.
 const Scope = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly " +
-	"https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly"
+	"https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly " +
+	"https://www.googleapis.com/auth/googlehealth.sleep.readonly"
 
 // MaxRollupDays is the longest window the API accepts in one steps roll-up,
 // and so the longest view there is. The widest the app offers is exactly this,
@@ -488,65 +492,131 @@ func (c *Client) DailyActiveCalories(ctx context.Context, accessToken string, st
 	return days, nil
 }
 
-// sleepPointsResponse is a list of sleep stage points, each an interval in a
-// single stage.
-type sleepPointsResponse struct {
+// sleepListResponse is a page of sleep sessions, each a night with a summary and
+// the per-stage run. Sleep is a Session record type: it is read with the list
+// method (GET), not a roll-up. The night's total is summary.minutesAsleep -
+// which Google defines as the asleep stages (LIGHT, REM, DEEP), awake excluded -
+// and the stages are a fallback when a list response carries no summary.
+type sleepListResponse struct {
 	DataPoints []struct {
-		StartTime string `json:"startTime"`
-		EndTime   string `json:"endTime"`
-		Sleep     *struct {
-			SleepType string `json:"sleepType"`
+		Sleep *struct {
+			Interval struct {
+				EndTime      string        `json:"endTime"`
+				CivilEndTime civilDateTime `json:"civilEndTime"`
+			} `json:"interval"`
+			Stages []struct {
+				StartTime string `json:"startTime"`
+				EndTime   string `json:"endTime"`
+				Type      string `json:"type"`
+			} `json:"stages"`
+			Summary *struct {
+				// Minutes, as a JSON string of an integer.
+				MinutesAsleep string `json:"minutesAsleep"`
+			} `json:"summary"`
 		} `json:"sleep"`
 	} `json:"dataPoints"`
 }
 
-// googleAwakeTypes are the sleep stages that count as awake-in-bed; OUT_OF_BED
-// is left out of the night entirely rather than drawn as an awake stretch.
-var googleAwakeTypes = map[string]bool{"AWAKE": true, "AWAKE_IN_BED": true}
-
-// LastNightSleep reads the member's most recent night from Google Health (which
-// also carries Fitbit sleep synced into it), as the stages between falling
-// asleep and waking.
+// SleepDays reads the member's nights over [start, end] from Google Health
+// (which also carries Fitbit sleep synced into it), one entry per morning woken
+// with the minutes actually slept.
 //
-// NOTE: the Google Health sleep dataType and response shape are not exercised by
-// the test account; verify the path and fields against a live account. No new
-// OAuth scope is requested here on purpose - an unrecognised scope would break
-// the whole consent screen - so if the read comes back MISSING_OAUTH_SCOPE the
-// right scope must be added deliberately.
-func (c *Client) LastNightSleep(ctx context.Context, accessToken string) (devicelink.SleepNight, error) {
-	now := time.Now().UTC()
-	// Reach back about thirty hours: enough to hold last night whenever it was
-	// slept, not so far that an earlier night is caught too.
-	start := now.Add(-30 * time.Hour)
-	body := map[string]any{
-		"timeRange": map[string]string{
-			"startTime": start.Format(time.RFC3339),
-			"endTime":   now.Format(time.RFC3339),
-		},
+// Sleep is read with the list method and filtered by the civil end time (the
+// member's local morning), because sleep is a session type with no daily
+// roll-up. A night's total is summary.minutesAsleep; the night is keyed by the
+// morning it ends, and when a day has more than one session the longest - the
+// main sleep, not a nap - is the one kept.
+func (c *Client) SleepDays(ctx context.Context, accessToken string, start, end time.Time) ([]devicelink.SleepDay, error) {
+	start = truncateDay(start)
+	end = truncateDay(end)
+	if end.Before(start) {
+		return nil, nil
 	}
 
-	var parsed sleepPointsResponse
-	if err := c.call(ctx, http.MethodPost,
-		"/v4/users/me/dataTypes/sleep/dataPoints:query", accessToken, body, &parsed); err != nil {
-		return devicelink.SleepNight{}, err
+	// A night ending on or after the first morning asked for. The filter is on
+	// civil (local) end time, the same clock the mornings are counted in.
+	filter := fmt.Sprintf(`sleep.interval.civil_end_time >= "%s"`, start.Format("2006-01-02"))
+	path := "/v4/users/me/dataTypes/sleep/dataPoints?pageSize=100&filter=" + url.QueryEscape(filter)
+
+	var parsed sleepListResponse
+	if err := c.call(ctx, http.MethodGet, path, accessToken, nil, &parsed); err != nil {
+		return nil, err
 	}
 
-	var segments []devicelink.SleepSegment
+	byDate := map[string]int{}
 	for _, point := range parsed.DataPoints {
-		if point.Sleep == nil || point.Sleep.SleepType == "OUT_OF_BED" {
+		if point.Sleep == nil {
 			continue
 		}
-		startAt, err1 := time.Parse(time.RFC3339, point.StartTime)
-		endAt, err2 := time.Parse(time.RFC3339, point.EndTime)
-		if err1 != nil || err2 != nil || !endAt.After(startAt) {
+		minutes := 0
+		if point.Sleep.Summary != nil {
+			if parsedMinutes, err := strconv.Atoi(strings.TrimSpace(point.Sleep.Summary.MinutesAsleep)); err == nil {
+				minutes = parsedMinutes
+			}
+		}
+		if minutes <= 0 {
+			// No summary on this list response: sum the asleep stages instead.
+			minutes = asleepStageMinutes(point.Sleep.Stages)
+		}
+		if minutes <= 0 {
 			continue
 		}
-		segments = append(segments, devicelink.SleepSegment{
-			Start: startAt.UTC(), End: endAt.UTC(),
-			Awake: googleAwakeTypes[point.Sleep.SleepType],
-		})
+		date := civilDateKey(point.Sleep.Interval.CivilEndTime.Date)
+		if date == "" {
+			// No civil end time: fall back to the UTC end timestamp's date.
+			if when, e := time.Parse(time.RFC3339, point.Sleep.Interval.EndTime); e == nil {
+				date = when.Format("2006-01-02")
+			}
+		}
+		if date == "" {
+			continue
+		}
+		// The longest session a day has is its main sleep; a shorter nap on the
+		// same date does not add to it.
+		if minutes > byDate[date] {
+			byDate[date] = minutes
+		}
 	}
-	return devicelink.SleepFromSegments(segments), nil
+
+	days := []devicelink.SleepDay{}
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		key := day.Format("2006-01-02")
+		if minutes, ok := byDate[key]; ok {
+			days = append(days, devicelink.SleepDay{Date: key, AsleepMin: minutes})
+		}
+	}
+	return days, nil
+}
+
+// civilDateKey formats a civil date as YYYY-MM-DD, or blank when it is unset.
+func civilDateKey(d civilDate) string {
+	if d.Year == 0 {
+		return ""
+	}
+	return fmt.Sprintf("%04d-%02d-%02d", d.Year, d.Month, d.Day)
+}
+
+// asleepStageMinutes sums the minutes of the stages that count as asleep - every
+// stage but AWAKE, which is how Google defines the night's asleep total. The
+// fallback for a list response that carries the stages but no summary.
+func asleepStageMinutes(stages []struct {
+	StartTime string `json:"startTime"`
+	EndTime   string `json:"endTime"`
+	Type      string `json:"type"`
+}) int {
+	total := 0
+	for _, stage := range stages {
+		if stage.Type == "AWAKE" || stage.Type == "SLEEP_STAGE_TYPE_UNSPECIFIED" {
+			continue
+		}
+		start, err1 := time.Parse(time.RFC3339, stage.StartTime)
+		end, err2 := time.Parse(time.RFC3339, stage.EndTime)
+		if err1 != nil || err2 != nil || !end.After(start) {
+			continue
+		}
+		total += int(end.Sub(start).Minutes())
+	}
+	return total
 }
 
 type apiError struct {

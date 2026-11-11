@@ -12,6 +12,7 @@ import (
 	"image/color"
 	"strconv"
 	"strings"
+	"time"
 
 	"strong-fish-api/internal/devicelink"
 	"strong-fish-api/internal/models"
@@ -78,7 +79,7 @@ func Sections(steps models.StepSeries, heart *models.HeartSeries,
 // or maintain.
 func AllSections(steps models.StepSeries, heart *models.HeartSeries,
 	nutrition *models.NutritionSeries, targets *models.NutritionTargets,
-	body *models.BodyComposition, sleep *models.SleepNight, barSets []models.BarSet,
+	body *models.BodyComposition, sleep *models.SleepWeek, barSets []models.BarSet,
 	locale, metric string) []programsheet.Section {
 	var sections []programsheet.Section
 	if len(steps.Days) > 0 {
@@ -91,7 +92,7 @@ func AllSections(steps models.StepSeries, heart *models.HeartSeries,
 	if body != nil && len(body.Measures) > 0 {
 		sections = append(sections, BodySection(*body, locale))
 	}
-	// After body composition and nutrition, before bar speed: last night.
+	// After body composition and nutrition, before bar speed: the sleep week.
 	if sleep != nil && sleep.Recorded() {
 		sections = append(sections, SleepSection(*sleep, locale))
 	}
@@ -99,47 +100,84 @@ func AllSections(steps models.StepSeries, heart *models.HeartSeries,
 	return sections
 }
 
-// Sleep chart colours: indigo for a stretch asleep, amber for one awake in bed.
+// Sleep chart colours: the traffic-light read a glance wants - green for a good
+// night, amber for a fair one, red for a short one.
 var (
-	sleepAsleepColor = color.RGBA{79, 70, 229, 255}  // indigo
-	sleepAwakeColor  = color.RGBA{245, 158, 11, 255} // amber
+	sleepGoodColor = color.RGBA{34, 197, 94, 255}  // green
+	sleepFairColor = color.RGBA{245, 158, 11, 255} // amber
+	sleepPoorColor = color.RGBA{239, 68, 68, 255}  // red
 )
 
-// SleepSection draws last night as twelve hourly bars from 21:00 to 09:00: each
-// hour's bar is as tall as the minutes asleep in it and indigo, or - for an hour
-// spent awake in bed - amber, so the shape of the night reads at a glance. The
-// heading carries the total slept and the good/fair/poor status.
-func SleepSection(night models.SleepNight, locale string) programsheet.Section {
+// sleepStatusColor is a night's bar colour from its good/fair/poor read.
+func sleepStatusColor(status string) color.RGBA {
+	switch status {
+	case models.SleepStatusGood:
+		return sleepGoodColor
+	case models.SleepStatusFair:
+		return sleepFairColor
+	default:
+		return sleepPoorColor
+	}
+}
+
+// sleepStatusRank is a night's bar height: three levels, so the week reads as a
+// row of good/fair/poor nights rather than raw hours.
+func sleepStatusRank(status string) float64 {
+	switch status {
+	case models.SleepStatusGood:
+		return 3
+	case models.SleepStatusFair:
+		return 2
+	case models.SleepStatusPoor:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// SleepSection draws the last seven nights as a bar a night, each read
+// good/fair/poor: green for a good night, amber for a fair one, red for a short
+// one, and an empty slot for a night the tracker had nothing for. Three heights,
+// so the week reads at a glance the way a sleep app's traffic light does.
+func SleepSection(week models.SleepWeek, locale string) programsheet.Section {
 	chart := &programsheet.Chart{
 		Legend: []programsheet.LegendEntry{
-			{Label: programsheet.Heading(locale, "sleepAsleep"), Color: sleepAsleepColor},
-			{Label: programsheet.Heading(locale, "sleepAwake"), Color: sleepAwakeColor},
+			{Label: programsheet.Heading(locale, "sleepStatus.good"), Color: sleepGoodColor},
+			{Label: programsheet.Heading(locale, "sleepStatus.fair"), Color: sleepFairColor},
+			{Label: programsheet.Heading(locale, "sleepStatus.poor"), Color: sleepPoorColor},
 		},
 	}
-	for _, hour := range night.Hours() {
-		bar := programsheet.Bar{Label: fmt.Sprintf("%02dh", hour.Hour)}
-		switch {
-		case hour.AsleepMin > 0:
-			bar.Value = float64(hour.AsleepMin)
-			bar.Color = sleepAsleepColor
-		case hour.InBedMin > 0:
-			bar.Value = float64(hour.InBedMin)
-			bar.Color = sleepAwakeColor
+	for _, day := range week.Days {
+		bar := programsheet.Bar{Label: sleepDayLabel(day.Date, locale)}
+		if day.Status != "" {
+			bar.Value = sleepStatusRank(day.Status)
+			bar.Color = sleepStatusColor(day.Status)
 		}
 		chart.Bars = append(chart.Bars, bar)
 	}
-	return programsheet.Section{Heading: sleepHeading(night, locale), Chart: chart}
+	return programsheet.Section{Heading: programsheet.Heading(locale, "sleepTitle"), Chart: chart}
 }
 
-// sleepHeading names the section: "Sleep - 7h12 (good)".
-func sleepHeading(night models.SleepNight, locale string) string {
-	status := programsheet.Heading(locale, "sleepStatus."+night.Status())
-	return fmt.Sprintf(programsheet.Heading(locale, "sleepTitle"), formatSleepDuration(night.AsleepMin), status)
+// sleepWeekdayShort is the three-letter weekday label for a bar, indexed by
+// time.Weekday (Sunday 0 .. Saturday 6).
+var sleepWeekdayShort = map[string][]string{
+	"en": {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"},
+	"fr": {"Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"},
+	"ar": {"الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"},
 }
 
-// formatSleepDuration writes minutes as "7h12".
-func formatSleepDuration(minutes int) string {
-	return fmt.Sprintf("%dh%02d", minutes/60, minutes%60)
+// sleepDayLabel names a bar by the weekday of the morning it covers, in the
+// member's language, falling back to the date itself when it cannot be parsed.
+func sleepDayLabel(date, locale string) string {
+	when, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return date
+	}
+	names, ok := sleepWeekdayShort[locale]
+	if !ok {
+		names = sleepWeekdayShort["en"]
+	}
+	return names[int(when.Weekday())]
 }
 
 // StepsSection is a histogram of the range, a bar a day coloured by its band.

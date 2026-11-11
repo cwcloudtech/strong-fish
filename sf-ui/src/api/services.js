@@ -114,8 +114,8 @@ export const devices = {
   // panel is "where am I now".
   bodyComposition: (provider, userId) =>
     body(client.get(`${deviceBase(userId)}/${provider}/body-composition`)),
-  // Last night's sleep from the chosen provider: the good/fair/poor read and the
-  // asleep/awake stretches the chart draws.
+  // The last seven nights from the chosen provider: a bar a night, each read
+  // good/fair/poor from how long was slept.
   sleep: (provider, userId) =>
     body(client.get(`${deviceBase(userId)}/${provider}/sleep`)),
   // Logged energy and protein from a food diary (Yazio, MyFitnessPal), over the

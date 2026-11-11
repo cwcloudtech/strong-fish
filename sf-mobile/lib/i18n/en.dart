@@ -738,15 +738,16 @@ const Map<String, dynamic> en = {
     'activityFrom': 'Steps and heart rate are shown from {{provider}}.',
     'sleep': {
       'title': 'Sleep',
-      'empty': 'No sleep recorded last night.',
-      'summary': '{{asleep}} asleep · {{awake}} awake',
-      'asleep': 'Asleep',
-      'awake': 'Awake',
+      'subtitle': 'Last 7 nights',
+      'empty': 'No sleep recorded this week.',
       'status': {
         'good': 'good',
         'fair': 'fair',
         'poor': 'poor',
       },
+      'summary': '{{asleep}} asleep · {{awake}} awake',
+      'asleep': 'Asleep',
+      'awake': 'Awake',
     },
     'bodyComposition': {
       'title': 'Body composition',

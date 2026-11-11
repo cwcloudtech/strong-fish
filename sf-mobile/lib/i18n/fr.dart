@@ -738,15 +738,16 @@ const Map<String, dynamic> fr = {
     'activityFrom': 'Les pas et la fréquence cardiaque affichés viennent de {{provider}}.',
     'sleep': {
       'title': 'Sommeil',
-      'empty': 'Aucun sommeil enregistré la nuit dernière.',
-      'summary': '{{asleep}} de sommeil · {{awake}} éveillé',
-      'asleep': 'Endormi',
-      'awake': 'Éveillé',
+      'subtitle': '7 dernières nuits',
+      'empty': 'Aucun sommeil enregistré cette semaine.',
       'status': {
         'good': 'bon',
         'fair': 'moyen',
         'poor': 'mauvais',
       },
+      'summary': '{{asleep}} de sommeil · {{awake}} éveillé',
+      'asleep': 'Endormi',
+      'awake': 'Éveillé',
     },
     'bodyComposition': {
       'title': 'Composition corporelle',

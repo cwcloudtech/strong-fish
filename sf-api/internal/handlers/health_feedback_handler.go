@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"strong-fish-api/internal/ai"
@@ -299,17 +300,26 @@ func (h *DeviceHandler) FitnessContext(r *http.Request, userID, locale string) s
 	return programmd.RenderTables("", subtitle, sections, "")
 }
 
-// SleepContext is last night's sleep on its own, for an AI reading that is not
-// the whole fitness page - a session review, where how the athlete slept bears
-// on the session but their steps and body fat do not. A short line, or "" when
-// there is no recent night to read.
+// SleepContext is the week of sleep on its own, for an AI reading that is not
+// the whole fitness page - a session review, where how the athlete has been
+// sleeping bears on the session but their steps and body fat do not. A short
+// list a night a line, or "" when there is no recent sleep to read.
 func (h *DeviceHandler) SleepContext(r *http.Request, userID, locale string) string {
-	night := h.exportSleep(r, userID)
-	if night == nil || !night.Recorded() {
+	week := h.exportSleep(r, userID)
+	if week == nil || !week.Recorded() {
 		return ""
 	}
-	return fmt.Sprintf("## Last night's sleep\n\n%s asleep (%s), %s awake, from %s.",
-		formatSleepHM(night.AsleepMin), night.Status(), formatSleepHM(night.AwakeMin), night.Provider)
+	lines := make([]string, 0, len(week.Days))
+	for _, day := range week.Days {
+		if day.AsleepMin <= 0 {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("- %s: %s (%s)", day.Date, formatSleepHM(day.AsleepMin), day.Status))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("## Sleep (last 7 nights, from %s)\n\n%s", week.Provider, strings.Join(lines, "\n"))
 }
 
 // formatSleepHM writes minutes as "7h12".
