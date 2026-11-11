@@ -220,6 +220,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Get("/{provider}/steps", h.Device.Steps)
 					r.Get("/{provider}/heart-rate", h.Device.HeartRate)
 					r.Get("/{provider}/body-composition", h.Device.BodyComposition)
+					r.Get("/{provider}/sleep", h.Device.Sleep)
 					r.Get("/{provider}/nutrition", h.Device.Nutrition)
 					r.Get("/{provider}/feedback", h.Device.HealthFeedback)
 				})
@@ -257,6 +258,8 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Get("/{provider}/steps", h.Device.Steps)
 					r.Get("/{provider}/heart-rate", h.Device.HeartRate)
 					r.Get("/{provider}/body-composition", h.Device.BodyComposition)
+					// Last night's sleep - the good/fair/poor read and the chart.
+					r.Get("/{provider}/sleep", h.Device.Sleep)
 					// Logged energy and protein from a food diary (Yazio,
 					// MyFitnessPal), with the member's daily targets.
 					r.Get("/{provider}/nutrition", h.Device.Nutrition)

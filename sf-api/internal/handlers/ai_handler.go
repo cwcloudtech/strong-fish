@@ -44,6 +44,9 @@ type AIHandler struct {
 	// holds this one, and two pointers at each other is a knot nobody needs to
 	// untie later.
 	lastDay func(*http.Request, string, string) string
+	// sleep is last night on its own, for a session review - the whole fitness
+	// page would be too much there, but how the athlete slept bears on it.
+	sleep func(*http.Request, string, string) string
 }
 
 func NewAIHandler(connections *store.AIStore, users *store.UserStore, uiBaseURL string) *AIHandler {
@@ -62,6 +65,21 @@ func (h *AIHandler) WithMemberContext(oneRMs *store.OneRMStore, programs *store.
 func (h *AIHandler) WithHealth(lastDay func(*http.Request, string, string) string) *AIHandler {
 	h.lastDay = lastDay
 	return h
+}
+
+// WithSleep adds last night's sleep on its own, for the session review context.
+func (h *AIHandler) WithSleep(sleep func(*http.Request, string, string) string) *AIHandler {
+	h.sleep = sleep
+	return h
+}
+
+// MemberSleepContext is last night's sleep as markdown, or "" when there is no
+// reader wired or no recent night.
+func (h *AIHandler) MemberSleepContext(r *http.Request, userID, locale string) string {
+	if h.sleep == nil {
+		return ""
+	}
+	return h.sleep(r, userID, locale)
 }
 
 type aiConnectionPayload struct {

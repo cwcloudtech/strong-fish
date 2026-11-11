@@ -12,6 +12,7 @@ package devicelink
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"time"
 )
@@ -254,12 +255,73 @@ type NutritionProvider interface {
 	NutritionReader
 }
 
+// SleepSegment is one stretch of a night in a single state: asleep, or awake
+// while in bed. A tracker's finer stages (light, deep, REM) all reduce to
+// "asleep" here - what StrongFish shows is the shape of the night, the hours
+// slept against the hours awake, not a full hypnogram.
+type SleepSegment struct {
+	Start time.Time
+	End   time.Time
+	// Awake is true for a stretch spent awake in bed, false for one asleep.
+	Awake bool
+}
+
+// SleepNight is one night's sleep as a tracker reports it: when the member fell
+// asleep and woke, how long they actually slept, and the awake/asleep stretches
+// in between.
+type SleepNight struct {
+	// Date is the morning they woke, YYYY-MM-DD - a night is named by the day it
+	// ends, the way a sleep tracker labels it. Blank for "no recent night".
+	Date      string
+	Start     time.Time
+	End       time.Time
+	AsleepMin int
+	AwakeMin  int
+	Segments  []SleepSegment
+}
+
+// SleepReader is a provider that tracks sleep - a watch, or a scale with a
+// bedside sensor.
+type SleepReader interface {
+	// LastNightSleep returns the member's most recent night, or an empty night
+	// (Date == "") when the tracker has nothing recent.
+	LastNightSleep(ctx context.Context, accessToken string) (SleepNight, error)
+}
+
+// SleepFromSegments assembles a night from its stretches: the overall span, the
+// minutes asleep and awake, and the date it ends on. The segments may arrive in
+// any order and are sorted; the night is named by the morning it ends.
+func SleepFromSegments(segments []SleepSegment) SleepNight {
+	if len(segments) == 0 {
+		return SleepNight{}
+	}
+	sort.Slice(segments, func(i, j int) bool { return segments[i].Start.Before(segments[j].Start) })
+	night := SleepNight{Segments: segments, Start: segments[0].Start, End: segments[len(segments)-1].End}
+	for _, segment := range segments {
+		minutes := int(segment.End.Sub(segment.Start).Minutes())
+		if minutes <= 0 {
+			continue
+		}
+		if segment.Awake {
+			night.AwakeMin += minutes
+		} else {
+			night.AsleepMin += minutes
+		}
+	}
+	if night.AsleepMin == 0 {
+		return SleepNight{}
+	}
+	night.Date = night.End.Format("2006-01-02")
+	return night
+}
+
 // What a provider can be read for, as the clients are told.
 const (
 	CapabilityActivity        = "activity"
 	CapabilityBodyComposition = "body-composition"
 	CapabilityBarSpeed        = "bar-speed"
 	CapabilityNutrition       = "nutrition"
+	CapabilitySleep           = "sleep"
 )
 
 // Capabilities lists what this provider can be read for, so a client draws
@@ -278,7 +340,46 @@ func Capabilities(provider Provider) []string {
 	if _, ok := provider.(NutritionReader); ok {
 		capabilities = append(capabilities, CapabilityNutrition)
 	}
+	if _, ok := provider.(SleepReader); ok {
+		capabilities = append(capabilities, CapabilitySleep)
+	}
 	return capabilities
+}
+
+// sleepPriority is the order sleep is read in, and it is not registration order:
+// the member wants a watch's night over a scale's, so google health (and the
+// Fitbit it can carry) comes first, then Garmin, then Withings.
+var sleepPriority = []string{"googlehealth", "garmin", "withings"}
+
+// SleepSources lists the connected, sleep-capable providers in priority order
+// (google health/fitbit, then Garmin, then Withings). The reader of the fitness
+// page shows the first; an export tries them in turn, so a first source with no
+// recent night falls through to the next.
+func SleepSources(providers []Provider, connected map[string]bool) []string {
+	byName := map[string]Provider{}
+	for _, provider := range providers {
+		byName[provider.Name()] = provider
+	}
+	var names []string
+	for _, name := range sleepPriority {
+		provider, ok := byName[name]
+		if !ok {
+			continue
+		}
+		if _, ok := provider.(SleepReader); ok && connected[name] && provider.Enabled() {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// SleepSource is the one provider whose sleep the fitness page shows: the first
+// of SleepSources, or blank when none is connected.
+func SleepSource(providers []Provider, connected map[string]bool) string {
+	if names := SleepSources(providers, connected); len(names) > 0 {
+		return names[0]
+	}
+	return ""
 }
 
 // ActivitySource picks, among the providers a member connected, the one whose

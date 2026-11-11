@@ -14,6 +14,15 @@ import (
 	"strong-fish-api/internal/templates"
 )
 
+// sessionSleepBlock wraps last night's sleep for the session prompt, or nothing
+// when there is no reading.
+func sessionSleepBlock(sleep string) string {
+	if sleep == "" {
+		return ""
+	}
+	return "\n\n" + sleep
+}
+
 // What the model is shown of the block behind the session being reviewed.
 //
 // Enough to see a direction, not the whole history: a dozen sessions of
@@ -124,10 +133,12 @@ func (h *TrainingHandler) GenerateSessionFeedback(w http.ResponseWriter, r *http
 
 	answer, ok := h.ai.ask(w, r, callerID, connectionID, "session", ai.Request{
 		// Both skills: how a coach answers at all, then what a session review
-		// specifically is. Kept apart so the common half is edited once. The
-		// language follows the athlete's own comments on the sets, falling back
-		// to their configured language when they left none.
+		// specifically is. Kept apart so the common half is edited once. Last
+		// night's sleep rides along when there is a reading - it bears on the
+		// session. The language follows the athlete's own comments on the sets,
+		// falling back to their configured language when they left none.
 		System: templates.CoachSkill + "\n\n" + templates.FeedbackSkill +
+			sessionSleepBlock(h.ai.MemberSleepContext(r, assignment.UserID, locale)) +
 			"\n\n" + SessionLanguageRule(locale),
 		Messages: []models.ChatMessage{
 			{Role: models.ChatRoleUser, Message: sheet},

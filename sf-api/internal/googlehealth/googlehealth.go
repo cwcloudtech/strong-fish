@@ -488,6 +488,67 @@ func (c *Client) DailyActiveCalories(ctx context.Context, accessToken string, st
 	return days, nil
 }
 
+// sleepPointsResponse is a list of sleep stage points, each an interval in a
+// single stage.
+type sleepPointsResponse struct {
+	DataPoints []struct {
+		StartTime string `json:"startTime"`
+		EndTime   string `json:"endTime"`
+		Sleep     *struct {
+			SleepType string `json:"sleepType"`
+		} `json:"sleep"`
+	} `json:"dataPoints"`
+}
+
+// googleAwakeTypes are the sleep stages that count as awake-in-bed; OUT_OF_BED
+// is left out of the night entirely rather than drawn as an awake stretch.
+var googleAwakeTypes = map[string]bool{"AWAKE": true, "AWAKE_IN_BED": true}
+
+// LastNightSleep reads the member's most recent night from Google Health (which
+// also carries Fitbit sleep synced into it), as the stages between falling
+// asleep and waking.
+//
+// NOTE: the Google Health sleep dataType and response shape are not exercised by
+// the test account; verify the path and fields against a live account. No new
+// OAuth scope is requested here on purpose - an unrecognised scope would break
+// the whole consent screen - so if the read comes back MISSING_OAUTH_SCOPE the
+// right scope must be added deliberately.
+func (c *Client) LastNightSleep(ctx context.Context, accessToken string) (devicelink.SleepNight, error) {
+	now := time.Now().UTC()
+	// Reach back about thirty hours: enough to hold last night whenever it was
+	// slept, not so far that an earlier night is caught too.
+	start := now.Add(-30 * time.Hour)
+	body := map[string]any{
+		"timeRange": map[string]string{
+			"startTime": start.Format(time.RFC3339),
+			"endTime":   now.Format(time.RFC3339),
+		},
+	}
+
+	var parsed sleepPointsResponse
+	if err := c.call(ctx, http.MethodPost,
+		"/v4/users/me/dataTypes/sleep/dataPoints:query", accessToken, body, &parsed); err != nil {
+		return devicelink.SleepNight{}, err
+	}
+
+	var segments []devicelink.SleepSegment
+	for _, point := range parsed.DataPoints {
+		if point.Sleep == nil || point.Sleep.SleepType == "OUT_OF_BED" {
+			continue
+		}
+		startAt, err1 := time.Parse(time.RFC3339, point.StartTime)
+		endAt, err2 := time.Parse(time.RFC3339, point.EndTime)
+		if err1 != nil || err2 != nil || !endAt.After(startAt) {
+			continue
+		}
+		segments = append(segments, devicelink.SleepSegment{
+			Start: startAt.UTC(), End: endAt.UTC(),
+			Awake: googleAwakeTypes[point.Sleep.SleepType],
+		})
+	}
+	return devicelink.SleepFromSegments(segments), nil
+}
+
 type apiError struct {
 	Error struct {
 		Code    int    `json:"code"`

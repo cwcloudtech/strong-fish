@@ -114,6 +114,10 @@ export const devices = {
   // panel is "where am I now".
   bodyComposition: (provider, userId) =>
     body(client.get(`${deviceBase(userId)}/${provider}/body-composition`)),
+  // Last night's sleep from the chosen provider: the good/fair/poor read and the
+  // asleep/awake stretches the chart draws.
+  sleep: (provider, userId) =>
+    body(client.get(`${deviceBase(userId)}/${provider}/sleep`)),
   // Logged energy and protein from a food diary (Yazio, MyFitnessPal), over the
   // same named windows the steps use. The response carries the daily averages
   // and the member's targets alongside the per-day series.

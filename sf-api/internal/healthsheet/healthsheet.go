@@ -78,7 +78,8 @@ func Sections(steps models.StepSeries, heart *models.HeartSeries,
 // or maintain.
 func AllSections(steps models.StepSeries, heart *models.HeartSeries,
 	nutrition *models.NutritionSeries, targets *models.NutritionTargets,
-	body *models.BodyComposition, barSets []models.BarSet, locale, metric string) []programsheet.Section {
+	body *models.BodyComposition, sleep *models.SleepNight, barSets []models.BarSet,
+	locale, metric string) []programsheet.Section {
 	var sections []programsheet.Section
 	if len(steps.Days) > 0 {
 		sections = append(sections, StepsSection(steps, locale))
@@ -90,8 +91,55 @@ func AllSections(steps models.StepSeries, heart *models.HeartSeries,
 	if body != nil && len(body.Measures) > 0 {
 		sections = append(sections, BodySection(*body, locale))
 	}
+	// After body composition and nutrition, before bar speed: last night.
+	if sleep != nil && sleep.Recorded() {
+		sections = append(sections, SleepSection(*sleep, locale))
+	}
 	sections = append(sections, BarSpeedSections(barSets, locale, metric)...)
 	return sections
+}
+
+// Sleep chart colours: indigo for a stretch asleep, amber for one awake in bed.
+var (
+	sleepAsleepColor = color.RGBA{79, 70, 229, 255}  // indigo
+	sleepAwakeColor  = color.RGBA{245, 158, 11, 255} // amber
+)
+
+// SleepSection draws last night as twelve hourly bars from 21:00 to 09:00: each
+// hour's bar is as tall as the minutes asleep in it and indigo, or - for an hour
+// spent awake in bed - amber, so the shape of the night reads at a glance. The
+// heading carries the total slept and the good/fair/poor status.
+func SleepSection(night models.SleepNight, locale string) programsheet.Section {
+	chart := &programsheet.Chart{
+		Legend: []programsheet.LegendEntry{
+			{Label: programsheet.Heading(locale, "sleepAsleep"), Color: sleepAsleepColor},
+			{Label: programsheet.Heading(locale, "sleepAwake"), Color: sleepAwakeColor},
+		},
+	}
+	for _, hour := range night.Hours() {
+		bar := programsheet.Bar{Label: fmt.Sprintf("%02dh", hour.Hour)}
+		switch {
+		case hour.AsleepMin > 0:
+			bar.Value = float64(hour.AsleepMin)
+			bar.Color = sleepAsleepColor
+		case hour.InBedMin > 0:
+			bar.Value = float64(hour.InBedMin)
+			bar.Color = sleepAwakeColor
+		}
+		chart.Bars = append(chart.Bars, bar)
+	}
+	return programsheet.Section{Heading: sleepHeading(night, locale), Chart: chart}
+}
+
+// sleepHeading names the section: "Sleep - 7h12 (good)".
+func sleepHeading(night models.SleepNight, locale string) string {
+	status := programsheet.Heading(locale, "sleepStatus."+night.Status())
+	return fmt.Sprintf(programsheet.Heading(locale, "sleepTitle"), formatSleepDuration(night.AsleepMin), status)
+}
+
+// formatSleepDuration writes minutes as "7h12".
+func formatSleepDuration(minutes int) string {
+	return fmt.Sprintf("%dh%02d", minutes/60, minutes%60)
 }
 
 // StepsSection is a histogram of the range, a bar a day coloured by its band.

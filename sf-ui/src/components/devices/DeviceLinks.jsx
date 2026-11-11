@@ -197,6 +197,7 @@ export default function DeviceLinks({ userId, canGenerate = true }) {
 
   const activitySource = connections.find((connection) => connection.activitySource)?.provider;
   const nutritionSource = connections.find((connection) => connection.nutritionSource)?.provider;
+  const sleepSource = connections.find((connection) => connection.sleepSource)?.provider;
   // Whether there is anything to put in a document: steps, a scale reading, a
   // food diary or a tracked set. The one export button appears only when at
   // least one of them is connected.
@@ -270,6 +271,11 @@ export default function DeviceLinks({ userId, canGenerate = true }) {
           targets. Rendered once - the panel loads the targets itself even when
           no food app is connected, so a member still sees what to aim for. */}
       <NutritionPanel provider={nutritionSource} range={range} onRange={setRange} userId={member} />
+
+      {/* Last night's sleep, after the body and nutrition data and before the
+          bar speed: the good/fair/poor read and the asleep/awake chart, from the
+          one source the server picked. */}
+      {sleepSource ? <SleepPanel provider={sleepSource} userId={member} /> : null}
 
       {/* Bar speed, once and consolidated. Self only: it reads the viewer's own
           last sets, and there is no per-member bar-speed read - the athlete's
@@ -810,6 +816,175 @@ function kcalTone(kcal, maintenance) {
  * there is always something to aim for. A missing height is a prompt, not a
  * blank: the one field that unlocks the rest.
  */
+// --- sleep ---
+
+/** good/fair/poor from minutes asleep, the same thresholds the API uses. */
+function sleepStatus(asleepMin) {
+  if (asleepMin >= 7 * 60) return "good";
+  if (asleepMin >= 6 * 60) return "fair";
+  return "poor";
+}
+
+/** Minutes as "7h12". */
+function formatSleepHM(minutes) {
+  return `${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, "0")}`;
+}
+
+function overlapMinutes(a1, a2, b1, b2) {
+  const start = Math.max(a1, b1);
+  const end = Math.min(a2, b2);
+  return end > start ? Math.round((end - start) / 60000) : 0;
+}
+
+/**
+ * The twelve one-hour buckets from 21:00 to 09:00, each with minutes in bed and
+ * asleep - the chart, mirrored from the API's own breakdown. Bucketed in UTC,
+ * which is how the providers report the times.
+ */
+function sleepHours(night) {
+  const start = Date.parse(night.start);
+  const end = Date.parse(night.end);
+  if (!start || !end || end <= start) return [];
+  const asleepSpans = (night.segments || [])
+    .filter((segment) => !segment.awake)
+    .map((segment) => [Date.parse(segment.start), Date.parse(segment.end)]);
+
+  const bed = new Date(start);
+  let evening = Date.UTC(bed.getUTCFullYear(), bed.getUTCMonth(), bed.getUTCDate(), 21, 0, 0);
+  if (bed.getUTCHours() < 21) evening -= 24 * 3600 * 1000;
+
+  const hours = [];
+  for (let h = 0; h < 12; h += 1) {
+    const bucketStart = evening + h * 3600 * 1000;
+    const bucketEnd = bucketStart + 3600 * 1000;
+    const inBedMin = overlapMinutes(start, end, bucketStart, bucketEnd);
+    let asleepMin = 0;
+    asleepSpans.forEach(([s, e]) => {
+      asleepMin += overlapMinutes(s, e, bucketStart, bucketEnd);
+    });
+    hours.push({ hour: (21 + h) % 24, inBedMin, asleepMin: Math.min(asleepMin, inBedMin) });
+  }
+  return hours;
+}
+
+const SLEEP_ASLEEP_INK = "#4f46e5";
+const SLEEP_AWAKE_INK = "#f59e0b";
+
+/**
+ * Last night, from the one connected provider the server picked (a watch's
+ * before a scale's): the good/fair/poor read, the hours slept, and a bar an hour
+ * from 21:00 to 09:00 - indigo for asleep, amber for awake in bed.
+ */
+function SleepPanel({ provider, userId }) {
+  const { t } = useI18n();
+  const reauthToast = useReauthToast();
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await devicesApi.sleep(provider, userId));
+    } catch (err) {
+      setError(err);
+      setData(null);
+      if (isReauthorizeError(err)) reauthToast(provider);
+    } finally {
+      setLoading(false);
+    }
+  }, [provider, userId, reauthToast]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const recorded = data && data.date && data.asleepMin > 0;
+  const status = recorded ? sleepStatus(data.asleepMin) : null;
+  const hours = recorded ? sleepHours(data) : [];
+  const peak = Math.max(60, ...hours.map((h) => Math.max(h.asleepMin, h.inBedMin)));
+
+  return (
+    <div style={{ marginTop: "1rem" }}>
+      <div className="sf-row" style={{ gap: "0.4rem", alignItems: "center" }}>
+        <strong>{t("devices.sleep.title")}</strong>
+        {status ? (
+          <span className={`sf-badge sf-sleep-${status}`}>{t(`devices.sleep.status.${status}`)}</span>
+        ) : null}
+        <button
+          className="sf-button sf-button-ghost sf-button-sm"
+          onClick={load}
+          disabled={loading}
+          aria-label={t("common.refresh")}
+          title={t("common.refresh")}
+        >
+          <FiRefreshCw />
+        </button>
+      </div>
+
+      <ErrorMessage error={error} />
+      {loading && !data ? <Spinner /> : null}
+      {data && !recorded ? <p className="sf-muted">{t("devices.sleep.empty")}</p> : null}
+
+      {recorded ? (
+        <>
+          <div className="sf-muted" style={{ fontSize: "0.85rem", marginTop: "0.2rem" }}>
+            {t("devices.sleep.summary", {
+              asleep: formatSleepHM(data.asleepMin),
+              awake: formatSleepHM(data.awakeMin || 0),
+            })}
+            {" · "}
+            {barSpeedSource(t, data.provider)}
+          </div>
+
+          <div
+            aria-hidden="true"
+            style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "72px", marginTop: "0.5rem" }}
+          >
+            {hours.map((hour, index) => {
+              const asleep = hour.asleepMin > 0;
+              const value = asleep ? hour.asleepMin : hour.inBedMin;
+              const ink = asleep ? SLEEP_ASLEEP_INK : hour.inBedMin > 0 ? SLEEP_AWAKE_INK : "transparent";
+              return (
+                <div
+                  key={index}
+                  style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%", justifyContent: "flex-end" }}
+                  title={`${String(hour.hour).padStart(2, "0")}h`}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: `${Math.round((value / peak) * 100)}%`,
+                      background: ink,
+                      borderRadius: "2px 2px 0 0",
+                      minHeight: value > 0 ? "2px" : 0,
+                    }}
+                  />
+                  <span className="sf-muted" style={{ fontSize: "0.6rem", marginTop: "2px" }}>
+                    {String(hour.hour).padStart(2, "0")}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="sf-row" style={{ gap: "1rem", marginTop: "0.3rem" }}>
+            <span className="sf-muted" style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem" }}>
+              <i style={{ background: SLEEP_ASLEEP_INK, width: 10, height: 10, display: "inline-block", borderRadius: 2 }} />
+              {t("devices.sleep.asleep")}
+            </span>
+            <span className="sf-muted" style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.8rem" }}>
+              <i style={{ background: SLEEP_AWAKE_INK, width: 10, height: 10, display: "inline-block", borderRadius: 2 }} />
+              {t("devices.sleep.awake")}
+            </span>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 function NutritionPanel({ provider, range, onRange, userId }) {
   const { t } = useI18n();
   const reauthToast = useReauthToast();

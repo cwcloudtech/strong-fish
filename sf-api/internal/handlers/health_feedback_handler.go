@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -200,7 +201,7 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 	// bar-speed charts - not just the activity numbers.
 	sections := healthsheet.AllSections(steps, heart,
 		h.exportNutrition(r, userID, days), h.computeTargets(r, userID),
-		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale, models.EffortMetricRPE)
+		h.exportBodyComposition(r, userID), h.exportSleep(r, userID), h.BarSpeedSets(r, userID), locale, models.EffortMetricRPE)
 	sheet := programmd.RenderTables(
 		healthsheet.Title(h.memberName(r.Context(), userID), locale),
 		healthsheet.Subtitle(steps, heart, locale),
@@ -284,7 +285,7 @@ func (h *DeviceHandler) FitnessContext(r *http.Request, userID, locale string) s
 
 	sections := healthsheet.AllSections(steps, heart,
 		h.exportNutrition(r, userID, nutritionContextDays), h.computeTargets(r, userID),
-		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale, models.EffortMetricRPE)
+		h.exportBodyComposition(r, userID), h.exportSleep(r, userID), h.BarSpeedSets(r, userID), locale, models.EffortMetricRPE)
 	if len(sections) == 0 {
 		return ""
 	}
@@ -296,4 +297,22 @@ func (h *DeviceHandler) FitnessContext(r *http.Request, userID, locale string) s
 		subtitle = healthsheet.Subtitle(steps, heart, locale)
 	}
 	return programmd.RenderTables("", subtitle, sections, "")
+}
+
+// SleepContext is last night's sleep on its own, for an AI reading that is not
+// the whole fitness page - a session review, where how the athlete slept bears
+// on the session but their steps and body fat do not. A short line, or "" when
+// there is no recent night to read.
+func (h *DeviceHandler) SleepContext(r *http.Request, userID, locale string) string {
+	night := h.exportSleep(r, userID)
+	if night == nil || !night.Recorded() {
+		return ""
+	}
+	return fmt.Sprintf("## Last night's sleep\n\n%s asleep (%s), %s awake, from %s.",
+		formatSleepHM(night.AsleepMin), night.Status(), formatSleepHM(night.AwakeMin), night.Provider)
+}
+
+// formatSleepHM writes minutes as "7h12".
+func formatSleepHM(minutes int) string {
+	return fmt.Sprintf("%dh%02d", minutes/60, minutes%60)
 }

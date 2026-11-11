@@ -193,6 +193,8 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	source := devicelink.ActivitySource(h.providers, linked)
 	bodySource := devicelink.BodyCompositionSource(h.providers, linked)
+	nutritionSource := devicelink.NutritionSource(h.providers, linked)
+	sleepSource := devicelink.SleepSource(h.providers, linked)
 
 	results := make([]models.DeviceConnection, 0, len(h.providers))
 	for _, provider := range h.providers {
@@ -203,6 +205,8 @@ func (h *DeviceHandler) List(w http.ResponseWriter, r *http.Request) {
 			Capabilities:          devicelink.Capabilities(provider),
 			ActivitySource:        provider.Name() == source,
 			BodyCompositionSource: provider.Name() == bodySource,
+			NutritionSource:       provider.Name() == nutritionSource,
+			SleepSource:           provider.Name() == sleepSource,
 		}
 		if _, ok := provider.(devicelink.AccountPairer); ok {
 			connection.AccountPaired = true
@@ -569,7 +573,8 @@ func (h *DeviceHandler) Export(w http.ResponseWriter, r *http.Request) {
 
 	sections := healthsheet.AllSections(steps, heart,
 		h.exportNutrition(r, userID, exportRangeDays(r)), h.computeTargets(r, userID),
-		h.exportBodyComposition(r, userID), h.BarSpeedSets(r, userID), locale,
+		h.exportBodyComposition(r, userID), h.exportSleep(r, userID),
+		h.BarSpeedSets(r, userID), locale,
 		h.effortMetric(r.Context(), userID))
 	// The AI's reading of the same data, last, when it was asked recently
 	// enough to be about this sheet - from whichever provider it was generated
@@ -806,6 +811,114 @@ func (h *DeviceHandler) exportBodyComposition(r *http.Request, userID string) *m
 	}
 	result := bodyComposition(name, measures)
 	return &result
+}
+
+// Sleep returns the member's last night from one provider: the good/fair/poor
+// read and the stretches the chart draws.
+func (h *DeviceHandler) Sleep(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
+	found, ok := h.provider(w, r)
+	if !ok {
+		return
+	}
+	reader, ok := found.(devicelink.SleepReader)
+	if !ok {
+		writeError(w, http.StatusNotFound, "This provider has no sleep data", CodeNotFound)
+		return
+	}
+	if !found.Enabled() {
+		writeError(w, http.StatusNotImplemented,
+			"This integration is not enabled on this server", CodeDeviceUnavailable)
+		return
+	}
+	link, err := h.links.Find(r.Context(), userID, found.Name())
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "No account connected", CodeDeviceNotConnected)
+			return
+		}
+		writeStoreError(w, err)
+		return
+	}
+	accessToken, err := h.freshToken(r, found, link)
+	if err != nil {
+		h.writeProviderError(w, err, found.Name())
+		return
+	}
+	night, err := reader.LastNightSleep(r.Context(), accessToken)
+	if err != nil {
+		h.writeProviderError(w, err, found.Name())
+		return
+	}
+	writeJSON(w, http.StatusOK, sleepNight(found.Name(), night))
+}
+
+// sleepNight maps a provider's night into the shape the clients and the export
+// read.
+func sleepNight(provider string, night devicelink.SleepNight) models.SleepNight {
+	out := models.SleepNight{
+		Provider:  provider,
+		Date:      night.Date,
+		Start:     night.Start,
+		End:       night.End,
+		AsleepMin: night.AsleepMin,
+		AwakeMin:  night.AwakeMin,
+	}
+	for _, segment := range night.Segments {
+		out.Segments = append(out.Segments, models.SleepSegment{
+			Start: segment.Start, End: segment.End, Awake: segment.Awake,
+		})
+	}
+	return out
+}
+
+// exportSleep is last night for an export or an AI reading, from the one source
+// the screen shows too - SleepSources' priority (Google Health/Fitbit, Garmin,
+// then Withings). Optional, like the rest: a tracker that will not answer must
+// not cost the member the document. The sources are tried in order, so a first
+// one with nothing recent falls through to the next.
+func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.SleepNight {
+	connected, err := h.links.ListProviders(r.Context(), userID)
+	if err != nil {
+		return nil
+	}
+	linked := map[string]bool{}
+	for _, name := range connected {
+		linked[name] = true
+	}
+	for _, name := range devicelink.SleepSources(h.providers, linked) {
+		found, ok := devicelink.Find(h.providers, name)
+		if !ok {
+			continue
+		}
+		reader, ok := found.(devicelink.SleepReader)
+		if !ok {
+			continue
+		}
+		link, err := h.links.Find(r.Context(), userID, name)
+		if err != nil {
+			continue
+		}
+		accessToken, err := h.freshToken(r, found, link)
+		if err != nil {
+			slog.Warn("health export: sleep unavailable", "provider", name, "error", err)
+			continue
+		}
+		night, err := reader.LastNightSleep(r.Context(), accessToken)
+		if err != nil {
+			slog.Warn("health export: sleep unavailable", "provider", name, "error", err)
+			continue
+		}
+		if night.Date == "" {
+			continue
+		}
+		result := sleepNight(name, night)
+		return &result
+	}
+	return nil
 }
 
 // readable resolves everything a read of a member's data needs: the provider,

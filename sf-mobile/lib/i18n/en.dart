@@ -736,6 +736,18 @@ const Map<String, dynamic> en = {
     'export': 'Export this view',
     'bpm': 'bpm',
     'activityFrom': 'Steps and heart rate are shown from {{provider}}.',
+    'sleep': {
+      'title': 'Sleep',
+      'empty': 'No sleep recorded last night.',
+      'summary': '{{asleep}} asleep · {{awake}} awake',
+      'asleep': 'Asleep',
+      'awake': 'Awake',
+      'status': {
+        'good': 'good',
+        'fair': 'fair',
+        'poor': 'poor',
+      },
+    },
     'bodyComposition': {
       'title': 'Body composition',
       'empty': 'No measurement from your scale yet.',

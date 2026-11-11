@@ -479,6 +479,50 @@ func (c *Client) LatestBodyComposition(ctx context.Context, accessToken string) 
 	return results, nil
 }
 
+// sleepBody is Withings' /v2/sleep action=get response: the night as a run of
+// stages. state 0 is awake; 1 light, 2 deep, 3 REM are all asleep.
+type sleepBody struct {
+	Series []struct {
+		StartDate int64 `json:"startdate"`
+		EndDate   int64 `json:"enddate"`
+		State     int   `json:"state"`
+	} `json:"series"`
+}
+
+// LastNightSleep reads the member's most recent night from a Withings sleep
+// tracker (a Sleep Analyzer, or a watch), as the stages between falling asleep
+// and waking. Covered by the user.activity scope the integration already asks
+// for.
+func (c *Client) LastNightSleep(ctx context.Context, accessToken string) (devicelink.SleepNight, error) {
+	now := time.Now().UTC()
+	// From yesterday noon to now: wide enough to hold one night whenever it was
+	// slept, narrow enough that it is only the last one.
+	start := time.Date(now.Year(), now.Month(), now.Day(), 12, 0, 0, 0, time.UTC).AddDate(0, 0, -1)
+	form := url.Values{
+		"action":    {"get"},
+		"startdate": {strconv.FormatInt(start.Unix(), 10)},
+		"enddate":   {strconv.FormatInt(now.Unix(), 10)},
+	}
+
+	var parsed sleepBody
+	if err := c.call(ctx, "/v2/sleep", accessToken, form, &parsed); err != nil {
+		return devicelink.SleepNight{}, err
+	}
+
+	segments := make([]devicelink.SleepSegment, 0, len(parsed.Series))
+	for _, stage := range parsed.Series {
+		if stage.EndDate <= stage.StartDate {
+			continue
+		}
+		segments = append(segments, devicelink.SleepSegment{
+			Start: time.Unix(stage.StartDate, 0).UTC(),
+			End:   time.Unix(stage.EndDate, 0).UTC(),
+			Awake: stage.State == 0,
+		})
+	}
+	return devicelink.SleepFromSegments(segments), nil
+}
+
 type measureBody struct {
 	MeasureGroups []struct {
 		Date     int64 `json:"date"`

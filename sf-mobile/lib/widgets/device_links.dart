@@ -246,9 +246,11 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
     if (connections == null || connections.isEmpty) return const SizedBox.shrink();
     String? activitySource;
     String? nutritionSource;
+    String? sleepSource;
     for (final connection in connections) {
       if (connection.activitySource) activitySource = connection.provider;
       if (connection.nutritionSource) nutritionSource = connection.provider;
+      if (connection.sleepSource) sleepSource = connection.provider;
     }
     // Whether there is anything to put in a document: steps, a scale reading, a
     // food diary or a tracked set. The one export button appears only when at
@@ -319,6 +321,10 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
             onRange: (value) => setState(() => _range = value),
             userId: _member,
           ),
+          // Last night's sleep, after the body and nutrition data and before the
+          // bar speed: the good/fair/poor read and the asleep/awake chart, from
+          // the one source the server picked.
+          if (sleepSource != null) _SleepPanel(provider: sleepSource, userId: _member),
           // Bar speed, once and consolidated. Self only: it reads the viewer's
           // own last sets, and there is no per-member bar-speed read - the
           // athlete's bar speed still rides along in the export and AI reading.
@@ -1070,6 +1076,183 @@ Color _kcalTone(BuildContext context, double kcal, double maintenance) {
   if (kcal < maintenance * 0.92) return _nutDeficitColor;
   if (kcal > maintenance * 1.08) return colors.warning;
   return colors.success;
+}
+
+const _sleepAsleepInk = Color(0xFF4F46E5);
+const _sleepAwakeInk = Color(0xFFF59E0B);
+
+String _sleepHM(int minutes) => '${minutes ~/ 60}h${(minutes % 60).toString().padLeft(2, '0')}';
+
+/// Last night, from the one connected provider the server picked: the
+/// good/fair/poor read, the hours slept, and a bar an hour from 21:00 to 09:00 -
+/// indigo for asleep, amber for awake in bed.
+class _SleepPanel extends ConsumerStatefulWidget {
+  final String provider;
+  final String userId;
+  const _SleepPanel({required this.provider, this.userId = ''});
+
+  @override
+  ConsumerState<_SleepPanel> createState() => _SleepPanelState();
+}
+
+class _SleepPanelState extends ConsumerState<_SleepPanel> {
+  SleepNight? _night;
+  String _error = '';
+  Object? _errorRaw;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(_SleepPanel old) {
+    super.didUpdateWidget(old);
+    if (old.userId != widget.userId || old.provider != widget.provider) _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+    try {
+      final night = await ref.read(apiProvider).deviceSleep(widget.provider, userId: widget.userId);
+      if (mounted) setState(() => _night = night);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _night = null;
+          _errorRaw = error;
+          _error = ref.read(tErrorProvider)(error);
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'good':
+        return const Color(0xFF16A34A);
+      case 'fair':
+        return _sleepAwakeInk;
+      default:
+        return const Color(0xFFDC2626);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(tProvider);
+    final night = _night;
+    final small = Theme.of(context).textTheme.bodySmall;
+    final recorded = night != null && night.recorded;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 14),
+      Row(children: [
+        Expanded(
+          child: Text(t('devices.sleep.title'), style: const TextStyle(fontWeight: FontWeight.w600)),
+        ),
+        if (recorded)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Text(
+              t('devices.sleep.status.${night.status}'),
+              style: TextStyle(color: _statusColor(night.status), fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+          ),
+        IconButton(
+          onPressed: _loading ? null : _load,
+          tooltip: t('common.refresh'),
+          icon: const Icon(Icons.refresh, size: 20),
+          visualDensity: VisualDensity.compact,
+        ),
+      ]),
+      if (_loading && night == null)
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+      if (_error.isNotEmpty) _PanelError(_error, _errorRaw),
+      if (night != null && !recorded) Text(t('devices.sleep.empty'), style: small),
+      if (recorded) ...[
+        Text(
+          '${t('devices.sleep.summary', {'asleep': _sleepHM(night.asleepMin), 'awake': _sleepHM(night.awakeMin)})}'
+          ' · ${t('devices.provider.${night.provider}')}',
+          style: small,
+        ),
+        const SizedBox(height: 8),
+        _SleepChart(hours: night.hours),
+        const SizedBox(height: 6),
+        Row(children: [
+          _sleepLegend(context, _sleepAsleepInk, t('devices.sleep.asleep')),
+          const SizedBox(width: 16),
+          _sleepLegend(context, _sleepAwakeInk, t('devices.sleep.awake')),
+        ]),
+      ],
+    ]);
+  }
+}
+
+Widget _sleepLegend(BuildContext context, Color color, String label) {
+  return Row(mainAxisSize: MainAxisSize.min, children: [
+    Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+    ),
+    const SizedBox(width: 4),
+    Text(label, style: Theme.of(context).textTheme.bodySmall),
+  ]);
+}
+
+/// Twelve hourly bars from 21:00 to 09:00: each as tall as the minutes asleep in
+/// it and indigo, or - for an hour awake in bed - amber.
+class _SleepChart extends StatelessWidget {
+  final List<SleepHour> hours;
+  const _SleepChart({required this.hours});
+
+  @override
+  Widget build(BuildContext context) {
+    var peak = 60;
+    for (final hour in hours) {
+      peak = [peak, hour.asleepMin, hour.inBedMin].reduce((a, b) => a > b ? a : b);
+    }
+    final small = Theme.of(context).textTheme.bodySmall;
+    return SizedBox(
+      height: 84,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          for (final hour in hours)
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    height: (hour.asleepMin > 0 ? hour.asleepMin : hour.inBedMin) / peak * 62,
+                    margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                    decoration: BoxDecoration(
+                      color: hour.asleepMin > 0
+                          ? _sleepAsleepInk
+                          : (hour.inBedMin > 0 ? _sleepAwakeInk : Colors.transparent),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(hour.hour.toString().padLeft(2, '0'), style: small?.copyWith(fontSize: 9)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Logged nutrition and the member's daily targets.

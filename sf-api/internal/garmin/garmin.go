@@ -393,6 +393,92 @@ func (c *Client) LatestBodyComposition(ctx context.Context, accessToken string) 
 
 func round1(v float64) float64 { return float64(int64(v*10+0.5)) / 10 }
 
+// --- sleep ---
+
+// garminSleep is Connect's dailySleepData: the night summary, and the per-stage
+// levels that draw the chart.
+type garminSleep struct {
+	DailySleepDTO struct {
+		SleepTimeSeconds       *int64 `json:"sleepTimeSeconds"`
+		AwakeSleepSeconds      *int64 `json:"awakeSleepSeconds"`
+		SleepStartTimestampGMT *int64 `json:"sleepStartTimestampGMT"`
+		SleepEndTimestampGMT   *int64 `json:"sleepEndTimestampGMT"`
+	} `json:"dailySleepDTO"`
+	SleepLevels []struct {
+		StartGMT      string  `json:"startGMT"`
+		EndGMT        string  `json:"endGMT"`
+		ActivityLevel float64 `json:"activityLevel"`
+	} `json:"sleepLevels"`
+}
+
+// garminAwakeLevel is the sleepLevels activity level that marks an awake stretch
+// (deep 0, light 1, REM 2, awake 3 in Connect's coding). Totals do not depend on
+// it - they come from the summary - so if a real account codes awake
+// differently, only the chart's awake dips move.
+const garminAwakeLevel = 3
+
+// LastNightSleep reads the member's most recent night from Garmin Connect. The
+// totals (asleep, awake) come from the day summary; the chart's stretches come
+// from the per-stage levels.
+//
+// NOTE: the Connect sleep path and its stage codes are not exercised by the test
+// account, so they may need adjusting against a real Garmin once one is linked.
+func (c *Client) LastNightSleep(ctx context.Context, accessToken string) (devicelink.SleepNight, error) {
+	now := time.Now()
+	// Garmin files a night under the date it ends: try today, then yesterday.
+	for _, day := range []time.Time{now, now.AddDate(0, 0, -1)} {
+		var resp garminSleep
+		if err := c.get(ctx, accessToken, "/wellness-service/wellness/dailySleepData",
+			url.Values{"date": {day.Format("2006-01-02")}}, &resp); err != nil {
+			return devicelink.SleepNight{}, err
+		}
+		if night, ok := resp.toNight(); ok {
+			return night, nil
+		}
+	}
+	return devicelink.SleepNight{}, nil
+}
+
+func (s garminSleep) toNight() (devicelink.SleepNight, bool) {
+	dto := s.DailySleepDTO
+	if dto.SleepStartTimestampGMT == nil || dto.SleepEndTimestampGMT == nil ||
+		dto.SleepTimeSeconds == nil || *dto.SleepTimeSeconds <= 0 {
+		return devicelink.SleepNight{}, false
+	}
+	end := time.UnixMilli(*dto.SleepEndTimestampGMT).UTC()
+	night := devicelink.SleepNight{
+		Start:     time.UnixMilli(*dto.SleepStartTimestampGMT).UTC(),
+		End:       end,
+		AsleepMin: int(*dto.SleepTimeSeconds / 60),
+		Date:      end.Format("2006-01-02"),
+	}
+	if dto.AwakeSleepSeconds != nil {
+		night.AwakeMin = int(*dto.AwakeSleepSeconds / 60)
+	}
+	for _, level := range s.SleepLevels {
+		start, err1 := parseGarminSleepTime(level.StartGMT)
+		finish, err2 := parseGarminSleepTime(level.EndGMT)
+		if err1 != nil || err2 != nil || !finish.After(start) {
+			continue
+		}
+		night.Segments = append(night.Segments, devicelink.SleepSegment{
+			Start: start, End: finish, Awake: level.ActivityLevel >= garminAwakeLevel,
+		})
+	}
+	return night, true
+}
+
+// parseGarminSleepTime reads a Connect sleep-level timestamp - "2006-01-02T15:04:05.0"
+// in GMT, no zone.
+func parseGarminSleepTime(s string) (time.Time, error) {
+	for _, layout := range []string{"2006-01-02T15:04:05.0", "2006-01-02T15:04:05.000", "2006-01-02T15:04:05"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("garmin: unrecognised sleep time %q", s)
+}
+
 // --- transport ---
 
 type apiError struct {

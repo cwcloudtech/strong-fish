@@ -194,6 +194,7 @@ func main() {
 		// the member opted in - can read an athlete's health data on their profile.
 		WithRelations(profileHandler.RelationTo)
 	aiHandler.WithHealth(deviceHandler.FitnessContext)
+	aiHandler.WithSleep(deviceHandler.SleepContext)
 
 	api := router.New(router.Handlers{
 		User: handlers.NewUserHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.MaxImageSize,

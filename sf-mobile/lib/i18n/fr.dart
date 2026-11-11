@@ -736,6 +736,18 @@ const Map<String, dynamic> fr = {
     'export': 'Exporter cette vue',
     'bpm': 'bpm',
     'activityFrom': 'Les pas et la fréquence cardiaque affichés viennent de {{provider}}.',
+    'sleep': {
+      'title': 'Sommeil',
+      'empty': 'Aucun sommeil enregistré la nuit dernière.',
+      'summary': '{{asleep}} de sommeil · {{awake}} éveillé',
+      'asleep': 'Endormi',
+      'awake': 'Éveillé',
+      'status': {
+        'good': 'bon',
+        'fair': 'moyen',
+        'poor': 'mauvais',
+      },
+    },
     'bodyComposition': {
       'title': 'Composition corporelle',
       'empty': 'Aucune mesure de votre balance pour l\'instant.',

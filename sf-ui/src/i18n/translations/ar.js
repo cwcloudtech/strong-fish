@@ -716,6 +716,14 @@ const ar = {
     export: "تصدير هذه الفترة",
     bpm: "نبضة/د",
     activityFrom: "الخطوات ونبض القلب المعروضة مصدرها {{provider}}.",
+    sleep: {
+      title: "النوم",
+      empty: "لا يوجد نوم مسجّل الليلة الماضية.",
+      summary: "{{asleep}} نوم · {{awake}} استيقاظ",
+      asleep: "نائم",
+      awake: "مستيقظ",
+      status: { good: "جيد", fair: "متوسط", poor: "ضعيف" },
+    },
     bodyComposition: {
       title: "تركيب الجسم",
       empty: "لا توجد قياسات من ميزانك بعد.",
