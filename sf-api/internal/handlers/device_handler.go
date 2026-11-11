@@ -876,10 +876,10 @@ func sleepNight(provider string, night devicelink.SleepNight) models.SleepNight 
 }
 
 // exportSleep is last night for an export or an AI reading, from the one source
-// the screen shows too - SleepSources' priority (Google Health/Fitbit, Garmin,
-// then Withings). Optional, like the rest: a tracker that will not answer must
-// not cost the member the document. The sources are tried in order, so a first
-// one with nothing recent falls through to the next.
+// the screen shows too - SleepSources' priority (Google Health/Fitbit, then
+// Withings). Optional, like the rest: a tracker that will not answer must not
+// cost the member the document. The sources are tried in order, so a first one
+// with nothing recent falls through to the next.
 func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.SleepNight {
 	connected, err := h.links.ListProviders(r.Context(), userID)
 	if err != nil {
