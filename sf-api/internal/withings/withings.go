@@ -492,8 +492,10 @@ type sleepSummaryBody struct {
 			REM   int `json:"remsleepduration"`
 		} `json:"data"`
 	} `json:"series"`
-	More   int `json:"more"`
-	Offset int `json:"offset"`
+	// more is a bool on the sleep summary (it is an int on getmeas) - Withings is
+	// not consistent across endpoints, so this is read as the type it actually is.
+	More   bool `json:"more"`
+	Offset int  `json:"offset"`
 }
 
 // sleepSummaryFields is the stage durations read for each night; summed, they are
@@ -511,6 +513,17 @@ func (c *Client) SleepDays(ctx context.Context, accessToken string, start, end t
 	}
 
 	byDate := map[string]int{}
+	order := func() []devicelink.SleepDay {
+		days := []devicelink.SleepDay{}
+		for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+			key := day.Format("2006-01-02")
+			if minutes, ok := byDate[key]; ok {
+				days = append(days, devicelink.SleepDay{Date: key, AsleepMin: minutes})
+			}
+		}
+		return days
+	}
+
 	offset := 0
 	for page := 0; page < maxPages; page++ {
 		form := url.Values{
@@ -525,7 +538,9 @@ func (c *Client) SleepDays(ctx context.Context, accessToken string, start, end t
 
 		var parsed sleepSummaryBody
 		if err := c.call(ctx, "/v2/sleep", accessToken, form, &parsed); err != nil {
-			return nil, err
+			// Hand back the nights read so far with the error, so the caller can
+			// graph what there is and still report what went wrong.
+			return order(), err
 		}
 		for _, night := range parsed.Series {
 			minutes := (night.Data.Light + night.Data.Deep + night.Data.REM) / 60
@@ -538,20 +553,13 @@ func (c *Client) SleepDays(ctx context.Context, accessToken string, start, end t
 				byDate[night.Date] = minutes
 			}
 		}
-		if parsed.More == 0 || parsed.Offset == 0 {
+		if !parsed.More || parsed.Offset == 0 {
 			break
 		}
 		offset = parsed.Offset
 	}
 
-	days := []devicelink.SleepDay{}
-	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
-		key := day.Format("2006-01-02")
-		if minutes, ok := byDate[key]; ok {
-			days = append(days, devicelink.SleepDay{Date: key, AsleepMin: minutes})
-		}
-	}
-	return days, nil
+	return order(), nil
 }
 
 type measureBody struct {

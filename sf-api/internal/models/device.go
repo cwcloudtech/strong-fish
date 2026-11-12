@@ -270,6 +270,11 @@ type SleepWeek struct {
 	From string     `json:"from,omitempty"`
 	To   string     `json:"to,omitempty"`
 	Days []SleepDay `json:"days"`
+	// Error is a provider failure to log in the client console for
+	// troubleshooting. Set when the week was graphed from partial or no data
+	// despite a provider error, so one tracker's outage does not blank the panel.
+	// Empty on success.
+	Error string `json:"error,omitempty"`
 }
 
 // SleepStatusFor is the good/fair/poor read of one night, from how long was

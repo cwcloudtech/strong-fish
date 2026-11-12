@@ -862,11 +862,20 @@ func (h *DeviceHandler) Sleep(w http.ResponseWriter, r *http.Request) {
 	}
 	start, end := sleepWindow()
 	days, err := reader.SleepDays(r.Context(), accessToken, start, end)
+	week := sleepWeek(found.Name(), start, end, days)
 	if err != nil {
-		h.writeProviderError(w, err, found.Name())
-		return
+		// A grant the member must fix still flows through as its own status, so
+		// the client can prompt a reconnect. Any other upstream failure does not
+		// blank the panel: the week is graphed from whatever came back, and the
+		// error rides along in the body for the client to log for troubleshooting.
+		if errors.Is(err, devicelink.ErrReauthorize) || errors.Is(err, devicelink.ErrNotLinked) {
+			h.writeProviderError(w, err, found.Name())
+			return
+		}
+		slog.Error("device sleep read failed; graphing what there is", "provider", found.Name(), "error", err)
+		week.Error = err.Error()
 	}
-	writeJSON(w, http.StatusOK, sleepWeek(found.Name(), start, end, days))
+	writeJSON(w, http.StatusOK, week)
 }
 
 // sleepWeek maps a provider's nights into the week the clients and the export
@@ -927,8 +936,9 @@ func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.Slee
 		}
 		days, err := reader.SleepDays(r.Context(), accessToken, start, end)
 		if err != nil {
-			slog.Warn("health export: sleep unavailable", "provider", name, "error", err)
-			continue
+			// Not fatal: graph whatever nights came back and read on. Only a
+			// source with nothing at all falls through to the next.
+			slog.Warn("health export: sleep partial/unavailable", "provider", name, "error", err)
 		}
 		week := sleepWeek(name, start, end, days)
 		if !week.Recorded() {

@@ -854,8 +854,13 @@ function SleepPanel({ provider, userId }) {
     setLoading(true);
     setError(null);
     try {
-      setData(await devicesApi.sleep(provider, userId));
+      const week = await devicesApi.sleep(provider, userId);
+      // A provider error the server graphed around: log it for troubleshooting,
+      // but still show the chart from whatever nights came back.
+      if (week && week.error) console.error(`[sleep:${provider}]`, week.error);
+      setData(week);
     } catch (err) {
+      console.error(`[sleep:${provider}]`, err);
       setError(err);
       setData(null);
       if (isReauthorizeError(err)) reauthToast(provider);

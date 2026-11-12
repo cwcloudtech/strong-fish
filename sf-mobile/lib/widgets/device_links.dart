@@ -1165,8 +1165,12 @@ class _SleepPanelState extends ConsumerState<_SleepPanel> {
     });
     try {
       final week = await ref.read(apiProvider).deviceSleep(widget.provider, userId: widget.userId);
+      // A provider error the server graphed around: log it for troubleshooting,
+      // but still show the chart from whatever nights came back.
+      if (week.error.isNotEmpty) debugPrint('[sleep:${widget.provider}] ${week.error}');
       if (mounted) setState(() => _week = week);
     } catch (error) {
+      debugPrint('[sleep:${widget.provider}] $error');
       if (mounted) {
         setState(() {
           _week = null;

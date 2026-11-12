@@ -388,10 +388,15 @@ class SleepDay {
 class SleepWeek {
   final String provider;
   final List<SleepDay> days;
-  const SleepWeek({this.provider = '', this.days = const []});
+
+  /// A provider failure to log for troubleshooting, set when the week was graphed
+  /// from partial or no data anyway. Empty on success.
+  final String error;
+  const SleepWeek({this.provider = '', this.days = const [], this.error = ''});
 
   factory SleepWeek.fromJson(Map<String, dynamic> json) => SleepWeek(
         provider: _toString(json['provider']),
+        error: _toString(json['error']),
         days: json['days'] is List
             ? (json['days'] as List)
                 .map((item) => SleepDay.fromJson(item as Map<String, dynamic>))

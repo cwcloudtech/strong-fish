@@ -136,6 +136,44 @@ func TestExpiredTokenAsksToReconnect(t *testing.T) {
 	}
 }
 
+// The sleep summary carries `more` as a bool (getmeas carries it as an int):
+// reading it as an int once turned a good response into a 502. This pins the
+// shape, and that a night's asleep minutes are light+deep+rem over 60.
+func TestSleepDaysParsesSummary(t *testing.T) {
+	client := stub(t, func(action string, w http.ResponseWriter, r *http.Request) {
+		if action != "getsummary" {
+			t.Errorf("unexpected action %q", action)
+		}
+		// 3h light + 1h30 deep + 1h REM = 5h30 = 330 min, poor.
+		fmt.Fprint(w, `{"status":0,"body":{"series":[{"date":"2026-11-10","data":{"lightsleepduration":10800,"deepsleepduration":5400,"remsleepduration":3600}}],"more":false,"offset":0}}`)
+	})
+
+	end := time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC)
+	days, err := client.SleepDays(context.Background(), "token", end.AddDate(0, 0, -6), end)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(days) != 1 || days[0].Date != "2026-11-10" || days[0].AsleepMin != 330 {
+		t.Fatalf("unexpected sleep days: %+v", days)
+	}
+}
+
+// A provider error partway through does not throw away the nights already read:
+// they come back with the error, so the caller can graph what there is.
+func TestSleepDaysReturnsPartialOnError(t *testing.T) {
+	client := stub(t, func(_ string, w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"status":503,"error":"temporary"}`)
+	})
+	days, err := client.SleepDays(context.Background(), "token",
+		time.Date(2026, 11, 6, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC))
+	if err == nil {
+		t.Fatal("expected the provider error to be reported")
+	}
+	if days == nil {
+		t.Fatal("expected a (possibly empty) slice, not nil, so the caller can graph it")
+	}
+}
+
 func TestActivitySourcePrefersRegistrationOrder(t *testing.T) {
 	google := fakeActivity{name: "google-health"}
 	scale := New(Config{ClientID: "id", ClientSecret: "secret"})
