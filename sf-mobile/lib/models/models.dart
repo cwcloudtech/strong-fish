@@ -383,8 +383,23 @@ class SleepDay {
       );
 }
 
-/// The last seven nights from one provider - a bar a night read good/fair/poor,
-/// the way the step and nutrition charts show a week rather than one reading.
+/// One sleep source that could not be read: the provider and a short reason, for
+/// the debug console, so a missing week can be told from a tracker that needs
+/// reconnecting.
+class SleepIssue {
+  final String provider;
+  final String error;
+  const SleepIssue({this.provider = '', this.error = ''});
+
+  factory SleepIssue.fromJson(Map<String, dynamic> json) => SleepIssue(
+        provider: _toString(json['provider']),
+        error: _toString(json['error']),
+      );
+}
+
+/// The last seven nights from the best connected tracker - a bar a night read
+/// good/fair/poor, the way the step and nutrition charts show a week rather than
+/// one reading.
 class SleepWeek {
   final String provider;
   final List<SleepDay> days;
@@ -392,7 +407,12 @@ class SleepWeek {
   /// A provider failure to log for troubleshooting, set when the week was graphed
   /// from partial or no data anyway. Empty on success.
   final String error;
-  const SleepWeek({this.provider = '', this.days = const [], this.error = ''});
+
+  /// The sources tried that errored or had nothing, for the debug console: the
+  /// panel shows the first source with a night, and these are the rest.
+  final List<SleepIssue> issues;
+  const SleepWeek(
+      {this.provider = '', this.days = const [], this.error = '', this.issues = const []});
 
   factory SleepWeek.fromJson(Map<String, dynamic> json) => SleepWeek(
         provider: _toString(json['provider']),
@@ -400,6 +420,11 @@ class SleepWeek {
         days: json['days'] is List
             ? (json['days'] as List)
                 .map((item) => SleepDay.fromJson(item as Map<String, dynamic>))
+                .toList()
+            : const [],
+        issues: json['issues'] is List
+            ? (json['issues'] as List)
+                .map((item) => SleepIssue.fromJson(item as Map<String, dynamic>))
                 .toList()
             : const [],
       );

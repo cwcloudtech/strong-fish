@@ -501,7 +501,12 @@ type sleepListResponse struct {
 	DataPoints []struct {
 		Sleep *struct {
 			Interval struct {
-				EndTime      string        `json:"endTime"`
+				EndTime string `json:"endTime"`
+				// EndUtcOffset is the member's offset from UTC at wake, like
+				// "-14400s". The list response carries it; civilEndTime is a
+				// filter field and is not guaranteed in the body, so the morning
+				// is derived from endTime shifted by this offset.
+				EndUtcOffset string        `json:"endUtcOffset"`
 				CivilEndTime civilDateTime `json:"civilEndTime"`
 			} `json:"interval"`
 			Stages []struct {
@@ -533,10 +538,15 @@ func (c *Client) SleepDays(ctx context.Context, accessToken string, start, end t
 		return nil, nil
 	}
 
-	// A night ending on or after the first morning asked for. The filter is on
-	// civil (local) end time, the same clock the mornings are counted in.
-	filter := fmt.Sprintf(`sleep.interval.civil_end_time >= "%s"`, start.Format("2006-01-02"))
-	path := "/v4/users/me/dataTypes/sleep/dataPoints?pageSize=100&filter=" + url.QueryEscape(filter)
+	// A night ending in the window, by civil (local) end time - the same clock
+	// the mornings are counted in. Bounded on both ends: the exclusive upper
+	// bound is the morning after the last, so a nap logged tomorrow is not
+	// pulled in. pageSize is 25 because that is the maximum the API allows for
+	// sleep (asking for more is an INVALID_ARGUMENT); a week of nights fits well
+	// inside it, so there is nothing to page.
+	filter := fmt.Sprintf(`sleep.interval.civil_end_time >= "%s" AND sleep.interval.civil_end_time < "%s"`,
+		start.Format("2006-01-02"), end.AddDate(0, 0, 1).Format("2006-01-02"))
+	path := "/v4/users/me/dataTypes/sleep/dataPoints?pageSize=25&filter=" + url.QueryEscape(filter)
 
 	var parsed sleepListResponse
 	if err := c.call(ctx, http.MethodGet, path, accessToken, nil, &parsed); err != nil {
@@ -563,10 +573,10 @@ func (c *Client) SleepDays(ctx context.Context, accessToken string, start, end t
 		}
 		date := civilDateKey(point.Sleep.Interval.CivilEndTime.Date)
 		if date == "" {
-			// No civil end time: fall back to the UTC end timestamp's date.
-			if when, e := time.Parse(time.RFC3339, point.Sleep.Interval.EndTime); e == nil {
-				date = when.Format("2006-01-02")
-			}
+			// No civil end time in the body (it is a filter field, not a
+			// guaranteed response one): key the night by the local morning, from
+			// the UTC end instant shifted by the member's own offset.
+			date = localEndDate(point.Sleep.Interval.EndTime, point.Sleep.Interval.EndUtcOffset)
 		}
 		if date == "" {
 			continue
@@ -586,6 +596,35 @@ func (c *Client) SleepDays(ctx context.Context, accessToken string, start, end t
 		}
 	}
 	return days, nil
+}
+
+// localEndDate is the local morning a night ended on: the UTC end instant
+// shifted by the member's own offset from UTC (endUtcOffset, like "-14400s"),
+// so a night that ends after midnight UTC is still keyed by the day they woke
+// in their own timezone. Falls back to the end timestamp's own date when the
+// offset is absent, and to blank when the timestamp will not parse.
+func localEndDate(endTime, endUtcOffset string) string {
+	when, err := time.Parse(time.RFC3339, endTime)
+	if err != nil {
+		return ""
+	}
+	if secs, ok := offsetSeconds(endUtcOffset); ok {
+		return when.UTC().Add(time.Duration(secs) * time.Second).Format("2006-01-02")
+	}
+	return when.Format("2006-01-02")
+}
+
+// offsetSeconds reads Google's "-14400s" UTC-offset form into seconds.
+func offsetSeconds(s string) (int, bool) {
+	s = strings.TrimSuffix(strings.TrimSpace(s), "s")
+	if s == "" {
+		return 0, false
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
 }
 
 // civilDateKey formats a civil date as YYYY-MM-DD, or blank when it is unset.
@@ -668,10 +707,16 @@ func (c *Client) call(ctx context.Context, method, path, accessToken string, bod
 		case resp.StatusCode == http.StatusUnauthorized:
 			return devicelink.ErrReauthorize
 		case strings.Contains(failure.Error.Status, "MISSING_OAUTH_SCOPE"),
-			strings.Contains(failure.Error.Message, "MISSING_OAUTH_SCOPE"):
-			// A link made before this app asked for a scope it now needs.
-			// The member has to consent again, which is what ErrReauthorize
-			// already tells them to do.
+			strings.Contains(failure.Error.Message, "MISSING_OAUTH_SCOPE"),
+			// Google does not always name the code MISSING_OAUTH_SCOPE: a read
+			// whose grant lacks a scope comes back 403 PERMISSION_DENIED
+			// "Required OAuth scope(s) are missing for this operation." A link
+			// made before this app asked for the sleep scope hits exactly this,
+			// so a 403 that mentions a scope is a reconnect, not a dead end.
+			resp.StatusCode == http.StatusForbidden &&
+				strings.Contains(strings.ToLower(failure.Error.Message), "scope"):
+			// A link made before this app asked for a scope it now needs. The
+			// member has to consent again, which is what ErrReauthorize tells them.
 			return devicelink.ErrReauthorize
 		}
 		// SERVICE_DISABLED here means the Google Health API is not enabled on

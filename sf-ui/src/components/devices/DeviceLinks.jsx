@@ -272,10 +272,11 @@ export default function DeviceLinks({ userId, canGenerate = true }) {
           no food app is connected, so a member still sees what to aim for. */}
       <NutritionPanel provider={nutritionSource} range={range} onRange={setRange} userId={member} />
 
-      {/* Last night's sleep, after the body and nutrition data and before the
-          bar speed: the good/fair/poor read and the asleep/awake chart, from the
-          one source the server picked. */}
-      {sleepSource ? <SleepPanel provider={sleepSource} userId={member} /> : null}
+      {/* The week of sleep, after the body and nutrition data and before the
+          bar speed: the good/fair/poor read, from the best connected tracker the
+          server could read (it falls through the priority order itself). Shown
+          whenever any sleep-capable tracker is connected. */}
+      {sleepSource ? <SleepPanel userId={member} /> : null}
 
       {/* Bar speed, once and consolidated. Self only: it reads the viewer's own
           last sets, and there is no per-member bar-speed read - the athlete's
@@ -838,14 +839,16 @@ const SLEEP_STATUS_INK = { good: "#22c55e", fair: "#f59e0b", poor: "#ef4444" };
 const SLEEP_STATUS_RANK = { good: 3, fair: 2, poor: 1 };
 
 /**
- * The last seven nights, from the one connected provider the server picked (a
- * watch's before a scale's): a bar a night read good/fair/poor - green, amber or
- * red - with the hours slept on hover. A night with nothing recorded is an empty
- * slot, so the week always shows seven days.
+ * The last seven nights, from the best connected tracker the server could read -
+ * it tries them in priority order (a watch's night before a scale's, Garmin
+ * last) and shows the first with data: a bar a night read good/fair/poor - green,
+ * amber or red - with the hours slept on hover. A night with nothing recorded is
+ * an empty slot, so the week always shows seven days. A source that errored or
+ * had nothing (a tracker that needs reconnecting, say) does not blank the panel:
+ * it is logged in the troubleshoot console, and the next source is shown.
  */
-function SleepPanel({ provider, userId }) {
+function SleepPanel({ userId }) {
   const { t } = useI18n();
-  const reauthToast = useReauthToast();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -854,20 +857,22 @@ function SleepPanel({ provider, userId }) {
     setLoading(true);
     setError(null);
     try {
-      const week = await devicesApi.sleep(provider, userId);
-      // A provider error the server graphed around: log it for troubleshooting,
-      // but still show the chart from whatever nights came back.
-      if (week && week.error) console.error(`[sleep:${provider}]`, week.error);
+      const week = await devicesApi.sleepAll(userId);
+      // Provider errors the server graphed around - a tracker that needs
+      // reconnecting, an outage - logged for troubleshooting while the chart
+      // still shows whatever source had nights.
+      (week?.issues || []).forEach((issue) =>
+        console.error(`[sleep:${issue.provider}]`, issue.error));
+      if (week?.error) console.error(`[sleep:${week.provider || "?"}]`, week.error);
       setData(week);
     } catch (err) {
-      console.error(`[sleep:${provider}]`, err);
+      console.error("[sleep]", err);
       setError(err);
       setData(null);
-      if (isReauthorizeError(err)) reauthToast(provider);
     } finally {
       setLoading(false);
     }
-  }, [provider, userId, reauthToast]);
+  }, [userId]);
 
   useEffect(() => {
     load();

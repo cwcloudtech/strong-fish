@@ -118,6 +118,12 @@ export const devices = {
   // good/fair/poor from how long was slept.
   sleep: (provider, userId) =>
     body(client.get(`${deviceBase(userId)}/${provider}/sleep`)),
+  // The week of sleep from the best connected tracker, falling through the
+  // priority order (Google Health/Fitbit, then Withings, then Garmin) when one
+  // errors or has nothing. The response names the source it used and lists, in
+  // `issues`, the sources that failed - for the troubleshoot console - so one
+  // tracker needing a reconnect never blanks the panel.
+  sleepAll: (userId) => body(client.get(`${deviceBase(userId)}/sleep`)),
   // Logged energy and protein from a food diary (Yazio, MyFitnessPal), over the
   // same named windows the steps use. The response carries the daily averages
   // and the member's targets alongside the per-day series.

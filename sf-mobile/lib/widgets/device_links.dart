@@ -321,10 +321,11 @@ class _DeviceLinksSectionState extends ConsumerState<DeviceLinksSection> with Wi
             onRange: (value) => setState(() => _range = value),
             userId: _member,
           ),
-          // Last night's sleep, after the body and nutrition data and before the
-          // bar speed: the good/fair/poor read and the asleep/awake chart, from
-          // the one source the server picked.
-          if (sleepSource != null) _SleepPanel(provider: sleepSource, userId: _member),
+          // The week of sleep, after the body and nutrition data and before the
+          // bar speed: the good/fair/poor read, from the best connected tracker
+          // the server could read (it falls through the priority order itself).
+          // Shown whenever any sleep-capable tracker is connected.
+          if (sleepSource != null) _SleepPanel(userId: _member),
           // Bar speed, once and consolidated. Self only: it reads the viewer's
           // own last sets, and there is no per-member bar-speed read - the
           // athlete's bar speed still rides along in the export and AI reading.
@@ -1132,9 +1133,8 @@ String _sleepWeekday(String date, String locale) {
 /// red - with the hours slept on a long-press. A night with nothing recorded is
 /// an empty slot, so the week always shows seven days.
 class _SleepPanel extends ConsumerStatefulWidget {
-  final String provider;
   final String userId;
-  const _SleepPanel({required this.provider, this.userId = ''});
+  const _SleepPanel({this.userId = ''});
 
   @override
   ConsumerState<_SleepPanel> createState() => _SleepPanelState();
@@ -1155,7 +1155,7 @@ class _SleepPanelState extends ConsumerState<_SleepPanel> {
   @override
   void didUpdateWidget(_SleepPanel old) {
     super.didUpdateWidget(old);
-    if (old.userId != widget.userId || old.provider != widget.provider) _load();
+    if (old.userId != widget.userId) _load();
   }
 
   Future<void> _load() async {
@@ -1164,13 +1164,19 @@ class _SleepPanelState extends ConsumerState<_SleepPanel> {
       _error = '';
     });
     try {
-      final week = await ref.read(apiProvider).deviceSleep(widget.provider, userId: widget.userId);
-      // A provider error the server graphed around: log it for troubleshooting,
-      // but still show the chart from whatever nights came back.
-      if (week.error.isNotEmpty) debugPrint('[sleep:${widget.provider}] ${week.error}');
+      final week = await ref.read(apiProvider).deviceSleepAll(userId: widget.userId);
+      // Provider errors the server graphed around - a tracker that needs
+      // reconnecting, an outage - logged for troubleshooting while the chart
+      // still shows whatever source had nights.
+      for (final issue in week.issues) {
+        debugPrint('[sleep:${issue.provider}] ${issue.error}');
+      }
+      if (week.error.isNotEmpty) {
+        debugPrint('[sleep:${week.provider.isEmpty ? '?' : week.provider}] ${week.error}');
+      }
       if (mounted) setState(() => _week = week);
     } catch (error) {
-      debugPrint('[sleep:${widget.provider}] $error');
+      debugPrint('[sleep] $error');
       if (mounted) {
         setState(() {
           _week = null;

@@ -306,10 +306,12 @@ func Capabilities(provider Provider) []string {
 }
 
 // sleepPriority is the order sleep is read in, and it is not registration order:
-// the member wants a watch's night over a scale's, so google health (and the
-// Fitbit it can carry) comes first, then Withings. Garmin is absent on purpose -
-// its Personal API has no sleep endpoint, so Garmin is not a SleepReader.
-var sleepPriority = []string{"googlehealth", "withings"}
+// the member wants a watch's night over a scale's, so Google Health (and the
+// Fitbit it can carry) comes first, then Withings, then Garmin. The names are
+// the provider names (google-health, with the hyphen) - a mismatch here silently
+// drops a provider from the sleep source, which is how Google Health's own sleep
+// went unread.
+var sleepPriority = []string{"google-health", "withings", "garmin"}
 
 // SleepSources lists the connected, sleep-capable providers in priority order
 // (google health/fitbit, then Withings). The reader of the fitness page shows

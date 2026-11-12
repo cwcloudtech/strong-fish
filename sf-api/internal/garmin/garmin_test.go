@@ -133,3 +133,69 @@ func TestLatestBodyCompositionFromWeightRange(t *testing.T) {
 		t.Errorf("muscle mass not converted: %+v", m)
 	}
 }
+
+// Sleep arrives in two shapes - the fields at the top level, or nested under
+// dailySleepDTO - and the total is either sleepTimeSeconds or only the stage
+// seconds. This pins both, that the minutes are the seconds over 60, and that a
+// 404 for one night is skipped (the member just did not wear the watch) rather
+// than failing the whole week.
+func TestSleepDaysReadsBothShapesAndSkips404(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/sleep-service/sleep/dailySleep") {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		switch r.URL.Query().Get("calendarDate") {
+		case "2026-01-01": // top-level total: 7h = 25200s = 420 min
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"calendarDate": "2026-01-01", "sleepTimeSeconds": 25200})
+		case "2026-01-02": // nested, no total: stage seconds summed = 6h = 360 min
+			_ = json.NewEncoder(w).Encode(map[string]any{"dailySleepDTO": map[string]any{
+				"calendarDate":      "2026-01-02",
+				"deepSleepSeconds":  7200,
+				"lightSleepSeconds": 10800,
+				"remSleepSeconds":   3600,
+			}})
+		default: // no night: the service 404s, which must not fail the week
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+	c := New(Config{APIBaseURL: server.URL})
+
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+	days, err := c.SleepDays(context.Background(), "at", start, end)
+	if err != nil {
+		t.Fatalf("SleepDays: %v", err)
+	}
+	if len(days) != 2 {
+		t.Fatalf("want 2 nights (the 404 skipped), got %+v", days)
+	}
+	if days[0].Date != "2026-01-01" || days[0].AsleepMin != 420 {
+		t.Errorf("night 1 (top-level total) wrong: %+v", days[0])
+	}
+	if days[1].Date != "2026-01-02" || days[1].AsleepMin != 360 {
+		t.Errorf("night 2 (nested, stage sum) wrong: %+v", days[1])
+	}
+}
+
+// When no night can be read at all (e.g. the path is wrong and every day 404s),
+// the last error is returned so it reaches the troubleshoot console, rather than
+// looking like an empty week.
+func TestSleepDaysSurfacesErrorWhenNothingRead(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+	c := New(Config{APIBaseURL: server.URL})
+
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	days, err := c.SleepDays(context.Background(), "at", start, end)
+	if err == nil {
+		t.Fatal("want the read error surfaced when no night came back")
+	}
+	if len(days) != 0 {
+		t.Fatalf("want no nights, got %+v", days)
+	}
+}

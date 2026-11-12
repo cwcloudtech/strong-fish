@@ -393,10 +393,84 @@ func (c *Client) LatestBodyComposition(ctx context.Context, accessToken string) 
 
 func round1(v float64) float64 { return float64(int64(v*10+0.5)) / 10 }
 
-// Garmin has no sleep reader: its Personal API exposes no sleep endpoint (the
-// Connect dailySleepData path answers 404), so Garmin is deliberately not a
-// SleepReader. Sleep comes from Google Health/Fitbit or Withings instead; see
-// devicelink.sleepPriority.
+// --- sleep ---
+
+// garminSleep is one night's summary from the sleep service, tolerant of the
+// two shapes it arrives in - the fields at the top level, or nested under
+// dailySleepDTO. sleepTimeSeconds is Garmin's total time asleep (deep + light +
+// REM, with awake excluded); when it is absent the stage seconds are summed.
+type garminSleep struct {
+	CalendarDate      string   `json:"calendarDate"`
+	SleepTimeSeconds  *float64 `json:"sleepTimeSeconds"`
+	DeepSleepSeconds  *float64 `json:"deepSleepSeconds"`
+	LightSleepSeconds *float64 `json:"lightSleepSeconds"`
+	RemSleepSeconds   *float64 `json:"remSleepSeconds"`
+}
+
+// garminSleepResponse reads the night whether it is at the top level or under
+// dailySleepDTO, so one unmarshal covers both shapes.
+type garminSleepResponse struct {
+	garminSleep
+	DailySleepDTO *garminSleep `json:"dailySleepDTO"`
+}
+
+// asleepMinutes is the night's minutes asleep: the total Garmin gave, or the
+// sum of the stages when it gave none. Zero when the night has nothing.
+func (s garminSleep) asleepMinutes() int {
+	if s.SleepTimeSeconds != nil && *s.SleepTimeSeconds > 0 {
+		return int(*s.SleepTimeSeconds / 60)
+	}
+	seconds := deref(s.DeepSleepSeconds) + deref(s.LightSleepSeconds) + deref(s.RemSleepSeconds)
+	if seconds <= 0 {
+		return 0
+	}
+	return int(seconds / 60)
+}
+
+// SleepDays returns one entry per night Garmin has sleep for over [start, end],
+// read a day at a time from the Connect sleep service's daily sleep endpoint
+// (Garmin keys a night by the morning woken).
+//
+// Per the fitness page's rule, a night the service has nothing for - or answers
+// 404 for - is skipped rather than failing the week; only an expired grant stops
+// the read. A run that reads no night but met an error returns the last one, so
+// a wrong path or an outage reaches the troubleshoot console instead of looking
+// like an empty week. The date query is sent under both of Garmin's spellings
+// (calendarDate and date) so the one the service reads is always present.
+func (c *Client) SleepDays(ctx context.Context, accessToken string, start, end time.Time) ([]devicelink.SleepDay, error) {
+	days := []devicelink.SleepDay{}
+	var lastErr error
+	for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+		date := day.Format("2006-01-02")
+		var resp garminSleepResponse
+		err := c.get(ctx, accessToken, "/sleep-service/sleep/dailySleep",
+			url.Values{"calendarDate": {date}, "date": {date}, "nonSleepBufferMinutes": {"60"}}, &resp)
+		if err != nil {
+			if errors.Is(err, devicelink.ErrReauthorize) {
+				return nil, err
+			}
+			lastErr = err
+			continue
+		}
+		night := resp.garminSleep
+		if resp.DailySleepDTO != nil {
+			night = *resp.DailySleepDTO
+		}
+		minutes := night.asleepMinutes()
+		if minutes <= 0 {
+			continue
+		}
+		key := date
+		if night.CalendarDate != "" {
+			key = night.CalendarDate
+		}
+		days = append(days, devicelink.SleepDay{Date: key, AsleepMin: minutes})
+	}
+	if len(days) == 0 && lastErr != nil {
+		return days, lastErr
+	}
+	return days, nil
+}
 
 // --- transport ---
 

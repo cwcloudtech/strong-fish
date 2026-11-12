@@ -275,6 +275,20 @@ type SleepWeek struct {
 	// despite a provider error, so one tracker's outage does not blank the panel.
 	// Empty on success.
 	Error string `json:"error,omitempty"`
+	// Issues are the failures met while trying each sleep source in turn, for
+	// the client to print in its troubleshoot console. The panel reads the first
+	// source that had a night to show (Google Health/Fitbit, then Withings, then
+	// Garmin); a source that errored or had nothing is recorded here rather than
+	// blanking the chart, so the member still sees whatever any tracker had.
+	Issues []SleepIssue `json:"issues,omitempty"`
+}
+
+// SleepIssue is one sleep source that could not be read: the provider and a
+// short reason, logged in the client console so a missing week can be told from
+// a provider that needs reconnecting.
+type SleepIssue struct {
+	Provider string `json:"provider"`
+	Error    string `json:"error"`
 }
 
 // SleepStatusFor is the good/fair/poor read of one night, from how long was

@@ -539,6 +539,15 @@ class SfApi {
     return SleepWeek.fromJson(_map(response.data));
   }
 
+  /// The week of sleep from the best connected tracker, falling through the
+  /// priority order (Google Health/Fitbit, then Withings, then Garmin) when one
+  /// errors or has nothing. The response names the source used and lists, in
+  /// `issues`, the sources that failed - for the debug console.
+  Future<SleepWeek> deviceSleepAll({String userId = ''}) async {
+    final response = await client.dio.get('${_deviceBase(userId)}/sleep');
+    return SleepWeek.fromJson(_map(response.data));
+  }
+
   /// What the AI made of the last ninety days of health data. A 404 is the
   /// ordinary "nobody has asked yet", which the caller reads as no reading.
   Future<HealthFeedback> healthFeedback(String provider, {String userId = ''}) async =>

@@ -878,6 +878,29 @@ func (h *DeviceHandler) Sleep(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, week)
 }
 
+// SleepAll returns the member's week of sleep from the best source available,
+// trying the connected trackers in priority order (Google Health/Fitbit, then
+// Withings, then Garmin) and graphing the first that has a night to show. A
+// source that errors or has nothing does not blank the panel: it is recorded in
+// the week's Issues for the client's troubleshoot console, and the next source
+// is tried. This is the endpoint the fitness page's sleep panel reads, so one
+// tracker needing a reconnect never costs the member a night another tracker
+// has.
+func (h *DeviceHandler) SleepAll(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.readUserID(w, r)
+	if !ok {
+		return
+	}
+	if week := h.bestSleepWeek(r, userID); week != nil {
+		writeJSON(w, http.StatusOK, *week)
+		return
+	}
+	// No sleep-capable provider connected: an empty week, so the client renders
+	// its own "nothing recorded" state rather than erroring on a missing body.
+	start, end := sleepWindow()
+	writeJSON(w, http.StatusOK, sleepWeek("", start, end, nil))
+}
+
 // sleepWeek maps a provider's nights into the week the clients and the export
 // read: one entry per morning in the window, present with no sleep for a night
 // the tracker had nothing for, so the chart always shows seven bars.
@@ -901,12 +924,16 @@ func sleepWeek(provider string, start, end time.Time, days []devicelink.SleepDay
 	return week
 }
 
-// exportSleep is the week of sleep for an export or an AI reading, from the one
-// source the screen shows too - SleepSources' priority (Google Health/Fitbit,
-// then Withings). Optional, like the rest: a tracker that will not answer must
-// not cost the member the document. The sources are tried in order, so a first
-// one with no recorded night falls through to the next.
-func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.SleepWeek {
+// bestSleepWeek is the member's week of sleep from the first connected source
+// that has a night to show, tried in priority order (Google Health/Fitbit,
+// Withings, Garmin). Every source that errors or has nothing is recorded in the
+// returned week's Issues, for the client's troubleshoot console, so one
+// tracker's outage or a grant that needs reconnecting never blanks the panel.
+//
+// It returns the first source with a recorded night; failing that, the first
+// source's own (empty) week so the chart still draws its seven bars, with the
+// issues attached; and nil only when no sleep source is connected at all.
+func (h *DeviceHandler) bestSleepWeek(r *http.Request, userID string) *models.SleepWeek {
 	connected, err := h.links.ListProviders(r.Context(), userID)
 	if err != nil {
 		return nil
@@ -915,8 +942,15 @@ func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.Slee
 	for _, name := range connected {
 		linked[name] = true
 	}
+	sources := devicelink.SleepSources(h.providers, linked)
+	if len(sources) == 0 {
+		return nil
+	}
+
 	start, end := sleepWindow()
-	for _, name := range devicelink.SleepSources(h.providers, linked) {
+	var issues []models.SleepIssue
+	var fallback *models.SleepWeek
+	for _, name := range sources {
 		found, ok := devicelink.Find(h.providers, name)
 		if !ok {
 			continue
@@ -931,22 +965,58 @@ func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.Slee
 		}
 		accessToken, err := h.freshToken(r, found, link)
 		if err != nil {
-			slog.Warn("health export: sleep unavailable", "provider", name, "error", err)
+			issues = append(issues, models.SleepIssue{Provider: name, Error: sleepIssueText(err)})
+			if fallback == nil {
+				empty := sleepWeek(name, start, end, nil)
+				fallback = &empty
+			}
 			continue
 		}
 		days, err := reader.SleepDays(r.Context(), accessToken, start, end)
 		if err != nil {
-			// Not fatal: graph whatever nights came back and read on. Only a
-			// source with nothing at all falls through to the next.
-			slog.Warn("health export: sleep partial/unavailable", "provider", name, "error", err)
+			slog.Warn("sleep source partial/unavailable; graphing what there is", "provider", name, "error", err)
+			issues = append(issues, models.SleepIssue{Provider: name, Error: sleepIssueText(err)})
 		}
 		week := sleepWeek(name, start, end, days)
-		if !week.Recorded() {
-			continue
+		if fallback == nil {
+			fallback = &week
 		}
-		return &week
+		if week.Recorded() {
+			week.Issues = issues
+			return &week
+		}
 	}
-	return nil
+	if fallback == nil {
+		empty := sleepWeek(sources[0], start, end, nil)
+		fallback = &empty
+	}
+	fallback.Issues = issues
+	return fallback
+}
+
+// sleepIssueText is a short, member-readable reason a sleep source could not be
+// read, for the troubleshoot console: the two failures that need a reconnect are
+// named as such, and anything else carries the provider's own error verbatim.
+func sleepIssueText(err error) string {
+	switch {
+	case errors.Is(err, devicelink.ErrReauthorize):
+		return "reconnect required (authorization expired or missing sleep permission)"
+	case errors.Is(err, devicelink.ErrNotLinked):
+		return "account not linked at the provider"
+	default:
+		return err.Error()
+	}
+}
+
+// exportSleep is the week of sleep for an export or an AI reading, from the same
+// best source the fitness page shows - but only when a night was actually
+// recorded, so a sheet never carries an empty sleep chart.
+func (h *DeviceHandler) exportSleep(r *http.Request, userID string) *models.SleepWeek {
+	week := h.bestSleepWeek(r, userID)
+	if week == nil || !week.Recorded() {
+		return nil
+	}
+	return week
 }
 
 // readable resolves everything a read of a member's data needs: the provider,
