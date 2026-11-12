@@ -642,6 +642,7 @@ const fr = {
       recordOnly: "Enregistrer seulement",
       recordOnlyHint: "Le capteur uniquement",
       cameraUnavailable: "Caméra indisponible",
+      switchCamera: "Changer de caméra",
       recordCapturing: "Enregistrement… {{count}} stances",
       troubleshoot: "Dépannage : afficher les données brutes du capteur",
       debugTitle: "Données brutes du capteur",

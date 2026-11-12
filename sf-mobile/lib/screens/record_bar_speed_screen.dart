@@ -75,6 +75,12 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   // down (removing the preview from the tree disposes the camera). A new set
   // brings it back. False keeps it off; it only ever matters when widget.film.
   bool _filmStopped = false;
+  // The film-mode camera, owned here so it can be flipped between the selfie and
+  // rear lens. The preview widget starts it on mount and stops it on unmount
+  // (autoStart), and dispose() tears it down; it is null when not filming. It
+  // defaults to the selfie lens so the member sees their set mirrored back.
+  MobileScannerController? _camera;
+  CameraFacing _facing = CameraFacing.front;
   // The reviewed rep count (correcting what the engine detected) and whether the
   // reviewed set has been written back to its training-session set yet.
   final TextEditingController _reps = TextEditingController();
@@ -94,6 +100,11 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.film) {
+      // Default to the selfie camera so the set is mirrored back to the member;
+      // the switch button flips it to the rear lens.
+      _camera = MobileScannerController(facing: CameraFacing.front);
+    }
     if (widget.initialLoad > 0) {
       _load.text = widget.initialLoad % 1 == 0
           ? widget.initialLoad.toStringAsFixed(0)
@@ -136,7 +147,27 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
     _sub?.cancel();
     _load.dispose();
     _reps.dispose();
+    _camera?.dispose();
     super.dispose();
+  }
+
+  /// Flips the film-mode preview between the selfie and rear camera. The selfie
+  /// lens is the default (a mirror of the set); this toggles to the rear and
+  /// back. Does nothing until the camera is running, or on a single-camera
+  /// device - the view simply stays as it is.
+  Future<void> _switchCamera() async {
+    final camera = _camera;
+    if (camera == null) return;
+    try {
+      await camera.switchCamera();
+      if (!mounted) return;
+      setState(() {
+        _facing =
+            _facing == CameraFacing.front ? CameraFacing.back : CameraFacing.front;
+      });
+    } catch (_) {
+      // Camera not ready yet (tapped mid-initialisation): leave it unchanged.
+    }
   }
 
   void _start() {
@@ -150,7 +181,10 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
       _error = '';
       _recording = true;
       // A fresh set brings the camera back if a previous Stop turned it off.
+      // The preview remounts and autostarts at the controller's default (selfie)
+      // lens, so track that here regardless of what was selected on the last set.
       _filmStopped = false;
+      _facing = CameraFacing.front;
     });
   }
 
@@ -306,7 +340,7 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
         // nothing is filmed to disk or uploaded - and it goes away when the set
         // is stopped. Mounting the preview starts the camera; removing it (on
         // Stop) disposes it, so there is no controller to manage here.
-        if (widget.film && !_filmStopped)
+        if (widget.film && !_filmStopped && _camera != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child: ClipRRect(
@@ -314,20 +348,47 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
               child: SizedBox(
                 height: 260,
                 width: double.infinity,
-                child: MobileScanner(
-                  // Used purely as a viewfinder: detections are ignored, this
-                  // films nothing and reads nothing.
-                  onDetect: (_) {},
-                  errorBuilder: (context, error) => Container(
-                    color: colors.backgroundMuted,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      t('devices.barSpeed.cameraUnavailable'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: colors.textMuted),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: MobileScanner(
+                        // Used purely as a viewfinder: detections are ignored,
+                        // this films nothing and reads nothing. The controller
+                        // (owned by the state) sets the selfie lens and lets the
+                        // switch button flip it.
+                        controller: _camera,
+                        onDetect: (_) {},
+                        errorBuilder: (context, error) => Container(
+                          color: colors.backgroundMuted,
+                          alignment: Alignment.center,
+                          padding: const EdgeInsets.all(16),
+                          child: Text(
+                            t('devices.barSpeed.cameraUnavailable'),
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: colors.textMuted),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                    // Flip between the selfie (default) and rear camera.
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.black.withValues(alpha: 0.45),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: IconButton(
+                          tooltip: t('devices.barSpeed.switchCamera'),
+                          color: Colors.white,
+                          icon: Icon(_facing == CameraFacing.front
+                              ? Icons.camera_front
+                              : Icons.camera_rear),
+                          onPressed: _switchCamera,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

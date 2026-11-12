@@ -659,6 +659,7 @@ const Map<String, dynamic> ar = {
       'recordOnly': 'التسجيل فقط',
       'recordOnlyHint': 'المستشعر فقط',
       'cameraUnavailable': 'الكاميرا غير متوفرة',
+      'switchCamera': 'تبديل الكاميرا',
       'recordCapturing': 'جارٍ التسجيل… {{count}} عيّنة',
       'troubleshoot': 'استكشاف الأخطاء: عرض البيانات الخام للمستشعر',
       'debugTitle': 'البيانات الخام للمستشعر',

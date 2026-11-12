@@ -631,6 +631,7 @@ const en = {
       recordOnly: "Record only",
       recordOnlyHint: "Just the sensor",
       cameraUnavailable: "Camera unavailable",
+      switchCamera: "Switch camera",
       recordCapturing: "Recording… {{count}} stances",
       troubleshoot: "Troubleshoot: show raw sensor data",
       debugTitle: "Raw sensor data",
