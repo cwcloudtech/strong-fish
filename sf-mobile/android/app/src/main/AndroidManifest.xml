@@ -8,10 +8,11 @@
     <!-- Recording a voice message in a private conversation, and the audio of a
          filmed set (the camera plugin records with sound, like the camera app). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-    <!-- Saving a filmed set to the shared gallery (gal). Android 10+ writes
+    <!-- Saving a filmed set to the shared gallery (gal): Android 10+ writes
          through MediaStore and needs no permission; older versions need legacy
-         external storage, so this is capped at API 29. -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
+         WRITE_EXTERNAL_STORAGE, which the camera plugin already declares (merged
+         in at maxSdkVersion 28), so it isn't repeated here - declaring it again
+         with a different cap breaks the manifest merge. -->
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <!-- Handing the downloaded APK to Android's package installer, which is
          what makes the in-app upgrade an update rather than a re-install. The
