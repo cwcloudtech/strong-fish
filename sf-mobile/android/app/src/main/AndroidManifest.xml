@@ -5,8 +5,13 @@
     <!-- Reading the sign-in QR code the web app shows. The camera is optional
          hardware: a device without one can still sign in with a password. -->
     <uses-permission android:name="android.permission.CAMERA"/>
-    <!-- Recording a voice message in a private conversation. -->
+    <!-- Recording a voice message in a private conversation, and the audio of a
+         filmed set (the camera plugin records with sound, like the camera app). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Saving a filmed set to the shared gallery (gal). Android 10+ writes
+         through MediaStore and needs no permission; older versions need legacy
+         external storage, so this is capped at API 29. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <!-- Handing the downloaded APK to Android's package installer, which is
          what makes the in-app upgrade an update rather than a re-install. The

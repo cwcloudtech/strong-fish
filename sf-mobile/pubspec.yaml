@@ -39,6 +39,13 @@ dependencies:
   # webhook dio already covers. See services/callback_trigger.dart.
   web_socket_channel: ^3.0.0
   mqtt_client: ^10.0.0
+  # Films the set while the VBT sensor records (see record_bar_speed_screen.dart):
+  # camera captures the clip, gal saves it to the device gallery - the same place
+  # the camera app stores its videos - so the set can be edited and shared from
+  # the normal photo apps. Needs CAMERA + RECORD_AUDIO (already declared) and, on
+  # iOS, the camera/mic/photo-add usage descriptions in Info.plist.
+  camera: ^0.12.2
+  gal: ^3.0.0
 
 dev_dependencies:
   flutter_test:

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:gal/gal.dart';
 
 import '../models/models.dart';
 import '../native/bar_speed_capture.dart';
@@ -36,10 +38,11 @@ class RecordBarSpeedScreen extends ConsumerStatefulWidget {
   // recording.
   final String initialSetType;
   final bool initialTempoVariation;
-  // Film and record: show a live camera view of the set alongside the sensor
-  // recording, so the member can watch their own form. Nothing is filmed to
-  // disk or uploaded - it is a mirror, on screen only - and the one Stop button
-  // ends both the camera and the sensor capture. False is sensor-only.
+  // Film and record: capture a video of the set alongside the sensor recording,
+  // so the member can watch their own form. The one Stop button ends both the
+  // camera and the sensor, and the clip is saved to the device gallery - the
+  // same place the camera app stores its videos - so the set can be reviewed,
+  // edited and shared from the normal photo apps. False is sensor-only.
   final bool film;
 
   const RecordBarSpeedScreen({
@@ -71,16 +74,18 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   bool _recording = false;
   bool _busy = false;
   StanceSet? _result;
-  // Film mode: the live camera view is shown until the set is stopped, then torn
-  // down (removing the preview from the tree disposes the camera). A new set
-  // brings it back. False keeps it off; it only ever matters when widget.film.
-  bool _filmStopped = false;
-  // The film-mode camera, owned here so it can be flipped between the selfie and
-  // rear lens. The preview widget starts it on mount and stops it on unmount
-  // (autoStart), and dispose() tears it down; it is null when not filming. It
-  // defaults to the selfie lens so the member sees their set mirrored back.
-  MobileScannerController? _camera;
-  CameraFacing _facing = CameraFacing.front;
+  // Film mode: a real camera, owned here for the screen's life so one Stop can
+  // end the clip and save it to the gallery. It defaults to the selfie lens (a
+  // mirror of the set) and can be flipped to the rear before recording. Null and
+  // unused unless widget.film. The clip is captured only during a Start..Stop
+  // window (_videoRecording); the preview is a live mirror the rest of the time.
+  CameraController? _camera;
+  List<CameraDescription> _cameras = const [];
+  CameraLensDirection _lens = CameraLensDirection.front;
+  bool _cameraReady = false; // the preview can be shown
+  bool _switchingCamera = false; // re-initialising to the other lens
+  bool _videoRecording = false; // a clip is being captured
+  String _cameraError = ''; // shown in place of the preview when it fails
   // The reviewed rep count (correcting what the engine detected) and whether the
   // reviewed set has been written back to its training-session set yet.
   final TextEditingController _reps = TextEditingController();
@@ -102,8 +107,8 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
     super.initState();
     if (widget.film) {
       // Default to the selfie camera so the set is mirrored back to the member;
-      // the switch button flips it to the rear lens.
-      _camera = MobileScannerController(facing: CameraFacing.front);
+      // the switch button flips it to the rear lens before recording.
+      _setupCamera(CameraLensDirection.front);
     }
     if (widget.initialLoad > 0) {
       _load.text = widget.initialLoad % 1 == 0
@@ -151,22 +156,113 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
     super.dispose();
   }
 
-  /// Flips the film-mode preview between the selfie and rear camera. The selfie
-  /// lens is the default (a mirror of the set); this toggles to the rear and
-  /// back. Does nothing until the camera is running, or on a single-camera
-  /// device - the view simply stays as it is.
-  Future<void> _switchCamera() async {
-    final camera = _camera;
-    if (camera == null) return;
+  /// Brings up the film-mode camera on the given lens, replacing any camera that
+  /// was already running. Only one camera session can be live at a time, so the
+  /// previous controller is disposed before the new one initialises. A failure
+  /// (no camera, permission denied) shows a message in place of the preview and
+  /// leaves the sensor recording untouched.
+  Future<void> _setupCamera(CameraLensDirection lens) async {
     try {
-      await camera.switchCamera();
-      if (!mounted) return;
+      if (_cameras.isEmpty) {
+        _cameras = await availableCameras();
+      }
+      if (_cameras.isEmpty) {
+        if (mounted) setState(() => _cameraError = _cameraErrorText());
+        return;
+      }
+      final desc = _cameras.firstWhere(
+        (c) => c.lensDirection == lens,
+        orElse: () => _cameras.first,
+      );
+      final previous = _camera;
+      if (mounted) {
+        setState(() {
+          _camera = null;
+          _cameraReady = false;
+          _cameraError = '';
+        });
+      } else {
+        _camera = null;
+      }
+      await previous?.dispose();
+      // Record with sound, like the camera app, so the saved clip is a normal
+      // video; audio needs the mic permission declared in the native manifests.
+      final controller =
+          CameraController(desc, ResolutionPreset.high, enableAudio: true);
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
       setState(() {
-        _facing =
-            _facing == CameraFacing.front ? CameraFacing.back : CameraFacing.front;
+        _camera = controller;
+        _lens = desc.lensDirection;
+        _cameraReady = true;
       });
     } catch (_) {
-      // Camera not ready yet (tapped mid-initialisation): leave it unchanged.
+      // availableCameras / initialize throw a CameraException on denial or on a
+      // device with no usable camera; filming is optional, so note it and move
+      // on - the sensor set still records.
+      if (mounted) setState(() => _cameraError = _cameraErrorText());
+    }
+  }
+
+  String _cameraErrorText() => ref.read(tProvider)('devices.barSpeed.cameraUnavailable');
+
+  /// Flips the film-mode preview between the selfie (default) and rear camera.
+  /// Only before recording: swapping the lens re-initialises the controller,
+  /// which would abort a clip, so the button is disabled during a set.
+  Future<void> _switchCamera() async {
+    if (_switchingCamera || _videoRecording) return;
+    setState(() => _switchingCamera = true);
+    final next = _lens == CameraLensDirection.front
+        ? CameraLensDirection.back
+        : CameraLensDirection.front;
+    await _setupCamera(next);
+    if (mounted) setState(() => _switchingCamera = false);
+  }
+
+  /// Starts filming the set, alongside the sensor capture. Fire-and-forget from
+  /// [_start]: a camera that fails must not hold up the sensor set.
+  Future<void> _startVideo() async {
+    final camera = _camera;
+    if (camera == null || !camera.value.isInitialized || camera.value.isRecordingVideo) {
+      return;
+    }
+    try {
+      await camera.startVideoRecording();
+      if (mounted) setState(() => _videoRecording = true);
+    } catch (_) {
+      // Filming failed (e.g. mic/permission): the sensor set carries on.
+      if (mounted) setState(() => _cameraError = _cameraErrorText());
+    }
+  }
+
+  /// Ends the clip and saves it to the device gallery - the same place the
+  /// camera app stores its videos - so the set can be edited and shared from the
+  /// normal photo apps. gal requests the photo-library permission itself the
+  /// first time. A failure is reported in a snackbar and never blocks the set.
+  Future<void> _stopVideoAndSave() async {
+    final camera = _camera;
+    if (camera == null || !camera.value.isRecordingVideo) {
+      if (mounted) setState(() => _videoRecording = false);
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    final t = ref.read(tProvider);
+    try {
+      final file = await camera.stopVideoRecording();
+      if (mounted) setState(() => _videoRecording = false);
+      await Gal.putVideo(file.path);
+      // gal copied the clip into the gallery; drop our temporary capture.
+      try {
+        await File(file.path).delete();
+      } catch (_) {}
+      messenger.showSnackBar(SnackBar(content: Text(t('devices.barSpeed.videoSaved'))));
+    } catch (_) {
+      if (mounted) setState(() => _videoRecording = false);
+      messenger.showSnackBar(
+          SnackBar(content: Text(t('devices.barSpeed.videoSaveFailed'))));
     }
   }
 
@@ -180,21 +276,17 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
       _result = null;
       _error = '';
       _recording = true;
-      // A fresh set brings the camera back if a previous Stop turned it off.
-      // The preview remounts and autostarts at the controller's default (selfie)
-      // lens, so track that here regardless of what was selected on the last set.
-      _filmStopped = false;
-      _facing = CameraFacing.front;
     });
+    // Film the set alongside the sensor; fire-and-forget so a camera hiccup
+    // never delays the capture.
+    if (widget.film) _startVideo();
   }
 
   Future<void> _stop() async {
-    // One Stop ends both: the sensor window closes and, in film mode, the live
-    // camera is torn down with it.
-    setState(() {
-      _recording = false;
-      if (widget.film) _filmStopped = true;
-    });
+    // One Stop ends both: the sensor window closes and, in film mode, the clip
+    // is ended and saved to the gallery.
+    setState(() => _recording = false);
+    if (widget.film) await _stopVideoAndSave();
     _fireCallbacks('stop');
 
     // Analyse whenever the sensor actually streamed samples - even if the BLE
@@ -310,6 +402,98 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
     }
   }
 
+  /// The film-mode preview: the live camera filling the frame, a REC badge while
+  /// a clip is being captured, and a button to flip between the selfie (default)
+  /// and rear lens before recording. Falls back to a message when the camera is
+  /// unavailable, or a spinner while it initialises.
+  Widget _buildFilmPreview(
+      String Function(String, [Map<String, String>?]) t, AppColors colors) {
+    final camera = _camera;
+    if (_cameraError.isNotEmpty) {
+      return Container(
+        color: colors.backgroundMuted,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(16),
+        child: Text(
+          _cameraError,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: colors.textMuted),
+        ),
+      );
+    }
+    if (camera == null || !_cameraReady || !camera.value.isInitialized) {
+      return Container(
+        color: colors.backgroundMuted,
+        alignment: Alignment.center,
+        child: const CircularProgressIndicator(),
+      );
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Fill the frame, cropping the overflow, without stretching the image.
+        // previewSize is reported landscape, so width/height are swapped for the
+        // portrait frame.
+        Positioned.fill(
+          child: ClipRect(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: camera.value.previewSize?.height ?? 260,
+                height: camera.value.previewSize?.width ?? 260,
+                child: CameraPreview(camera),
+              ),
+            ),
+          ),
+        ),
+        if (_videoRecording)
+          Positioned(
+            top: 10,
+            left: 10,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 9,
+                  height: 9,
+                  decoration: const BoxDecoration(
+                      color: Color(0xFFEF4444), shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 6),
+                Text(t('devices.barSpeed.filming'),
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+              ]),
+            ),
+          ),
+        // Flip between the selfie (default) and rear lens; disabled while a clip
+        // is recording, since swapping would abort it.
+        Positioned(
+          top: 8,
+          right: 8,
+          child: Material(
+            color: Colors.black.withValues(alpha: 0.45),
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: IconButton(
+              tooltip: t('devices.barSpeed.switchCamera'),
+              color: Colors.white,
+              disabledColor: Colors.white38,
+              icon: Icon(_lens == CameraLensDirection.front
+                  ? Icons.camera_front
+                  : Icons.camera_rear),
+              onPressed:
+                  (_videoRecording || _switchingCamera) ? null : _switchCamera,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = ref.watch(tProvider);
@@ -335,12 +519,10 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
         ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
-        // Film and record: a live camera view of the set, so the member can
-        // watch their own form while the sensor captures. On screen only -
-        // nothing is filmed to disk or uploaded - and it goes away when the set
-        // is stopped. Mounting the preview starts the camera; removing it (on
-        // Stop) disposes it, so there is no controller to manage here.
-        if (widget.film && !_filmStopped && _camera != null)
+        // Film and record: a live camera view of the set, which is captured to a
+        // video and saved to the gallery between Start and Stop so the member can
+        // review, edit and share it. The preview is a mirror the rest of the time.
+        if (widget.film)
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child: ClipRRect(
@@ -348,48 +530,7 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
               child: SizedBox(
                 height: 260,
                 width: double.infinity,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: MobileScanner(
-                        // Used purely as a viewfinder: detections are ignored,
-                        // this films nothing and reads nothing. The controller
-                        // (owned by the state) sets the selfie lens and lets the
-                        // switch button flip it.
-                        controller: _camera,
-                        onDetect: (_) {},
-                        errorBuilder: (context, error) => Container(
-                          color: colors.backgroundMuted,
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            t('devices.barSpeed.cameraUnavailable'),
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: colors.textMuted),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // Flip between the selfie (default) and rear camera.
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Material(
-                        color: Colors.black.withValues(alpha: 0.45),
-                        shape: const CircleBorder(),
-                        clipBehavior: Clip.antiAlias,
-                        child: IconButton(
-                          tooltip: t('devices.barSpeed.switchCamera'),
-                          color: Colors.white,
-                          icon: Icon(_facing == CameraFacing.front
-                              ? Icons.camera_front
-                              : Icons.camera_rear),
-                          onPressed: _switchCamera,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                child: _buildFilmPreview(t, colors),
               ),
             ),
           ),
