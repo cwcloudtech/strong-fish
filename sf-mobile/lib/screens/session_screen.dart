@@ -720,19 +720,16 @@ class _SetTile extends ConsumerWidget {
     // name and the coach's notes, where a "paused", "2CT" or "3:3:0" cue lives.
     // The member confirms or overrides them on the record screen.
     final cues = [set.exerciseSlug, ...set.exerciseLabels.values, set.notes].join(' ');
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RecordBarSpeedScreen(
-          initialMovement: movement,
-          initialLoad: load,
-          // Opened from this set: a recorded set writes its reps, load and
-          // measured RPE straight back here.
-          assignmentId: assignmentId,
-          setId: set.id,
-          initialSetType: detectSetType(cues),
-          initialTempoVariation: detectTempoVariation(cues),
-        ),
-      ),
+    await showRecordSetSheet(
+      context,
+      initialMovement: movement,
+      initialLoad: load,
+      // Opened from this set: a recorded set writes its reps, load and
+      // measured RPE straight back here.
+      assignmentId: assignmentId,
+      setId: set.id,
+      initialSetType: detectSetType(cues),
+      initialTempoVariation: detectTempoVariation(cues),
     );
     // The recording may have logged the set; refresh so the tile shows it.
     ref.invalidate(assignmentProvider(assignmentId));

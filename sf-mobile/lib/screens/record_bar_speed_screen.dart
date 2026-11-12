@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../models/models.dart';
 import '../native/bar_speed_capture.dart';
@@ -35,6 +36,11 @@ class RecordBarSpeedScreen extends ConsumerStatefulWidget {
   // recording.
   final String initialSetType;
   final bool initialTempoVariation;
+  // Film and record: show a live camera view of the set alongside the sensor
+  // recording, so the member can watch their own form. Nothing is filmed to
+  // disk or uploaded - it is a mirror, on screen only - and the one Stop button
+  // ends both the camera and the sensor capture. False is sensor-only.
+  final bool film;
 
   const RecordBarSpeedScreen({
     super.key,
@@ -44,6 +50,7 @@ class RecordBarSpeedScreen extends ConsumerStatefulWidget {
     this.setId = '',
     this.initialSetType = 'warmup',
     this.initialTempoVariation = false,
+    this.film = false,
   });
 
   @override
@@ -64,6 +71,10 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
   bool _recording = false;
   bool _busy = false;
   StanceSet? _result;
+  // Film mode: the live camera view is shown until the set is stopped, then torn
+  // down (removing the preview from the tree disposes the camera). A new set
+  // brings it back. False keeps it off; it only ever matters when widget.film.
+  bool _filmStopped = false;
   // The reviewed rep count (correcting what the engine detected) and whether the
   // reviewed set has been written back to its training-session set yet.
   final TextEditingController _reps = TextEditingController();
@@ -138,11 +149,18 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
       _result = null;
       _error = '';
       _recording = true;
+      // A fresh set brings the camera back if a previous Stop turned it off.
+      _filmStopped = false;
     });
   }
 
   Future<void> _stop() async {
-    setState(() => _recording = false);
+    // One Stop ends both: the sensor window closes and, in film mode, the live
+    // camera is torn down with it.
+    setState(() {
+      _recording = false;
+      if (widget.film) _filmStopped = true;
+    });
     _fireCallbacks('stop');
 
     // Analyse whenever the sensor actually streamed samples - even if the BLE
@@ -283,6 +301,37 @@ class _RecordBarSpeedScreenState extends ConsumerState<RecordBarSpeedScreen> {
         ],
       ),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        // Film and record: a live camera view of the set, so the member can
+        // watch their own form while the sensor captures. On screen only -
+        // nothing is filmed to disk or uploaded - and it goes away when the set
+        // is stopped. Mounting the preview starts the camera; removing it (on
+        // Stop) disposes it, so there is no controller to manage here.
+        if (widget.film && !_filmStopped)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                height: 260,
+                width: double.infinity,
+                child: MobileScanner(
+                  // Used purely as a viewfinder: detections are ignored, this
+                  // films nothing and reads nothing.
+                  onDetect: (_) {},
+                  errorBuilder: (context, error) => Container(
+                    color: colors.backgroundMuted,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      t('devices.barSpeed.cameraUnavailable'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: colors.textMuted),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         // Nothing records without a sensor connected: say so, and offer the
         // one tap that fixes it, rather than a dead Start button - unless a
         // callback device is set up, which can record on its own.
@@ -557,4 +606,63 @@ class _DebugConsole extends ConsumerWidget {
       ]),
     );
   }
+}
+
+/// Opens the set recorder, first asking how to record: "film and record" shows a
+/// live camera view of the set alongside the sensor (on screen only, nothing
+/// saved), "record only" is the sensor on its own. Shared by the fitness page's
+/// record button and a training-session set, so the choice is offered the same
+/// way from both. A cancelled sheet opens nothing.
+Future<void> showRecordSetSheet(
+  BuildContext context, {
+  String initialMovement = 'squat',
+  double initialLoad = 0,
+  String assignmentId = '',
+  String setId = '',
+  String initialSetType = 'warmup',
+  bool initialTempoVariation = false,
+}) async {
+  final film = await showModalBottomSheet<bool>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheetContext) => Consumer(
+      builder: (context, ref, _) {
+        final t = ref.watch(tProvider);
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.videocam_outlined),
+                title: Text(t('devices.barSpeed.filmAndRecord')),
+                subtitle: Text(t('devices.barSpeed.filmAndRecordHint')),
+                onTap: () => Navigator.of(context).pop(true),
+              ),
+              ListTile(
+                leading: const Icon(Icons.fiber_manual_record),
+                title: Text(t('devices.barSpeed.recordOnly')),
+                subtitle: Text(t('devices.barSpeed.recordOnlyHint')),
+                onTap: () => Navigator.of(context).pop(false),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+  if (film == null || !context.mounted) return;
+  await Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => RecordBarSpeedScreen(
+        film: film,
+        initialMovement: initialMovement,
+        initialLoad: initialLoad,
+        assignmentId: assignmentId,
+        setId: setId,
+        initialSetType: initialSetType,
+        initialTempoVariation: initialTempoVariation,
+      ),
+    ),
+  );
 }

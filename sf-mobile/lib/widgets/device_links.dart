@@ -1757,9 +1757,7 @@ class _BarSpeedPanelState extends ConsumerState<_BarSpeedPanel> {
   }
 
   Future<void> _record() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const RecordBarSpeedScreen()),
-    );
+    await showRecordSetSheet(context); // asks film-and-record vs record-only
     await _load(); // a new capture may have landed
   }
 
