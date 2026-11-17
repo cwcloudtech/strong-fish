@@ -228,6 +228,8 @@ class _NavItem extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+
+
               badge
                   ? _UnreadBadge(child: Icon(icon, color: color, size: 24))
                   : Icon(icon, color: color, size: 24),
