@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { FiEye, FiMapPin, FiShield, FiSlash, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
+import useToastError from "../../utils/useToast";
 import { admin as adminApi, clubs as clubsApi } from "../../api/services";
 import Avatar from "../../components/common/Avatar";
 import Modal, { ConfirmModal } from "../../components/common/Modal";
@@ -412,6 +413,7 @@ function networkLabel(geo) {
  */
 function IpsTab() {
   const { t } = useI18n();
+  const toastError = useToastError();
   const [input, setInput] = useState("");
   const [term, setTerm] = useState("");
   const [page, setPage] = useState(0);
@@ -468,7 +470,9 @@ function IpsTab() {
       loadStats();
       load();
     } catch (err) {
-      setError(err);
+      // Toast the API's error (translated from its i18n code) rather than a line
+      // behind the modal; the modal stays open so the address can be corrected.
+      toastError(err);
     } finally {
       setBusy(false);
     }
@@ -481,7 +485,7 @@ function IpsTab() {
       loadStats();
       load();
     } catch (err) {
-      setError(err);
+      toastError(err);
     }
     setConfirmUnban(null);
   };
