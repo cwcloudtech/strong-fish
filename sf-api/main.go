@@ -17,12 +17,14 @@ import (
 	"strong-fish-api/internal/devicelink"
 	"strong-fish-api/internal/email"
 	"strong-fish-api/internal/garmin"
+	"strong-fish-api/internal/geo"
 	"strong-fish-api/internal/googlehealth"
-	"strong-fish-api/internal/myfitnesspal"
 	"strong-fish-api/internal/handlers"
 	"strong-fish-api/internal/metrics"
 	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
+	"strong-fish-api/internal/myfitnesspal"
+	"strong-fish-api/internal/notify"
 	"strong-fish-api/internal/oidc"
 	"strong-fish-api/internal/router"
 	"strong-fish-api/internal/stance"
@@ -91,6 +93,20 @@ func main() {
 	deviceLinkStore := store.NewDeviceLinkStore(pool)
 	aiStore := store.NewAIStore(pool)
 	callbackStore := store.NewCallbackStore(pool)
+	sessionStore := store.NewSessionStore(pool)
+
+	// The geo enricher turns a bare address into a country/city/network. Always
+	// built (ip-api needs no key); the ipinfo fallback uses the optional token.
+	// The same function enriches a first-seen visit and tags a Discord notice.
+	enricher := geo.New(cfg.IpinfoToken).Enrich
+
+	// Discord notifications for the API's own events (sign-in/out, finished
+	// sessions, new posts). Left nil when no webhook is configured, which the
+	// handlers treat as "don't announce".
+	var notifier handlers.Notifier
+	if d := notify.NewDiscord(cfg.DiscordToken, enricher); d != nil {
+		notifier = d
+	}
 
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
 	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
@@ -198,18 +214,22 @@ func main() {
 
 	api := router.New(router.Handlers{
 		User: handlers.NewUserHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.MaxImageSize,
-			cfg.ActivationMode, mailer, cfg.APIBaseURL, cfg.UIBaseURL, cfg.ConfirmationEmailTTL),
-		MFA: handlers.NewMFAHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.ActivationMode, waInstance, mfaIssuer),
+			cfg.ActivationMode, mailer, cfg.APIBaseURL, cfg.UIBaseURL, cfg.ConfirmationEmailTTL).
+			WithVisits(sessionStore, enricher, notifier),
+		MFA: handlers.NewMFAHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.ActivationMode, waInstance, mfaIssuer).
+			WithVisits(sessionStore, enricher, notifier),
 		OIDC: handlers.NewOIDCHandler(providers, userStore, webauthnStore, cfg.JWTSecret,
-			cfg.APIBaseURL, cfg.UIBaseURL, cfg.OIDCKeycloakGroups, cfg.ActivationMode),
+			cfg.APIBaseURL, cfg.UIBaseURL, cfg.OIDCKeycloakGroups, cfg.ActivationMode).
+			WithVisits(sessionStore, enricher, notifier),
 		Club:     handlers.NewClubHandler(clubStore, userStore, mailer, cfg.MaxImageSize, cfg.UIBaseURL),
 		Exercise: handlers.NewExerciseHandler(exerciseStore, oneRMStore, userStore),
 		Program:  programHandler,
-		Training: handlers.NewTrainingHandler(programStore, clubStore, userStore, programHandler, aiStore, aiHandler),
+		Training: handlers.NewTrainingHandler(programStore, clubStore, userStore, programHandler, aiStore, aiHandler).
+			WithNotify(notifier),
 		Social: handlers.NewSocialHandler(socialStore, clubStore, userStore, oneRMStore,
-			messageStore, cfg.MaxImageSize),
+			messageStore, cfg.MaxImageSize).WithNotify(notifier),
 		Profile: profileHandler,
-		Admin: handlers.NewAdminHandler(userStore, webauthnStore, socialStore, mailer,
+		Admin: handlers.NewAdminHandler(userStore, webauthnStore, socialStore, sessionStore, mailer,
 			cfg.ActivationMode, cfg.UIBaseURL),
 		Config: handlers.NewConfigHandler(oidc.Names(providers), cfg.ActivationMode,
 			cfg.PlateIncrement, cfg.MaxImageSize, cfg.MaxVideoSize, cfg.MaxAudioSize,
@@ -238,7 +258,7 @@ func main() {
 				}
 				return sets
 			}),
-		Callback:   handlers.NewCallbackHandler(callbackStore),
+		Callback: handlers.NewCallbackHandler(callbackStore),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),
 		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, mailer, cfg.MaxImageSize, cfg.UIBaseURL),
@@ -252,6 +272,8 @@ func main() {
 		Version:            cfg.Version,
 		Instrument:         middleware.Instrument(tel.Tracer, tel.Logger, observability.Observe),
 		MetricsHandler:     observability.Handler,
+		Visitors:           sessionStore,
+		Enricher:           enricher,
 	})
 
 	slog.Info("strong-fish api listening", "port", cfg.Port, "version", cfg.Version,

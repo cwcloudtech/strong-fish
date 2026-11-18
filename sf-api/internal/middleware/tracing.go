@@ -51,6 +51,9 @@ func Instrument(tracer trace.Tracer, logger *slog.Logger, observe EndpointObserv
 				attribute.String("http.route", route),
 				attribute.Int("http.status_code", recorder.status),
 			)
+			if cid := CIDFromContext(ctx); utils.IsNotBlank(cid) {
+				span.SetAttributes(attribute.String("cid", cid))
+			}
 			if recorder.status >= http.StatusInternalServerError {
 				span.SetStatus(codes.Error, http.StatusText(recorder.status))
 			}
@@ -75,12 +78,16 @@ func logRequest(ctx context.Context, logger *slog.Logger, method, route string, 
 	case status >= http.StatusBadRequest:
 		level = slog.LevelWarn
 	}
-	logger.Log(ctx, level, "http request",
+	attrs := []any{
 		slog.String("method", method),
 		slog.String("route", route),
 		slog.Int("status", status),
 		slog.Duration("duration", duration),
-	)
+	}
+	if cid := CIDFromContext(ctx); utils.IsNotBlank(cid) {
+		attrs = append(attrs, slog.String("cid", cid))
+	}
+	logger.Log(ctx, level, "http request", attrs...)
 }
 
 // statusRecorder remembers the status the handler wrote. net/http offers no

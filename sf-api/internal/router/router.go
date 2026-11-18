@@ -59,14 +59,25 @@ type Options struct {
 	// what /v1/metrics serves.
 	Instrument     func(http.Handler) http.Handler
 	MetricsHandler http.Handler
+	// Visitors backs the IP guard: the per-request ban check and the visit log.
+	// Nil leaves the guard unmounted (a degraded boot with no session store).
+	Visitors middleware.VisitorStore
+	// Enricher resolves an address's geolocation for a first-seen visit. Nil
+	// records visits without it.
+	Enricher middleware.Enricher
 }
 
 func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) http.Handler {
 	r := chi.NewRouter()
 
-	// Outermost, so a request rejected by CORS or by auth is still counted and
-	// still traced - the requests that never reach a handler are exactly the
-	// ones worth seeing on a dashboard.
+	// First of all, so the correlation id is settled before anything logs it:
+	// every request gets an X-Cid (the caller's, or a fresh one), on the context
+	// and echoed on the response.
+	r.Use(middleware.Correlation)
+
+	// Outermost after that, so a request rejected by CORS or by auth is still
+	// counted and still traced - the requests that never reach a handler are
+	// exactly the ones worth seeing on a dashboard.
 	if o.Instrument != nil {
 		r.Use(o.Instrument)
 	}
@@ -75,8 +86,16 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 		r.Use(cors.Handler(cors.Options{
 			AllowedOrigins: o.CorsAllowedOrigins,
 			AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-			AllowedHeaders: []string{"Authorization", "Content-Type"},
+			AllowedHeaders: []string{"Authorization", "Content-Type", "X-Cid"},
 		}))
+	}
+
+	// The IP guard sits in front of every route: a banned address is refused on
+	// the login page and the public feed alike, and an anonymous visit is logged
+	// here (an authenticated one is logged when its session is minted). Mounted
+	// only when a session store is available.
+	if o.Visitors != nil {
+		r.Use(middleware.BanIP(o.Visitors, o.Enricher))
 	}
 
 	// authenticated wraps a route group in "logged in and not disabled/banned".
@@ -200,6 +219,10 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.Auth(o.JWTSecret, o.ApiKeys))
 				r.Get("/me", h.User.Me)
+				// Logout only announces the departure - the session is a stateless
+				// JWT the client drops - so it needs a session but not an active
+				// account: a banned member signing out still may.
+				r.Post("/logout", h.User.Logout)
 			})
 
 			// An athlete's fitness data read from their profile, keyed by
@@ -716,6 +739,14 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Delete("/{userId}", h.Admin.DeleteUser)
 					r.Delete("/{userId}/mfa", h.Admin.ClearMFA)
 					r.Get("/{userId}/ips", h.Admin.UserIPs)
+				})
+
+				// The IP administration screen: the roster of addresses seen, the
+				// badges above it, and banning or unbanning one.
+				r.Route("/ips", func(r chi.Router) {
+					r.Get("/", h.Admin.ListIPs)
+					r.Get("/stats", h.Admin.IPStats)
+					r.Put("/", h.Admin.BanIP)
 				})
 			})
 		}))

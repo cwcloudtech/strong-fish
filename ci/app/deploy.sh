@@ -8,6 +8,10 @@ env|grep "POSTGRES_"|while read; do
 done
 
 echo "JWT_SECRET=${JWT_SECRET}" > .env.sf.api
+# DISCORD_TOKEN isn't SF_/CWCLOUD_-prefixed, so (like JWT_SECRET) it's written
+# explicitly rather than swept up by the grep below. compute-env.sh maps it
+# from the runner's DISCORD_TOKEN_PUBLIC.
+echo "DISCORD_TOKEN=${DISCORD_TOKEN}" >> .env.sf.api
 env|grep -E "(SF|CWCLOUD)_"|while read; do
   echo "${REPLY}" >> .env.sf.api
 done

@@ -33,6 +33,7 @@ type SocialHandler struct {
 	users        *store.UserStore
 	oneRMs       *store.OneRMStore
 	maxImageSize int64
+	notify       Notifier
 }
 
 func NewSocialHandler(social *store.SocialStore, clubs *store.ClubStore, users *store.UserStore,
@@ -41,6 +42,13 @@ func NewSocialHandler(social *store.SocialStore, clubs *store.ClubStore, users *
 		social: social, clubs: clubs, users: users, oneRMs: oneRMs,
 		messages: messages, maxImageSize: maxImageSize,
 	}
+}
+
+// WithNotify wires the Discord notifier so a new post is announced with its
+// author and the address it was posted from. Optional.
+func (h *SocialHandler) WithNotify(notify Notifier) *SocialHandler {
+	h.notify = notify
+	return h
 }
 
 // decorate fills in the per-caller action flags every post carries: its author
@@ -203,6 +211,9 @@ func (h *SocialHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeStoreError(w, err)
 		return
+	}
+	if user, err := h.users.FindByID(r.Context(), callerID); err == nil {
+		notifyEvent(h.notify, r, EventNewPost, user)
 	}
 	writeJSON(w, http.StatusCreated, decoratePost(post, callerID, superadmin))
 }

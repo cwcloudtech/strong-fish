@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiGlobe, FiShield, FiTrash2 } from "react-icons/fi";
+import { FiGlobe, FiMapPin, FiShield, FiSlash, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { admin as adminApi, clubs as clubsApi } from "../../api/services";
@@ -52,6 +52,7 @@ export default function Admin() {
           { id: "clubs", label: t("admin.clubs") },
           { id: "reports", label: t("admin.reports") },
           { id: "coaches", label: t("admin.coachRequests") },
+          { id: "ips", label: t("admin.ips") },
         ].map((item) => (
           <button key={item.id} type="button" className={`sf-tab ${tab === item.id ? "active" : ""}`} onClick={() => setTab(item.id)}>
             {item.label}
@@ -63,6 +64,7 @@ export default function Admin() {
       {tab === "clubs" ? <ClubsTab /> : null}
       {tab === "reports" ? <ReportsTab /> : null}
       {tab === "coaches" ? <CoachRequestsTab /> : null}
+      {tab === "ips" ? <IpsTab /> : null}
     </div>
   );
 }
@@ -317,9 +319,11 @@ function UserIpsModal({ user, onClose }) {
             <thead>
               <tr>
                 <th>{t("admin.ip")}</th>
+                <th>{t("admin.ipsScreen.location")}</th>
                 <th className="sf-table-num">{t("admin.ipCount")}</th>
                 <th>{t("admin.ipFirstSeen")}</th>
                 <th>{t("admin.ipLastSeen")}</th>
+                <th>{t("admin.ipsScreen.status")}</th>
               </tr>
             </thead>
             <tbody>
@@ -328,9 +332,17 @@ function UserIpsModal({ user, onClose }) {
                   <td>
                     <code>{entry.ip}</code>
                   </td>
+                  <td className="sf-muted">{geoLabel(entry.geo) || "—"}</td>
                   <td className="sf-table-num">{entry.count}</td>
                   <td className="sf-muted">{new Date(entry.firstSeen).toLocaleString()}</td>
                   <td className="sf-muted">{new Date(entry.lastSeen).toLocaleString()}</td>
+                  <td>
+                    {entry.banned ? (
+                      <span className="sf-badge sf-badge-danger">{t("admin.ipsScreen.banned")}</span>
+                    ) : (
+                      <span className="sf-muted">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -338,6 +350,279 @@ function UserIpsModal({ user, onClose }) {
         </div>
       )}
     </Modal>
+  );
+}
+
+// geoLabel renders what the enrichment knows of where an address is - "City,
+// Region, Country (CC)" - using only the parts that resolved.
+function geoLabel(geo) {
+  if (!geo) return "";
+  const place = [geo.city, geo.region, geo.country].filter(Boolean).join(", ");
+  const code = geo.countryCode ? ` (${geo.countryCode})` : "";
+  return place ? place + code : "";
+}
+
+// networkLabel names the operator behind an address - its ISP, else the
+// organisation or AS number.
+function networkLabel(geo) {
+  if (!geo) return "";
+  return geo.isp || geo.org || geo.asn || "";
+}
+
+/**
+ * The IP administration screen: every address seen (plus any banned before it
+ * was seen), with who has been behind it, where it is, and whether it is
+ * banned. The same roster ~/uprodit offers - search, ban/unban, geolocation -
+ * backed here by the sessions table.
+ */
+function IpsTab() {
+  const { t } = useI18n();
+  const [input, setInput] = useState("");
+  const [term, setTerm] = useState("");
+  const [page, setPage] = useState(0);
+  const [data, setData] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [error, setError] = useState(null);
+  const [banOpen, setBanOpen] = useState(false);
+  const [banIpValue, setBanIpValue] = useState("");
+  const [banMotif, setBanMotif] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [confirmUnban, setConfirmUnban] = useState(null);
+
+  const loadStats = useCallback(() => {
+    adminApi.ipStats().then(setStats).catch(() => setStats(null));
+  }, []);
+
+  const load = useCallback(() => {
+    setData(null);
+    setError(null);
+    adminApi.ips(term, page).then(setData).catch(setError);
+  }, [term, page]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Debounce the filter box, and go back to the first page when it changes.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setTerm(input.trim());
+      setPage(0);
+    }, 350);
+    return () => clearTimeout(id);
+  }, [input]);
+
+  const openBan = (ip = "") => {
+    setBanIpValue(ip);
+    setBanMotif("");
+    setBanOpen(true);
+  };
+
+  const submitBan = async () => {
+    const ip = banIpValue.trim();
+    if (!ip) return;
+    setBusy(true);
+    try {
+      await adminApi.banIp(ip, banMotif.trim());
+      toast.success(t("admin.ipsScreen.bannedToast"), toastOptions);
+      setBanOpen(false);
+      loadStats();
+      load();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const unban = async (ip) => {
+    try {
+      await adminApi.unbanIp(ip);
+      toast.success(t("admin.ipsScreen.unbannedToast"), toastOptions);
+      loadStats();
+      load();
+    } catch (err) {
+      setError(err);
+    }
+    setConfirmUnban(null);
+  };
+
+  const rows = data?.results || null;
+
+  return (
+    <>
+      <div className="sf-row-between" style={{ marginBottom: "0.8rem", flexWrap: "wrap", gap: "0.6rem" }}>
+        <div className="sf-row" style={{ gap: "1.5rem" }}>
+          <div>
+            <span className="sf-stat-value">{stats ? stats.total : "—"}</span>
+            <span className="sf-stat-label">{t("admin.ipsScreen.totalIps")}</span>
+          </div>
+          <div>
+            <span className="sf-stat-value">{stats ? stats.banned : "—"}</span>
+            <span className="sf-stat-label">{t("admin.ipsScreen.bannedIps")}</span>
+          </div>
+        </div>
+        <div className="sf-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+          <input
+            className="sf-input"
+            style={{ maxWidth: 240 }}
+            placeholder={t("admin.ipsScreen.searchPlaceholder")}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+          />
+          <button className="sf-button sf-button-danger sf-button-sm" onClick={() => openBan("")}>
+            <FiSlash /> {t("admin.ipsScreen.banNew")}
+          </button>
+        </div>
+      </div>
+
+      <p className="sf-muted" style={{ marginTop: 0 }}>
+        {t("admin.ipsScreen.help")}
+      </p>
+      <ErrorMessage error={error} />
+
+      {rows === null ? (
+        <Spinner />
+      ) : rows.length === 0 ? (
+        <EmptyState title={t("admin.ipsScreen.emptyTitle")} message={t("admin.ipsScreen.emptyBody")} />
+      ) : (
+        <div className="sf-card">
+          <div className="sf-table-wrapper">
+            <table className="sf-table">
+              <thead>
+                <tr>
+                  <th>{t("admin.ip")}</th>
+                  <th>{t("admin.ipsScreen.members")}</th>
+                  <th>{t("admin.ipsScreen.location")}</th>
+                  <th>{t("admin.ipsScreen.network")}</th>
+                  <th className="sf-table-num">{t("admin.ipCount")}</th>
+                  <th>{t("admin.ipLastSeen")}</th>
+                  <th>{t("admin.ipsScreen.status")}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.ip}>
+                    <td>
+                      <code>{row.ip}</code>
+                    </td>
+                    <td>
+                      {row.members.length === 0 ? (
+                        <span className="sf-muted">{t("admin.ipsScreen.anonymous")}</span>
+                      ) : (
+                        row.members.map((m, i) => (
+                          <span key={m.id}>
+                            {i > 0 ? ", " : ""}
+                            {m.handle ? <Link to={`/profile/${m.handle}`}>{m.email}</Link> : m.email}
+                          </span>
+                        ))
+                      )}
+                    </td>
+                    <td className="sf-muted">
+                      {geoLabel(row.geo) ? (
+                        <>
+                          <FiMapPin style={{ verticalAlign: "-2px" }} /> {geoLabel(row.geo)}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="sf-muted">{networkLabel(row.geo) || "—"}</td>
+                    <td className="sf-table-num">{row.count}</td>
+                    <td className="sf-muted">{row.lastSeen ? new Date(row.lastSeen).toLocaleString() : "—"}</td>
+                    <td>
+                      {row.banned ? (
+                        <span className="sf-badge sf-badge-danger" title={row.reason || ""}>
+                          {t("admin.ipsScreen.banned")}
+                        </span>
+                      ) : (
+                        <span className="sf-muted">—</span>
+                      )}
+                    </td>
+                    <td className="sf-table-num">
+                      {row.banned ? (
+                        <button className="sf-button sf-button-secondary sf-button-sm" onClick={() => setConfirmUnban(row)}>
+                          {t("admin.ipsScreen.unban")}
+                        </button>
+                      ) : (
+                        <button className="sf-button sf-button-danger sf-button-sm" onClick={() => openBan(row.ip)}>
+                          {t("admin.ipsScreen.ban")}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="sf-row" style={{ justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.6rem" }}>
+            <button
+              className="sf-button sf-button-secondary sf-button-sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              {t("admin.ipsScreen.prev")}
+            </button>
+            <span className="sf-muted" style={{ alignSelf: "center" }}>
+              {page + 1}
+            </span>
+            <button
+              className="sf-button sf-button-secondary sf-button-sm"
+              disabled={!data?.hasNext}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              {t("admin.ipsScreen.next")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {banOpen ? (
+        <Modal
+          title={t("admin.ipsScreen.banTitle")}
+          onClose={() => setBanOpen(false)}
+          actions={
+            <>
+              <button className="sf-button sf-button-secondary" onClick={() => setBanOpen(false)}>
+                {t("common.cancel")}
+              </button>
+              <button className="sf-button sf-button-danger" onClick={submitBan} disabled={busy || !banIpValue.trim()}>
+                {t("admin.ipsScreen.ban")}
+              </button>
+            </>
+          }
+        >
+          <div className="sf-field">
+            <label className="sf-label">{t("admin.ip")}</label>
+            <input className="sf-input" value={banIpValue} onChange={(e) => setBanIpValue(e.target.value)} placeholder="203.0.113.7" autoFocus />
+          </div>
+          <div className="sf-field">
+            <label className="sf-label">{t("admin.ipsScreen.reason")}</label>
+            <input
+              className="sf-input"
+              value={banMotif}
+              onChange={(e) => setBanMotif(e.target.value)}
+              placeholder={t("admin.ipsScreen.reasonPlaceholder")}
+            />
+          </div>
+        </Modal>
+      ) : null}
+
+      {confirmUnban ? (
+        <ConfirmModal
+          title={t("admin.ipsScreen.unban")}
+          message={t("admin.ipsScreen.confirmUnban", { ip: confirmUnban.ip })}
+          onConfirm={() => unban(confirmUnban.ip)}
+          onClose={() => setConfirmUnban(null)}
+        />
+      ) : null}
+    </>
   );
 }
 

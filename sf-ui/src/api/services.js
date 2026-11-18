@@ -14,6 +14,9 @@ export const auth = {
   register: (payload) => body(client.post("/users", payload)),
   login: (email, password) => body(client.post("/users/login", { email, password })),
   me: () => body(client.get("/users/me")),
+  // Best-effort: the session is a stateless JWT the client drops, so this only
+  // tells the server the member left (for the sign-out notification).
+  logout: () => body(client.post("/users/logout")),
   updateProfile: (payload) => body(client.put("/users/me", payload)),
   updatePicture: (picture, x, y) => body(client.put("/users/me/picture", { picture, x, y })),
   forgotPassword: (email) => body(client.post("/users/forgot-password", { email })),
@@ -573,4 +576,10 @@ export const admin = {
     body(client.get("/admin/reports", { params: { status: status || undefined, page, size: PAGE_SIZE } })),
   resolveReport: (reportId, status, deleteTarget) =>
     body(client.put(`/admin/reports/${reportId}`, { status, deleteTarget })),
+  // The IP administration roster: {results, page, pageSize, hasNext}. term
+  // filters by address or a member's email/name; page is 0-based.
+  ips: (term, page = 0) => body(client.get("/admin/ips", { params: { term: term || undefined, page } })),
+  ipStats: () => body(client.get("/admin/ips/stats")),
+  banIp: (ip, motif) => body(client.put("/admin/ips", { ip, action: "ban", motif: motif || "" })),
+  unbanIp: (ip) => body(client.put("/admin/ips", { ip, action: "unban" })),
 };

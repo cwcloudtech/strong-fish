@@ -123,9 +123,6 @@ type User struct {
 	// soon as enrollment starts but MFAEnabled stays false until the user
 	// confirms a code generated from it.
 	MFATOTPSecret string `json:"-"`
-	// IPs are the addresses this account has connected from, with a hit count
-	// each. Administrative data, never serialized with the user.
-	IPs []ConnectionIP `json:"-"`
 	// CoachRequest is set when the account asked to be a coach at signup. The
 	// role is not granted by asking: it waits on a superadmin's decision.
 	CoachRequest CoachRequest `json:"-"`
@@ -244,8 +241,8 @@ type PublicProfile struct {
 	Following int           `json:"following"`
 	// Followed reports whether the *caller* follows this profile; false for an
 	// anonymous visitor.
-	Followed  bool          `json:"followed"`
-	Clubs     []ProfileClub `json:"clubs"`
+	Followed bool          `json:"followed"`
+	Clubs    []ProfileClub `json:"clubs"`
 	// CanViewHealth tells the client whether to offer this profile's fitness
 	// data (the charts, the export, the AI reading): true for the member
 	// themselves, a superadmin, a coach or nutritionist of a club they are in,

@@ -26,6 +26,7 @@ type TrainingHandler struct {
 	// refuses, is the same answer here as in the chat.
 	aiStore *store.AIStore
 	ai      *AIHandler
+	notify  Notifier
 }
 
 // NewTrainingHandler reuses ProgramHandler's set resolution rather than
@@ -36,6 +37,13 @@ func NewTrainingHandler(programs *store.ProgramStore, clubs *store.ClubStore, us
 		programs: programs, clubs: clubs, users: users, sets: sets,
 		aiStore: aiStore, ai: aiHandler,
 	}
+}
+
+// WithNotify wires the Discord notifier so finishing a training session is
+// announced - one message per session marked done, never per set. Optional.
+func (h *TrainingHandler) WithNotify(notify Notifier) *TrainingHandler {
+	h.notify = notify
+	return h
 }
 
 // ListAssignments returns the programs the caller has been given.
@@ -345,6 +353,13 @@ func (h *TrainingHandler) SetDayDone(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeStoreError(w, err)
 		return
+	}
+	// Announce a finished session - one per day ticked off, not per set, and
+	// only on completion (not when a member un-ticks one).
+	if p.Done {
+		if user, err := h.users.FindByID(r.Context(), callerID); err == nil {
+			notifyEvent(h.notify, r, EventSession, user)
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"dayId": dayID, "done": p.Done, "sets": count})
 }

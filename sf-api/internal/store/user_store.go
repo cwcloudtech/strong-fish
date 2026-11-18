@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -45,19 +43,18 @@ type userData struct {
 	// PublicProfile is the boolean ProfileVisibility replaced. It is still read
 	// so an account the V5 migration hasn't touched still resolves to something
 	// sensible, and never written.
-	PublicProfile     bool                  `json:"publicProfile,omitempty"`
-	ProfileVisibility string                `json:"profileVisibility,omitempty"`
-	FitnessPublic     bool                  `json:"fitnessPublic,omitempty"`
-	Birthdate         string                `json:"birthdate,omitempty"`
-	Gender            string                `json:"gender,omitempty"`
-	EffortMetric      string                `json:"effortMetric,omitempty"`
-	CoachRequest      *models.CoachRequest  `json:"coachRequest,omitempty"`
-	IPs               []models.ConnectionIP `json:"ips,omitempty"`
-	Bodyweight        float64               `json:"bodyweight,omitempty"`
-	Height            float64               `json:"height,omitempty"`
-	Socials           *models.Socials       `json:"socials,omitempty"`
-	MFAEnabled        bool                  `json:"mfaEnabled,omitempty"`
-	MFATOTPSecret     string                `json:"mfaTotpSecret,omitempty"`
+	PublicProfile     bool                 `json:"publicProfile,omitempty"`
+	ProfileVisibility string               `json:"profileVisibility,omitempty"`
+	FitnessPublic     bool                 `json:"fitnessPublic,omitempty"`
+	Birthdate         string               `json:"birthdate,omitempty"`
+	Gender            string               `json:"gender,omitempty"`
+	EffortMetric      string               `json:"effortMetric,omitempty"`
+	CoachRequest      *models.CoachRequest `json:"coachRequest,omitempty"`
+	Bodyweight        float64              `json:"bodyweight,omitempty"`
+	Height            float64              `json:"height,omitempty"`
+	Socials           *models.Socials      `json:"socials,omitempty"`
+	MFAEnabled        bool                 `json:"mfaEnabled,omitempty"`
+	MFATOTPSecret     string               `json:"mfaTotpSecret,omitempty"`
 	// CalendarFeed* back the ICS subscription: they live in the payload like
 	// everything else here, and are never sent out with the user. (The
 	// storage connection used to sit beside them; V12 moved it to its own
@@ -109,7 +106,6 @@ func scanUser(row pgx.Row) (models.User, error) {
 	if d.CoachRequest != nil {
 		u.CoachRequest = *d.CoachRequest
 	}
-	u.IPs = d.IPs
 	u.Bodyweight = d.Bodyweight
 	u.Height = d.Height
 	u.Gender = d.Gender
@@ -873,51 +869,6 @@ func (s *UserStore) CountByRole(ctx context.Context) (map[string]int64, error) {
 		counts[role] = count
 	}
 	return counts, rows.Err()
-}
-
-// RecordConnection notes that userID connected from ip: a new address is
-// appended, a known one has its counter bumped and its lastSeen refreshed.
-//
-// It reads the list, edits it in Go and writes it back, rather than doing the
-// same in a jsonb_set expression. That is a deliberate trade: the SQL would be
-// one statement but genuinely unreadable, and the race it avoids - two
-// simultaneous logins from the same account - costs at worst one lost tick of a
-// counter that exists to be looked at, not to be reconciled.
-//
-// The list is bounded (models.MaxConnectionIPs): an account connecting from a
-// new address every time would otherwise grow its own row without limit, so
-// past the cap the least recently seen address is dropped.
-func (s *UserStore) RecordConnection(ctx context.Context, userID, ip string, at time.Time) error {
-	if utils.IsBlank(userID) || utils.IsBlank(ip) {
-		return nil
-	}
-
-	user, err := s.FindByID(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	ips := user.IPs
-	found := false
-	for i := range ips {
-		if ips[i].IP == ip {
-			ips[i].Count++
-			ips[i].LastSeen = at
-			found = true
-			break
-		}
-	}
-	if !found {
-		ips = append(ips, models.ConnectionIP{IP: ip, Count: 1, FirstSeen: at, LastSeen: at})
-	}
-
-	sort.Slice(ips, func(i, j int) bool { return ips[i].LastSeen.After(ips[j].LastSeen) })
-	if len(ips) > models.MaxConnectionIPs {
-		ips = ips[:models.MaxConnectionIPs]
-	}
-
-	_, err = s.merge(ctx, userID, map[string]any{"ips": ips})
-	return err
 }
 
 // Birthday is the little a calendar needs to draw somebody's birthday: who

@@ -72,6 +72,10 @@ export function AuthProvider({ children }) {
   );
 
   const logout = useCallback(() => {
+    // Tell the server the member is leaving - for the sign-out notification -
+    // while the token is still there to authenticate the call. Best-effort:
+    // logging out locally must never wait on or fail with it.
+    auth.logout().catch(() => {});
     clearToken();
     setUser(null);
   }, []);

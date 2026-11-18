@@ -14,6 +14,12 @@ export SF_CORS_ENABLED="off"
 export SF_MAX_IMAGE_SIZE="2097152"
 export SF_ACTIVATION_MODE="email"
 
+# Discord webhook for the API's own event notifications (sign-in/out, finished
+# sessions, new posts). It reuses DISCORD_TOKEN_PUBLIC - the same runner secret
+# ci/common/notif.sh posts deploy notices with - under the name the API reads
+# (DISCORD_TOKEN, matching ~/uprodit). deploy.sh writes it into .env.sf.api.
+export DISCORD_TOKEN="${DISCORD_TOKEN_PUBLIC:-}"
+
 echo "VERSION=${VERSION}" > .env.ci
 echo "VERSION_SHA=${VERSION_SHA}" >> .env.ci
 

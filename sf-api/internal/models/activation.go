@@ -24,6 +24,9 @@ const (
 	I18nAccountDisabledAdmin = "errors.accountDisabledAdmin"
 	I18nAccountDisabledEmail = "errors.accountDisabledEmail"
 	I18nAccountBanned        = "errors.accountBanned"
+	// I18nIPBanned is why the guard middleware refuses a request outright: the
+	// address it came from is banned, whoever (if anyone) is behind it.
+	I18nIPBanned = "errors.ipBanned"
 )
 
 // I18nCodeForRole returns the i18n code describing why an account with role is

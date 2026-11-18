@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"net"
 	"net/http"
-	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -21,18 +23,25 @@ type AdminHandler struct {
 	users          *store.UserStore
 	webauthnCreds  *store.WebAuthnCredentialStore
 	social         *store.SocialStore
+	sessions       *store.SessionStore
 	mailer         *email.Sender
 	activationMode string
 	uiBaseURL      string
 }
 
 func NewAdminHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCredentialStore,
-	social *store.SocialStore, mailer *email.Sender, activationMode, uiBaseURL string) *AdminHandler {
+	social *store.SocialStore, sessions *store.SessionStore, mailer *email.Sender,
+	activationMode, uiBaseURL string) *AdminHandler {
 	return &AdminHandler{
-		users: users, webauthnCreds: webauthnCreds, social: social, mailer: mailer,
-		activationMode: activationMode, uiBaseURL: uiBaseURL,
+		users: users, webauthnCreds: webauthnCreds, social: social, sessions: sessions,
+		mailer: mailer, activationMode: activationMode, uiBaseURL: uiBaseURL,
 	}
 }
+
+// adminIPPageSize bounds one page of the IP roster. The screen filters and
+// pages server-side, so this is the slice sent per request, not a cap on how
+// many addresses may exist.
+const adminIPPageSize = 50
 
 // adminUser is one account as the management screen shows it, with the MFA flag
 // the plain profile response hides.
@@ -170,28 +179,88 @@ func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// UserIPs lists the addresses one account has connected from, with a hit count
-// each - the same view ~/uprodit offers.
-//
-// There is deliberately no ban here: blocking an address is the firewall's job,
-// and a ban list in the application would be a second, weaker place for the
-// same rule to live. This is for recognizing an account, not for stopping one.
+// UserIPs lists the addresses one account has connected from, newest-first,
+// each with its hit count, geolocation and whether it is currently banned.
 func (h *AdminHandler) UserIPs(w http.ResponseWriter, r *http.Request) {
-	user, err := h.users.FindByID(r.Context(), chi.URLParam(r, "userId"))
+	ips, err := h.sessions.ListByUser(r.Context(), chi.URLParam(r, "userId"))
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
-
-	ips := user.IPs
-	if ips == nil {
-		ips = []models.ConnectionIP{}
-	}
-	// Most recently seen first: an administrator looking at an account is
-	// asking "where is this person now", not "where did they start".
-	sort.SliceStable(ips, func(i, j int) bool { return ips[i].LastSeen.After(ips[j].LastSeen) })
-
 	writeJSON(w, http.StatusOK, ips)
+}
+
+// ListIPs is the IP administration roster: every address seen (plus any banned
+// before they were seen), with its members, geolocation and ban state. It
+// filters by ?term= (an address, or a member's email or name) and pages by
+// ?page= (0-based).
+func (h *AdminHandler) ListIPs(w http.ResponseWriter, r *http.Request) {
+	term := r.URL.Query().Get("term")
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 0 {
+		page = 0
+	}
+
+	ips, err := h.sessions.ListIps(r.Context(), term, page*adminIPPageSize, adminIPPageSize)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	// hasNext is inferred from a full page rather than a second count query: a
+	// page that came back short is the last one.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"results":  ips,
+		"page":     page,
+		"pageSize": adminIPPageSize,
+		"hasNext":  len(ips) == adminIPPageSize,
+	})
+}
+
+// IPStats backs the roster's badges: how many distinct addresses have been
+// seen, and how many are banned.
+func (h *AdminHandler) IPStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.sessions.Stats(r.Context())
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+// BanIP bans or lifts the ban on an address. One endpoint, two actions
+// ({"action":"ban"|"unban"}): a banned address is refused by the guard
+// middleware on its next request. The address is taken from the body rather
+// than the path so an IPv6 address - colons and all - needs no URL-encoding.
+func (h *AdminHandler) BanIP(w http.ResponseWriter, r *http.Request) {
+	callerID, _ := middleware.UserIDFromContext(r.Context())
+
+	var p models.IpBanAction
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+	ip := strings.TrimSpace(p.IP)
+	if net.ParseIP(ip) == nil {
+		writeError(w, http.StatusBadRequest, "Please provide a valid IP address", CodeInvalidRequestBody)
+		return
+	}
+
+	switch p.Action {
+	case models.IPActionBan:
+		if err := h.sessions.BanIp(r.Context(), ip, p.Motif, callerID); err != nil {
+			writeStoreError(w, err)
+			return
+		}
+	case models.IPActionUnban:
+		if err := h.sessions.UnbanIp(r.Context(), ip); err != nil {
+			writeStoreError(w, err)
+			return
+		}
+	default:
+		writeError(w, http.StatusBadRequest, "Unknown action", CodeInvalidRequestBody)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ip": ip, "action": p.Action})
 }
 
 // --- coach confirmation ---

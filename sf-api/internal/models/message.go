@@ -82,21 +82,3 @@ type Block struct {
 	Blocked   UserSummary `json:"blocked"`
 	CreatedAt time.Time   `json:"createdAt"`
 }
-
-// ConnectionIP is one address an account has connected from, with how often.
-//
-// Kept in the user's payload rather than in a table: it is a short per-account
-// list, read only on that account's administration screen, and a row per login
-// would be a write on every single authentication for data nobody queries
-// across accounts.
-type ConnectionIP struct {
-	IP        string    `json:"ip"`
-	Count     int       `json:"count"`
-	FirstSeen time.Time `json:"firstSeen"`
-	LastSeen  time.Time `json:"lastSeen"`
-}
-
-// MaxConnectionIPs bounds the list. An account connecting from a new address
-// every time - a phone on mobile data - would otherwise grow its own row
-// without limit; past this, the least recently seen address is dropped.
-const MaxConnectionIPs = 50

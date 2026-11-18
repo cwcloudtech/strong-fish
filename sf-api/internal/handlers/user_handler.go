@@ -34,6 +34,9 @@ type UserHandler struct {
 	apiBaseURL           string
 	uiBaseURL            string
 	confirmationTokenTTL time.Duration
+	visits               middleware.VisitorStore
+	enrich               middleware.Enricher
+	notify               Notifier
 }
 
 func NewUserHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCredentialStore, jwtSecret string,
@@ -44,6 +47,17 @@ func NewUserHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCredent
 		activationMode: activationMode, mailer: mailer, apiBaseURL: apiBaseURL, uiBaseURL: uiBaseURL,
 		confirmationTokenTTL: confirmationTokenTTL,
 	}
+}
+
+// WithVisits wires the connection log and the Discord notifier: a successful
+// login/register records the address it came from (enriching a first-seen one
+// with geolocation) and announces the sign-in. Optional - left unset, logins
+// simply aren't logged or announced.
+func (h *UserHandler) WithVisits(visits middleware.VisitorStore, enrich middleware.Enricher, notify Notifier) *UserHandler {
+	h.visits = visits
+	h.enrich = enrich
+	h.notify = notify
+	return h
 }
 
 type registerPayload struct {
@@ -208,7 +222,14 @@ func (h *UserHandler) respondSession(w http.ResponseWriter, r *http.Request, use
 		writeError(w, http.StatusInternalServerError, err.Error(), CodeInternal)
 		return
 	}
-	recordConnection(r, h.users, user.ID)
+	recordConnection(r, h.visits, h.enrich, user.ID)
+	// A 201 here is a brand-new account minting its first session - a sign-up;
+	// a 200 is an existing account signing in.
+	event := EventSignIn
+	if status == http.StatusCreated {
+		event = EventSignUp
+	}
+	notifyEvent(h.notify, r, event, user)
 	writeJSON(w, status, models.UserResponse{
 		ID: user.ID, Email: user.Email, Name: user.Name, Surname: user.Surname,
 		Handle: user.Handle, Role: user.Role, Token: token, Picture: user.Picture,
@@ -277,6 +298,21 @@ func (h *UserHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, meResponse(user, h.activationMode))
+}
+
+// Logout announces a sign-out. The session is a stateless JWT the client simply
+// drops, so there is nothing to revoke here - this endpoint exists only so a
+// departure can be announced alongside the arrivals, with who left and from
+// where. Best-effort from the client's side; it need not block on the call.
+func (h *UserHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+	user, err := h.users.FindByID(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "User not found", CodeUserNotFound)
+		return
+	}
+	notifyEvent(h.notify, r, EventSignOut, user)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 type updateProfilePayload struct {

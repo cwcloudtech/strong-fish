@@ -94,6 +94,15 @@ type Config struct {
 	AboutURL string
 	// DocURL is the wiki's own root, linked from the sidebar.
 	DocURL string
+	// IpinfoToken is the optional ipinfo.io API token the geo enricher uses as
+	// its fallback provider; ip-api (tried first) needs none, so this is blank
+	// in most deployments.
+	IpinfoToken string
+	// DiscordToken is the incoming-webhook token the API posts its own event
+	// notifications to (sign-in/out, finished sessions, new posts). Blank or
+	// "changeit" disables them. Mapped from the runner's DISCORD_TOKEN_PUBLIC in
+	// ci/app/compute-env.sh - the same webhook the deploy notice uses.
+	DiscordToken string
 }
 
 const (
@@ -236,6 +245,8 @@ func Load() Config {
 		OTELProto:                utils.GetEnv("SF_OTEL_PROTO", "otlp/grpc"),
 		AboutURL:                 utils.GetEnv("SF_ABOUT_URL", "https://doc.strong-fish.com/docs/about"),
 		DocURL:                   utils.GetEnv("SF_DOC_URL", "https://doc.strong-fish.com"),
+		IpinfoToken:              os.Getenv("SF_IPINFO_TOKEN"),
+		DiscordToken:             os.Getenv("DISCORD_TOKEN"),
 	}
 }
 

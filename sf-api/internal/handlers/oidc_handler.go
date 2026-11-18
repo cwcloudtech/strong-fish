@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"strong-fish-api/internal/authtoken"
+	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/oidc"
 	"strong-fish-api/internal/store"
@@ -32,6 +33,9 @@ type OIDCHandler struct {
 	uiBaseURL      string
 	keycloakGroups []string
 	activationMode string
+	visits         middleware.VisitorStore
+	enrich         middleware.Enricher
+	notify         Notifier
 }
 
 func NewOIDCHandler(providers []oidc.Provider, users *store.UserStore, webauthnCreds *store.WebAuthnCredentialStore,
@@ -41,6 +45,16 @@ func NewOIDCHandler(providers []oidc.Provider, users *store.UserStore, webauthnC
 		apiBaseURL: apiBaseURL, uiBaseURL: uiBaseURL, keycloakGroups: keycloakGroups,
 		activationMode: activationMode,
 	}
+}
+
+// WithVisits wires the connection log and the Discord notifier so an OIDC
+// sign-in that completes without MFA records the address it came from and
+// announces the sign-in. Optional - unset, it simply isn't logged or announced.
+func (h *OIDCHandler) WithVisits(visits middleware.VisitorStore, enrich middleware.Enricher, notify Notifier) *OIDCHandler {
+	h.visits = visits
+	h.enrich = enrich
+	h.notify = notify
+	return h
 }
 
 // ListProviders is unauthenticated: the frontend calls it to know which
@@ -115,7 +129,8 @@ func (h *OIDCHandler) finishSession(r *http.Request, user models.User) (string, 
 	if !user.MFAEnabled {
 		token, err := authtoken.Generate(h.jwtSecret, user.ID)
 		if err == nil {
-			recordConnection(r, h.users, user.ID)
+			recordConnection(r, h.visits, h.enrich, user.ID)
+			notifyEvent(h.notify, r, EventSignIn, user)
 		}
 		return token, nil, err
 	}

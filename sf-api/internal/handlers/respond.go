@@ -1,14 +1,13 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
-	"time"
 
+	"strong-fish-api/internal/middleware"
 	"strong-fish-api/internal/models"
 	"strong-fish-api/internal/store"
 	"strong-fish-api/internal/strength"
@@ -263,31 +262,26 @@ func meResponse(user models.User, activationMode string) models.UserMeResponse {
 		Gender:       string(strength.NormalizeGender(user.Gender)),
 		EffortMetric: models.NormalizeEffortMetric(user.EffortMetric),
 		Socials:      models.NormalizeSocials(user.Socials),
-		MFAEnabled: user.MFAEnabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
+		MFAEnabled:   user.MFAEnabled, CreatedAt: user.CreatedAt, UpdatedAt: user.UpdatedAt,
 		I18nCode: models.I18nCodeForRole(user.Role, activationMode),
 	}
 }
 
-// connectionRecorder is the one store method recordConnection needs, kept
-// narrow so both handlers can take it without either depending on the other.
-type connectionRecorder interface {
-	RecordConnection(ctx context.Context, userID, ip string, at time.Time) error
-}
-
-// recordConnection notes the address a session was minted from.
+// recordConnection notes the address a session was minted from, against the
+// member it belongs to, and - on a first sighting - enriches it with
+// geolocation. The work is handed to the session store's visit tracker.
 //
-// It is best-effort and deliberately silent on failure: this is administrative
-// data, and losing a counter tick must never fail a login. It runs on session
-// creation rather than per request - the alternative is a database write on
-// every single call for a number nobody reads that often.
-func recordConnection(r *http.Request, users connectionRecorder, userID string) {
+// Best-effort and fire-and-forget: this is administrative data, and neither a
+// counter tick nor a geo lookup must ever slow a login or fail one. It runs on
+// session creation rather than per request - the alternative is a write on
+// every single call for data nobody reads that often.
+func recordConnection(r *http.Request, visits middleware.VisitorStore, enrich middleware.Enricher, userID string) {
 	ip := utils.ClientIP(r)
-	if utils.IsBlank(ip) || users == nil {
+	if utils.IsBlank(ip) || visits == nil || utils.IsBlank(userID) {
 		return
 	}
-	if err := users.RecordConnection(r.Context(), userID, ip, time.Now().UTC()); err != nil {
-		slog.Warn("failed to record a connection address", "userId", userID, "error", err)
-	}
+	id := userID
+	go middleware.TrackVisit(visits, enrich, &id, ip)
 }
 
 // localeOf returns the language to send a user's emails in, defaulting to the

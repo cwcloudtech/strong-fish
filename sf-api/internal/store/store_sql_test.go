@@ -173,6 +173,7 @@ func TestReadQueriesExecute(t *testing.T) {
 	social := NewSocialStore(pool)
 	programs := NewProgramStore(pool)
 	invitations := NewInvitationStore(pool)
+	sessions := NewSessionStore(pool)
 
 	caller := seedUser(t, pool, "caller.sql@example.test")
 
@@ -206,7 +207,25 @@ func TestReadQueriesExecute(t *testing.T) {
 			}
 			return err
 		}},
-		{"RecordConnection", func() error { return users.RecordConnection(ctx, caller, "203.0.113.7", time.Now().UTC()) }},
+		{"sessions.RecordVisit/member", func() error {
+			_, err := sessions.RecordVisit(ctx, &caller, "203.0.113.7", time.Now().UTC())
+			return err
+		}},
+		{"sessions.RecordVisit/anonymous", func() error {
+			_, err := sessions.RecordVisit(ctx, nil, "203.0.113.8", time.Now().UTC())
+			return err
+		}},
+		{"sessions.NeedsGeo", func() error { _, err := sessions.NeedsGeo(ctx, "203.0.113.7"); return err }},
+		{"sessions.SetGeo", func() error {
+			return sessions.SetGeo(ctx, "203.0.113.7", map[string]string{"country": "France", "city": "Lyon"})
+		}},
+		{"sessions.IsIpBanned", func() error { _, err := sessions.IsIpBanned(ctx, "203.0.113.7"); return err }},
+		{"sessions.ListByUser", func() error { _, err := sessions.ListByUser(ctx, caller); return err }},
+		{"sessions.ListIps", func() error { _, err := sessions.ListIps(ctx, "", 0, 50); return err }},
+		{"sessions.ListIps/term", func() error { _, err := sessions.ListIps(ctx, "203.0", 0, 50); return err }},
+		{"sessions.Stats", func() error { _, err := sessions.Stats(ctx); return err }},
+		{"sessions.BanIp", func() error { return sessions.BanIp(ctx, "203.0.113.9", "test", caller) }},
+		{"sessions.UnbanIp", func() error { return sessions.UnbanIp(ctx, "203.0.113.9") }},
 
 		{"RelationTo", func() error { _, err := clubs.RelationTo(ctx, caller, caller); return err }},
 		{"ListClubMateIDs", func() error { _, err := clubs.ListClubMateIDs(ctx, caller); return err }},
