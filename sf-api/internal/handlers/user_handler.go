@@ -354,11 +354,6 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &p) {
 		return
 	}
-	if utils.IsBlank(p.Name) || utils.IsBlank(p.Surname) {
-		writeError(w, http.StatusBadRequest, "Please add name and surname fields", CodeAllFieldsRequired)
-		return
-	}
-
 	// The username is normalized rather than validated character by character,
 	// so somebody typing "Marie Dubois" gets "marie-dubois" instead of an
 	// error - but a name of nothing but punctuation has no slug at all, and
@@ -366,6 +361,15 @@ func (h *UserHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	username := utils.Slugify(p.Username)
 	if utils.IsNotBlank(p.Username) && utils.IsBlank(username) {
 		writeError(w, http.StatusBadRequest, "This username cannot be used", CodeInvalidUsername)
+		return
+	}
+
+	// The same rule registration uses: a member needs a name and surname, or a
+	// username to go by. Requiring a real name here used to lock a username-only
+	// (anonymous) member out of their own settings entirely - so their profile
+	// visibility and fitness-on-profile toggle silently never saved.
+	if (utils.IsBlank(p.Name) || utils.IsBlank(p.Surname)) && utils.IsBlank(username) {
+		writeError(w, http.StatusBadRequest, "Give a name and surname, or pick a username", CodeNameOrUsername)
 		return
 	}
 	if utils.IsNotBlank(username) {
