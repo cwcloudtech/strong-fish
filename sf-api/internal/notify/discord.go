@@ -63,9 +63,13 @@ func NewDiscord(token string, enrich Enricher) *Discord {
 	}
 }
 
-// slackMessage is the Slack-compatible payload the /slack endpoint accepts. A
-// message carries either an attachment (the rich event cards) or a plain text
-// line (the [CHAT]/[REPORT] notices), so both fields are optional.
+// infoBlue is the attachment colour for every notice - the "info" blue
+// ~/comwork-cloud-api uses (utils/logger get_color_level), so the alerts read as
+// one family.
+const infoBlue = "#95C8F3"
+
+// slackMessage is the Slack-compatible payload the /slack endpoint accepts.
+// Everything is sent as a coloured attachment, so Text is unused here.
 type slackMessage struct {
 	Username    string            `json:"username,omitempty"`
 	Text        string            `json:"text,omitempty"`
@@ -75,6 +79,7 @@ type slackMessage struct {
 type slackAttachment struct {
 	Color  string       `json:"color,omitempty"`
 	Title  string       `json:"title"`
+	Text   string       `json:"text,omitempty"`
 	Fields []slackField `json:"fields,omitempty"`
 	TS     int64        `json:"ts,omitempty"`
 }
@@ -103,7 +108,7 @@ func (d *Discord) Notify(ctx context.Context, event, member, email, ip string) {
 	payload := slackMessage{
 		Username: "StrongFish",
 		Attachments: []slackAttachment{{
-			Color:  colorFor(event),
+			Color:  infoBlue,
 			Title:  event,
 			TS:     time.Now().UTC().Unix(),
 			Fields: fieldsFor(member, email, ip, geo),
@@ -116,15 +121,48 @@ func (d *Discord) Notify(ctx context.Context, event, member, email, ip string) {
 	_ = d.post(ctx, body)
 }
 
-// NotifyText posts a plain-text line (the [CONNECT]/[REGISTER]/[DISCONNECT]/
-// [CHAT]/[REPORT] notices), the same shape ~/uprodit's alerts use. Truncated to
-// the Discord limit. Synchronous; the caller owns the goroutine.
+// NotifyText posts a notice as a coloured attachment, the shape
+// ~/comwork-cloud-api uses: the "[TAG] :emoji:" prefix becomes the attachment
+// title ("TAG :emoji:") and the rest becomes the body. Truncated to the Discord
+// limit. Synchronous; the caller owns the goroutine.
 func (d *Discord) NotifyText(ctx context.Context, text string) {
 	if len(text) > limitSize {
 		text = text[:limitSize]
 	}
-	body, _ := json.Marshal(map[string]string{"text": text})
-	_ = d.post(ctx, body)
+	title, body := splitNotice(text)
+	payload := slackMessage{
+		Username:    "StrongFish",
+		Attachments: []slackAttachment{{Color: infoBlue, Title: title, Text: body}},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	_ = d.post(ctx, raw)
+}
+
+// splitNotice turns a "[TAG] :emoji: rest" line into an attachment title
+// ("TAG :emoji:") and body ("rest"). A line that doesn't open with a [tag] has
+// no title and becomes the body as-is.
+func splitNotice(text string) (title, body string) {
+	s := strings.TrimSpace(text)
+	if !strings.HasPrefix(s, "[") {
+		return "", s
+	}
+	close := strings.IndexByte(s, ']')
+	if close < 0 {
+		return "", s
+	}
+	tag := strings.TrimSpace(s[1:close])
+	rest := strings.TrimSpace(s[close+1:])
+	// An optional :emoji: right after the tag joins it in the title.
+	if strings.HasPrefix(rest, ":") {
+		if end := strings.IndexByte(rest[1:], ':'); end >= 0 {
+			tag += " " + rest[:end+2]
+			rest = strings.TrimSpace(rest[end+2:])
+		}
+	}
+	return tag, rest
 }
 
 // post sends one webhook body and - like ~/uprodit - always logs Discord's
@@ -216,17 +254,4 @@ func orDash(s string) string {
 		return "—"
 	}
 	return s
-}
-
-// colorFor tints the attachment by what happened: green for arriving, grey for
-// leaving, blue for activity - a glanceable cue in a busy channel.
-func colorFor(event string) string {
-	switch {
-	case strings.Contains(event, "Sign-in"), strings.Contains(event, "Sign-up"):
-		return "#2ecc71"
-	case strings.Contains(event, "Sign-out"):
-		return "#95a5a6"
-	default:
-		return "#3498db"
-	}
 }

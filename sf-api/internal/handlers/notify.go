@@ -105,6 +105,24 @@ func notifyReport(n Notifier, reporter, reported models.User) {
 		reporter.Email, reporter.ID, reported.Email, reported.ID))
 }
 
+// notifyPost posts "[POST] :nerd: from: <email> (<id>) to: <audience>" on a new
+// feed post. The audience is the post's visibility, noting a club count when it
+// is shared to clubs.
+func notifyPost(n Notifier, author models.User, visibility string, clubCount int) {
+	audience := visibility
+	if clubCount > 0 {
+		audience = fmt.Sprintf("%s (%d club(s))", visibility, clubCount)
+	}
+	notifyText(n, fmt.Sprintf("[POST] :nerd: from: %s (%s) to: %s", author.Email, author.ID, audience))
+}
+
+// notifyComment posts "[COMMENT] :nerd: from: <email> (<id>) to: <email> (<id>)"
+// on a new comment - from the commenter, to the author of the post.
+func notifyComment(n Notifier, commenter, postAuthor models.User) {
+	notifyText(n, fmt.Sprintf("[COMMENT] :nerd: from: %s (%s) to: %s (%s)",
+		commenter.Email, commenter.ID, postAuthor.Email, postAuthor.ID))
+}
+
 // profileURL is the link to a member's public profile, by handle when they have
 // one and by id otherwise - "unknown" when there is no base URL to build on.
 func profileURL(uiBaseURL string, user models.User) string {
@@ -142,9 +160,5 @@ func memberLabel(user models.User) string {
 	return user.Email
 }
 
-// The rich-card events. Kept as constants so the wording is in one place and a
-// log search or a Discord filter can rely on it.
-const (
-	EventSession = "Training session completed"
-	EventNewPost = "New post"
-)
+// EventSession is the rich-card (geo) event for a finished training session.
+const EventSession = "Training session completed"

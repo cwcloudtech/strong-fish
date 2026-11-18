@@ -212,8 +212,10 @@ func (h *SocialHandler) CreatePost(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
-	if user, err := h.users.FindByID(r.Context(), callerID); err == nil {
-		notifyEvent(h.notify, r, EventNewPost, user)
+	if h.notify != nil {
+		if author, err := h.users.FindByID(r.Context(), callerID); err == nil {
+			notifyPost(h.notify, author, p.Visibility, len(p.ClubIDs))
+		}
 	}
 	writeJSON(w, http.StatusCreated, decoratePost(post, callerID, superadmin))
 }
@@ -496,6 +498,14 @@ func (h *SocialHandler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeStoreError(w, err)
 		return
+	}
+	// [COMMENT] Discord notice: from the commenter, to the post's author.
+	if h.notify != nil {
+		commenter, cerr := h.users.FindByID(r.Context(), callerID)
+		author, aerr := h.users.FindByID(r.Context(), post.AuthorID)
+		if cerr == nil && aerr == nil {
+			notifyComment(h.notify, commenter, author)
+		}
 	}
 	writeJSON(w, http.StatusCreated, decorateComment(comment, callerID, superadmin))
 }
