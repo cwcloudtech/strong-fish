@@ -130,7 +130,7 @@ func (h *OIDCHandler) finishSession(r *http.Request, user models.User) (string, 
 		token, err := authtoken.Generate(h.jwtSecret, user.ID)
 		if err == nil {
 			recordConnection(r, h.visits, h.enrich, user.ID)
-			notifyEvent(h.notify, r, EventSignIn, user)
+			notifyLogin(h.notify, r, user, h.uiBaseURL)
 		}
 		return token, nil, err
 	}

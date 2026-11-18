@@ -37,6 +37,9 @@ type MessageHandler struct {
 	profile      *ProfileHandler
 	mailer       *email.Sender
 	uiBaseURL    string
+	// alerts is the Discord notifier. Named apart from the notify method, which
+	// emails the recipient. Optional.
+	alerts Notifier
 }
 
 func NewMessageHandler(messages *store.MessageStore, users *store.UserStore, profile *ProfileHandler,
@@ -45,6 +48,13 @@ func NewMessageHandler(messages *store.MessageStore, users *store.UserStore, pro
 		messages: messages, users: users, profile: profile, mailer: mailer,
 		maxImageSize: maxImageSize, uiBaseURL: uiBaseURL,
 	}
+}
+
+// WithNotify wires the Discord notifier so a new private message is announced
+// ([CHAT]). Optional.
+func (h *MessageHandler) WithNotify(notify Notifier) *MessageHandler {
+	h.alerts = notify
+	return h
 }
 
 func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -220,6 +230,13 @@ func (h *MessageHandler) Send(w http.ResponseWriter, r *http.Request) {
 	message.Mine = true
 	message.Deletable = true
 	h.notify(recipient, message)
+	// [CHAT] Discord notice. The sender is loaded only when a notifier is
+	// configured, so a deployment without one does no extra work.
+	if h.alerts != nil {
+		if sender, err := h.users.FindByID(r.Context(), callerID); err == nil {
+			notifyChat(h.alerts, sender, recipient)
+		}
+	}
 	writeJSON(w, http.StatusCreated, message)
 }
 

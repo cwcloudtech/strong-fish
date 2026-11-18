@@ -215,6 +215,19 @@ func TestReadQueriesExecute(t *testing.T) {
 			_, err := sessions.RecordVisit(ctx, nil, "203.0.113.8", time.Now().UTC())
 			return err
 		}},
+		{"sessions.RecordVisit/oncePerDay", func() error {
+			if _, err := sessions.RecordVisit(ctx, &caller, "203.0.113.20", time.Now().UTC()); err != nil {
+				return err
+			}
+			recorded, err := sessions.RecordVisit(ctx, &caller, "203.0.113.20", time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if recorded {
+				return errors.New("expected a same-day repeat visit to be a no-op")
+			}
+			return nil
+		}},
 		{"sessions.NeedsGeo", func() error { _, err := sessions.NeedsGeo(ctx, "203.0.113.7"); return err }},
 		{"sessions.SetGeo", func() error {
 			return sessions.SetGeo(ctx, "203.0.113.7", map[string]string{"country": "France", "city": "Lyon"})

@@ -646,7 +646,38 @@ func (h *SocialHandler) Report(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
+	// [REPORT] Discord notice: from the reporter, on whoever owns the reported
+	// content. Resolved only when a notifier is configured.
+	if h.notify != nil {
+		reporter, rerr := h.users.FindByID(r.Context(), callerID)
+		reported, derr := h.users.FindByID(r.Context(), h.reportedUserID(r.Context(), p))
+		if rerr == nil && derr == nil {
+			notifyReport(h.notify, reporter, reported)
+		}
+	}
 	writeJSON(w, http.StatusCreated, report)
+}
+
+// reportedUserID resolves the member a report is about: the reported account
+// itself, or the author/sender of the reported post, comment or message.
+func (h *SocialHandler) reportedUserID(ctx context.Context, p reportPayload) string {
+	switch p.TargetType {
+	case models.ReportTargetUser:
+		return p.TargetID
+	case models.ReportTargetPost:
+		if post, err := h.social.FindPost(ctx, p.TargetID, ""); err == nil {
+			return post.AuthorID
+		}
+	case models.ReportTargetComment:
+		if comment, err := h.social.FindComment(ctx, p.TargetID); err == nil {
+			return comment.AuthorID
+		}
+	case models.ReportTargetMessage:
+		if message, err := h.messages.FindMessage(ctx, p.TargetID); err == nil {
+			return message.SenderID
+		}
+	}
+	return utils.EMPTY
 }
 
 // snapshotTarget captures the reported content as it reads now, and doubles as

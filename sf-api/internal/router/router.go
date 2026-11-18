@@ -91,11 +91,11 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 	}
 
 	// The IP guard sits in front of every route: a banned address is refused on
-	// the login page and the public feed alike, and an anonymous visit is logged
-	// here (an authenticated one is logged when its session is minted). Mounted
-	// only when a session store is available.
+	// the login page and the public feed alike, and the visit is logged here -
+	// the member resolved from the request's own JWT, or anonymously - at most
+	// once a day. Mounted only when a session store is available.
 	if o.Visitors != nil {
-		r.Use(middleware.BanIP(o.Visitors, o.Enricher))
+		r.Use(middleware.BanIP(o.Visitors, o.Enricher, o.JWTSecret))
 	}
 
 	// authenticated wraps a route group in "logged in and not disabled/banned".

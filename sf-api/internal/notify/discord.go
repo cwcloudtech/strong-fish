@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -26,6 +27,10 @@ import (
 // token is the "{id}/{token}" segment Discord issues; the /slack suffix is what
 // makes the endpoint accept a Slack attachment payload.
 const webhookTpl = "https://discord.com/api/webhooks/%s/slack"
+
+// limitSize caps a plain-text message: Discord truncates long messages, so this
+// matches ~/uprodit's AlertService.LIMIT_SIZE.
+const limitSize = 2000
 
 // disabledToken is the placeholder a deployment that has not set a real webhook
 // carries (matching the API's default), treated as "no notifier".
@@ -58,10 +63,13 @@ func NewDiscord(token string, enrich Enricher) *Discord {
 	}
 }
 
-// slackMessage is the Slack-compatible payload the /slack endpoint accepts.
+// slackMessage is the Slack-compatible payload the /slack endpoint accepts. A
+// message carries either an attachment (the rich event cards) or a plain text
+// line (the [CHAT]/[REPORT] notices), so both fields are optional.
 type slackMessage struct {
 	Username    string            `json:"username,omitempty"`
-	Attachments []slackAttachment `json:"attachments"`
+	Text        string            `json:"text,omitempty"`
+	Attachments []slackAttachment `json:"attachments,omitempty"`
 }
 
 type slackAttachment struct {
@@ -77,9 +85,13 @@ type slackField struct {
 	Short bool   `json:"short"`
 }
 
-// Notify resolves the address's geolocation and posts the event. Synchronous by
-// design - the caller owns the goroutine - and silent on failure: a missed chat
-// message is not worth more than a warning, let alone an error the member sees.
+// Enabled reports whether the transport will actually call Discord (a real
+// token was configured). Callers may also just nil-check the Notifier.
+func (d *Discord) Enabled() bool { return d != nil }
+
+// Notify resolves the address's geolocation and posts the event as a rich
+// attachment (the sign-in-with-geo cards). Synchronous by design - the caller
+// owns the goroutine.
 func (d *Discord) Notify(ctx context.Context, event, member, email, ip string) {
 	var geo map[string]string
 	if d.enrich != nil && ip != "" {
@@ -97,22 +109,46 @@ func (d *Discord) Notify(ctx context.Context, event, member, email, ip string) {
 			Fields: fieldsFor(member, email, ip, geo),
 		}},
 	}
-
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return
 	}
+	_ = d.post(ctx, body)
+}
+
+// NotifyText posts a plain-text line (the [CONNECT]/[REGISTER]/[DISCONNECT]/
+// [CHAT]/[REPORT] notices), the same shape ~/uprodit's alerts use. Truncated to
+// the Discord limit. Synchronous; the caller owns the goroutine.
+func (d *Discord) NotifyText(ctx context.Context, text string) {
+	if len(text) > limitSize {
+		text = text[:limitSize]
+	}
+	body, _ := json.Marshal(map[string]string{"text": text})
+	_ = d.post(ctx, body)
+}
+
+// post sends one webhook body and - like ~/uprodit - always logs Discord's
+// answer (status + body; the Slack-format endpoint usually replies 200 "ok" or
+// 204 empty). The URL carries the secret token, so it is never logged.
+func (d *Discord) post(ctx context.Context, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.url, bytes.NewReader(body))
 	if err != nil {
-		return
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := d.http.Do(req)
 	if err != nil {
-		slog.WarnContext(ctx, "discord notification failed", "event", event, "error", err)
-		return
+		slog.ErrorContext(ctx, "discord webhook transport error", "error", err)
+		return err
 	}
-	_ = resp.Body.Close()
+	defer resp.Body.Close()
+	answer, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		slog.ErrorContext(ctx, "discord webhook response", "status", resp.StatusCode, "body", string(answer))
+		return fmt.Errorf("discord webhook responded %d", resp.StatusCode)
+	}
+	slog.InfoContext(ctx, "discord webhook response", "status", resp.StatusCode, "body", string(answer))
+	return nil
 }
 
 // fieldsFor lays out the member, the address, and whatever geolocation came

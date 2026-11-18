@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"strong-fish-api/internal/models"
@@ -33,8 +34,9 @@ type VisitorStore interface {
 // providers. A nil Enricher simply records visits without geolocation.
 type Enricher func(ctx context.Context, ip string) (map[string]string, error)
 
-// BanIP refuses a request whose address is banned, and - for anonymous traffic
-// - records the visit so the address shows up on the administration roster.
+// BanIP refuses a request whose address is banned, and records the visit so the
+// address - and the member behind it, when there is one - shows up on the
+// administration roster.
 //
 // It sits in front of everything, so a ban holds on the login page and the
 // public feed alike. The ban check fails open: if the lookup errors (a database
@@ -42,7 +44,15 @@ type Enricher func(ctx context.Context, ip string) (map[string]string, error)
 // administrative feature. An address that will not parse is left alone rather
 // than rejected - behind a trusted proxy the header is always a real address,
 // and refusing an odd one would only be a way to lock legitimate traffic out.
-func BanIP(store VisitorStore, enrich Enricher) func(http.Handler) http.Handler {
+//
+// Every request is logged, not just signup/login: the member is resolved from
+// the request's own JWT (so the attribution is known here, in front of auth),
+// and the record is made at most once per calendar day per (ip, member) - the
+// database enforces that, and a per-replica day cache keeps the hot path from
+// even attempting a write on a repeat. A request with no (valid) token is
+// logged anonymously, the same once-a-day.
+func BanIP(store VisitorStore, enrich Enricher, secret string) func(http.Handler) http.Handler {
+	seen := newDayCache()
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// The infra endpoints are left untouched: a load balancer's health
@@ -68,14 +78,15 @@ func BanIP(store VisitorStore, enrich Enricher) func(http.Handler) http.Handler 
 				return
 			}
 
-			// Only anonymous traffic is logged here. A signed-in member's
-			// address is recorded against them when their session is minted
-			// (recordConnection), which is where the identity is known - here,
-			// in front of auth, every request looks anonymous. Skipping requests
-			// that carry a credential keeps this from writing a nameless row for
-			// every authenticated call too.
-			if !hasCredential(r) {
-				go TrackVisit(store, enrich, nil, ip)
+			// Resolve who is behind the request from its own token, and log the
+			// visit once a day. A member browsing all afternoon from one address
+			// is one row, bumped once.
+			var userID *string
+			if uid, ok := userIDFromRequest(secret, r); ok {
+				userID = &uid
+			}
+			if seen.firstToday(dayKey(userID, ip)) {
+				go TrackVisit(store, enrich, userID, ip)
 			}
 
 			next.ServeHTTP(w, r)
@@ -98,12 +109,15 @@ func TrackVisit(store VisitorStore, enrich Enricher, userID *string, ip string) 
 	ctx, cancel := context.WithTimeout(context.Background(), visitTimeout)
 	defer cancel()
 
-	firstSeen, err := store.RecordVisit(ctx, userID, ip, time.Now().UTC())
+	recorded, err := store.RecordVisit(ctx, userID, ip, time.Now().UTC())
 	if err != nil {
 		slog.WarnContext(ctx, "failed to record a visit", "ip", ip, "error", err)
 		return
 	}
-	if !firstSeen || enrich == nil {
+	// Only when this call actually wrote (a first-ever sighting, or a new day) is
+	// geo worth a look - and NeedsGeo then keeps it to once per address, so the
+	// external lookup is retried across days only until it succeeds.
+	if !recorded || enrich == nil {
 		return
 	}
 
@@ -120,10 +134,46 @@ func TrackVisit(store VisitorStore, enrich Enricher, userID *string, ip string) 
 	}
 }
 
-// hasCredential reports whether a request carries any proof of identity, so the
-// ban guard can leave authenticated traffic for the session-mint path to log.
-func hasCredential(r *http.Request) bool {
-	return utils.IsNotBlank(r.Header.Get("Authorization")) || utils.IsNotBlank(r.Header.Get("X-Api-Key"))
+// dayCache remembers which (member, ip) pairs have already been recorded today
+// in this process, so the guard records each only once a day without a database
+// round trip on every request. It resets when the day turns over, bounding it to
+// one day's distinct visitors. The database is the real authority on once-a-day
+// (across replicas and restarts); this is only the fast path in front of it.
+type dayCache struct {
+	mu   sync.Mutex
+	day  string
+	seen map[string]struct{}
+}
+
+func newDayCache() *dayCache {
+	return &dayCache{day: today(), seen: make(map[string]struct{})}
+}
+
+// firstToday reports whether key has not been seen yet today, recording it when
+// so. A new day clears the set.
+func (c *dayCache) firstToday(key string) bool {
+	now := today()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.day != now {
+		c.day = now
+		c.seen = make(map[string]struct{})
+	}
+	if _, ok := c.seen[key]; ok {
+		return false
+	}
+	c.seen[key] = struct{}{}
+	return true
+}
+
+func today() string { return time.Now().UTC().Format("2006-01-02") }
+
+// dayKey identifies a (member-or-anonymous, ip) pair for the day cache.
+func dayKey(userID *string, ip string) string {
+	if userID != nil {
+		return *userID + "|" + ip
+	}
+	return "|" + ip
 }
 
 // isInfraPath reports whether a path is an operational endpoint the guard

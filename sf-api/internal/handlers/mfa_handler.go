@@ -39,6 +39,7 @@ type MFAHandler struct {
 	visits         middleware.VisitorStore
 	enrich         middleware.Enricher
 	notify         Notifier
+	uiBaseURL      string
 }
 
 func NewMFAHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCredentialStore,
@@ -50,12 +51,14 @@ func NewMFAHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCredenti
 }
 
 // WithVisits wires the connection log and the Discord notifier so finishing an
-// MFA login records the address it came from and announces the sign-in.
-// Optional - unset, the login simply isn't logged or announced.
-func (h *MFAHandler) WithVisits(visits middleware.VisitorStore, enrich middleware.Enricher, notify Notifier) *MFAHandler {
+// MFA login records the address it came from and announces the sign-in. The
+// base URL builds the profile link in that notice. Optional - unset, the login
+// simply isn't logged or announced.
+func (h *MFAHandler) WithVisits(visits middleware.VisitorStore, enrich middleware.Enricher, notify Notifier, uiBaseURL string) *MFAHandler {
 	h.visits = visits
 	h.enrich = enrich
 	h.notify = notify
+	h.uiBaseURL = uiBaseURL
 	return h
 }
 
@@ -102,7 +105,7 @@ func (h *MFAHandler) respondSession(w http.ResponseWriter, r *http.Request, user
 		return
 	}
 	recordConnection(r, h.visits, h.enrich, user.ID)
-	notifyEvent(h.notify, r, EventSignIn, user)
+	notifyLogin(h.notify, r, user, h.uiBaseURL)
 	writeJSON(w, http.StatusOK, models.UserResponse{
 		ID: user.ID, Email: user.Email, Name: user.Name, Surname: user.Surname,
 		Handle: user.Handle, Role: user.Role, Token: token, Picture: user.Picture,

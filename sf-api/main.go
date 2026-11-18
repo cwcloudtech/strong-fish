@@ -217,7 +217,7 @@ func main() {
 			cfg.ActivationMode, mailer, cfg.APIBaseURL, cfg.UIBaseURL, cfg.ConfirmationEmailTTL).
 			WithVisits(sessionStore, enricher, notifier),
 		MFA: handlers.NewMFAHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.ActivationMode, waInstance, mfaIssuer).
-			WithVisits(sessionStore, enricher, notifier),
+			WithVisits(sessionStore, enricher, notifier, cfg.UIBaseURL),
 		OIDC: handlers.NewOIDCHandler(providers, userStore, webauthnStore, cfg.JWTSecret,
 			cfg.APIBaseURL, cfg.UIBaseURL, cfg.OIDCKeycloakGroups, cfg.ActivationMode).
 			WithVisits(sessionStore, enricher, notifier),
@@ -261,7 +261,8 @@ func main() {
 		Callback: handlers.NewCallbackHandler(callbackStore),
 		Invitation: handlers.NewInvitationHandler(invitationStore, clubStore, userStore,
 			mailer, cfg.UIBaseURL),
-		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, mailer, cfg.MaxImageSize, cfg.UIBaseURL),
+		Message: handlers.NewMessageHandler(messageStore, userStore, profileHandler, mailer, cfg.MaxImageSize, cfg.UIBaseURL).
+			WithNotify(notifier),
 	}, userStore, clubStore, router.Options{
 		JWTSecret:          cfg.JWTSecret,
 		ApiKeys:            apiKeyStore,

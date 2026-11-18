@@ -3,8 +3,10 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"strong-fish-api/internal/models"
@@ -24,17 +26,27 @@ func NewSessionStore(pool *pgxpool.Pool) *SessionStore {
 }
 
 // RecordVisit notes a connection from ip, by the given member or - when userID
-// is nil - anonymously. It returns whether this was the address's first sighting
-// in that bucket (member or anonymous), which is the caller's cue to enrich it.
+// is nil - anonymously, AT MOST ONCE PER CALENDAR DAY (UTC). It returns whether
+// this call actually recorded - a first-ever sighting, or the first from that
+// (ip, member) on a new day - as opposed to a same-day repeat it ignored. That
+// is the caller's cue to (re)check geo.
 //
-// The two buckets need two statements because the uniqueness that makes the
-// upsert work is split across two partial indexes: ON CONFLICT has to name the
-// one it is reconciling against. `xmax = 0` is Postgres's own tell for "this
-// RETURNING row was inserted, not updated".
+// "Once per day" is enforced in the database, not only in the caller's cache:
+// the DO UPDATE fires only when the row was last touched before today, so two
+// replicas racing on the same (ip, member) still bump the counter once. count
+// is therefore the number of distinct days connected from, not raw hits. A
+// no-op (already recorded today) comes back from RETURNING with no row, which
+// pgx reports as ErrNoRows - mapped here to (false, nil).
+//
+// The two buckets (member / anonymous) need two statements because the
+// uniqueness is split across two partial indexes, and ON CONFLICT has to name
+// the one it reconciles against.
 func (s *SessionStore) RecordVisit(ctx context.Context, userID *string, ip string, at time.Time) (bool, error) {
-	var inserted bool
+	day := at.UTC().Truncate(24 * time.Hour)
+	var one int
+	var err error
 	if userID != nil && *userID != "" {
-		err := s.pool.QueryRow(ctx, `
+		err = s.pool.QueryRow(ctx, `
 			INSERT INTO sessions (user_id, ip, data)
 			VALUES ($1::uuid, $2, jsonb_build_object('count', 1))
 			ON CONFLICT (ip, user_id) WHERE user_id IS NOT NULL
@@ -42,21 +54,29 @@ func (s *SessionStore) RecordVisit(ctx context.Context, userID *string, ip strin
 				data = jsonb_set(sessions.data, '{count}',
 					to_jsonb(COALESCE((sessions.data->>'count')::int, 0) + 1)),
 				updated_at = $3::timestamptz
-			RETURNING (xmax = 0)
-		`, *userID, ip, at).Scan(&inserted)
-		return inserted, err
+			WHERE sessions.updated_at < $4::timestamptz
+			RETURNING 1
+		`, *userID, ip, at, day).Scan(&one)
+	} else {
+		err = s.pool.QueryRow(ctx, `
+			INSERT INTO sessions (user_id, ip, data)
+			VALUES (NULL, $1, jsonb_build_object('count', 1))
+			ON CONFLICT (ip) WHERE user_id IS NULL
+			DO UPDATE SET
+				data = jsonb_set(sessions.data, '{count}',
+					to_jsonb(COALESCE((sessions.data->>'count')::int, 0) + 1)),
+				updated_at = $2::timestamptz
+			WHERE sessions.updated_at < $3::timestamptz
+			RETURNING 1
+		`, ip, at, day).Scan(&one)
 	}
-	err := s.pool.QueryRow(ctx, `
-		INSERT INTO sessions (user_id, ip, data)
-		VALUES (NULL, $1, jsonb_build_object('count', 1))
-		ON CONFLICT (ip) WHERE user_id IS NULL
-		DO UPDATE SET
-			data = jsonb_set(sessions.data, '{count}',
-				to_jsonb(COALESCE((sessions.data->>'count')::int, 0) + 1)),
-			updated_at = $2::timestamptz
-		RETURNING (xmax = 0)
-	`, ip, at).Scan(&inserted)
-	return inserted, err
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil // already recorded today
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // NeedsGeo reports whether no row for ip carries geo yet, so enrichment runs

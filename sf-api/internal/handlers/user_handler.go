@@ -225,11 +225,11 @@ func (h *UserHandler) respondSession(w http.ResponseWriter, r *http.Request, use
 	recordConnection(r, h.visits, h.enrich, user.ID)
 	// A 201 here is a brand-new account minting its first session - a sign-up;
 	// a 200 is an existing account signing in.
-	event := EventSignIn
 	if status == http.StatusCreated {
-		event = EventSignUp
+		notifyRegister(h.notify, r, user, h.uiBaseURL)
+	} else {
+		notifyLogin(h.notify, r, user, h.uiBaseURL)
 	}
-	notifyEvent(h.notify, r, event, user)
 	writeJSON(w, status, models.UserResponse{
 		ID: user.ID, Email: user.Email, Name: user.Name, Surname: user.Surname,
 		Handle: user.Handle, Role: user.Role, Token: token, Picture: user.Picture,
@@ -311,7 +311,7 @@ func (h *UserHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "User not found", CodeUserNotFound)
 		return
 	}
-	notifyEvent(h.notify, r, EventSignOut, user)
+	notifyLogout(h.notify, r, user, h.uiBaseURL)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
