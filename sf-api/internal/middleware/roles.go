@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -15,7 +16,7 @@ import (
 // authenticated action beyond logging in and reading their own status. The role
 // is re-read from the database on every request since it can change after the
 // token was issued (a superadmin confirms, disables or bans the account later).
-func RequireActiveUser(users *store.UserStore, activationMode string) func(http.Handler) http.Handler {
+func RequireActiveUser(users *store.UserStore, activationMode string, alerter *BanAlerter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID, _ := UserIDFromContext(r.Context())
@@ -26,6 +27,8 @@ func RequireActiveUser(users *store.UserStore, activationMode string) func(http.
 			}
 			switch user.Role {
 			case models.GlobalRoleBan:
+				alerter.Alert("user:"+user.ID,
+					fmt.Sprintf("banned user %s (id %s) tried %s %s", user.Email, user.ID, r.Method, r.URL.Path))
 				jsonErrorCode(w, http.StatusForbidden, "Your account has been banned by an administrator.", models.I18nAccountBanned)
 				return
 			case models.GlobalRoleDisabled:

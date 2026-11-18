@@ -65,6 +65,9 @@ type Options struct {
 	// Enricher resolves an address's geolocation for a first-seen visit. Nil
 	// records visits without it.
 	Enricher middleware.Enricher
+	// BanAlerter raises the deduped "[BAN] :rotating_light:" Discord notice when a
+	// banned IP or banned user keeps trying to reach the API. Nil disables it.
+	BanAlerter *middleware.BanAlerter
 }
 
 func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) http.Handler {
@@ -95,14 +98,14 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 	// the member resolved from the request's own JWT, or anonymously - at most
 	// once a day. Mounted only when a session store is available.
 	if o.Visitors != nil {
-		r.Use(middleware.BanIP(o.Visitors, o.Enricher, o.JWTSecret))
+		r.Use(middleware.BanIP(o.Visitors, o.Enricher, o.JWTSecret, o.BanAlerter))
 	}
 
 	// authenticated wraps a route group in "logged in and not disabled/banned".
 	authenticated := func(fn func(chi.Router)) func(chi.Router) {
 		return func(r chi.Router) {
 			r.Use(middleware.Auth(o.JWTSecret, o.ApiKeys))
-			r.Use(middleware.RequireActiveUser(users, o.ActivationMode))
+			r.Use(middleware.RequireActiveUser(users, o.ActivationMode, o.BanAlerter))
 			fn(r)
 		}
 	}

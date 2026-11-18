@@ -122,6 +122,15 @@ func main() {
 		}
 	}
 
+	// Alert (deduped per subject) when a banned IP or banned user keeps trying to
+	// reach the API — the "[BAN] :rotating_light:" notice the ban guards raise.
+	var banAlerter *middleware.BanAlerter
+	if notifier != nil {
+		banAlerter = middleware.NewBanAlerter(func(ctx context.Context, text string) {
+			notifier.NotifyText(ctx, text)
+		})
+	}
+
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
 	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
 
@@ -290,6 +299,7 @@ func main() {
 		MetricsHandler:     observability.Handler,
 		Visitors:           sessionStore,
 		Enricher:           enricher,
+		BanAlerter:         banAlerter,
 	})
 
 	slog.Info("strong-fish api listening", "port", cfg.Port, "version", cfg.Version,

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -51,7 +52,7 @@ type Enricher func(ctx context.Context, ip string) (map[string]string, error)
 // database enforces that, and a per-replica day cache keeps the hot path from
 // even attempting a write on a repeat. A request with no (valid) token is
 // logged anonymously, the same once-a-day.
-func BanIP(store VisitorStore, enrich Enricher, secret string) func(http.Handler) http.Handler {
+func BanIP(store VisitorStore, enrich Enricher, secret string, alerter *BanAlerter) func(http.Handler) http.Handler {
 	seen := newDayCache()
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +75,7 @@ func BanIP(store VisitorStore, enrich Enricher, secret string) func(http.Handler
 			if err != nil {
 				slog.WarnContext(r.Context(), "ip ban check failed, allowing", "ip", ip, "error", err)
 			} else if banned {
+				alerter.Alert("ip:"+ip, fmt.Sprintf("banned ip %s tried %s %s", ip, r.Method, r.URL.Path))
 				jsonErrorCode(w, http.StatusForbidden, "This address has been banned.", models.I18nIPBanned)
 				return
 			}
