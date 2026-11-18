@@ -511,6 +511,7 @@ const fr = {
     searchUsers: "Rechercher un compte",
     makeRole: "Passer en {{role}}",
     ips: "Adresses IP",
+    ipsView: "Voir les connexions",
     ipsTitle: "Connexions de {{name}}",
     ipsHelp:
       "Toutes les adresses depuis lesquelles ce compte s'est connecté, leur fréquence, leur localisation, et si elles sont bannies.",

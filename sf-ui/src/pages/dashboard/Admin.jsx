@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiGlobe, FiMapPin, FiShield, FiSlash, FiTrash2 } from "react-icons/fi";
+import { FiEye, FiMapPin, FiShield, FiSlash, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import { admin as adminApi, clubs as clubsApi } from "../../api/services";
@@ -119,6 +119,7 @@ function UsersTab() {
                 <th>{t("auth.name")}</th>
                 <th>{t("admin.role")}</th>
                 <th>{t("mfa.title")}</th>
+                <th>{t("admin.ips")}</th>
                 <th />
               </tr>
             </thead>
@@ -142,17 +143,22 @@ function UsersTab() {
                     </span>
                   </td>
                   <td>{user.mfaEnabled ? <FiShield title={t("mfa.title")} /> : <span className="sf-muted">—</span>}</td>
+                  <td>
+                    {/* The connection popin: every address this account has
+                        connected from, how often, where, and whether banned. */}
+                    <button
+                      className="sf-button sf-button-secondary sf-button-sm"
+                      onClick={() => setShowingIps(user)}
+                      title={t("admin.ipsView")}
+                      aria-label={t("admin.ipsView")}
+                    >
+                      <FiEye />
+                    </button>
+                  </td>
                   <td className="sf-table-num">
                     <div className="sf-row" style={{ justifyContent: "flex-end", gap: "0.25rem" }}>
                       <button className="sf-button sf-button-secondary sf-button-sm" onClick={() => setEditing(user)}>
                         {t("common.edit")}
-                      </button>
-                      <button
-                        className="sf-button sf-button-secondary sf-button-sm"
-                        onClick={() => setShowingIps(user)}
-                        title={t("admin.ips")}
-                      >
-                        <FiGlobe />
                       </button>
                       {user.mfaEnabled ? (
                         <button className="sf-button sf-button-secondary sf-button-sm" onClick={() => clearMfa(user)} title={t("admin.clearMfaHelp")}>
@@ -283,24 +289,43 @@ function UserFormModal({ user, isSelf, onClose, onSaved }) {
  * its own tells them nothing about whether to try again.
  */
 /**
- * The addresses one account has connected from, with a hit count each - the
- * same view ~/uprodit offers.
- *
- * There is deliberately no ban button: blocking an address is the firewall's
- * job, and a second, weaker version of that rule living in the application
- * would only be a place for the two to disagree.
+ * The connection popin: every address one account has connected from, with how
+ * often, where it is, and whether it is banned - plus a ban/unban toggle on
+ * each. The same per-member view ~/uprodit offers, opened from the eye button
+ * on the users table.
  */
 function UserIpsModal({ user, onClose }) {
   const { t } = useI18n();
   const [ips, setIps] = useState(null);
   const [error, setError] = useState(null);
+  const [busyIp, setBusyIp] = useState(null);
+
+  const load = useCallback(() => {
+    adminApi.userIps(user.id).then(setIps).catch(setError);
+  }, [user.id]);
 
   useEffect(() => {
-    adminApi
-      .userIps(user.id)
-      .then(setIps)
-      .catch(setError);
-  }, [user.id]);
+    load();
+  }, [load]);
+
+  const toggleBan = async (entry) => {
+    const next = !entry.banned;
+    setBusyIp(entry.ip);
+    // Optimistic: flip the row now, and roll it back if the call fails. Banning
+    // or unbanning from here is global - the same ban the IP screen manages -
+    // so an address banned on one member is banned for everyone.
+    setIps((list) => list.map((x) => (x.ip === entry.ip ? { ...x, banned: next } : x)));
+    try {
+      if (next) await adminApi.banIp(entry.ip, "");
+      else await adminApi.unbanIp(entry.ip);
+      toast.success(t(next ? "admin.ipsScreen.bannedToast" : "admin.ipsScreen.unbannedToast"), toastOptions);
+    } catch (err) {
+      setIps((list) => list.map((x) => (x.ip === entry.ip ? { ...x, banned: entry.banned } : x)));
+      setError(err);
+    } finally {
+      setBusyIp(null);
+    }
+  };
 
   return (
     <Modal title={t("admin.ipsTitle", { name: `${user.name} ${user.surname}`.trim() })} onClose={onClose} wide>
@@ -324,6 +349,7 @@ function UserIpsModal({ user, onClose }) {
                 <th>{t("admin.ipFirstSeen")}</th>
                 <th>{t("admin.ipLastSeen")}</th>
                 <th>{t("admin.ipsScreen.status")}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -342,6 +368,15 @@ function UserIpsModal({ user, onClose }) {
                     ) : (
                       <span className="sf-muted">—</span>
                     )}
+                  </td>
+                  <td className="sf-table-num">
+                    <button
+                      className={`sf-button sf-button-sm ${entry.banned ? "sf-button-secondary" : "sf-button-danger"}`}
+                      onClick={() => toggleBan(entry)}
+                      disabled={busyIp === entry.ip}
+                    >
+                      {entry.banned ? t("admin.ipsScreen.unban") : t("admin.ipsScreen.ban")}
+                    </button>
                   </td>
                 </tr>
               ))}

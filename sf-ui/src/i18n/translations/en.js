@@ -503,6 +503,7 @@ const en = {
     searchUsers: "Search accounts",
     makeRole: "Make {{role}}",
     ips: "IP addresses",
+    ipsView: "View connections",
     ipsTitle: "{{name}}'s connections",
     ipsHelp: "Every address this account has connected from, how often, where it is, and whether it is banned.",
     ip: "Address",
