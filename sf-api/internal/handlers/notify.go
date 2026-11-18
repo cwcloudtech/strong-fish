@@ -123,6 +123,27 @@ func notifyComment(n Notifier, commenter, postAuthor models.User) {
 		commenter.Email, commenter.ID, postAuthor.Email, postAuthor.ID))
 }
 
+// notifyClub posts "[CLUB] :nerd: name = <name>, by = <userId>" on a new club
+// (StrongFish's organization equivalent).
+func notifyClub(n Notifier, name, byUserID string) {
+	notifyText(n, fmt.Sprintf("[CLUB] :nerd: name = %s, by = %s", name, byUserID))
+}
+
+// notifyProgram posts "[PROGRAM] :nerd: name = <name>, by = <userId>" on a new
+// training program.
+func notifyProgram(n Notifier, name, byUserID string) {
+	notifyText(n, fmt.Sprintf("[PROGRAM] :nerd: name = %s, by = %s", name, byUserID))
+}
+
+// notifyBanIP / notifyUnbanIP post the moderation notices for an admin IP ban.
+func notifyBanIP(n Notifier, ip, motif, byUserID string) {
+	notifyText(n, fmt.Sprintf("[BAN] :no_entry: ip = %s, motif = %s, by = %s", ip, motif, byUserID))
+}
+
+func notifyUnbanIP(n Notifier, ip, byUserID string) {
+	notifyText(n, fmt.Sprintf("[UNBAN] :white_check_mark: ip = %s, by = %s", ip, byUserID))
+}
+
 // profileURL is the link to a member's public profile. The handle is computed
 // the same way the frontend serves the page and UserStore.deriveHandle does -
 // the slugified username when the member picked one, otherwise their name and

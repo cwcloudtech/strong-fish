@@ -19,6 +19,11 @@ import (
 // middleware re-deriving the same three facts.
 type EndpointObserver func(route, method string, status int, duration time.Duration)
 
+// ErrorFunc is an optional hook fired once for every 5xx response, used to raise a
+// Discord [ERROR] alert. It runs after the response is written, so it must post
+// asynchronously and never block. May be nil (disabled).
+type ErrorFunc func(method, route string, status int)
+
 // Instrument opens a span for every request, logs one line for it, and reports
 // it to observe.
 //
@@ -27,7 +32,7 @@ type EndpointObserver func(route, method string, status int, duration time.Durat
 // known yet, so it starts named after the path and is renamed once chi has
 // settled on a match - otherwise every request for a different program id
 // would be its own endpoint, and the metrics would be unaggregatable.
-func Instrument(tracer trace.Tracer, logger *slog.Logger, observe EndpointObserver) func(http.Handler) http.Handler {
+func Instrument(tracer trace.Tracer, logger *slog.Logger, observe EndpointObserver, onError ErrorFunc) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -62,6 +67,9 @@ func Instrument(tracer trace.Tracer, logger *slog.Logger, observe EndpointObserv
 
 			if observe != nil {
 				observe(route, r.Method, recorder.status, duration)
+			}
+			if onError != nil && recorder.status >= http.StatusInternalServerError {
+				onError(r.Method, route, recorder.status)
 			}
 		})
 	}

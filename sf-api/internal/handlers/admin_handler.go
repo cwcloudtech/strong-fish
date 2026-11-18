@@ -25,6 +25,7 @@ type AdminHandler struct {
 	social         *store.SocialStore
 	sessions       *store.SessionStore
 	mailer         *email.Sender
+	notify         Notifier
 	activationMode string
 	uiBaseURL      string
 }
@@ -36,6 +37,13 @@ func NewAdminHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCreden
 		users: users, webauthnCreds: webauthnCreds, social: social, sessions: sessions,
 		mailer: mailer, activationMode: activationMode, uiBaseURL: uiBaseURL,
 	}
+}
+
+// WithNotify wires the Discord transport so an IP ban/unban posts a [BAN]/[UNBAN]
+// alert. Optional and best-effort (a nil notifier is a no-op).
+func (h *AdminHandler) WithNotify(n Notifier) *AdminHandler {
+	h.notify = n
+	return h
 }
 
 // adminIPPageSize bounds one page of the IP roster. The screen filters and
@@ -250,11 +258,13 @@ func (h *AdminHandler) BanIP(w http.ResponseWriter, r *http.Request) {
 			writeStoreError(w, err)
 			return
 		}
+		notifyBanIP(h.notify, ip, p.Motif, callerID)
 	case models.IPActionUnban:
 		if err := h.sessions.UnbanIp(r.Context(), ip); err != nil {
 			writeStoreError(w, err)
 			return
 		}
+		notifyUnbanIP(h.notify, ip, callerID)
 	default:
 		writeError(w, http.StatusBadRequest, "Unknown action", CodeInvalidRequestBody)
 		return

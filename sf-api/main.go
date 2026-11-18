@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -108,6 +109,19 @@ func main() {
 		notifier = d
 	}
 
+	// Raise a Discord [ERROR] alert on every 5xx response, best-effort and async so
+	// it never blocks the request. Nil (disabled) when no webhook is configured.
+	var onServerError middleware.ErrorFunc
+	if notifier != nil {
+		onServerError = func(method, route string, status int) {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				notifier.NotifyText(ctx, fmt.Sprintf("[ERROR] :fire: %d on %s %s", status, method, route))
+			}()
+		}
+	}
+
 	mailer := email.NewSender(cfg.CWCloudAPIURL, cfg.CWCloudAPIKey, cfg.EmailFrom, cfg.APIBaseURL)
 	contactClient := contact.New(cfg.CWCloudAPIURL, cfg.CWCloudContactFormID)
 
@@ -187,7 +201,8 @@ func main() {
 		WithStrength(strengthHandler)
 
 	programHandler := handlers.NewProgramHandler(programStore, clubStore, exerciseStore, oneRMStore,
-		userStore, mailer, cfg.MaxUploadSize, cfg.PlateIncrement, cfg.UIBaseURL)
+		userStore, mailer, cfg.MaxUploadSize, cfg.PlateIncrement, cfg.UIBaseURL).
+		WithNotify(notifier)
 
 	observability, err := metrics.Setup(ctx, metrics.Config{
 		Endpoint: cfg.OTELEndpoint, Proto: cfg.OTELProto, Version: cfg.Version,
@@ -221,7 +236,7 @@ func main() {
 		OIDC: handlers.NewOIDCHandler(providers, userStore, webauthnStore, cfg.JWTSecret,
 			cfg.APIBaseURL, cfg.UIBaseURL, cfg.OIDCKeycloakGroups, cfg.ActivationMode).
 			WithVisits(sessionStore, enricher, notifier),
-		Club:     handlers.NewClubHandler(clubStore, userStore, mailer, cfg.MaxImageSize, cfg.UIBaseURL),
+		Club:     handlers.NewClubHandler(clubStore, userStore, mailer, cfg.MaxImageSize, cfg.UIBaseURL).WithNotify(notifier),
 		Exercise: handlers.NewExerciseHandler(exerciseStore, oneRMStore, userStore),
 		Program:  programHandler,
 		Training: handlers.NewTrainingHandler(programStore, clubStore, userStore, programHandler, aiStore, aiHandler).
@@ -230,7 +245,7 @@ func main() {
 			messageStore, cfg.MaxImageSize).WithNotify(notifier),
 		Profile: profileHandler,
 		Admin: handlers.NewAdminHandler(userStore, webauthnStore, socialStore, sessionStore, mailer,
-			cfg.ActivationMode, cfg.UIBaseURL),
+			cfg.ActivationMode, cfg.UIBaseURL).WithNotify(notifier),
 		Config: handlers.NewConfigHandler(oidc.Names(providers), cfg.ActivationMode,
 			cfg.PlateIncrement, cfg.MaxImageSize, cfg.MaxVideoSize, cfg.MaxAudioSize,
 			cfg.Version, contactClient.Configured(),
@@ -271,7 +286,7 @@ func main() {
 		CorsAllowedOrigins: cfg.CorsAllowedOrigins,
 		ManifestPath:       cfg.ManifestPath,
 		Version:            cfg.Version,
-		Instrument:         middleware.Instrument(tel.Tracer, tel.Logger, observability.Observe),
+		Instrument:         middleware.Instrument(tel.Tracer, tel.Logger, observability.Observe, onServerError),
 		MetricsHandler:     observability.Handler,
 		Visitors:           sessionStore,
 		Enricher:           enricher,

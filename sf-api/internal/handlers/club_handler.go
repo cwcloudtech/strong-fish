@@ -17,6 +17,7 @@ type ClubHandler struct {
 	clubs        *store.ClubStore
 	users        *store.UserStore
 	mailer       *email.Sender
+	notify       Notifier
 	maxImageSize int64
 	uiBaseURL    string
 }
@@ -24,6 +25,13 @@ type ClubHandler struct {
 func NewClubHandler(clubs *store.ClubStore, users *store.UserStore, mailer *email.Sender,
 	maxImageSize int64, uiBaseURL string) *ClubHandler {
 	return &ClubHandler{clubs: clubs, users: users, mailer: mailer, maxImageSize: maxImageSize, uiBaseURL: uiBaseURL}
+}
+
+// WithNotify wires the Discord transport so a new club posts a [CLUB] alert.
+// Optional and best-effort.
+func (h *ClubHandler) WithNotify(n Notifier) *ClubHandler {
+	h.notify = n
+	return h
 }
 
 type clubPayload struct {
@@ -87,6 +95,7 @@ func (h *ClubHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
+	notifyClub(h.notify, p.Name, userID)
 	writeJSON(w, http.StatusCreated, club)
 }
 

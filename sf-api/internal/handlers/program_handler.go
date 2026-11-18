@@ -22,6 +22,7 @@ type ProgramHandler struct {
 	oneRMs         *store.OneRMStore
 	users          *store.UserStore
 	mailer         *email.Sender
+	notify         Notifier
 	maxUploadSize  int64
 	plateIncrement float64
 	uiBaseURL      string
@@ -34,6 +35,13 @@ func NewProgramHandler(programs *store.ProgramStore, clubs *store.ClubStore, exe
 		programs: programs, clubs: clubs, exercises: exercises, oneRMs: oneRMs, users: users,
 		mailer: mailer, maxUploadSize: maxUploadSize, plateIncrement: plateIncrement, uiBaseURL: uiBaseURL,
 	}
+}
+
+// WithNotify wires the Discord transport so a new program posts a [PROGRAM] alert.
+// Optional and best-effort.
+func (h *ProgramHandler) WithNotify(n Notifier) *ProgramHandler {
+	h.notify = n
+	return h
 }
 
 // List returns a club's programs.
@@ -364,6 +372,7 @@ func (h *ProgramHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
+	notifyProgram(h.notify, p.Name, authorID)
 	writeJSON(w, http.StatusCreated, program)
 }
 
