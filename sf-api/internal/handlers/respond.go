@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -13,6 +14,12 @@ import (
 	"strong-fish-api/internal/strength"
 	"strong-fish-api/internal/utils"
 )
+
+// statusClientClosedRequest is nginx's 499 "Client Closed Request": the caller
+// hung up before the response was ready. It is not a server error, so we answer
+// with it rather than a 500 - keeping a canceled request out of the error log and
+// out of the [ERROR] alerting that fires on 5xx.
+const statusClientClosedRequest = 499
 
 type errorBody struct {
 	Message  string `json:"message"`
@@ -211,6 +218,15 @@ var storeErrorMapping = []struct {
 // for anything unrecognized (which is logged, since it's a bug rather than a
 // user error).
 func writeStoreError(w http.ResponseWriter, err error) {
+	// A canceled context means the client went away mid-flight (closed the tab,
+	// navigated, or an aborted fetch), not a server fault. The response won't be
+	// read anyway, so record the cause at debug and answer 499 so it never lands in
+	// the error log or triggers 5xx alerting.
+	if errors.Is(err, context.Canceled) {
+		slog.Debug("request canceled by client", "error", err)
+		w.WriteHeader(statusClientClosedRequest)
+		return
+	}
 	for _, mapping := range storeErrorMapping {
 		if errors.Is(err, mapping.err) {
 			writeError(w, mapping.status, mapping.message, mapping.code)
