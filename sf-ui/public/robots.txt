@@ -1,0 +1,5 @@
+# StrongFish - the powerlifting social network & app
+User-agent: *
+Allow: /
+
+Sitemap: https://www.strong-fish.com/sitemap.xml

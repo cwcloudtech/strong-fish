@@ -2,8 +2,9 @@
 
 ![StrongFish](./img/logo.png)
 
-A powerlifting app: RPE-based programs whose loads are computed from each
-athlete's own current 1RM, clubs to coach them in, and a training feed.
+The powerlifting social network and app: a training feed and clubs to share
+your lifting in, RPE-based programs whose loads are computed from each athlete's
+own current 1RM, and velocity-based training.
 
 ## Features
 

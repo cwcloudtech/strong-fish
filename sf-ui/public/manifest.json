@@ -1,6 +1,7 @@
 {
   "short_name": "StrongFish",
-  "name": "StrongFish - Powerlifting app",
+  "name": "StrongFish - Powerlifting social network & app",
+  "description": "The powerlifting social network and app: a training feed, clubs, RPE-based programs with per-athlete 1RM loads, and velocity-based training.",
   "icons": [
     { "src": "favicon.ico", "sizes": "16x16 32x32 48x48 64x64", "type": "image/x-icon" },
     { "src": "logo192.png", "type": "image/png", "sizes": "192x192" },

@@ -10,12 +10,58 @@
     <meta name="theme-color" content="#062a4e" />
     <meta name="description" content="%REACT_APP_SEO_DESCRIPTION%" />
     <meta name="keywords" content="%REACT_APP_SEO_KEYWORDS%" />
+    <meta name="robots" content="index, follow" />
+    <meta name="author" content="StrongFish" />
+    <link rel="canonical" href="https://www.strong-fish.com/" />
+
+    <!-- Open Graph: how the link renders when it's shared (Discord, LinkedIn,
+         Facebook). The title and description reuse the same SEO values CRA
+         substitutes into the <title> and <meta name="description">. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="StrongFish" />
+    <meta property="og:title" content="%REACT_APP_SEO_TITLE%" />
+    <meta property="og:description" content="%REACT_APP_SEO_DESCRIPTION%" />
+    <meta property="og:url" content="https://www.strong-fish.com/" />
+    <meta property="og:image" content="https://www.strong-fish.com/logo512.png" />
+
+    <!-- Twitter/X card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="%REACT_APP_SEO_TITLE%" />
+    <meta name="twitter:description" content="%REACT_APP_SEO_DESCRIPTION%" />
+    <meta name="twitter:image" content="https://www.strong-fish.com/logo512.png" />
+
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>%REACT_APP_SEO_TITLE%</title>
+
+    <!-- Structured data: tells search engines what StrongFish is, in the words
+         we want it found by. WebApplication + the "powerlifting social network"
+         phrasing is the on-page signal behind the ranking goal. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "StrongFish",
+        "alternateName": "StrongFish - Powerlifting social network & app",
+        "applicationCategory": "SportsApplication",
+        "operatingSystem": "Web, Android",
+        "url": "https://www.strong-fish.com/",
+        "description": "StrongFish is the powerlifting social network and app: a training feed, clubs, RPE-based programs with per-athlete 1RM load calculation, and velocity-based training.",
+        "keywords": "powerlifting social network, powerlifting network, powerlifting app, VBT, RPE, 1RM",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" }
+      }
+    </script>
   </head>
   <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <noscript>
+      <h1>StrongFish — the powerlifting social network &amp; app</h1>
+      <p>
+        StrongFish is a powerlifting social network: share your training in a
+        feed, follow lifters and clubs, run RPE-based programs with per-athlete
+        1RM load calculation, and track velocity-based training. You need to
+        enable JavaScript to use the app.
+      </p>
+    </noscript>
     <div id="root"></div>
   </body>
 </html>
