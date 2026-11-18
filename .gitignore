@@ -39,3 +39,7 @@ sf-mobile/android/app/release/
 # working copy Xcode leaves behind.
 !sf-mobile/dist/
 !sf-mobile/dist/*.ipa
+
+# add new rules can you controle this please
+.widget_preview/
+.idea/

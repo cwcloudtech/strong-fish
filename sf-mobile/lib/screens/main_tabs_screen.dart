@@ -9,7 +9,6 @@ import '../widgets/logo.dart';
 import 'admin_users_screen.dart';
 import 'ai_coach_screen.dart';
 import 'coach_screen.dart';
-import 'events_screen.dart';
 import 'feed_screen.dart';
 import 'invitations_screen.dart';
 import 'member_search_screen.dart';
@@ -40,38 +39,23 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
     final isCoach = user?.isCoach ?? false;
     final isSuperadmin = user?.role == 'superadmin';
 
-    // The coaching tab is inserted rather than always present, so an athlete's
-    // app doesn't carry a tab they can't use.
     final tabs = <({String label, IconData icon, Widget screen})>[
-      // The feed leads: it is what the app is opened for most often, and the
-      // first tab is where a thumb lands.
       (label: t('nav.feed'), icon: Icons.forum_outlined, screen: const FeedScreen()),
       (label: t('nav.training'), icon: Icons.fitness_center, screen: const TrainingScreen()),
       (label: t('nav.oneRms'), icon: Icons.emoji_events_outlined, screen: const OneRmsScreen()),
       (label: t('nav.healthData'), icon: Icons.favorite_outline, screen: const StepsScreen()),
-      // Beside the maxes, because it is what they are worth.
       (label: t('nav.strength'), icon: Icons.leaderboard_outlined, screen: const StrengthScreen()),
       if (isCoach)
         (label: t('programs.title'), icon: Icons.edit_note, screen: const CoachScreen()),
-      (label: t('nav.events'), icon: Icons.event_outlined, screen: const EventsScreen()),
-      // Its own icon, not the envelope: an invitation is somebody asking you
-      // to join them, and it should not read as another inbox.
       (label: t('nav.invitations'), icon: Icons.group_add_outlined, screen: const InvitationsScreen()),
       (label: t('nav.messages'), icon: Icons.chat_bubble_outline, screen: const MessagesScreen()),
-      // The AI coach, beside the messages: both are threads of questions and
-      // answers, and this is the one that answers at three in the morning.
       (label: t('nav.coach'), icon: Icons.auto_awesome_outlined, screen: const AiCoachScreen()),
-      // Only a superadmin has anything to manage, so the tab is inserted
-      // rather than always present - the same way the coaching tab is.
       if (isSuperadmin)
         (label: t('nav.admin'), icon: Icons.admin_panel_settings_outlined, screen: const AdminUsersScreen()),
       (label: t('nav.profile'), icon: Icons.person_outline, screen: const ProfileScreen()),
     ];
 
-    // Losing coach rights while a later tab is selected would leave the index
-    // past the end of the list.
     final index = _index.clamp(0, tabs.length - 1);
-    final feedIndex = tabs.indexWhere((tab) => tab.screen is FeedScreen);
     final messagesIndex = tabs.indexWhere((tab) => tab.screen is MessagesScreen);
 
     return Scaffold(
@@ -85,46 +69,19 @@ class _MainTabsScreenState extends ConsumerState<MainTabsScreen> {
         ),
       ),
       body: IndexedStack(index: index, children: [for (final tab in tabs) tab.screen]),
-      // Each tab's obvious action, and nothing on the tabs that have none:
-      // writing a post on the feed, and finding somebody to write to in the
-      // messages. A conversation can only be started with a person, and until
-      // now the phone had no way to look one up - the web's "find someone"
-      // button had no counterpart here.
-      floatingActionButton: index == feedIndex
+      floatingActionButton: index == messagesIndex
           ? FloatingActionButton(
-              onPressed: () async {
-                final posted = await Navigator.of(context).push<bool>(
-                  MaterialPageRoute(builder: (context) => const ComposePostScreen()),
-                );
-                // The feed keeps its own paged list, so a new post is picked up
-                // by rebuilding it from page 0.
-                if (posted == true && mounted) setState(() {});
-              },
-              child: const Icon(Icons.edit),
-            )
-          : index == messagesIndex
-              ? FloatingActionButton(
-                  tooltip: t('messages.findSomeone'),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (context) => const MemberSearchScreen()),
-                  ),
-                  child: const Icon(Icons.person_search),
-                )
-              : null,
-      // The open conversations sit directly above the bar, as a row of faces -
-      // the phone's answer to the web sidebar's conversation list. A bottom bar
-      // cannot list them as destinations, but a tap-to-open strip above it is
-      // the same one-tap shortcut.
+        tooltip: t('messages.findSomeone'),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => const MemberSearchScreen()),
+        ),
+        child: const Icon(Icons.person_search),
+      )
+          : null,
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const _ConversationStrip(),
-          // A horizontally scrollable bar rather than a NavigationBar: with the
-          // coaching and admin tabs there are up to nine destinations, far more
-          // than fit fixed - Material's own bar squeezes them until the labels
-          // are unreadable. This slides when they overflow and spreads out to
-          // fill the width when they don't, which is how ~/uprodit's mobile app
-          // solves the same problem.
           Container(
             decoration: BoxDecoration(
               color: colors.surface,
@@ -224,9 +181,9 @@ class _UnreadBadge extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final unread = ref.watch(conversationsProvider).valueOrNull?.fold<int>(
-          0,
+      0,
           (total, conversation) => total + conversation.unread,
-        ) ??
+    ) ??
         0;
 
     return Badge(
@@ -271,6 +228,8 @@ class _NavItem extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+
+
               badge
                   ? _UnreadBadge(child: Icon(icon, color: color, size: 24))
                   : Icon(icon, color: color, size: 24),

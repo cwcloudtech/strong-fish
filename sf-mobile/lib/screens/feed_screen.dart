@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/models.dart';
 import '../providers/providers.dart';
@@ -16,7 +17,8 @@ import '../widgets/linkified_text.dart';
 
 /// The feed: posts from the people you follow, your own, and your clubs'.
 /// "Discover" switches to every public post, which is what a new account needs
-/// before it follows anyone.
+/// before it follows anyone. "Calendar" shows the events list in the same
+/// place, so the three live under one set of tabs.
 class FeedScreen extends ConsumerStatefulWidget {
   const FeedScreen({super.key});
 
@@ -28,20 +30,33 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   final _scroll = ScrollController();
   final List<Post> _posts = [];
 
-  bool _discover = false;
+  /// Which tab is showing: 'following', 'discover' or 'calendar'.
+  String _selectedFeed = 'following';
+
   bool _loading = true;
   bool _loadedOnce = false;
   int _page = 0;
   int _total = 0;
   String? _error;
 
+  /// Bumped on every load and on every switch to the calendar, so an answer
+  /// that arrives after the tab changed is recognised as stale and dropped
+  /// instead of being mixed into the other list.
+  int _requestId = 0;
+
   bool get _hasMore => !_loadedOnce || _posts.length < _total;
+  bool get _isCalendar => _selectedFeed == 'calendar';
+  bool get _isDiscover => _selectedFeed == 'discover';
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(() {
-      if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 300 && !_loading && _hasMore) {
+      if (!_isCalendar &&
+          _scroll.hasClients &&
+          _scroll.position.pixels > _scroll.position.maxScrollExtent - 300 &&
+          !_loading &&
+          _hasMore) {
         _load();
       }
     });
@@ -55,6 +70,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
   }
 
   Future<void> _load({bool reset = false}) async {
+    final myId = ++_requestId;
     if (reset) {
       setState(() {
         _posts.clear();
@@ -68,8 +84,10 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       _error = null;
     });
     try {
-      final page = await ref.read(apiProvider).feed(page: _page, discover: _discover);
-      if (!mounted) return;
+      final page = await ref
+          .read(apiProvider)
+          .feed(page: _page, discover: _isDiscover);
+      if (!mounted || myId != _requestId) return;
       setState(() {
         _posts.addAll(page.results);
         _total = page.totalResults;
@@ -77,68 +95,117 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         _loadedOnce = true;
       });
     } catch (error) {
-      if (mounted) setState(() => _error = ref.read(tErrorProvider)(error));
+      if (mounted && myId == _requestId) {
+        setState(() => _error = ref.read(tErrorProvider)(error));
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && myId == _requestId) setState(() => _loading = false);
     }
+  }
+
+  /// Opens the composer and reloads the feed once a post has been created.
+  Future<void> _compose() async {
+    final created = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const ComposePostScreen()),
+    );
+    if (created == true && mounted) _load(reset: true);
   }
 
   @override
   Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: _isCalendar
+          ? null
+          : FloatingActionButton(
+        heroTag: 'feed-compose',
+        onPressed: _compose,
+        child: const Icon(Icons.edit),
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
     final t = ref.watch(tProvider);
 
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: SegmentedButton<bool>(
+          child: SegmentedButton<String>(
             segments: [
-              ButtonSegment(value: false, label: Text(t('feed.following'))),
-              ButtonSegment(value: true, label: Text(t('feed.discover'))),
+              ButtonSegment(
+                value: 'following',
+                label: Text(t('feed.following')),
+              ),
+              ButtonSegment(value: 'discover', label: Text(t('feed.discover'))),
+              ButtonSegment(value: 'calendar', label: Text(t('feed.calendar'))),
             ],
-            selected: {_discover},
+            selected: {_selectedFeed},
             onSelectionChanged: (selection) {
-              setState(() => _discover = selection.first);
-              _load(reset: true);
+              final next = selection.first;
+              if (next == _selectedFeed) return;
+              setState(() => _selectedFeed = next);
+              if (next == 'calendar') {
+                // Drops any feed request still in flight; the calendar loads
+                // through its own provider.
+                setState(() {
+                  _requestId++;
+                  _loading = false;
+                });
+              } else {
+                _load(reset: true);
+              }
             },
           ),
         ),
-        Expanded(
-          child: _error != null && _posts.isEmpty
-              ? SfErrorState(message: _error!, retryLabel: t('common.back'), onRetry: () => _load(reset: true))
-              : RefreshIndicator(
-                  onRefresh: () => _load(reset: true),
-                  child: ListView.builder(
-                    controller: _scroll,
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _posts.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == _posts.length) {
-                        if (_loading) {
-                          return const Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Center(child: CircularProgressIndicator()),
-                          );
-                        }
-                        if (_posts.isEmpty && _loadedOnce) {
-                          return SfEmptyState(
-                            icon: Icons.forum_outlined,
-                            title: t(_discover ? 'feed.emptyDiscover' : 'feed.empty'),
-                          );
-                        }
-                        return const SizedBox(height: 40);
-                      }
-                      return _PostCard(
-                        post: _posts[index],
-                        onChanged: (updated) => setState(() => _posts[index] = updated),
-                        onDeleted: () => setState(() => _posts.removeAt(index)),
-                      );
-                    },
-                  ),
-                ),
-        ),
+        Expanded(child: _isCalendar ? const _EventsView() : _buildFeed()),
       ],
+    );
+  }
+
+  Widget _buildFeed() {
+    final t = ref.watch(tProvider);
+
+    if (_error != null && _posts.isEmpty) {
+      return SfErrorState(
+        message: _error!,
+        retryLabel: t('common.back'),
+        onRetry: () => _load(reset: true),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _load(reset: true),
+      child: ListView.builder(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: _posts.length + 1,
+        itemBuilder: (context, index) {
+          if (index == _posts.length) {
+            if (_loading) {
+              return const Padding(
+                padding: EdgeInsets.all(24),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (_posts.isEmpty && _loadedOnce) {
+              return SfEmptyState(
+                icon: Icons.forum_outlined,
+                title: t(_isDiscover ? 'feed.emptyDiscover' : 'feed.empty'),
+              );
+            }
+            return const SizedBox(height: 40);
+          }
+          return _PostCard(
+            post: _posts[index],
+            onChanged: (updated) => setState(() => _posts[index] = updated),
+            onDeleted: () => setState(() => _posts.removeAt(index)),
+          );
+        },
+      ),
     );
   }
 }
@@ -148,7 +215,11 @@ class _PostCard extends ConsumerWidget {
   final void Function(Post) onChanged;
   final VoidCallback onDeleted;
 
-  const _PostCard({required this.post, required this.onChanged, required this.onDeleted});
+  const _PostCard({
+    required this.post,
+    required this.onChanged,
+    required this.onDeleted,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -168,10 +239,13 @@ class _PostCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(post.author.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text(
+                        post.author.fullName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
                       Text(
                         '${post.createdAt.toLocal().toString().split('.').first}'
-                        '${post.clubNames.isNotEmpty ? ' · ${post.clubNames.join(', ')}' : ''}',
+                            '${post.clubNames.isNotEmpty ? ' · ${post.clubNames.join(', ')}' : ''}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -179,7 +253,11 @@ class _PostCard extends ConsumerWidget {
                 ),
                 Chip(
                   label: Text(
-                    t(post.visibility == 'club' ? 'feed.visibilityClub' : 'feed.visibilityPublic'),
+                    t(
+                      post.visibility == 'club'
+                          ? 'feed.visibilityClub'
+                          : 'feed.visibilityPublic',
+                    ),
                     style: const TextStyle(fontSize: 11),
                   ),
                   visualDensity: VisualDensity.compact,
@@ -202,7 +280,10 @@ class _PostCard extends ConsumerWidget {
               // The framed document claims to be served from this deployment's
               // own origin: an embed with no origin to report is what YouTube
               // refuses with a configuration error.
-              MediaPlayer(url: link, baseUrl: ref.read(apiProvider).client.apiUrl),
+              MediaPlayer(
+                url: link,
+                baseUrl: ref.read(apiProvider).client.apiUrl,
+              ),
             ],
             const Divider(height: 20),
             Row(
@@ -212,29 +293,49 @@ class _PostCard extends ConsumerWidget {
                 // too; this keeps a dead control off the screen.
                 if (post.author.id == ref.watch(sessionProvider).user?.id)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.favorite_border, size: 18, color: AppColors.of(context).textMuted),
+                        Icon(
+                          Icons.favorite_border,
+                          size: 18,
+                          color: AppColors.of(context).textMuted,
+                        ),
                         const SizedBox(width: 6),
-                        Text('${post.likes}',
-                            style: TextStyle(color: AppColors.of(context).textMuted)),
+                        Text(
+                          '${post.likes}',
+                          style: TextStyle(
+                            color: AppColors.of(context).textMuted,
+                          ),
+                        ),
                       ],
                     ),
                   )
                 else
                   TextButton.icon(
-                    icon: Icon(post.liked ? Icons.favorite : Icons.favorite_border,
-                        color: post.liked ? Theme.of(context).colorScheme.error : null),
+                    icon: Icon(
+                      post.liked ? Icons.favorite : Icons.favorite_border,
+                      color: post.liked
+                          ? Theme.of(context).colorScheme.error
+                          : null,
+                    ),
                     label: Text('${post.likes}'),
                     onPressed: () async {
                       try {
-                        onChanged(await ref.read(apiProvider).like(post.id, post.liked));
+                        onChanged(
+                          await ref.read(apiProvider).like(post.id, post.liked),
+                        );
                       } catch (error) {
                         if (context.mounted) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(ref.read(tErrorProvider)(error)),
+                            ),
+                          );
                         }
                       }
                     },
@@ -257,8 +358,12 @@ class _PostCard extends ConsumerWidget {
                               Text(ref.read(tProvider)('share.label')),
                               const SizedBox(height: 8),
                               SocialShareRow(
-                                url: '${ref.read(apiProvider).client.frontendUrl}/posts/${post.id}',
-                                text: shareTextFor(post.content, ref.read(tProvider)('share.postText')),
+                                url:
+                                '${ref.read(apiProvider).client.frontendUrl}/posts/${post.id}',
+                                text: shareTextFor(
+                                  post.content,
+                                  ref.read(tProvider)('share.postText'),
+                                ),
                               ),
                             ],
                           ),
@@ -319,14 +424,19 @@ class _PostCard extends ConsumerWidget {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(t('common.edit')),
-        content: TextField(controller: controller, maxLines: 6, autofocus: true),
+        content: TextField(
+          controller: controller,
+          maxLines: 6,
+          autofocus: true,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: Text(t('common.cancel')),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
             child: Text(t('common.save')),
           ),
         ],
@@ -343,8 +453,9 @@ class _PostCard extends ConsumerWidget {
       onChanged(await ref.read(apiProvider).updatePost(post, content));
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+        );
       }
     }
   }
@@ -365,10 +476,14 @@ class _PostCard extends ConsumerWidget {
       clubs = await ref.read(clubsProvider.future).catchError((_) => <Club>[]);
     } else {
       for (var i = 0; i < post.clubIds.length; i++) {
-        clubs.add(Club(
-          id: post.clubIds[i],
-          name: i < post.clubNames.length ? post.clubNames[i] : t('feed.visibilityClub'),
-        ));
+        clubs.add(
+          Club(
+            id: post.clubIds[i],
+            name: i < post.clubNames.length
+                ? post.clubNames[i]
+                : t('feed.visibilityClub'),
+          ),
+        );
       }
     }
     if (!context.mounted) return;
@@ -391,7 +506,8 @@ class _PostCard extends ConsumerWidget {
               // deprecated the per-tile form after 3.32.
               RadioGroup<String>(
                 groupValue: visibility,
-                onChanged: (value) => setSheetState(() => visibility = value ?? 'public'),
+                onChanged: (value) =>
+                    setSheetState(() => visibility = value ?? 'public'),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -451,16 +567,23 @@ class _PostCard extends ConsumerWidget {
     );
     if (confirmed != true) return;
 
-    final unchanged = visibility == post.visibility &&
-        picked.length == post.clubIds.length &&
-        picked.every(post.clubIds.contains);
+    final unchanged =
+        visibility == post.visibility &&
+            picked.length == post.clubIds.length &&
+            picked.every(post.clubIds.contains);
     if (unchanged) return;
 
     try {
-      onChanged(await ref.read(apiProvider).updatePostVisibility(post, visibility, picked));
+      onChanged(
+        await ref
+            .read(apiProvider)
+            .updatePostVisibility(post, visibility, picked),
+      );
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+        );
       }
     }
   }
@@ -470,11 +593,15 @@ class _PostCard extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
         child: _CommentsSheet(post: post),
       ),
     );
-    if (added != null && added != 0) onChanged(post.copyWith(comments: post.comments + added));
+    if (added != null && added != 0) {
+      onChanged(post.copyWith(comments: post.comments + added));
+    }
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
@@ -485,8 +612,14 @@ class _PostCard extends ConsumerWidget {
         title: Text(t('common.delete')),
         content: Text(t('feed.confirmDeletePost')),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text(t('common.cancel'))),
-          FilledButton(onPressed: () => Navigator.of(context).pop(true), child: Text(t('common.delete'))),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(t('common.cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(t('common.delete')),
+          ),
         ],
       ),
     );
@@ -497,7 +630,9 @@ class _PostCard extends ConsumerWidget {
       onDeleted();
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+        );
       }
     }
   }
@@ -517,7 +652,10 @@ class _PostCard extends ConsumerWidget {
               'inappropriate': 'feed.reportInappropriate',
               'other': 'feed.reportOther',
             }.entries)
-              ListTile(title: Text(t(entry.value)), onTap: () => Navigator.of(context).pop(entry.key)),
+              ListTile(
+                title: Text(t(entry.value)),
+                onTap: () => Navigator.of(context).pop(entry.key),
+              ),
           ],
         ),
       ),
@@ -525,13 +663,19 @@ class _PostCard extends ConsumerWidget {
     if (reason == null) return;
 
     try {
-      await ref.read(apiProvider).report(targetType: 'post', targetId: post.id, reason: reason);
+      await ref
+          .read(apiProvider)
+          .report(targetType: 'post', targetId: post.id, reason: reason);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('feed.reported'))));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(t('feed.reported'))));
       }
     } catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+        );
       }
     }
   }
@@ -579,8 +723,12 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
     ref
         .read(apiProvider)
         .comments(widget.post.id)
-        .then((page) => mounted ? setState(() => _comments = page.results) : null)
-        .catchError((_) => mounted ? setState(() => _comments = <Comment>[]) : null);
+        .then(
+          (page) => mounted ? setState(() => _comments = page.results) : null,
+    )
+        .catchError(
+          (_) => mounted ? setState(() => _comments = <Comment>[]) : null,
+    );
   }
 
   @override
@@ -600,9 +748,16 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(t('common.edit')),
-        content: TextField(controller: controller, maxLines: 4, autofocus: true),
+        content: TextField(
+          controller: controller,
+          maxLines: 4,
+          autofocus: true,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('common.cancel'))),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(t('common.cancel')),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: Text(t('common.save')),
@@ -612,19 +767,26 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
     );
     controller.dispose();
 
-    if (content == null || content.isEmpty || content == comment.content) return;
+    if (content == null || content.isEmpty || content == comment.content) {
+      return;
+    }
     try {
-      final updated = await ref.read(apiProvider).updateComment(widget.post.id, comment.id, content);
+      final updated = await ref
+          .read(apiProvider)
+          .updateComment(widget.post.id, comment.id, content);
       if (mounted) {
-        setState(() => _comments = [
-              for (final item in _comments ?? <Comment>[])
-                if (item.id == updated.id) updated else item,
-            ]);
+        setState(
+              () => _comments = [
+            for (final item in _comments ?? <Comment>[])
+              if (item.id == updated.id) updated else item,
+          ],
+        );
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+        );
       }
     }
   }
@@ -634,7 +796,10 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
     if (content.isEmpty) return;
     setState(() => _busy = true);
     try {
-      final comment = await ref.read(apiProvider).addComment(widget.post.id, content);
+      final comment = await ref
+          .read(apiProvider)
+          .addComment(widget.post.id, content);
+      if (!mounted) return;
       setState(() {
         _comments = [...?_comments, comment];
         _delta += 1;
@@ -642,7 +807,9 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
       });
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -660,10 +827,15 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (_comments == null)
-              const Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(),
+              )
             else
               ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
+                ),
                 child: ListView(
                   shrinkWrap: true,
                   children: [
@@ -672,14 +844,22 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                         leading: SfAvatar.of(comment.author, radius: 16),
                         title: Row(
                           children: [
-                            Flexible(child: Text(comment.author.fullName, overflow: TextOverflow.ellipsis)),
+                            Flexible(
+                              child: Text(
+                                comment.author.fullName,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                             // Says so when it has been changed since: a comment
                             // somebody replied to may not be the one on screen.
                             if (comment.wasEdited) ...[
                               const SizedBox(width: 6),
                               Text(
                                 t('feed.edited'),
-                                style: TextStyle(fontSize: 11, color: AppColors.of(context).textMuted),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.of(context).textMuted,
+                                ),
                               ),
                             ],
                           ],
@@ -688,10 +868,10 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                         dense: true,
                         trailing: comment.editable
                             ? IconButton(
-                                icon: const Icon(Icons.edit_outlined, size: 18),
-                                tooltip: t('common.edit'),
-                                onPressed: () => _edit(comment),
-                              )
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          tooltip: t('common.edit'),
+                          onPressed: () => _edit(comment),
+                        )
                             : null,
                       ),
                   ],
@@ -703,11 +883,16 @@ class _CommentsSheetState extends ConsumerState<_CommentsSheet> {
                 Expanded(
                   child: TextField(
                     controller: _input,
-                    decoration: InputDecoration(hintText: t('feed.writeComment')),
+                    decoration: InputDecoration(
+                      hintText: t('feed.writeComment'),
+                    ),
                     onSubmitted: (_) => _submit(),
                   ),
                 ),
-                IconButton(icon: const Icon(Icons.send), onPressed: _busy ? null : _submit),
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: _busy ? null : _submit,
+                ),
               ],
             ),
             TextButton(
@@ -736,6 +921,7 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
   final List<String> _pictures = [];
 
   String _visibility = 'public';
+
   /// The clubs a club-only post goes to. Several, because a coach who runs two
   /// writes the same session note for both and should not post it twice.
   final List<String> _clubIds = [];
@@ -754,11 +940,17 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
   }
 
   Future<void> _addPicture() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 80);
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1600,
+      imageQuality: 80,
+    );
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
     if (!mounted) return;
-    setState(() => _pictures.add('data:image/jpeg;base64,${base64Encode(bytes)}'));
+    setState(
+          () => _pictures.add('data:image/jpeg;base64,${base64Encode(bytes)}'),
+    );
   }
 
   /// Uploads a video and appends its URL to the post's text.
@@ -769,38 +961,40 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
   Future<void> _addVideo() async {
     final picked = await ImagePicker().pickVideo(source: ImageSource.gallery);
     if (picked == null) return;
-
-    // Refused here rather than half-way through the transfer: the API stops an
-    // oversized body mid-stream, which reaches the phone as a lost connection
-    // and explains nothing. The cap comes from the deployment, so a club that
-    // raised it is believed.
     final limit = await maxVideoSize(ref);
     final size = await File(picked.path).length();
     if (!mounted) return;
     if (limit > 0 && size > limit) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ref.read(tProvider)('errors.videoTooLargeMax', {'size': formatBytes(limit)})),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ref.read(tProvider)('errors.videoTooLargeMax', {
+              'size': formatBytes(limit),
+            }),
+          ),
+        ),
+      );
       return;
     }
 
     setState(() => _uploading = 0);
     try {
-      final url = await ref.read(apiProvider).uploadVideo(
-            picked.path,
-            onProgress: (value) {
-              if (mounted) setState(() => _uploading = value);
-            },
-          );
+      final url = await ref
+          .read(apiProvider)
+          .uploadVideo(
+        picked.path,
+        onProgress: (value) {
+          if (mounted) setState(() => _uploading = value);
+        },
+      );
       if (!mounted) return;
       final text = _content.text.trim();
       _content.text = text.isEmpty ? url : '$text\n$url';
     } catch (error) {
-      // A member with no storage configured gets a 405, which carries its own
-      // i18n code and reads as "set up your storage first".
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+        );
       }
     } finally {
       if (mounted) setState(() => _uploading = null);
@@ -813,12 +1007,14 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
       _error = null;
     });
     try {
-      await ref.read(apiProvider).createPost(
-            content: _content.text.trim(),
-            pictures: _pictures,
-            visibility: _visibility,
-            clubIds: _visibility == 'club' ? _clubIds : const [],
-          );
+      await ref
+          .read(apiProvider)
+          .createPost(
+        content: _content.text.trim(),
+        pictures: _pictures,
+        visibility: _visibility,
+        clubIds: _visibility == 'club' ? _clubIds : const [],
+      );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
       if (mounted) {
@@ -841,7 +1037,10 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
         actions: [
           TextButton(
             onPressed: _busy ? null : _submit,
-            child: Text(t('feed.post'), style: const TextStyle(color: Colors.white)),
+            child: Text(
+              t('feed.post'),
+              style: const TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -854,8 +1053,6 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
             autofocus: true,
             decoration: InputDecoration(hintText: t('feed.compose')),
           ),
-          // No link field: paste the URL into the text above and the API
-          // picks it up, the same way it does on the web.
           const SizedBox(height: 12),
           for (final picture in _pictures) ...[
             _Base64Image(data: picture),
@@ -885,17 +1082,25 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
             initialValue: _visibility,
             decoration: InputDecoration(labelText: t('feed.visibility')),
             items: [
-              DropdownMenuItem(value: 'public', child: Text(t('feed.visibilityPublic'))),
-              if (clubs.isNotEmpty) DropdownMenuItem(value: 'club', child: Text(t('feed.visibilityClub'))),
+              DropdownMenuItem(
+                value: 'public',
+                child: Text(t('feed.visibilityPublic')),
+              ),
+              if (clubs.isNotEmpty)
+                DropdownMenuItem(
+                  value: 'club',
+                  child: Text(t('feed.visibilityClub')),
+                ),
             ],
-            onChanged: (value) => setState(() => _visibility = value ?? 'public'),
+            onChanged: (value) =>
+                setState(() => _visibility = value ?? 'public'),
           ),
           if (_visibility == 'club') ...[
             const SizedBox(height: 12),
-            // Checkboxes rather than a dropdown: a post can go to several
-            // clubs, and a list this short reads better than a menu that has
-            // to be opened to see what is picked.
-            Text(t('feed.pickClubs'), style: Theme.of(context).textTheme.labelLarge),
+            Text(
+              t('feed.pickClubs'),
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
             for (final club in clubs)
               CheckboxListTile(
                 dense: true,
@@ -914,10 +1119,188 @@ class _ComposePostScreenState extends ConsumerState<ComposePostScreen> {
           ],
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ],
         ],
       ),
     );
   }
+}
+
+/// The calendar: meets, club sessions and camps.
+///
+/// It is read-only here on purpose. Adding an event is a coach's desk job -
+/// dates, a location, an entry link - and the web app is where that belongs;
+/// what an athlete needs on a phone is to see what is coming, which is also
+/// what the ICS subscription is for.
+///
+/// Private to this file: it is only ever shown as the "calendar" tab of
+/// [FeedScreen].
+class _EventsView extends ConsumerWidget {
+  const _EventsView();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(tProvider);
+    final events = ref.watch(eventsProvider);
+
+    return RefreshIndicator(
+      onRefresh: () async => ref.invalidate(eventsProvider),
+      child: events.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => SfErrorState(
+          message: ref.read(tErrorProvider)(error),
+          onRetry: () => ref.invalidate(eventsProvider),
+          retryLabel: t('common.back'),
+        ),
+        data: (list) {
+          if (list.isEmpty) {
+            return SfRefreshableBody(
+              child: SfEmptyState(
+                icon: Icons.event_outlined,
+                title: t('events.emptyTitle'),
+                message: t('events.emptyBody'),
+              ),
+            );
+          }
+          return ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            itemCount: list.length,
+            itemBuilder: (context, index) => _EventCard(event: list[index]),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EventCard extends ConsumerWidget {
+  final Event event;
+
+  const _EventCard({required this.event});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(tProvider);
+    final colors = AppColors.of(context);
+    final dotColor = _eventColor();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (dotColor != null) ...[
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: dotColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Chip(
+                  label: Text(t('events.kind.${event.kind}')),
+                  backgroundColor: _kindColor(colors, event.kind),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(event.title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(_when(event), style: TextStyle(color: colors.textMuted)),
+            if (event.location.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  event.location,
+                  style: TextStyle(color: colors.textMuted),
+                ),
+              ),
+            if (event.clubName.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  event.clubName,
+                  style: TextStyle(color: colors.textMuted, fontSize: 12),
+                ),
+              ),
+            if (event.description.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              LinkifiedText(event.description),
+            ],
+            if (event.url.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                icon: const Icon(Icons.open_in_new, size: 16),
+                label: Text(t('events.moreInfo')),
+                onPressed: () => _openUrl(context, ref),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Opens the event's link. A malformed URL or a failed launch shows the
+  /// usual error snackbar instead of throwing out of the tap handler.
+  Future<void> _openUrl(BuildContext context, WidgetRef ref) async {
+    final uri = Uri.tryParse(event.url);
+    if (uri == null) return;
+    try {
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(event.url)),
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ref.read(tErrorProvider)(error))),
+        );
+      }
+    }
+  }
+
+  /// The event's own colour, or null when it has none or the server sent
+  /// something that is not a `#rrggbb` - a bad value drops the dot rather than
+  /// throwing on a card that would otherwise render.
+  Color? _eventColor() {
+    final value = event.color.trim();
+    if (!RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(value)) return null;
+    return Color(0xFF000000 | int.parse(value.substring(1), radix: 16));
+  }
+
+  Color _kindColor(AppColors colors, String kind) => switch (kind) {
+    'competition' => colors.primaryTint,
+    _ => colors.backgroundMuted,
+  };
+
+  /// The date as a reader wants it: a day for an all-day event, a day and a
+  /// time otherwise. Deliberately not localized through `intl` - the app
+  /// carries no date-formatting dependency, and this is the one place a
+  /// numeric date is clearer than a written one anyway.
+  String _when(Event event) {
+    final start = event.startsAt;
+    final day = '${_pad(start.day)}/${_pad(start.month)}/${start.year}';
+    if (event.allDay || event.kind == 'birthday') return day;
+    return '$day  ${_pad(start.hour)}:${_pad(start.minute)}';
+  }
+
+  String _pad(int value) => value.toString().padLeft(2, '0');
 }

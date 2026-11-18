@@ -469,6 +469,7 @@ const Map<String, dynamic> en = {
     'title': 'Feed',
     'discover': 'Discover',
     'following': 'Following',
+    'calendar': 'Calendar',
     'compose': 'Share something with your club...',
     'post': 'Post',
     'posted': 'Posted.',

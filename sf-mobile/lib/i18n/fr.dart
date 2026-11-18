@@ -469,6 +469,7 @@ const Map<String, dynamic> fr = {
     'title': 'Actualités',
     'discover': 'Découvrir',
     'following': 'Abonnements',
+    'calendar': 'Calendrier',
     'compose': 'Partagez quelque chose avec votre club...',
     'post': 'Publier',
     'posted': 'Publié.',

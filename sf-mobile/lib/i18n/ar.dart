@@ -469,6 +469,8 @@ const Map<String, dynamic> ar = {
     'title': 'المستجدات',
     'discover': 'استكشاف',
     'following': 'المتابَعون',
+    // Todo: traduct world
+    'calendar': 'calendar',
     'compose': 'شارك شيئاً مع ناديك...',
     'post': 'نشر',
     'posted': 'تم النشر.',
