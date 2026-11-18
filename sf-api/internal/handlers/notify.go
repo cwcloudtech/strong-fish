@@ -123,13 +123,23 @@ func notifyComment(n Notifier, commenter, postAuthor models.User) {
 		commenter.Email, commenter.ID, postAuthor.Email, postAuthor.ID))
 }
 
-// profileURL is the link to a member's public profile, by handle when they have
-// one and by id otherwise - "unknown" when there is no base URL to build on.
+// profileURL is the link to a member's public profile. The handle is computed
+// the same way the frontend serves the page and UserStore.deriveHandle does -
+// the slugified username when the member picked one, otherwise their name and
+// surname - rather than trusting the stored user.Handle, which can lag a switch
+// to a username (so an anonymous member's link would otherwise show their real
+// name). Falls back to the stored handle, then the id, then "unknown".
 func profileURL(uiBaseURL string, user models.User) string {
 	if utils.IsBlank(uiBaseURL) {
 		return "unknown"
 	}
-	handle := user.Handle
+	handle := utils.Slugify(user.Username)
+	if utils.IsBlank(handle) {
+		handle = utils.Slugify(strings.TrimSpace(user.Name + " " + user.Surname))
+	}
+	if utils.IsBlank(handle) {
+		handle = user.Handle
+	}
 	if utils.IsBlank(handle) {
 		handle = user.ID
 	}
