@@ -1098,6 +1098,16 @@ func (h *DeviceHandler) freshToken(r *http.Request, provider devicelink.Provider
 // clients can translate, and everything else into a plain upstream error.
 func (h *DeviceHandler) writeProviderError(w http.ResponseWriter, err error, provider string) {
 	switch {
+	case errors.Is(err, context.Canceled):
+		// The member navigated away mid-read (closed the tab, switched
+		// screens), so the provider call was canceled with the request - not a
+		// provider fault. Answer 499 and log at debug, exactly as
+		// writeStoreError does, so a closed tab never lands in the error log or
+		// trips the 5xx [ERROR] Discord alert. Heart rate is the one most likely
+		// to catch this: it reaches back a fortnight, so it is the slowest read
+		// and the easiest to walk away from before it returns.
+		slog.Debug("device read canceled by client", "provider", provider, "error", err)
+		w.WriteHeader(statusClientClosedRequest)
 	case errors.Is(err, devicelink.ErrNotLinked):
 		writeError(w, http.StatusConflict, "Account not linked at the provider", CodeDeviceNotLinked)
 	case errors.Is(err, devicelink.ErrReauthorize):
