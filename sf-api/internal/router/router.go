@@ -757,7 +757,7 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 
 	// Generated once every /v1 route above is registered, so the document can
 	// never describe a router that isn't the one running.
-	r.Get("/openapi.json", handlers.NewOpenAPIHandler(openapi.Generate(r, "strong-fish API", o.Version)))
+	r.Get("/openapi.json", handlers.NewOpenAPIHandler(openapi.Generate(r, "strong-fish API", o.Version, handlers.EndpointDocs())))
 	r.Get("/", handlers.ServeSwaggerUI)
 
 	return r
