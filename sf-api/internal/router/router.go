@@ -751,6 +751,10 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 					r.Get("/stats", h.Admin.IPStats)
 					r.Put("/", h.Admin.BanIP)
 				})
+
+				// The audit trail: every auditable event newest-first, paged and
+				// filterable by action and subject.
+				r.Get("/audit", h.Admin.Audit)
 			})
 		}))
 	})

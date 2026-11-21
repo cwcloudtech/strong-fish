@@ -300,6 +300,20 @@ func recordConnection(r *http.Request, visits middleware.VisitorStore, enrich mi
 	go middleware.TrackVisit(visits, enrich, &id, ip)
 }
 
+// recordAuthAudit writes an authentication event - a sign-in or a registration -
+// to the superadmin audit trail, naming the account and the address it came
+// from. Best-effort and nil-safe (see AuditStore.Record): a nil store, which is
+// how an unwired handler leaves it, is a no-op.
+func recordAuthAudit(audit *store.AuditStore, r *http.Request, action string, user models.User) {
+	if audit == nil {
+		return
+	}
+	audit.Record(r.Context(), user.ID, action, models.AuditSubjectUser, user.ID, map[string]any{
+		"email": user.Email,
+		"ip":    utils.ClientIP(r),
+	})
+}
+
 // localeOf returns the language to send a user's emails in, defaulting to the
 // request's Accept-Language when they never picked one.
 func localeOf(user models.User, r *http.Request) string {

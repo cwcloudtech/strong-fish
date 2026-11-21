@@ -27,6 +27,7 @@ import (
 type AIHandler struct {
 	connections *store.AIStore
 	users       *store.UserStore
+	audit       *store.AuditStore
 	client      *ai.Client
 	// uiBaseURL is where a shared conversation is read, and the attribution
 	// line of an exported one.
@@ -49,8 +50,8 @@ type AIHandler struct {
 	sleep func(*http.Request, string, string) string
 }
 
-func NewAIHandler(connections *store.AIStore, users *store.UserStore, uiBaseURL string) *AIHandler {
-	return &AIHandler{connections: connections, users: users, client: ai.New(), uiBaseURL: uiBaseURL}
+func NewAIHandler(connections *store.AIStore, users *store.UserStore, audit *store.AuditStore, uiBaseURL string) *AIHandler {
+	return &AIHandler{connections: connections, users: users, audit: audit, client: ai.New(), uiBaseURL: uiBaseURL}
 }
 
 // WithMemberContext gives the chat the member's own numbers to answer with.
@@ -689,5 +690,20 @@ func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request, userID, connecti
 		Provider: connection.Provider, Model: model, Feature: feature,
 		Input: answer.Tokens.Input, Output: answer.Tokens.Output, Cached: answer.Tokens.Cached,
 	})
+	// And, for the superadmin audit trail, who spent what on which key. Same
+	// chokepoint, same reason: every feature's question is counted here, so none
+	// can reach the model without leaving a record. Fire-and-forget (see
+	// AuditStore.Record) - a nil store is a no-op.
+	if h.audit != nil {
+		h.audit.Record(r.Context(), userID, models.AuditActionAICall,
+			models.AuditSubjectAIConnection, connection.ID, map[string]any{
+				"provider": connection.Provider,
+				"model":    model,
+				"feature":  feature,
+				"input":    answer.Tokens.Input,
+				"output":   answer.Tokens.Output,
+				"cached":   answer.Tokens.Cached,
+			})
+	}
 	return answer, true
 }

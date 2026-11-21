@@ -582,4 +582,16 @@ export const admin = {
   ipStats: () => body(client.get("/admin/ips/stats")),
   banIp: (ip, motif) => body(client.put("/admin/ips", { ip, action: "ban", motif: motif || "" })),
   unbanIp: (ip) => body(client.put("/admin/ips", { ip, action: "unban" })),
+  // The audit trail: {results, page, pageSize, hasNext}. page is 0-based;
+  // action and subject are optional filters. The screen infinite-scrolls.
+  audit: (params = {}) =>
+    body(
+      client.get("/admin/audit", {
+        params: {
+          page: params.page || 0,
+          action: params.action || undefined,
+          subject: params.subject || undefined,
+        },
+      })
+    ),
 };

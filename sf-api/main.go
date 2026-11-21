@@ -95,6 +95,7 @@ func main() {
 	aiStore := store.NewAIStore(pool)
 	callbackStore := store.NewCallbackStore(pool)
 	sessionStore := store.NewSessionStore(pool)
+	auditStore := store.NewAuditStore(pool)
 
 	// The geo enricher turns a bare address into a country/city/network. Always
 	// built (ip-api needs no key); the ipinfo fallback uses the optional token.
@@ -222,7 +223,7 @@ func main() {
 	}
 	defer shutdown(observability.Shutdown, "metrics")
 
-	aiHandler := handlers.NewAIHandler(aiStore, userStore, cfg.UIBaseURL).
+	aiHandler := handlers.NewAIHandler(aiStore, userStore, auditStore, cfg.UIBaseURL).
 		WithMemberContext(oneRMStore, programStore, programHandler)
 	// The two know each other: the device screens ask the model for a reading
 	// of the last ninety days, and the chat is told what the last day looked
@@ -239,12 +240,12 @@ func main() {
 	api := router.New(router.Handlers{
 		User: handlers.NewUserHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.MaxImageSize,
 			cfg.ActivationMode, mailer, cfg.APIBaseURL, cfg.UIBaseURL, cfg.ConfirmationEmailTTL).
-			WithVisits(sessionStore, enricher, notifier),
+			WithVisits(sessionStore, enricher, notifier).WithAudit(auditStore),
 		MFA: handlers.NewMFAHandler(userStore, webauthnStore, cfg.JWTSecret, cfg.ActivationMode, waInstance, mfaIssuer).
-			WithVisits(sessionStore, enricher, notifier, cfg.UIBaseURL),
+			WithVisits(sessionStore, enricher, notifier, cfg.UIBaseURL).WithAudit(auditStore),
 		OIDC: handlers.NewOIDCHandler(providers, userStore, webauthnStore, cfg.JWTSecret,
 			cfg.APIBaseURL, cfg.UIBaseURL, cfg.OIDCKeycloakGroups, cfg.ActivationMode).
-			WithVisits(sessionStore, enricher, notifier),
+			WithVisits(sessionStore, enricher, notifier).WithAudit(auditStore),
 		Club:     handlers.NewClubHandler(clubStore, userStore, mailer, cfg.MaxImageSize, cfg.UIBaseURL).WithNotify(notifier),
 		Exercise: handlers.NewExerciseHandler(exerciseStore, oneRMStore, userStore),
 		Program:  programHandler,
@@ -253,7 +254,7 @@ func main() {
 		Social: handlers.NewSocialHandler(socialStore, clubStore, userStore, oneRMStore,
 			messageStore, cfg.MaxImageSize).WithNotify(notifier),
 		Profile: profileHandler,
-		Admin: handlers.NewAdminHandler(userStore, webauthnStore, socialStore, sessionStore, mailer,
+		Admin: handlers.NewAdminHandler(userStore, webauthnStore, socialStore, sessionStore, auditStore, mailer,
 			cfg.ActivationMode, cfg.UIBaseURL).WithNotify(notifier),
 		Config: handlers.NewConfigHandler(oidc.Names(providers), cfg.ActivationMode,
 			cfg.PlateIncrement, cfg.MaxImageSize, cfg.MaxVideoSize, cfg.MaxAudioSize,

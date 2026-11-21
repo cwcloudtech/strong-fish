@@ -40,6 +40,7 @@ type MFAHandler struct {
 	enrich         middleware.Enricher
 	notify         Notifier
 	uiBaseURL      string
+	audit          *store.AuditStore
 }
 
 func NewMFAHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCredentialStore,
@@ -59,6 +60,13 @@ func (h *MFAHandler) WithVisits(visits middleware.VisitorStore, enrich middlewar
 	h.enrich = enrich
 	h.notify = notify
 	h.uiBaseURL = uiBaseURL
+	return h
+}
+
+// WithAudit wires the superadmin audit trail so finishing an MFA login records
+// the sign-in. Optional and nil-safe - unset, the event simply isn't audited.
+func (h *MFAHandler) WithAudit(audit *store.AuditStore) *MFAHandler {
+	h.audit = audit
 	return h
 }
 
@@ -106,6 +114,7 @@ func (h *MFAHandler) respondSession(w http.ResponseWriter, r *http.Request, user
 	}
 	recordConnection(r, h.visits, h.enrich, user.ID)
 	notifyLogin(h.notify, r, user, h.uiBaseURL)
+	recordAuthAudit(h.audit, r, models.AuditActionSignedIn, user)
 	writeJSON(w, http.StatusOK, models.UserResponse{
 		ID: user.ID, Email: user.Email, Name: user.Name, Surname: user.Surname,
 		Handle: user.Handle, Role: user.Role, Token: token, Picture: user.Picture,

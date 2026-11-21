@@ -37,6 +37,7 @@ type UserHandler struct {
 	visits               middleware.VisitorStore
 	enrich               middleware.Enricher
 	notify               Notifier
+	audit                *store.AuditStore
 }
 
 func NewUserHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCredentialStore, jwtSecret string,
@@ -57,6 +58,14 @@ func (h *UserHandler) WithVisits(visits middleware.VisitorStore, enrich middlewa
 	h.visits = visits
 	h.enrich = enrich
 	h.notify = notify
+	return h
+}
+
+// WithAudit wires the superadmin audit trail: a successful sign-in or
+// registration is recorded. Optional and nil-safe - left unset, those events
+// simply aren't audited.
+func (h *UserHandler) WithAudit(audit *store.AuditStore) *UserHandler {
+	h.audit = audit
 	return h
 }
 
@@ -227,8 +236,10 @@ func (h *UserHandler) respondSession(w http.ResponseWriter, r *http.Request, use
 	// a 200 is an existing account signing in.
 	if status == http.StatusCreated {
 		notifyRegister(h.notify, r, user, h.uiBaseURL)
+		recordAuthAudit(h.audit, r, models.AuditActionRegistered, user)
 	} else {
 		notifyLogin(h.notify, r, user, h.uiBaseURL)
+		recordAuthAudit(h.audit, r, models.AuditActionSignedIn, user)
 	}
 	writeJSON(w, status, models.UserResponse{
 		ID: user.ID, Email: user.Email, Name: user.Name, Surname: user.Surname,

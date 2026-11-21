@@ -327,6 +327,7 @@ var routes = []struct{ method, path string }{
 	{"DELETE", "/v1/admin/users/user-1"},
 	{"DELETE", "/v1/admin/users/user-1/mfa"},
 	{"GET", "/v1/admin/users/user-1/ips"},
+	{"GET", "/v1/admin/audit"},
 }
 
 // TestEveryRouteResolves asserts each documented endpoint is registered with

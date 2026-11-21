@@ -36,6 +36,7 @@ type OIDCHandler struct {
 	visits         middleware.VisitorStore
 	enrich         middleware.Enricher
 	notify         Notifier
+	audit          *store.AuditStore
 }
 
 func NewOIDCHandler(providers []oidc.Provider, users *store.UserStore, webauthnCreds *store.WebAuthnCredentialStore,
@@ -54,6 +55,15 @@ func (h *OIDCHandler) WithVisits(visits middleware.VisitorStore, enrich middlewa
 	h.visits = visits
 	h.enrich = enrich
 	h.notify = notify
+	return h
+}
+
+// WithAudit wires the superadmin audit trail so an OIDC sign-in that completes
+// without MFA records the sign-in. Optional and nil-safe - unset, the event
+// simply isn't audited. (An OIDC login that then goes through MFA is audited by
+// the MFA handler that finishes it.)
+func (h *OIDCHandler) WithAudit(audit *store.AuditStore) *OIDCHandler {
+	h.audit = audit
 	return h
 }
 
@@ -131,6 +141,7 @@ func (h *OIDCHandler) finishSession(r *http.Request, user models.User) (string, 
 		if err == nil {
 			recordConnection(r, h.visits, h.enrich, user.ID)
 			notifyLogin(h.notify, r, user, h.uiBaseURL)
+			recordAuthAudit(h.audit, r, models.AuditActionSignedIn, user)
 		}
 		return token, nil, err
 	}

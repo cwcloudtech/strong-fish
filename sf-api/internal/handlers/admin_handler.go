@@ -24,6 +24,7 @@ type AdminHandler struct {
 	webauthnCreds  *store.WebAuthnCredentialStore
 	social         *store.SocialStore
 	sessions       *store.SessionStore
+	audit          *store.AuditStore
 	mailer         *email.Sender
 	notify         Notifier
 	activationMode string
@@ -31,11 +32,11 @@ type AdminHandler struct {
 }
 
 func NewAdminHandler(users *store.UserStore, webauthnCreds *store.WebAuthnCredentialStore,
-	social *store.SocialStore, sessions *store.SessionStore, mailer *email.Sender,
+	social *store.SocialStore, sessions *store.SessionStore, audit *store.AuditStore, mailer *email.Sender,
 	activationMode, uiBaseURL string) *AdminHandler {
 	return &AdminHandler{
 		users: users, webauthnCreds: webauthnCreds, social: social, sessions: sessions,
-		mailer: mailer, activationMode: activationMode, uiBaseURL: uiBaseURL,
+		audit: audit, mailer: mailer, activationMode: activationMode, uiBaseURL: uiBaseURL,
 	}
 }
 
@@ -50,6 +51,14 @@ func (h *AdminHandler) WithNotify(n Notifier) *AdminHandler {
 // pages server-side, so this is the slice sent per request, not a cap on how
 // many addresses may exist.
 const adminIPPageSize = 50
+
+// auditPageSize is the default slice of the audit trail sent per request, and
+// auditMaxPageSize the most a caller may ask for. The screen infinite-scrolls,
+// so these bound one page, not the total the trail may hold.
+const (
+	auditPageSize    = 50
+	auditMaxPageSize = 200
+)
 
 // adminUser is one account as the management screen shows it, with the MFA flag
 // the plain profile response hides.
@@ -98,13 +107,17 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid role", CodeInvalidRole)
 		return
 	}
+	// The role before this edit, read once: it guards the self-demotion check
+	// below and tells the audit trail what a role change changed from.
+	var previousRole models.GlobalRole
+	if existing, err := h.users.FindByID(r.Context(), targetID); err == nil {
+		previousRole = existing.Role
+	}
 	// Changing your own role is refused rather than allowed-and-regretted: a
 	// superadmin demoting themselves could leave the instance with none.
-	if targetID == callerID {
-		if existing, err := h.users.FindByID(r.Context(), targetID); err == nil && existing.Role != p.Role {
-			writeError(w, http.StatusBadRequest, "You cannot change your own role", CodeCantEditOwnRole)
-			return
-		}
+	if targetID == callerID && previousRole != "" && previousRole != p.Role {
+		writeError(w, http.StatusBadRequest, "You cannot change your own role", CodeCantEditOwnRole)
+		return
 	}
 
 	var passwordHash *string
@@ -129,6 +142,17 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
+	// Record a role change, and only a role change: editing a name or resetting a
+	// password is routine, but who gained or lost coach/superadmin is what an
+	// audit of the admin console is for. Fire-and-forget after the edit landed.
+	if h.audit != nil && previousRole != p.Role {
+		h.audit.Record(r.Context(), callerID, models.AuditActionRoleChanged,
+			models.AuditSubjectUser, targetID, map[string]any{
+				"from":  string(previousRole),
+				"to":    string(p.Role),
+				"email": user.Email,
+			})
+	}
 	writeJSON(w, http.StatusOK, adminUser{UserMeResponse: meResponse(user, h.activationMode), MFAEnabled: user.MFAEnabled})
 }
 
@@ -141,9 +165,19 @@ func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "You cannot delete your own account", CodeCantDeleteOwnAccount)
 		return
 	}
+	// The email is read before the row goes, so the audit entry names the account
+	// that was removed rather than only its (now dangling) id.
+	var deletedEmail string
+	if existing, err := h.users.FindByID(r.Context(), targetID); err == nil {
+		deletedEmail = existing.Email
+	}
 	if err := h.users.Delete(r.Context(), targetID); err != nil {
 		writeStoreError(w, err)
 		return
+	}
+	if h.audit != nil {
+		h.audit.Record(r.Context(), callerID, models.AuditActionUserDeleted,
+			models.AuditSubjectUser, targetID, map[string]any{"email": deletedEmail})
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"id": targetID})
 }
@@ -224,6 +258,40 @@ func (h *AdminHandler) ListIPs(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Audit is the administrative audit trail: every auditable event newest-first,
+// paged. It filters by ?action= (an exact action, e.g. "ai.call") and
+// ?subject= (a subject_type like "aiConnection", or one subject_id - a
+// connection, an address, a user), and pages by ?page= (0-based) and ?size=
+// (default 50, capped at 200). The envelope mirrors ListIPs: {results, page,
+// pageSize, hasNext}.
+func (h *AdminHandler) Audit(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 0 {
+		page = 0
+	}
+	size, _ := strconv.Atoi(r.URL.Query().Get("size"))
+	if size <= 0 {
+		size = auditPageSize
+	}
+	if size > auditMaxPageSize {
+		size = auditMaxPageSize
+	}
+	action := r.URL.Query().Get("action")
+	subject := r.URL.Query().Get("subject")
+
+	entries, hasNext, err := h.audit.List(r.Context(), page, size, action, subject)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"results":  entries,
+		"page":     page,
+		"pageSize": size,
+		"hasNext":  hasNext,
+	})
+}
+
 // IPStats backs the roster's badges: how many distinct addresses have been
 // seen, and how many are banned.
 func (h *AdminHandler) IPStats(w http.ResponseWriter, r *http.Request) {
@@ -259,12 +327,20 @@ func (h *AdminHandler) BanIP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		notifyBanIP(h.notify, ip, p.Motif, callerID)
+		if h.audit != nil {
+			h.audit.Record(r.Context(), callerID, models.AuditActionIPBanned,
+				models.AuditSubjectIP, ip, map[string]any{"ip": ip, "reason": p.Motif})
+		}
 	case models.IPActionUnban:
 		if err := h.sessions.UnbanIp(r.Context(), ip); err != nil {
 			writeStoreError(w, err)
 			return
 		}
 		notifyUnbanIP(h.notify, ip, callerID)
+		if h.audit != nil {
+			h.audit.Record(r.Context(), callerID, models.AuditActionIPUnbanned,
+				models.AuditSubjectIP, ip, map[string]any{"ip": ip})
+		}
 	default:
 		writeError(w, http.StatusBadRequest, "Unknown action", CodeInvalidRequestBody)
 		return

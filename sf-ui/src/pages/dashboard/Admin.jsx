@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { FiEye, FiMapPin, FiShield, FiSlash, FiTrash2 } from "react-icons/fi";
@@ -54,6 +54,7 @@ export default function Admin() {
           { id: "reports", label: t("admin.reports") },
           { id: "coaches", label: t("admin.coachRequests") },
           { id: "ips", label: t("admin.ips") },
+          { id: "audit", label: t("admin.audit.tab") },
         ].map((item) => (
           <button key={item.id} type="button" className={`sf-tab ${tab === item.id ? "active" : ""}`} onClick={() => setTab(item.id)}>
             {item.label}
@@ -66,6 +67,7 @@ export default function Admin() {
       {tab === "reports" ? <ReportsTab /> : null}
       {tab === "coaches" ? <CoachRequestsTab /> : null}
       {tab === "ips" ? <IpsTab /> : null}
+      {tab === "audit" ? <AuditTab /> : null}
     </div>
   );
 }
@@ -661,6 +663,181 @@ function IpsTab() {
           onClose={() => setConfirmUnban(null)}
         />
       ) : null}
+    </>
+  );
+}
+
+// The audit actions and subject types the filter dropdowns offer, mirroring the
+// backend's models.AuditActions / models.AuditSubjectTypes. The stored values
+// carry dots ("ai.call"), so each maps to a dot-free i18n leaf the screen shows.
+const AUDIT_ACTIONS = [
+  "auth.signedIn",
+  "account.registered",
+  "ai.call",
+  "user.roleChanged",
+  "user.deleted",
+  "ip.banned",
+  "ip.unbanned",
+];
+const AUDIT_SUBJECTS = ["user", "aiConnection", "ip"];
+
+const AUDIT_ACTION_LABEL = {
+  "auth.signedIn": "actionSignedIn",
+  "account.registered": "actionRegistered",
+  "ai.call": "actionAiCall",
+  "user.roleChanged": "actionRoleChanged",
+  "user.deleted": "actionUserDeleted",
+  "ip.banned": "actionIpBanned",
+  "ip.unbanned": "actionIpUnbanned",
+};
+const AUDIT_SUBJECT_LABEL = { user: "subjectUser", aiConnection: "subjectAiConnection", ip: "subjectIp" };
+
+const auditActionLabel = (t, action) =>
+  AUDIT_ACTION_LABEL[action] ? t(`admin.audit.${AUDIT_ACTION_LABEL[action]}`) : action;
+const auditSubjectLabel = (t, subject) =>
+  AUDIT_SUBJECT_LABEL[subject] ? t(`admin.audit.${AUDIT_SUBJECT_LABEL[subject]}`) : subject;
+
+// auditDetails flattens an event's detail map to "key=value · key=value", the
+// one compact cell that says what the event carried (tokens, a ban reason, a
+// role change's from/to) without a column per possible field.
+function auditDetails(detail) {
+  if (!detail || typeof detail !== "object") return "";
+  return Object.entries(detail)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => `${key}=${typeof value === "object" ? JSON.stringify(value) : value}`)
+    .join(" · ");
+}
+
+/**
+ * The audit trail: every auditable event newest-first - AI calls, sign-ins,
+ * role changes, bans, deletions. Pages load on scroll (like the feed) rather
+ * than with prev/next, since the trail only grows and reads newest-first.
+ */
+function AuditTab() {
+  const { t } = useI18n();
+  const [rows, setRows] = useState([]);
+  const [page, setPage] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [error, setError] = useState(null);
+  const [action, setAction] = useState("");
+  const [subject, setSubject] = useState("");
+  const sentinel = useRef(null);
+
+  // Changing a filter restarts paging from scratch.
+  useEffect(() => {
+    setRows([]);
+    setPage(0);
+    setHasNext(false);
+    setLoadedOnce(false);
+    setLoading(true);
+  }, [action, subject]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const result = await adminApi.audit({ page, action, subject });
+        if (cancelled) return;
+        setRows((current) => (page === 0 ? result.results : [...current, ...result.results]));
+        setHasNext(result.hasNext);
+        setError(null);
+      } catch (err) {
+        if (!cancelled) setError(err);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setLoadedOnce(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [page, action, subject]);
+
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || !loadedOnce || loading || !hasNext) return;
+    const observer = new IntersectionObserver(
+      (entries) => entries[0].isIntersecting && setPage((current) => current + 1),
+      { rootMargin: "200px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [loadedOnce, loading, hasNext]);
+
+  return (
+    <>
+      <div className="sf-row-between" style={{ marginBottom: "0.8rem", flexWrap: "wrap", gap: "0.6rem" }}>
+        <p className="sf-muted" style={{ margin: 0 }}>
+          {t("admin.audit.help")}
+        </p>
+        <div className="sf-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+          <select className="sf-select" value={action} onChange={(e) => setAction(e.target.value)}>
+            <option value="">{t("admin.audit.allActions")}</option>
+            {AUDIT_ACTIONS.map((a) => (
+              <option key={a} value={a}>
+                {auditActionLabel(t, a)}
+              </option>
+            ))}
+          </select>
+          <select className="sf-select" value={subject} onChange={(e) => setSubject(e.target.value)}>
+            <option value="">{t("admin.audit.allSubjects")}</option>
+            {AUDIT_SUBJECTS.map((s) => (
+              <option key={s} value={s}>
+                {auditSubjectLabel(t, s)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <ErrorMessage error={error} />
+
+      {loadedOnce && rows.length === 0 && !loading ? (
+        <EmptyState title={t("admin.audit.emptyTitle")} message={t("admin.audit.emptyBody")} />
+      ) : rows.length > 0 ? (
+        <div className="sf-card">
+          <div className="sf-table-wrapper">
+            <table className="sf-table">
+              <thead>
+                <tr>
+                  <th>{t("admin.audit.when")}</th>
+                  <th>{t("admin.audit.who")}</th>
+                  <th>{t("admin.audit.action")}</th>
+                  <th>{t("admin.audit.subject")}</th>
+                  <th>{t("admin.audit.details")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="sf-muted">{new Date(row.createdAt).toLocaleString()}</td>
+                    <td>{row.userEmail || <span className="sf-muted">{t("admin.audit.anonymous")}</span>}</td>
+                    <td>{auditActionLabel(t, row.action)}</td>
+                    <td className="sf-muted">
+                      {row.subjectType ? auditSubjectLabel(t, row.subjectType) : "—"}
+                      {row.subjectId ? (
+                        <>
+                          {" "}
+                          <code>{row.subjectId}</code>
+                        </>
+                      ) : null}
+                    </td>
+                    <td className="sf-muted">{auditDetails(row.detail) || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {loading ? <Spinner /> : null}
+      {loadedOnce && hasNext ? <div ref={sentinel} style={{ height: 1 }} /> : null}
     </>
   );
 }
