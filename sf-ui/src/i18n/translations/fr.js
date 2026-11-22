@@ -591,6 +591,8 @@ const fr = {
       help: "Chaque événement auditable, du plus récent au plus ancien : appels à l'IA, connexions, changements de rôle, bannissements et suppressions.",
       allActions: "Toutes les actions",
       allSubjects: "Tous les objets",
+      from: "Du",
+      to: "Au",
       when: "Quand",
       who: "Qui",
       action: "Action",

@@ -723,6 +723,8 @@ function AuditTab() {
   const [error, setError] = useState(null);
   const [action, setAction] = useState("");
   const [subject, setSubject] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const sentinel = useRef(null);
 
   // Changing a filter restarts paging from scratch.
@@ -732,14 +734,14 @@ function AuditTab() {
     setHasNext(false);
     setLoadedOnce(false);
     setLoading(true);
-  }, [action, subject]);
+  }, [action, subject, from, to]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const result = await adminApi.audit({ page, action, subject });
+        const result = await adminApi.audit({ page, action, subject, from, to });
         if (cancelled) return;
         setRows((current) => (page === 0 ? result.results : [...current, ...result.results]));
         setHasNext(result.hasNext);
@@ -756,7 +758,7 @@ function AuditTab() {
     return () => {
       cancelled = true;
     };
-  }, [page, action, subject]);
+  }, [page, action, subject, from, to]);
 
   useEffect(() => {
     const node = sentinel.current;
@@ -776,6 +778,32 @@ function AuditTab() {
           {t("admin.audit.help")}
         </p>
         <div className="sf-row" style={{ gap: "0.5rem", flexWrap: "wrap" }}>
+          <label className="sf-row" style={{ gap: "0.35rem", alignItems: "center" }}>
+            <span className="sf-muted" style={{ fontSize: "0.85rem" }}>
+              {t("admin.audit.from")}
+            </span>
+            <input
+              type="date"
+              className="sf-input"
+              style={{ maxWidth: 170 }}
+              value={from}
+              max={to || undefined}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+          </label>
+          <label className="sf-row" style={{ gap: "0.35rem", alignItems: "center" }}>
+            <span className="sf-muted" style={{ fontSize: "0.85rem" }}>
+              {t("admin.audit.to")}
+            </span>
+            <input
+              type="date"
+              className="sf-input"
+              style={{ maxWidth: 170 }}
+              value={to}
+              min={from || undefined}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </label>
           <select className="sf-select" value={action} onChange={(e) => setAction(e.target.value)}>
             <option value="">{t("admin.audit.allActions")}</option>
             {AUDIT_ACTIONS.map((a) => (

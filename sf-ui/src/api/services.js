@@ -583,7 +583,8 @@ export const admin = {
   banIp: (ip, motif) => body(client.put("/admin/ips", { ip, action: "ban", motif: motif || "" })),
   unbanIp: (ip) => body(client.put("/admin/ips", { ip, action: "unban" })),
   // The audit trail: {results, page, pageSize, hasNext}. page is 0-based;
-  // action and subject are optional filters. The screen infinite-scrolls.
+  // action, subject and the from/to date range (YYYY-MM-DD, both inclusive) are
+  // optional filters. The screen infinite-scrolls.
   audit: (params = {}) =>
     body(
       client.get("/admin/audit", {
@@ -591,6 +592,8 @@ export const admin = {
           page: params.page || 0,
           action: params.action || undefined,
           subject: params.subject || undefined,
+          from: params.from || undefined,
+          to: params.to || undefined,
         },
       })
     ),

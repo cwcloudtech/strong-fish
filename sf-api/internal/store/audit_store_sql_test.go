@@ -15,7 +15,7 @@ func waitForAudit(t *testing.T, audit *AuditStore, action, subjectID string) mod
 	t.Helper()
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		entries, _, err := audit.List(context.Background(), 0, 10, action, subjectID)
+		entries, _, err := audit.List(context.Background(), 0, 10, action, subjectID, "", "")
 		if err != nil {
 			t.Fatalf("List while waiting for %s/%s: %v", action, subjectID, err)
 		}
@@ -81,7 +81,7 @@ func TestAuditQueries(t *testing.T) {
 	}
 
 	// The subject filter matches a subject_type (the console's dropdown)...
-	byType, _, err := audit.List(ctx, 0, 50, "", models.AuditSubjectAIConnection)
+	byType, _, err := audit.List(ctx, 0, 50, "", models.AuditSubjectAIConnection, "", "")
 	if err != nil {
 		t.Fatalf("List by subject type: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestAuditQueries(t *testing.T) {
 		}
 	}
 	// ...and a concrete subject_id.
-	byID, _, err := audit.List(ctx, 0, 50, "", "auditsql-conn-1")
+	byID, _, err := audit.List(ctx, 0, 50, "", "auditsql-conn-1", "", "")
 	if err != nil {
 		t.Fatalf("List by subject id: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestAuditQueries(t *testing.T) {
 	}
 
 	// The action filter is exact.
-	byAction, _, err := audit.List(ctx, 0, 50, models.AuditActionAICall, "")
+	byAction, _, err := audit.List(ctx, 0, 50, models.AuditActionAICall, "", "", "")
 	if err != nil {
 		t.Fatalf("List by action: %v", err)
 	}
@@ -110,9 +110,28 @@ func TestAuditQueries(t *testing.T) {
 		}
 	}
 
+	// The date range is inclusive of its whole end day. Today's events fall
+	// inside [today, today], but none fall on a day a year ago.
+	today := time.Now().UTC().Format("2006-01-02")
+	lastYear := time.Now().UTC().AddDate(-1, 0, 0).Format("2006-01-02")
+	inRange, _, err := audit.List(ctx, 0, 50, "", "auditsql-conn-1", today, today)
+	if err != nil {
+		t.Fatalf("List in date range: %v", err)
+	}
+	if len(inRange) != 1 {
+		t.Errorf("today's event should fall within [today, today]: got %d rows", len(inRange))
+	}
+	outOfRange, _, err := audit.List(ctx, 0, 50, "", "auditsql-conn-1", lastYear, lastYear)
+	if err != nil {
+		t.Fatalf("List out of date range: %v", err)
+	}
+	if len(outOfRange) != 0 {
+		t.Errorf("today's event should not fall within last year: got %d rows", len(outOfRange))
+	}
+
 	// hasNext is inferred by fetching one past the page: with two of our rows,
 	// a page of one must report another page.
-	page, hasNext, err := audit.List(ctx, 0, 1, "", "auditsql-ip-1")
+	page, hasNext, err := audit.List(ctx, 0, 1, "", "auditsql-ip-1", "", "")
 	if err != nil {
 		t.Fatalf("List paged: %v", err)
 	}
@@ -128,7 +147,7 @@ func TestAuditQueries(t *testing.T) {
 	if _, err := pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, actor); err != nil {
 		t.Fatalf("deleting actor: %v", err)
 	}
-	afterDelete, _, err := audit.List(ctx, 0, 10, models.AuditActionAICall, "auditsql-conn-1")
+	afterDelete, _, err := audit.List(ctx, 0, 10, models.AuditActionAICall, "auditsql-conn-1", "", "")
 	if err != nil {
 		t.Fatalf("List after actor deletion: %v", err)
 	}

@@ -580,6 +580,8 @@ const en = {
       help: "Every auditable event, newest first: AI calls, sign-ins, role changes, bans and deletions.",
       allActions: "All actions",
       allSubjects: "All subjects",
+      from: "From",
+      to: "To",
       when: "When",
       who: "Who",
       action: "Action",

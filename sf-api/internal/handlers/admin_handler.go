@@ -259,11 +259,11 @@ func (h *AdminHandler) ListIPs(w http.ResponseWriter, r *http.Request) {
 }
 
 // Audit is the administrative audit trail: every auditable event newest-first,
-// paged. It filters by ?action= (an exact action, e.g. "ai.call") and
-// ?subject= (a subject_type like "aiConnection", or one subject_id - a
-// connection, an address, a user), and pages by ?page= (0-based) and ?size=
-// (default 50, capped at 200). The envelope mirrors ListIPs: {results, page,
-// pageSize, hasNext}.
+// paged. It filters by ?action= (an exact action, e.g. "ai.call"), ?subject= (a
+// subject_type like "aiConnection", or one subject_id - a connection, an
+// address, a user), and a ?from=/?to= date range (YYYY-MM-DD, both inclusive of
+// their whole day). It pages by ?page= (0-based) and ?size= (default 50, capped
+// at 200). The envelope mirrors ListIPs: {results, page, pageSize, hasNext}.
 func (h *AdminHandler) Audit(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 0 {
@@ -278,8 +278,10 @@ func (h *AdminHandler) Audit(w http.ResponseWriter, r *http.Request) {
 	}
 	action := r.URL.Query().Get("action")
 	subject := r.URL.Query().Get("subject")
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
 
-	entries, hasNext, err := h.audit.List(r.Context(), page, size, action, subject)
+	entries, hasNext, err := h.audit.List(r.Context(), page, size, action, subject, from, to)
 	if err != nil {
 		writeStoreError(w, err)
 		return

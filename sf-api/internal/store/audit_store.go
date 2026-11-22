@@ -80,10 +80,12 @@ func (s *AuditStore) Record(ctx context.Context, userID, action, subjectType, su
 // defaults to auditDefaultPageSize and is capped at auditMaxPageSize. action is
 // an optional exact-action filter; subject is an optional filter that matches
 // either a subject_type (the console's type dropdown - "every AI call") or a
-// specific subject_id (one connection, one address). The second return is
-// hasNext, inferred by fetching one row past the page rather than with a second
-// count query.
-func (s *AuditStore) List(ctx context.Context, page, size int, action, subject string) ([]models.AuditEntry, bool, error) {
+// specific subject_id (one connection, one address). from and to are optional
+// YYYY-MM-DD bounds: from is inclusive from the start of its day, to is
+// inclusive of its whole day (compared against the day after). The second
+// return is hasNext, inferred by fetching one row past the page rather than
+// with a second count query.
+func (s *AuditStore) List(ctx context.Context, page, size int, action, subject, from, to string) ([]models.AuditEntry, bool, error) {
 	if size <= 0 {
 		size = auditDefaultPageSize
 	}
@@ -107,9 +109,11 @@ func (s *AuditStore) List(ctx context.Context, page, size int, action, subject s
 		LEFT JOIN users u ON u.id = a.user_id
 		WHERE ($1 = '' OR a.action = $1)
 		  AND ($2 = '' OR a.subject_id = $2 OR a.subject_type = $2)
+		  AND ($3 = '' OR a.created_at >= $3::date)
+		  AND ($4 = '' OR a.created_at < ($4::date + 1))
 		ORDER BY a.created_at DESC
-		LIMIT $3 OFFSET $4
-	`, action, subject, size+1, page*size)
+		LIMIT $5 OFFSET $6
+	`, action, subject, from, to, size+1, page*size)
 	if err != nil {
 		return nil, false, err
 	}
