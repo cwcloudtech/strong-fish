@@ -914,6 +914,29 @@ button {
 .sf-table tr:last-child td { border-bottom: none; }
 .sf-table-num { text-align: right; font-variant-numeric: tabular-nums; }
 
+/* Per-column value + copy button (audit trail), mirroring the per-cell copy
+   affordance in uprodit. The button reveals on row hover, like the drag
+   handle above, and flips to a check for a moment on success. */
+.sf-copy-cell { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.sf-copy-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sf-copy-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--sf-text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--sf-radius-sm);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+.sf-table tr:hover .sf-copy-btn,
+.sf-copy-btn:focus-visible { opacity: 1; }
+.sf-copy-btn:hover { color: var(--sf-primary); background: var(--sf-primary-tint); }
+
 /* --- avatar --- */
 
 .sf-avatar {

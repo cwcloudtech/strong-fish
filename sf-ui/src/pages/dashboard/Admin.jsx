@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { FiEye, FiMapPin, FiShield, FiSlash, FiTrash2 } from "react-icons/fi";
+import { FiCheck, FiCopy, FiEye, FiMapPin, FiShield, FiSlash, FiTrash2 } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
 import useToastError from "../../utils/useToast";
@@ -708,6 +708,51 @@ function auditDetails(detail) {
     .join(" · ");
 }
 
+// A per-column value + copy button for the audit table, mirroring uprodit's
+// AdminOperations CopyCell: the button reveals on row hover and flips from a
+// copy icon to a check for a moment on success. No value => a muted dash and no
+// button, so every column reads consistently.
+function CopyCell({ value, children }) {
+  const { t } = useI18n();
+  const [copied, setCopied] = useState(false);
+  const timer = useRef(null);
+
+  useEffect(() => () => timer.current && clearTimeout(timer.current), []);
+
+  const text = value == null ? "" : String(value);
+
+  const copy = () => {
+    if (!navigator.clipboard?.writeText) return;
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(true);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
+  };
+
+  return (
+    <div className="sf-copy-cell">
+      <span className="sf-copy-value">
+        {children != null && children !== "" ? children : <span className="sf-muted">—</span>}
+      </span>
+      {text ? (
+        <button
+          type="button"
+          className="sf-copy-btn"
+          onClick={copy}
+          title={t("common.copy")}
+          aria-label={t("common.copy")}
+        >
+          {copied ? <FiCheck /> : <FiCopy />}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * The audit trail: every auditable event newest-first - AI calls, sign-ins,
  * role changes, bans, deletions. Pages load on scroll (like the feed) rather
@@ -841,23 +886,42 @@ function AuditTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="sf-muted">{new Date(row.createdAt).toLocaleString()}</td>
-                    <td>{row.userEmail || <span className="sf-muted">{t("admin.audit.anonymous")}</span>}</td>
-                    <td>{auditActionLabel(t, row.action)}</td>
-                    <td className="sf-muted">
-                      {row.subjectType ? auditSubjectLabel(t, row.subjectType) : "—"}
-                      {row.subjectId ? (
-                        <>
-                          {" "}
-                          <code>{row.subjectId}</code>
-                        </>
-                      ) : null}
-                    </td>
-                    <td className="sf-muted">{auditDetails(row.detail) || "—"}</td>
-                  </tr>
-                ))}
+                {rows.map((row) => {
+                  const when = new Date(row.createdAt).toLocaleString();
+                  const actionText = auditActionLabel(t, row.action);
+                  const details = auditDetails(row.detail);
+                  return (
+                    <tr key={row.id}>
+                      <td className="sf-muted">
+                        <CopyCell value={when}>{when}</CopyCell>
+                      </td>
+                      <td>
+                        <CopyCell value={row.userEmail || ""}>
+                          {row.userEmail || <span className="sf-muted">{t("admin.audit.anonymous")}</span>}
+                        </CopyCell>
+                      </td>
+                      <td>
+                        <CopyCell value={actionText}>{actionText}</CopyCell>
+                      </td>
+                      {/* Copies the subject id (what gets pasted elsewhere),
+                          falling back to the subject label. */}
+                      <td className="sf-muted">
+                        <CopyCell value={row.subjectId || (row.subjectType ? auditSubjectLabel(t, row.subjectType) : "")}>
+                          {row.subjectType ? auditSubjectLabel(t, row.subjectType) : "—"}
+                          {row.subjectId ? (
+                            <>
+                              {" "}
+                              <code>{row.subjectId}</code>
+                            </>
+                          ) : null}
+                        </CopyCell>
+                      </td>
+                      <td className="sf-muted">
+                        <CopyCell value={details}>{details || "—"}</CopyCell>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
