@@ -22,7 +22,17 @@ export default function useToastError() {
 
   return useCallback(
     (error) => {
-      toast.error(tError(error), toastOptions);
+      let message = tError(error);
+      // A 5xx is a server fault the member can't act on: the message is generic,
+      // so give them the correlation id (the X-Cid response header) to quote to
+      // support, which ties the toast to the [ERROR] alert and the logs. A 4xx
+      // message stands on its own and gets no id.
+      const status = error?.response?.status;
+      const cid = error?.response?.headers?.["x-cid"];
+      if (status >= 500 && cid) {
+        message = `${message} (ref: ${cid})`;
+      }
+      toast.error(message, toastOptions);
       return error;
     },
     [tError]

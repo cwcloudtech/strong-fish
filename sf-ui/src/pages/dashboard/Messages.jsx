@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { FiFlag, FiImage, FiSearch, FiSend, FiSlash, FiTrash2, FiUser, FiVideo, FiX } from "react-icons/fi";
 
 import toastOptions from "../../utils/toastOptions";
+import useToastError from "../../utils/useToast";
 import Avatar from "../../components/common/Avatar";
 import Modal, { ConfirmModal } from "../../components/common/Modal";
 import Tooltip from "../../components/common/Tooltip";
@@ -487,6 +488,7 @@ function Thread({ userId, onSent }) {
  */
 function ReportMessageModal({ message, onClose, onReported }) {
   const { t } = useI18n();
+  const toastError = useToastError();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -497,7 +499,9 @@ function ReportMessageModal({ message, onClose, onReported }) {
       await social.report({ targetType: "message", targetId: message.id, reason });
       onReported();
     } catch (err) {
-      toast.error(err?.response?.data?.message || t("errors.generic"), toastOptions);
+      // Was toasting the API's raw message (a 5xx leaked the SQL error). Route it
+      // through the translated toaster: generic on a 5xx, with the X-Cid to quote.
+      toastError(err);
     } finally {
       setBusy(false);
     }

@@ -114,11 +114,15 @@ func main() {
 	// it never blocks the request. Nil (disabled) when no webhook is configured.
 	var onServerError middleware.ErrorFunc
 	if notifier != nil {
-		onServerError = func(method, route string, status int) {
+		onServerError = func(method, route string, status int, cid, detail string) {
+			if detail == "" {
+				detail = "(no detail)"
+			}
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				notifier.NotifyText(ctx, fmt.Sprintf("[ERROR] :fire: %d on %s %s", status, method, route))
+				notifier.NotifyText(ctx, fmt.Sprintf("[ERROR] :fire: %d on %s %s, cid = %s : %s",
+					status, method, route, cid, detail))
 			}()
 		}
 	}
