@@ -75,10 +75,15 @@ class TrainingScreen extends ConsumerWidget {
                                     ),
                               ),
                             ),
-                            Chip(
+                            ActionChip(
                               label: Text(t('session.status${_statusKey(assignment.status)}')),
                               visualDensity: VisualDensity.compact,
                               backgroundColor: _statusTint(assignment.status, colors),
+                              // Tap the badge to move the block on - in progress
+                              // → finished → archived - the way the web's status
+                              // control does. The chip handles the tap, so it
+                              // never opens the session underneath.
+                              onPressed: () => _changeStatus(context, ref, assignment),
                             ),
                           ],
                         ),
@@ -140,3 +145,42 @@ String _statusKey(String status) => switch (status) {
       'archived' => 'Archived',
       _ => 'Active',
     };
+
+/// Opens the status picker for a block and applies the choice, so a member can
+/// move their own programme on - in progress → finished → archived - from "my
+/// training", the way the web does from the session's status control. The three
+/// options are the ones the badge itself shows; the current one is ticked.
+Future<void> _changeStatus(BuildContext context, WidgetRef ref, Assignment assignment) async {
+  final t = ref.read(tProvider);
+  // Captured before the awaits: using the element's context afterwards is what
+  // the analyzer warns against, and the sheet builder gets its own context.
+  final messenger = ScaffoldMessenger.of(context);
+  const statuses = ['active', 'done', 'archived'];
+
+  final picked = await showModalBottomSheet<String>(
+    context: context,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final status in statuses)
+            ListTile(
+              title: Text(t('session.status${_statusKey(status)}')),
+              trailing: status == assignment.status ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.of(context).pop(status),
+            ),
+        ],
+      ),
+    ),
+  );
+  if (picked == null || picked == assignment.status) return;
+
+  try {
+    await ref.read(apiProvider).setAssignmentStatus(assignment.id, picked);
+    // Re-fetch rather than patch: the list re-sorts into its status buckets, so
+    // a block that just finished drops below the ones still being run.
+    ref.invalidate(assignmentsProvider);
+  } catch (error) {
+    messenger.showSnackBar(SnackBar(content: Text(ref.read(tErrorProvider)(error))));
+  }
+}
