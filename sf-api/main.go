@@ -307,6 +307,17 @@ func main() {
 		BanAlerter:         banAlerter,
 	})
 
+	// Announce the boot to Discord: a "[START] :rocket:" so the channel shows a
+	// deploy went through and which version is now up. Best-effort and async so
+	// it never holds up the listen. Nil (disabled) without a webhook.
+	if notifier != nil {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			notifier.NotifyText(ctx, fmt.Sprintf("[START] :rocket: the strong-fish API is up, version %s", cfg.Version))
+		}()
+	}
+
 	slog.Info("strong-fish api listening", "port", cfg.Port, "version", cfg.Version,
 		"activationMode", cfg.ActivationMode, "oidcProviders", oidc.Names(providers),
 		"contactForm", contactClient.Configured(), "otelEndpoint", cfg.OTELEndpoint)
