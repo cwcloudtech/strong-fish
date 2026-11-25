@@ -140,9 +140,9 @@ func (h *TrainingHandler) GenerateSessionFeedback(w http.ResponseWriter, r *http
 		System: templates.CoachSkill + "\n\n" + templates.FeedbackSkill +
 			sessionSleepBlock(h.ai.MemberSleepContext(r, assignment.UserID, locale)) +
 			"\n\n" + SessionLanguageRule(locale),
-		Messages: []models.ChatMessage{
+		Messages: turnsOf([]models.ChatMessage{
 			{Role: models.ChatRoleUser, Message: sheet},
-		},
+		}),
 	})
 	if !ok {
 		return

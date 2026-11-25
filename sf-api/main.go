@@ -228,7 +228,10 @@ func main() {
 	defer shutdown(observability.Shutdown, "metrics")
 
 	aiHandler := handlers.NewAIHandler(aiStore, userStore, auditStore, cfg.UIBaseURL).
-		WithMemberContext(oneRMStore, programStore, programHandler)
+		WithMemberContext(oneRMStore, programStore, programHandler).
+		// The assistant's tool calls this very API over loopback, as the member,
+		// so it never leaves the host or meets the corporate proxy.
+		WithLoopback("http://127.0.0.1:" + cfg.Port)
 	// The two know each other: the device screens ask the model for a reading
 	// of the last ninety days, and the chat is told what the last day looked
 	// like. Wired here rather than in a constructor, because neither can be

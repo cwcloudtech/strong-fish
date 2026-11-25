@@ -43,6 +43,15 @@ var FeedbackSkill string
 //go:embed health.skill.md
 var HealthSkill string
 
+// AssistantToolSkill tells the chat how to use the strong_fish_api tool - what
+// it may read, and the preview → the member's own yes → execute discipline
+// every write goes through. Sent only when the tool is actually offered (a
+// loopback base is wired), so the feedback generations, which have no tool,
+// never see it.
+//
+//go:embed tools.skill.md
+var AssistantToolSkill string
+
 // MessageEmail is the template for a locale, falling back to English for a
 // language nothing has been translated into yet - an email in the wrong
 // language beats no email at all.

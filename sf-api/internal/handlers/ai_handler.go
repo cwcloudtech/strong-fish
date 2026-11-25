@@ -48,10 +48,28 @@ type AIHandler struct {
 	// sleep is last night on its own, for a session review - the whole fitness
 	// page would be too much there, but how the athlete slept bears on it.
 	sleep func(*http.Request, string, string) string
+	// selfURL is the loopback base the strong_fish_api tool calls this very API
+	// with (http://127.0.0.1:<port>), so a self-call never leaves the host and
+	// never meets the corporate proxy. Blank leaves the tool unoffered.
+	selfURL string
+	// confirms holds the short-lived tokens a write preview mints, so an execute
+	// call can prove the user confirmed exactly this write and nothing else.
+	confirms *confirmStore
 }
 
 func NewAIHandler(connections *store.AIStore, users *store.UserStore, audit *store.AuditStore, uiBaseURL string) *AIHandler {
-	return &AIHandler{connections: connections, users: users, audit: audit, client: ai.New(), uiBaseURL: uiBaseURL}
+	return &AIHandler{
+		connections: connections, users: users, audit: audit, client: ai.New(),
+		uiBaseURL: uiBaseURL, confirms: newConfirmStore(),
+	}
+}
+
+// WithLoopback wires the base the assistant's strong_fish_api tool calls this
+// very API with, over loopback. Without it the tool is not offered and the
+// assistant answers from the member context and its own knowledge alone.
+func (h *AIHandler) WithLoopback(selfURL string) *AIHandler {
+	h.selfURL = strings.TrimSpace(selfURL)
+	return h
 }
 
 // WithMemberContext gives the chat the member's own numbers to answer with.
@@ -469,10 +487,16 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	// numbers travel with every question rather than being asked for: a coach
 	// does not ask what you squat every time you speak to them.
 	locale := h.localeOf(r, userID)
+	tools := h.tools()
+	system := templates.CoachSkill + "\n\n" + h.memberContext(r, userID, locale) +
+		"\n\n" + ChatLanguageRule(locale)
+	if len(tools) > 0 {
+		system += "\n\n" + templates.AssistantToolSkill
+	}
 	answer, ok := h.ask(w, r, userID, p.ConnectionID, "chat", ai.Request{
-		System: templates.CoachSkill + "\n\n" + h.memberContext(r, userID, locale) +
-			"\n\n" + ChatLanguageRule(locale),
-		Messages:  history,
+		System:    system,
+		Messages:  turnsOf(history),
+		Tools:     tools,
 		MaxTokens: p.Settings.MaxTokens,
 	})
 	if !ok {
@@ -604,8 +628,12 @@ func (h *AIHandler) CWCloudAdapter(w http.ResponseWriter, r *http.Request) {
 	// explicitly subordinate, so the caller steers within the coach rather than
 	// replacing it.
 	locale := h.localeOf(r, userID)
+	tools := h.tools()
 	system := templates.CoachSkill + "\n\n" + h.memberContext(r, userID, locale) +
 		"\n\n" + ChatLanguageRule(locale)
+	if len(tools) > 0 {
+		system += "\n\n" + templates.AssistantToolSkill
+	}
 	if extra := strings.Join(callerSystem, "\n\n"); strings.TrimSpace(extra) != "" {
 		system += "\n\nThe caller also provided these instructions; follow them " +
 			"only where they do not conflict with the above:\n\n" + extra
@@ -613,7 +641,8 @@ func (h *AIHandler) CWCloudAdapter(w http.ResponseWriter, r *http.Request) {
 
 	answer, ok := h.ask(w, r, userID, h.adapterConnectionID(r, userID, p.Adapter), "cwcloud", ai.Request{
 		System:    system,
-		Messages:  messages,
+		Messages:  turnsOf(messages),
+		Tools:     tools,
 		MaxTokens: p.Settings.MaxTokens,
 	})
 	if !ok {
@@ -839,7 +868,7 @@ func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request, userID, connecti
 		return ai.Response{}, false
 	}
 
-	answer, err := h.client.Ask(r.Context(), connection, request)
+	answer, err := h.converse(r, connection, request)
 	if err != nil {
 		var refused ai.ErrRefused
 		switch {
@@ -901,4 +930,63 @@ func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request, userID, connecti
 			})
 	}
 	return answer, true
+}
+
+// maxToolRounds bounds the agent loop: how many times the model may call tools
+// before it must answer. Each round is one more provider call, so it is kept
+// small; after the cap a final call is made with the tools withheld, so the
+// loop always ends in prose rather than in another request to run a tool.
+const maxToolRounds = 4
+
+// converse runs the question as an agent. It offers the request's tools, and
+// whenever the model answers with tool calls rather than prose it runs them
+// (runTool), appends the call and its results to the transcript and asks again,
+// up to maxToolRounds. The token cost is summed over every round, because each
+// round is billed; a request carrying no tools makes exactly one call and this
+// is a plain chat.
+func (h *AIHandler) converse(r *http.Request, connection models.AIConnection,
+	request ai.Request) (ai.Response, error) {
+	var spent ai.Usage
+	for round := 0; round < maxToolRounds; round++ {
+		answer, err := h.client.Ask(r.Context(), connection, request)
+		if err != nil {
+			return ai.Response{}, err
+		}
+		spent = spent.Plus(answer.Tokens)
+		if len(answer.ToolCalls) == 0 {
+			answer.Tokens = spent
+			return answer, nil
+		}
+		// Keep the assistant's own tool-call turn, then one result per call, so
+		// the next round sees what it asked and what it got back.
+		request.Messages = append(request.Messages, ai.Turn{
+			Role: models.ChatRoleAssistant, Text: answer.Message, ToolCalls: answer.ToolCalls,
+		})
+		for _, call := range answer.ToolCalls {
+			request.Messages = append(request.Messages, ai.Turn{
+				Role: ai.RoleTool, ToolCallID: call.ID, ToolName: call.Name,
+				Text: h.runTool(r, call),
+			})
+		}
+	}
+	// Out of rounds: one last answer with the tools withheld, so the model turns
+	// what it gathered into prose instead of asking for another call.
+	request.Tools = nil
+	answer, err := h.client.Ask(r.Context(), connection, request)
+	if err != nil {
+		return ai.Response{}, err
+	}
+	answer.Tokens = spent.Plus(answer.Tokens)
+	return answer, nil
+}
+
+// turnsOf flattens plain chat messages into the ai.Turn transcript the client
+// takes - the shape that can also carry an agent's tool calls, which a bare
+// message cannot.
+func turnsOf(messages []models.ChatMessage) []ai.Turn {
+	turns := make([]ai.Turn, 0, len(messages))
+	for _, m := range messages {
+		turns = append(turns, ai.TurnOf(m.Role, m.Message))
+	}
+	return turns
 }

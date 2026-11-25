@@ -220,7 +220,7 @@ func (h *DeviceHandler) GenerateHealthFeedback(w http.ResponseWriter, r *http.Re
 
 	answer, ok := h.ai.ask(w, r, sessionID, r.URL.Query().Get("connectionId"), "health", ai.Request{
 		System:   system,
-		Messages: []models.ChatMessage{{Role: models.ChatRoleUser, Message: sheet}},
+		Messages: turnsOf([]models.ChatMessage{{Role: models.ChatRoleUser, Message: sheet}}),
 	})
 	if !ok {
 		return
