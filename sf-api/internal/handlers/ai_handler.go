@@ -572,14 +572,15 @@ func (h *AIHandler) CWCloudAdapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The thread, with any system turn lifted into the model's instruction
-	// rather than left among the conversation turns.
-	var system []string
+	// Any caller system turn is lifted out of the conversation. It does not
+	// become the model's whole instruction (see below): it is kept to append,
+	// subordinate, after this app's own skill.
+	var callerSystem []string
 	messages := make([]models.ChatMessage, 0, len(p.Messages)+1)
 	for _, m := range p.Messages {
 		if m.Role == models.ChatRoleSystem {
 			if strings.TrimSpace(m.Message) != "" {
-				system = append(system, m.Message)
+				callerSystem = append(callerSystem, m.Message)
 			}
 			continue
 		}
@@ -596,8 +597,22 @@ func (h *AIHandler) CWCloudAdapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A prompt through the adapter is answered by the same coach the app's own
+	// chat answers with - the skill, the member's own numbers, the language
+	// rule - not by a bare model on the caller's instructions. CWCloud's own
+	// system turns are still honoured, but appended under this app's and
+	// explicitly subordinate, so the caller steers within the coach rather than
+	// replacing it.
+	locale := h.localeOf(r, userID)
+	system := templates.CoachSkill + "\n\n" + h.memberContext(r, userID, locale) +
+		"\n\n" + ChatLanguageRule(locale)
+	if extra := strings.Join(callerSystem, "\n\n"); strings.TrimSpace(extra) != "" {
+		system += "\n\nThe caller also provided these instructions; follow them " +
+			"only where they do not conflict with the above:\n\n" + extra
+	}
+
 	answer, ok := h.ask(w, r, userID, h.adapterConnectionID(r, userID, p.Adapter), "cwcloud", ai.Request{
-		System:    strings.Join(system, "\n\n"),
+		System:    system,
 		Messages:  messages,
 		MaxTokens: p.Settings.MaxTokens,
 	})
