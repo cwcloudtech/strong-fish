@@ -57,3 +57,70 @@ func TestMatchAdapterConnection(t *testing.T) {
 		})
 	}
 }
+
+// TestPickAdapterConnection pins the adapter resolution the CWCloud call uses:
+// a match wins; with no match it falls back to the first subscription in order,
+// preferring one that has a key saved so an unconfigured first slot does not
+// shadow a connected one; and "" only when there are none.
+func TestPickAdapterConnection(t *testing.T) {
+	const (
+		firstID  = "11111111-1111-1111-1111-111111111111"
+		secondID = "22222222-2222-2222-2222-222222222222"
+	)
+
+	t.Run("a match is spent even when a later one also has a key", func(t *testing.T) {
+		conns := []models.AIConnection{
+			{ID: firstID, Name: "Big model", HasToken: true},
+			{ID: secondID, Name: "driver", HasToken: true},
+		}
+		if got := pickAdapterConnection("use the driver", conns); got != secondID {
+			t.Errorf("got %q, want the matched %q", got, secondID)
+		}
+	})
+
+	t.Run("no match falls back to the first in order", func(t *testing.T) {
+		conns := []models.AIConnection{
+			{ID: firstID, Name: "Big model", HasToken: true},
+			{ID: secondID, Name: "driver", HasToken: true},
+		}
+		if got := pickAdapterConnection("nothing here matches", conns); got != firstID {
+			t.Errorf("got %q, want the first %q", got, firstID)
+		}
+	})
+
+	t.Run("no match skips an unconfigured first slot for one with a key", func(t *testing.T) {
+		conns := []models.AIConnection{
+			{ID: firstID, Name: "empty placeholder", HasToken: false},
+			{ID: secondID, Name: "real key", HasToken: true},
+		}
+		if got := pickAdapterConnection("adapter that matches neither", conns); got != secondID {
+			t.Errorf("got %q, want the key-bearing %q", got, secondID)
+		}
+	})
+
+	t.Run("a blank adapter takes the first key-bearing subscription", func(t *testing.T) {
+		conns := []models.AIConnection{
+			{ID: firstID, Name: "placeholder", HasToken: false},
+			{ID: secondID, Name: "real", HasToken: true},
+		}
+		if got := pickAdapterConnection("", conns); got != secondID {
+			t.Errorf("got %q, want %q", got, secondID)
+		}
+	})
+
+	t.Run("no key anywhere falls back to the very first", func(t *testing.T) {
+		conns := []models.AIConnection{
+			{ID: firstID, Name: "a", HasToken: false},
+			{ID: secondID, Name: "b", HasToken: false},
+		}
+		if got := pickAdapterConnection("no match", conns); got != firstID {
+			t.Errorf("got %q, want %q", got, firstID)
+		}
+	})
+
+	t.Run("no subscriptions resolves to empty", func(t *testing.T) {
+		if got := pickAdapterConnection("anything", nil); got != "" {
+			t.Errorf("got %q, want empty", got)
+		}
+	})
+}

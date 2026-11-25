@@ -663,18 +663,40 @@ func (h *AIHandler) CWCloudAdapter(w http.ResponseWriter, r *http.Request) {
 }
 
 // adapterConnectionID resolves the `adapter` field to the id of the subscription
-// to spend, or "" to fall back to the caller's first (which ask turns into
-// Usable, the chat's own default). The lookup is over the caller's own and
-// shared connections, so any match is one they may spend.
+// to spend. The lookup is over the caller's own and shared connections, so any
+// result is one they may spend; "" only when they have none, which ask turns
+// into "connect a provider first".
 func (h *AIHandler) adapterConnectionID(r *http.Request, userID, adapter string) string {
-	if strings.TrimSpace(adapter) == "" {
-		return ""
-	}
 	connections, err := h.connections.ListFor(r.Context(), userID)
 	if err != nil {
 		return ""
 	}
-	return matchAdapterConnection(adapter, connections)
+	return pickAdapterConnection(adapter, connections)
+}
+
+// pickAdapterConnection chooses the subscription id a CWCloud adapter call
+// spends: the one the adapter names, or - when it names none - the member's
+// first in their own order (owner-first, then position).
+//
+// The fallback prefers a subscription that has a key saved. The member's first
+// slot may be a placeholder with no credential, and spending that one would
+// answer "connect a provider first" while a connected subscription sits right
+// behind it; so the first key-bearing one is taken, falling back to the very
+// first only when none has a key (then the error is a truthful one). "" only
+// when there are no subscriptions at all.
+func pickAdapterConnection(adapter string, connections []models.AIConnection) string {
+	if len(connections) == 0 {
+		return ""
+	}
+	if id := matchAdapterConnection(adapter, connections); id != "" {
+		return id
+	}
+	for _, c := range connections {
+		if c.HasToken {
+			return c.ID
+		}
+	}
+	return connections[0].ID
 }
 
 // matchAdapterConnection picks the subscription a CWCloud `adapter` label names,
