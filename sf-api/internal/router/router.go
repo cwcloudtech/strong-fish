@@ -692,6 +692,10 @@ func New(h Handlers, users *store.UserStore, clubs *store.ClubStore, o Options) 
 
 			// Asking the model, and the threads of what was asked.
 			r.Post("/ai/chat", h.AI.Chat)
+			// CWCloud's external-adapter interface (ai-instruct-43): the chat put
+			// behind cwcloud's contract, so it can drive this account's AI
+			// subscription as a model backend.
+			r.Post("/ai/cwcloud/adapter", h.AI.CWCloudAdapter)
 			r.Get("/ai/providers", h.AI.Providers)
 			r.Route("/ai/conversations", func(r chi.Router) {
 				r.Get("/", h.AI.ListConversations)

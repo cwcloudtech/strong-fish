@@ -508,6 +508,138 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// --- cwcloud external adapter (ai-instruct-43) ---
+
+// cwAdapterPayload is the external-adapter contract CWCloud calls with
+// (cwcloud.tech/docs/tutorials/cwai#external-adapter-interface). It arrives in
+// two shapes: a single `message`, or a `messages` thread of role-tagged turns.
+// Both name the subscription to spend in `adapter` and cap the answer with
+// `settings.max_tokens`.
+type cwAdapterPayload struct {
+	Adapter  string       `json:"adapter"`
+	Settings chatSettings `json:"settings"`
+	// Message is the single-prompt shape.
+	Message string `json:"message"`
+	// Messages is the role-tagged thread shape: a "system" turn becomes the
+	// model's instruction, the rest the conversation. Whether it is present is
+	// also what decides the answer's shape (choices vs a bare message).
+	Messages []models.ChatMessage `json:"messages"`
+	// Regenerate and EnableHistory are part of the contract. This adapter is
+	// stateless - cwcloud sends the whole thread each call, and the contract
+	// carries no conversation id to continue a stored one - so they are parsed
+	// but not acted on. The spend is still metered and audited (see ask).
+	Regenerate    bool `json:"regenerate"`
+	EnableHistory bool `json:"enable_history"`
+}
+
+type cwAdapterUsage struct {
+	PromptTokens     int64 `json:"prompt_tokens"`
+	CompletionTokens int64 `json:"completion_tokens"`
+	TotalTokens      int64 `json:"total_tokens"`
+}
+
+type cwAdapterChoiceMessage struct {
+	Content string `json:"content"`
+}
+
+type cwAdapterChoice struct {
+	Message cwAdapterChoiceMessage `json:"message"`
+}
+
+// cwAdapterResponse is the contract's answer: the text in `message` for a
+// single-prompt call, or in `choices` for a thread call - the shape cwcloud
+// sent decides which - with the token count named the way the contract names it.
+type cwAdapterResponse struct {
+	Status  string            `json:"status"`
+	Message string            `json:"message,omitempty"`
+	Choices []cwAdapterChoice `json:"choices,omitempty"`
+	Usage   cwAdapterUsage    `json:"usage"`
+}
+
+// CWCloudAdapter answers a prompt for CWCloud through its external-adapter
+// interface, spending the caller's AI subscription. It is the chat path put
+// behind cwcloud's contract: the same model call, metering and audit (see ask),
+// without the stored conversation - cwcloud owns the thread and sends it whole.
+//
+// The subscription is the one `adapter` names, matched against a connection's
+// name or id; when nothing matches - or the field is blank - the caller's first
+// subscription is spent, the same default the chat uses when none is picked.
+func (h *AIHandler) CWCloudAdapter(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+
+	var p cwAdapterPayload
+	if !decodeJSON(w, r, &p) {
+		return
+	}
+
+	// The thread, with any system turn lifted into the model's instruction
+	// rather than left among the conversation turns.
+	var system []string
+	messages := make([]models.ChatMessage, 0, len(p.Messages)+1)
+	for _, m := range p.Messages {
+		if m.Role == models.ChatRoleSystem {
+			if strings.TrimSpace(m.Message) != "" {
+				system = append(system, m.Message)
+			}
+			continue
+		}
+		messages = append(messages, m)
+	}
+	// A `messages` thread is answered with choices; a bare `message` with a
+	// bare message. A single prompt sent alongside a thread is its last turn.
+	useChoices := len(p.Messages) > 0
+	if question := strings.TrimSpace(p.Message); question != "" {
+		messages = append(messages, models.ChatMessage{Role: models.ChatRoleUser, Message: question})
+	}
+	if len(messages) == 0 {
+		writeError(w, http.StatusBadRequest, "Ask something", CodeEmptyMessage)
+		return
+	}
+
+	answer, ok := h.ask(w, r, userID, h.adapterConnectionID(r, userID, p.Adapter), "cwcloud", ai.Request{
+		System:    strings.Join(system, "\n\n"),
+		Messages:  messages,
+		MaxTokens: p.Settings.MaxTokens,
+	})
+	if !ok {
+		return
+	}
+
+	response := cwAdapterResponse{Status: "ok", Usage: cwAdapterUsage{
+		PromptTokens:     answer.Tokens.Input,
+		CompletionTokens: answer.Tokens.Output,
+		TotalTokens:      answer.Tokens.Input + answer.Tokens.Output,
+	}}
+	if useChoices {
+		response.Choices = []cwAdapterChoice{{Message: cwAdapterChoiceMessage{Content: answer.Message}}}
+	} else {
+		response.Message = answer.Message
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+// adapterConnectionID resolves the `adapter` field to the id of the subscription
+// to spend: the one whose name or id it names, or "" to fall back to the
+// caller's first (which ask turns into Usable, the chat's own default). The
+// name match is case-insensitive; the lookup is over the caller's own and
+// shared connections, so any match is one they may spend.
+func (h *AIHandler) adapterConnectionID(r *http.Request, userID, adapter string) string {
+	adapter = strings.TrimSpace(adapter)
+	if adapter == "" {
+		return ""
+	}
+	connections, err := h.connections.ListFor(r.Context(), userID)
+	if err != nil {
+		return ""
+	}
+	for _, c := range connections {
+		if c.ID == adapter || strings.EqualFold(strings.TrimSpace(c.Name), adapter) {
+			return c.ID
+		}
+	}
+	return ""
+}
+
 // answeredWith is which model to record against an answer: the one the
 // provider reported, or the one the subscription is set to.
 //
