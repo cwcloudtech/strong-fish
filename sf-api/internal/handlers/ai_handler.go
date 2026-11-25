@@ -619,10 +619,16 @@ func (h *AIHandler) CWCloudAdapter(w http.ResponseWriter, r *http.Request) {
 }
 
 // adapterConnectionID resolves the `adapter` field to the id of the subscription
-// to spend: the one whose name or id it names, or "" to fall back to the
-// caller's first (which ask turns into Usable, the chat's own default). The
-// name match is case-insensitive; the lookup is over the caller's own and
-// shared connections, so any match is one they may spend.
+// to spend: the one it names, or "" to fall back to the caller's first (which
+// ask turns into Usable, the chat's own default). The lookup is over the
+// caller's own and shared connections, so any match is one they may spend.
+//
+// An id is matched exactly - a uuid is not something to match loosely - and
+// beats any name. A name is matched case-insensitively and by containment, so
+// "model" or "ig mod" both find "Big model"; but a name that IS the adapter
+// beats one that merely contains it, so a tenant with "test" and "test (big)"
+// gets "test" from "test". Ties below that fall to the list order (own before
+// shared, then position). Nothing matching leaves "" - the default stands.
 func (h *AIHandler) adapterConnectionID(r *http.Request, userID, adapter string) string {
 	adapter = strings.TrimSpace(adapter)
 	if adapter == "" {
@@ -632,12 +638,26 @@ func (h *AIHandler) adapterConnectionID(r *http.Request, userID, adapter string)
 	if err != nil {
 		return ""
 	}
+	needle := strings.ToLower(adapter)
+	var exactName, substring string
 	for _, c := range connections {
-		if c.ID == adapter || strings.EqualFold(strings.TrimSpace(c.Name), adapter) {
+		if c.ID == adapter {
 			return c.ID
 		}
+		name := strings.ToLower(strings.TrimSpace(c.Name))
+		switch {
+		case name == needle:
+			if exactName == "" {
+				exactName = c.ID
+			}
+		case substring == "" && name != "" && strings.Contains(name, needle):
+			substring = c.ID
+		}
 	}
-	return ""
+	if exactName != "" {
+		return exactName
+	}
+	return substring
 }
 
 // answeredWith is which model to record against an answer: the one the
