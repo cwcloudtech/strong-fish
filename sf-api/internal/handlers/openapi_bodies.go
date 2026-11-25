@@ -138,6 +138,7 @@ func EndpointDocs() map[string]openapi.EndpointDoc {
 
 		// --- AI assistant (chat + conversations) ---
 		"POST /v1/ai/chat":                           body(chatPayload{}),
+		"POST /v1/ai/cwcloud/adapter":                body(cwAdapterPayload{}),
 		"POST /v1/ai/conversations/delete":           body(deleteConversationsPayload{}),
 		"PUT /v1/ai/conversations/{conversationId}/": body(conversationTitlePayload{}),
 
