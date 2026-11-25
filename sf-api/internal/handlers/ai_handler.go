@@ -634,45 +634,73 @@ func (h *AIHandler) CWCloudAdapter(w http.ResponseWriter, r *http.Request) {
 }
 
 // adapterConnectionID resolves the `adapter` field to the id of the subscription
-// to spend: the one it names, or "" to fall back to the caller's first (which
-// ask turns into Usable, the chat's own default). The lookup is over the
-// caller's own and shared connections, so any match is one they may spend.
-//
-// An id is matched exactly - a uuid is not something to match loosely - and
-// beats any name. A name is matched case-insensitively and by containment, so
-// "model" or "ig mod" both find "Big model"; but a name that IS the adapter
-// beats one that merely contains it, so a tenant with "test" and "test (big)"
-// gets "test" from "test". Ties below that fall to the list order (own before
-// shared, then position). Nothing matching leaves "" - the default stands.
+// to spend, or "" to fall back to the caller's first (which ask turns into
+// Usable, the chat's own default). The lookup is over the caller's own and
+// shared connections, so any match is one they may spend.
 func (h *AIHandler) adapterConnectionID(r *http.Request, userID, adapter string) string {
-	adapter = strings.TrimSpace(adapter)
-	if adapter == "" {
+	if strings.TrimSpace(adapter) == "" {
 		return ""
 	}
 	connections, err := h.connections.ListFor(r.Context(), userID)
 	if err != nil {
 		return ""
 	}
-	needle := strings.ToLower(adapter)
-	var exactName, substring string
+	return matchAdapterConnection(adapter, connections)
+}
+
+// matchAdapterConnection picks the subscription a CWCloud `adapter` label names,
+// or "" when none fits.
+//
+// The adapter is a label written in cwcloud's own catalogue ("strong-fish big
+// model", "coach (claude)"), so the containment runs the caller's way round:
+// the ADAPTER carries the subscription's name or id, not the other way. "big"
+// does not find "Big model" - somebody asking for "big" did not ask for it -
+// but "ask the big model please" does.
+//
+// Most certain first: the adapter IS an id, then IS a name (case-insensitive),
+// then CONTAINS an id, then CONTAINS a name - the longest such name, so an
+// adapter carrying "my daily driver setup" takes "Daily driver" over "driver".
+// Ties below the longest-name rule fall to the list order (own before shared,
+// then position). A blank name matches nothing, so it is never read as carried
+// by every adapter. Nothing matching leaves "" - the default subscription stands.
+func matchAdapterConnection(adapter string, connections []models.AIConnection) string {
+	adapter = strings.TrimSpace(adapter)
+	if adapter == "" {
+		return ""
+	}
+	lower := strings.ToLower(adapter)
+
+	var exactName, containsID, longestName string
+	longestLen := 0
 	for _, c := range connections {
-		if c.ID == adapter {
+		// The adapter IS the id: a uuid is unique, so this is the answer.
+		if strings.EqualFold(c.ID, adapter) {
 			return c.ID
 		}
-		name := strings.ToLower(strings.TrimSpace(c.Name))
+		name := strings.TrimSpace(c.Name)
 		switch {
-		case name == needle:
+		case name != "" && strings.EqualFold(name, adapter):
 			if exactName == "" {
 				exactName = c.ID
 			}
-		case substring == "" && name != "" && strings.Contains(name, needle):
-			substring = c.ID
+		case c.ID != "" && strings.Contains(lower, strings.ToLower(c.ID)):
+			if containsID == "" {
+				containsID = c.ID
+			}
+		case name != "" && strings.Contains(lower, strings.ToLower(name)):
+			if len(name) > longestLen {
+				longestLen, longestName = len(name), c.ID
+			}
 		}
 	}
-	if exactName != "" {
+	switch {
+	case exactName != "":
 		return exactName
+	case containsID != "":
+		return containsID
+	default:
+		return longestName
 	}
-	return substring
 }
 
 // answeredWith is which model to record against an answer: the one the
