@@ -954,6 +954,26 @@ func (h *AIHandler) ask(w http.ResponseWriter, r *http.Request, userID, connecti
 	return answer, true
 }
 
+// noToolsRule replaces the tools for a provider that has none (CWCloud's
+// prompt API today). It is deliberately blunt: the alternative to saying this
+// is an assistant that reports sets it never read.
+const noToolsRule = `# No tools in this configuration
+
+The AI connection answering this question reaches a provider that cannot call ` +
+	"tools, so `strong_fish_api` is NOT available to you on this turn, whatever " +
+	`the rest of these instructions say about it.
+
+Answer from the conversation and the member context above, and from nothing ` +
+	`else. Where an answer would need their own rows - a programme's days, a ` +
+	`logged set, a bar-speed history, a 1RM you have not been given - say plainly ` +
+	`that you cannot read them through this connection and name the screen that ` +
+	`holds them: "My training" for programmes and logged sessions, "My 1RMs" for ` +
+	`maxes, "Fitness data" for steps, sleep and body composition. Never say you ` +
+	`looked something up, never produce a figure as if it came from their data, ` +
+	`and never claim to have recorded a session - recording one takes a tool you ` +
+	`do not have, so tell them to log it on the session screen themselves. Never ` +
+	`offer a file or a download link: a file can only be produced by a tool.`
+
 // maxToolRounds bounds the agent loop: how many times the model may call tools
 // before it must answer. Each round is one more provider call, so it is kept
 // small; after the cap a final call is made with the tools withheld, so the
@@ -968,6 +988,18 @@ const maxToolRounds = 4
 // is a plain chat.
 func (h *AIHandler) converse(r *http.Request, connection models.AIConnection,
 	request ai.Request) (ai.Response, error) {
+	// A format that cannot be handed tools is asked without them, and told
+	// so. Here rather than at each call site because here is the one place
+	// every feature's question passes through, and because the connection -
+	// and so its format - is only known once it has been resolved. The skill
+	// spends paragraphs on reading the API before answering, and a model given
+	// those instructions with no way to obey them does not stay silent about
+	// it: it says it looked something up, or that it logged the set.
+	if !models.AIFormatSupportsTools(connection.Format) {
+		request.Tools = nil
+		request.System = strings.TrimRight(request.System, "\n") + "\n\n" + noToolsRule
+	}
+
 	var spent ai.Usage
 	for round := 0; round < maxToolRounds; round++ {
 		answer, err := h.client.Ask(r.Context(), connection, request)

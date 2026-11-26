@@ -2,21 +2,24 @@
 // the model call back for help - strong-fish's own API as a tool - before it
 // answers.
 //
-// Three wire formats, not three vendors. OpenAI's chat-completions is also
-// what Mistral, DeepSeek, OpenRouter, Groq, Ollama and LiteLLM speak, so a
-// member pointing their "anthropic" connection at a local gateway is a change
-// of URL and nothing else. What the format decides is the shape of the request
-// body and where the key goes - a header named differently, a system prompt
-// that is a field rather than a message - and that is all this package knows.
+// Four wire formats, not four vendors. OpenAI's chat-completions is also what
+// Mistral, DeepSeek, OpenRouter, Groq, Ollama and LiteLLM speak, so a member
+// pointing their "anthropic" connection at a local gateway is a change of URL
+// and nothing else. What the format decides is the shape of the request body
+// and where the key goes - a header named differently, a system prompt that is
+// a field rather than a message - and that is all this package knows. The
+// fourth, CWCloud's prompt API, is not a vendor but a layer over them.
 //
-// Tool calling is the second thing the format decides. All three protocols let
-// a request carry a list of functions the model may call, answer with a call
-// rather than prose, and take the call's result back in the next turn - but
-// each spells it differently: OpenAI's tool_calls / role=tool messages,
+// Tool calling is the second thing the format decides. Three of the protocols
+// let a request carry a list of functions the model may call, answer with a
+// call rather than prose, and take the call's result back in the next turn -
+// but each spells it differently: OpenAI's tool_calls / role=tool messages,
 // Anthropic's tool_use / tool_result content blocks, Gemini's functionCall /
 // functionResponse parts. This package normalizes the three into Tool /
 // ToolCall / Turn so the caller runs one agent loop whatever the provider. A
-// request with no tools behaves exactly as a plain chat.
+// request with no tools behaves exactly as a plain chat - which is the only
+// way CWCloud's format can be asked anything at all, because it has no tools
+// to offer (see models.AIFormatSupportsTools).
 //
 // Nothing here is streamed. A coach reading a paragraph about their session
 // does not need it a token at a time, and an endpoint that answers once is one
@@ -244,9 +247,216 @@ func (c *Client) Ask(ctx context.Context, connection models.AIConnection, reques
 		return c.askAnthropic(ctx, connection, model, request)
 	case models.AIFormatGemini:
 		return c.askGemini(ctx, connection, model, request)
+	case models.AIFormatCWCloud:
+		return c.askCWCloud(ctx, connection, model, request)
 	default:
 		return c.askOpenAI(ctx, connection, model, request)
 	}
+}
+
+// --- CWCloud's prompt API (CWAI) -------------------------------------------
+//
+// Not a vendor but a layer over them: one CWCloud key reaches whichever
+// adapters that account is granted - a Mistral, a Claude, a Gemini - and the
+// one this question goes to is named in `adapter`, which is why a connection's
+// "model" here is an adapter name rather than a vendor's model id.
+//
+// Three things about the protocol are worth knowing while reading this:
+//
+//   - **A turn's text is in `message`**, not `content`, and the request
+//     carries no system field. CWAI maps a `system` role onto an assistant
+//     turn, so the instructions arrive as the first thing the assistant is
+//     taken to have said. That is the whole of what this format can do with a
+//     system prompt, and it is said here rather than discovered later.
+//   - **The answer is `response`, a string OR an array of strings**, which the
+//     clients join with newlines. Both shapes come back from the same endpoint
+//     depending on the adapter behind it.
+//   - **It answers 201**, and a refusal is `{"status":"ko", ...}` with the HTTP
+//     code to match - 424 when the model *behind* CWAI failed, and then the
+//     real cause is in `upstream.body`, which is the sentence the member needs
+//     rather than the wrapper around it.
+//
+// There are no tools: see models.AIFormatSupportsTools.
+
+// cwcloudMessage is one turn in CWAI's shape.
+type cwcloudMessage struct {
+	Role    string `json:"role"`
+	Message string `json:"message"`
+}
+
+// cwcloudPromptPath is appended to a base URL that does not already name the
+// endpoint. The catalogue's default is the full address
+// (https://api.cwcloud.tech/v1/ai/prompt), because that is what CWCloud's own
+// documentation gives people to paste; somebody who pastes the host alone, or
+// the /v1 root, gets the same call rather than a 404 they have to decode.
+const cwcloudPromptPath = "/v1/ai/prompt"
+
+// cwcloudEndpoint works out what to append to the configured base URL.
+func cwcloudEndpoint(baseURL string) string {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	switch {
+	case strings.HasSuffix(base, "/ai/prompt"):
+		return ""
+	case strings.HasSuffix(base, "/v1"):
+		return "/ai/prompt"
+	default:
+		return cwcloudPromptPath
+	}
+}
+
+func (c *Client) askCWCloud(ctx context.Context, connection models.AIConnection,
+	model string, request Request) (Response, error) {
+	messages := make([]cwcloudMessage, 0, len(request.Messages)+1)
+	// The system prompt first, as a system turn: CWAI will relabel it as an
+	// assistant turn, which is the closest thing it has to an instruction.
+	if strings.TrimSpace(request.System) != "" {
+		messages = append(messages, cwcloudMessage{
+			Role: models.ChatRoleSystem, Message: request.System,
+		})
+	}
+	for _, turn := range request.Messages {
+		// A tool result cannot arise here - no tools are ever offered to this
+		// format - and a turn with no text would be refused as empty.
+		if turn.Role == RoleTool || strings.TrimSpace(turn.Text) == "" {
+			continue
+		}
+		role := models.ChatRoleUser
+		if turn.Role == models.ChatRoleAssistant {
+			role = models.ChatRoleAssistant
+		}
+		messages = append(messages, cwcloudMessage{Role: role, Message: turn.Text})
+	}
+
+	var parsed struct {
+		Status string `json:"status"`
+		// Response is a string or an array of them, so it is read raw.
+		Response json.RawMessage `json:"response"`
+		Model    string          `json:"model"`
+		Usage    struct {
+			Prompt     int64 `json:"prompt"`
+			Completion int64 `json:"completion"`
+			Total      int64 `json:"total"`
+			Cached     int64 `json:"cached"`
+		} `json:"usage"`
+		Error    string `json:"error"`
+		I18nCode string `json:"i18n_code"`
+		CID      string `json:"cid"`
+	}
+
+	err := c.call(ctx, connection, cwcloudEndpoint(connection.BaseURL), map[string]string{
+		"X-Auth-Token": connection.Token,
+	}, struct {
+		Adapter  string           `json:"adapter"`
+		Messages []cwcloudMessage `json:"messages"`
+		Settings map[string]any   `json:"settings"`
+		// CWCloud keeps its own prompt history by default. This app keeps the
+		// conversation itself, and a model call made on a member's behalf has
+		// no business filling somebody's CWCloud history with it.
+		EnableHistory bool `json:"enable_history"`
+	}{
+		Adapter: model, Messages: messages,
+		Settings:      map[string]any{"max_tokens": request.MaxTokens},
+		EnableHistory: false,
+	}, &parsed)
+	if err != nil {
+		return Response{}, cwcloudFailure(err)
+	}
+
+	// A refusal can also arrive with a 2xx, since the verdict is in the body.
+	if parsed.Status != "" && !strings.EqualFold(parsed.Status, "ok") {
+		return Response{}, ErrRefused{
+			Status: http.StatusFailedDependency,
+			Detail: snippet([]byte(firstText(parsed.Error, parsed.I18nCode,
+				"CWCloud refused the request"))),
+		}
+	}
+
+	answer := cwcloudAnswer(parsed.Response)
+	if strings.TrimSpace(answer) == "" {
+		return Response{}, errors.New("ai: the provider returned no answer")
+	}
+	return Response{
+		Message: strings.TrimSpace(answer),
+		// The model CWCloud actually spent, when it says - otherwise the
+		// adapter's own name, which is what the member chose.
+		Model: firstText(parsed.Model, model),
+		// CWAI's own vocabulary is prompt/completion/cached, so the counts are
+		// read off the struct rather than through UsageOf, which looks for the
+		// three vendors' names and would bill this member zero. They are
+		// republished under OpenAI's names so a stored exchange and the
+		// token notice read the same whatever answered.
+		Usage: map[string]any{
+			"prompt_tokens": parsed.Usage.Prompt, "completion_tokens": parsed.Usage.Completion,
+			"total_tokens": parsed.Usage.Total, "cached_tokens": parsed.Usage.Cached,
+		},
+		Tokens: Usage{
+			Input: parsed.Usage.Prompt, Output: parsed.Usage.Completion, Cached: parsed.Usage.Cached,
+		},
+	}, nil
+}
+
+// cwcloudAnswer reads the answer, which is a string or an array of them.
+func cwcloudAnswer(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		return text
+	}
+	var parts []string
+	if json.Unmarshal(raw, &parts) == nil {
+		return strings.Join(parts, "\n")
+	}
+	return ""
+}
+
+// cwcloudFailure unwraps the cause from a CWAI refusal. When the model behind
+// CWCloud is what failed, CWAI answers 424 carrying the provider's own status
+// and body; "401 Incorrect API key" is what the member can act on, and the
+// wrapper around it is not.
+func cwcloudFailure(err error) error {
+	var refused ErrRefused
+	if !errors.As(err, &refused) {
+		return err
+	}
+	var body struct {
+		Error    string `json:"error"`
+		I18nCode string `json:"i18n_code"`
+		Upstream struct {
+			HTTPCode *int   `json:"http_code"`
+			Body     string `json:"body"`
+			Source   string `json:"source"`
+			Adapter  string `json:"adapter"`
+		} `json:"upstream"`
+	}
+	if json.Unmarshal([]byte(refused.Detail), &body) != nil {
+		return err
+	}
+	switch {
+	case strings.TrimSpace(body.Upstream.Body) != "":
+		detail := body.Upstream.Body
+		if body.Upstream.HTTPCode != nil {
+			detail = fmt.Sprintf("the model behind %s answered %d: %s",
+				firstText(body.Upstream.Adapter, "CWCloud"), *body.Upstream.HTTPCode, detail)
+		}
+		refused.Detail = snippet([]byte(detail))
+	case strings.TrimSpace(body.Error) != "":
+		refused.Detail = snippet([]byte(body.Error))
+	case strings.TrimSpace(body.I18nCode) != "":
+		refused.Detail = body.I18nCode
+	}
+	return refused
+}
+
+// firstText is the first of these that says something, trimmed.
+func firstText(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 // --- OpenAI-compatible (also Mistral, LiteLLM, Ollama, OpenRouter...) ---

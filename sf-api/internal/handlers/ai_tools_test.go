@@ -8,6 +8,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"strong-fish-api/internal/ai"
+	"strong-fish-api/internal/models"
+	"strong-fish-api/internal/templates"
 )
 
 // TestWriteAllowed pins the write allowlist: only the session-recording
@@ -22,7 +26,7 @@ func TestWriteAllowed(t *testing.T) {
 		{"PUT", "/v1/training/a1/days/d1/log", true},
 		{"PUT", "/v1/training/a1/status", true},
 		{"POST", "/v1/training/a1/status", true},
-		{"GET", "/v1/training/a1/status", false}, // a read is not a write
+		{"GET", "/v1/training/a1/status", false},  // a read is not a write
 		{"PUT", "/v1/training/a1/sets/s1", false}, // not the log sub-path
 		{"DELETE", "/v1/training/a1/sets/s1/log", false},
 		{"PUT", "/v1/training/a1/days/d1/feedback", false},
@@ -257,5 +261,99 @@ func TestToolsOfferedOnlyWithLoopback(t *testing.T) {
 	h := NewAIHandler(nil, nil, nil, "").WithLoopback("http://127.0.0.1:8080")
 	if len(h.tools()) != 1 || h.tools()[0].Name != toolSfAPIName {
 		t.Errorf("expected the single %s tool, got %v", toolSfAPIName, h.tools())
+	}
+}
+
+// TestAFormatWithoutToolsIsToldSo is the whole reason models.AIFormatSupportsTools
+// exists. CWCloud's prompt API cannot be handed a function, so the catalogue is
+// withheld - and the model is told, because the skill spends paragraphs on
+// reading the API before answering and one given those instructions with no way
+// to obey them does not stay silent: it claims it looked something up, or worse,
+// that it recorded the session.
+func TestAFormatWithoutToolsIsToldSo(t *testing.T) {
+	var calls int
+	var sent map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		_ = json.NewDecoder(r.Body).Decode(&sent)
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"status":"ok","response":"Open My training to see the block."}`))
+	}))
+	defer server.Close()
+
+	h := NewAIHandler(nil, nil, nil, "").WithLoopback("http://127.0.0.1:8080")
+	if len(h.tools()) == 0 {
+		t.Fatal("the tool should be offered with a loopback base, or this test proves nothing")
+	}
+	answer, err := h.converse(httptest.NewRequest(http.MethodPost, "/v1/ai/chat", nil),
+		models.AIConnection{
+			Provider: "cwcloud", Format: models.AIFormatCWCloud, BaseURL: server.URL,
+			Model: "claude-sonnet", Token: "cwc-key", MaxTokens: 512,
+		}, ai.Request{
+			System:   templates.CoachSkill + "\n\n" + templates.AssistantToolSkill,
+			Messages: []ai.Turn{ai.TurnOf(models.ChatRoleUser, "what is my block?")},
+			Tools:    h.tools(),
+		})
+	if err != nil {
+		t.Fatalf("converse: %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("calls = %d, want one - with no tools there is no round to loop over", calls)
+	}
+	if answer.Message == "" {
+		t.Error("the answer should still be prose")
+	}
+	if _, ok := sent["tools"]; ok {
+		t.Errorf("the catalogue was sent to a format that cannot call it: %+v", sent)
+	}
+
+	turns, _ := sent["messages"].([]any)
+	if len(turns) == 0 {
+		t.Fatal("nothing was sent")
+	}
+	system, _ := turns[0].(map[string]any)
+	instructions, _ := system["message"].(string)
+	if !strings.Contains(instructions, "No tools in this configuration") {
+		t.Errorf("the instructions do not say the tools are gone: %q", instructions)
+	}
+	// The three claims a tool-less assistant must not make.
+	for _, want := range []string{"NOT available to you", "Never say you looked something up",
+		"never claim to have recorded a session"} {
+		if !strings.Contains(instructions, want) {
+			t.Errorf("the no-tools rule is missing %q", want)
+		}
+	}
+}
+
+// And the contrast: a format that does take tools is handed them, with no rule
+// telling it otherwise.
+func TestAFormatWithToolsKeepsThem(t *testing.T) {
+	var sent map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&sent)
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"Three sets."}}]}`))
+	}))
+	defer server.Close()
+
+	h := NewAIHandler(nil, nil, nil, "").WithLoopback("http://127.0.0.1:8080")
+	if _, err := h.converse(httptest.NewRequest(http.MethodPost, "/v1/ai/chat", nil),
+		models.AIConnection{
+			Provider: "openai", Format: models.AIFormatOpenAI, BaseURL: server.URL,
+			Model: "gpt-4o-mini", Token: "sk-test", MaxTokens: 512,
+		}, ai.Request{
+			System:   "you are the coach",
+			Messages: []ai.Turn{ai.TurnOf(models.ChatRoleUser, "what is my block?")},
+			Tools:    h.tools(),
+		}); err != nil {
+		t.Fatalf("converse: %v", err)
+	}
+
+	if _, ok := sent["tools"]; !ok {
+		t.Errorf("the catalogue should have been offered: %+v", sent)
+	}
+	messages, _ := sent["messages"].([]any)
+	system, _ := messages[0].(map[string]any)
+	if instructions, _ := system["content"].(string); strings.Contains(instructions, "No tools") {
+		t.Errorf("a format that has tools must not be told it has none: %q", instructions)
 	}
 }

@@ -7,15 +7,34 @@ import (
 
 // The wire formats a provider can speak.
 //
-// Three cover every provider worth naming, which is why the catalogue stores
-// one of these rather than a vendor: what differs between OpenAI, Mistral,
+// Three cover every vendor worth naming, which is why the catalogue stores one
+// of these rather than a vendor: what differs between OpenAI, Mistral,
 // DeepSeek, OpenRouter, a LiteLLM and an Ollama is the address, not the
-// protocol. Only Claude and Gemini need a format of their own.
+// protocol. Only Claude and Gemini need a format of their own. The fourth is
+// not a vendor at all.
 const (
 	AIFormatOpenAI    = "openai"
 	AIFormatAnthropic = "anthropic"
 	AIFormatGemini    = "gemini"
+	// AIFormatCWCloud is CWCloud's own prompt API (CWAI), which is a layer
+	// over the vendors rather than one of them: one key reaches whichever
+	// adapters the CWCloud account is granted, and the model is named in an
+	// `adapter` field. It answers prose and nothing else - see
+	// AIFormatSupportsTools.
+	AIFormatCWCloud = "cwcloud"
 )
+
+// AIFormatSupportsTools reports whether a format can be handed this app's own
+// tools and asked to call them.
+//
+// CWAI cannot: its prompt API takes a transcript and returns an answer, with no
+// way to declare a function or to receive a call. That is not a gap to work
+// around - the assistant answers from the transcript and the member context
+// instead - but it has to be known before the question is asked, so the model
+// is never told to read endpoints it has no way to reach.
+func AIFormatSupportsTools(format string) bool {
+	return strings.TrimSpace(format) != AIFormatCWCloud
+}
 
 // AIProviderInfo is one row of the provider catalogue (see the ai_providers
 // table): where a provider lives, how to talk to it, and what it serves.

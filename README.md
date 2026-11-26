@@ -669,9 +669,41 @@ The providers themselves are a **table**, not a switch statement
 address, its default model, the models worth suggesting and what its key looks
 like. Six rows ship - OpenAI, Mistral, Anthropic, Gemini, OpenRouter and
 DeepSeek, the ones [cwclock](https://gitlab.cwcloud.tech/oss/cwclock) speaks to
-- and adding a seventh OpenAI-compatible service is an `INSERT`, with nothing
-to write in Go. Three wire formats cover all of them: OpenAI's
+- and adding another OpenAI-compatible service is an `INSERT`, with nothing to
+write in Go. Three wire formats cover all of them: OpenAI's
 `/chat/completions`, Anthropic's `/messages`, Gemini's `generateContent`.
+
+**CWCloud (CWAI) is the seventh row** (`V28`), and the only one that is not a
+vendor: it is comwork's own prompt API in front of them, so one CWCloud key
+reaches whichever adapters that account has been granted. It earns its place
+for the coach who already pays comwork and would rather not open a second
+account with a model vendor as well. Its protocol is its own, which is why it
+is a fourth wire format rather than another row aimed at an OpenAI-shaped URL -
+the model travels in an `adapter` field (so what a connection calls its
+"model" is an adapter name over there), a turn's text is in `message` rather
+than `content`, there is no system role (CWAI relabels one as an assistant
+turn, which is the whole of what a system prompt can be here), the answer comes
+back in `response` as a string *or* a list of them, the call answers `201`, and
+a verdict of `ko` can arrive on a `2xx` - so the body is read as well as the
+status. A failure of the model *behind* CWCloud is a `424` whose
+`upstream.body` holds the real cause, which the client unwraps so the member
+reads "the model behind claude-sonnet answered 401: Incorrect API key" instead
+of the envelope around it. `enable_history` is sent `false`: this app keeps the
+conversation, and a call made on a member's behalf has no business filling
+somebody's CWCloud prompt history.
+
+The one thing it cannot do is **tools**. CWAI takes a transcript and returns
+prose, with no way to declare a function or to receive a call, so a question
+asked through it is asked with the catalogue withheld *and* with a paragraph
+saying so - otherwise an assistant that has been told at length to call
+`strong_fish_api` before answering reports sets and sessions it never read, and
+may claim to have recorded one. `models.AIFormatSupportsTools` is the single
+place that answers whether a format may be handed tools; `converse` is the
+single place that acts on it, so every feature's question - the chat, the
+CWCloud adapter, a session review, a fitness reading - is covered at once.
+Through CWCloud the assistant answers from the conversation and the member
+context, names the screen that holds what it cannot reach ("My training",
+"My 1RMs", "Fitness data"), and offers no downloads.
 
 What the table says about models is a **suggestion, never a constraint**. The
 form autocompletes from it and takes anything the member types: a vendor ships
