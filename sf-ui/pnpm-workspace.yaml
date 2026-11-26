@@ -1,0 +1,14 @@
+# A single-package "workspace" used only to carry pnpm settings the image's
+# pnpm (12, from `npm i -g pnpm`) reads from here rather than from package.json.
+# packages: ['.'] so the homebrew pnpm (10) accepts a settings-only file too.
+packages:
+  - '.'
+# pnpm 12's own default, written down so the RESOLVER avoids versions published
+# in the last day instead of pinning them and failing the image build's
+# --frozen-lockfile with ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION.
+minimumReleaseAge: 1440
+# The only install scripts a react-scripts tree asks to run; core-js' is a
+# funding banner, harmless to allow.
+allowBuilds:
+  core-js: true
+  core-js-pure: true

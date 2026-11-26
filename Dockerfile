@@ -13,7 +13,7 @@ RUN npm i -g pnpm
 # .npmrc pins node-linker=hoisted: react-scripts' eslint setup resolves
 # eslint-config-react-app twice under pnpm's symlinked store ("Plugin react was
 # conflicted") and needs a flat node_modules, as npm gave it.
-COPY sf-ui/package.json sf-ui/pnpm-lock.yaml sf-ui/.npmrc ./
+COPY sf-ui/package.json sf-ui/pnpm-lock.yaml sf-ui/.npmrc sf-ui/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY sf-ui/ ./
 COPY manifest.json ./manifest.json
@@ -25,7 +25,7 @@ RUN pnpm run build:docker
 FROM node:${NODE_IMAGE_TAG} AS wiki-build
 WORKDIR /app
 RUN npm i -g pnpm
-COPY sf-wiki/package.json sf-wiki/pnpm-lock.yaml ./
+COPY sf-wiki/package.json sf-wiki/pnpm-lock.yaml sf-wiki/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY sf-wiki/ ./
 RUN pnpm run build
