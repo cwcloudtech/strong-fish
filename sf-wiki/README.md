@@ -6,9 +6,9 @@ from the same pipeline as the rest of the repository (see the `wiki` stage in
 the root `Dockerfile`).
 
 ```shell
-npm install
-npm start          # http://localhost:3000
-npm run build      # both locales
+pnpm install
+pnpm start          # http://localhost:3000
+pnpm run build      # both locales
 ```
 
 ## What is here
@@ -26,7 +26,7 @@ not in `i18n/fr/` renders in English on the French site. Adding a page means
 adding both.
 
 The navbar and footer strings live in `i18n/fr/docusaurus-theme-classic/`;
-regenerate the skeletons with `npm run write-translations -- --locale fr` after
+regenerate the skeletons with `pnpm run write-translations -- --locale fr` after
 changing the navbar.
 
 ## Note on the webpack pin

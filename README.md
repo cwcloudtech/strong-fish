@@ -118,7 +118,7 @@ failing a registration. Two more knobs are worth knowing:
 
 ```shell
 cd sf-api && go run .
-cd sf-ui && npm install && npm start
+cd sf-ui && pnpm install && pnpm start
 cd sf-mobile && flutter run
 ```
 
@@ -266,9 +266,9 @@ JSONB payload, so the schema stays stable while the domain grows.
 
 ```shell
 cd sf-api && go test ./...
-cd sf-ui && CI=true npm run build
+cd sf-ui && CI=true pnpm run build
 cd sf-mobile && flutter analyze
-cd sf-wiki && npm run build
+cd sf-wiki && pnpm run build
 ```
 
 The API's tests cover the load calculation against the reference spreadsheet's

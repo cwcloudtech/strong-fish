@@ -9,21 +9,26 @@ ARG FLUTTER_IMAGE_TAG=3.44.0
 # Stage ui build
 FROM node:${NODE_IMAGE_TAG} AS ui-build
 WORKDIR /app
-COPY sf-ui/package.json sf-ui/package-lock.json ./
-RUN npm ci
+RUN npm i -g pnpm
+# .npmrc pins node-linker=hoisted: react-scripts' eslint setup resolves
+# eslint-config-react-app twice under pnpm's symlinked store ("Plugin react was
+# conflicted") and needs a flat node_modules, as npm gave it.
+COPY sf-ui/package.json sf-ui/pnpm-lock.yaml sf-ui/.npmrc ./
+RUN pnpm install --frozen-lockfile
 COPY sf-ui/ ./
 COPY manifest.json ./manifest.json
-RUN npm run build:docker
+RUN pnpm run build:docker
 
 # Stage wiki build: the Docusaurus documentation site (sf-wiki), served on its
 # own domain rather than from the app - it is public, static, and changes on a
 # different rhythm than the product.
 FROM node:${NODE_IMAGE_TAG} AS wiki-build
 WORKDIR /app
-COPY sf-wiki/package.json sf-wiki/package-lock.json ./
-RUN npm ci
+RUN npm i -g pnpm
+COPY sf-wiki/package.json sf-wiki/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 COPY sf-wiki/ ./
-RUN npm run build
+RUN pnpm run build
 
 # Stage api build
 FROM golang:${GOLANG_IMAGE_TAG} AS api-build
