@@ -662,96 +662,78 @@ func (h *AIHandler) CWCloudAdapter(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-// adapterConnectionID resolves the `adapter` field to the id of the subscription
-// to spend. The lookup is over the caller's own and shared connections, so any
-// result is one they may spend; "" only when they have none, which ask turns
-// into "connect a provider first".
+// adapterConnectionID resolves the `adapter` field to a subscription id: the
+// caller's connection whose name or id the adapter carries (contained,
+// case-insensitive), or "" to let the default (first) be used — matching the
+// spec's "if it's not matching, take the first subscription".
 func (h *AIHandler) adapterConnectionID(r *http.Request, userID, adapter string) string {
+	if strings.TrimSpace(adapter) == "" {
+		return ""
+	}
 	connections, err := h.connections.ListFor(r.Context(), userID)
 	if err != nil {
 		return ""
 	}
-	return pickAdapterConnection(adapter, connections)
+	return pickAdapterConnection(connections, adapter)
 }
 
-// pickAdapterConnection chooses the subscription id a CWCloud adapter call
-// spends: the one the adapter names, or - when it names none - the member's
-// first in their own order (owner-first, then position).
+// pickAdapterConnection is which subscription an `adapter` string names, out of
+// the ones the caller may spend (ListFor order: their own before the ones shared
+// with them, then position/created_at).
 //
-// The fallback prefers a subscription that has a key saved. The member's first
-// slot may be a placeholder with no credential, and spending that one would
-// answer "connect a provider first" while a connected subscription sits right
-// behind it; so the first key-bearing one is taken, falling back to the very
-// first only when none has a key (then the error is a truthful one). "" only
-// when there are no subscriptions at all.
-func pickAdapterConnection(adapter string, connections []models.AIConnection) string {
-	if len(connections) == 0 {
-		return ""
-	}
-	if id := matchAdapterConnection(adapter, connections); id != "" {
-		return id
-	}
-	for _, c := range connections {
-		if c.HasToken {
-			return c.ID
-		}
-	}
-	return connections[0].ID
-}
-
-// matchAdapterConnection picks the subscription a CWCloud `adapter` label names,
-// or "" when none fits.
+// The containment runs adapter-side: `adapter` is a label somebody writes in
+// CWCloud's own catalogue ("strong-fish big model", "coach (claude)"),
+// and what it has to carry is enough to say which subscription is meant — its
+// name or its id, case-insensitively, both sides trimmed. So "strong-fish big model"
+// finds a subscription called "Big model", while a bare "big" finds nothing and
+// falls back. NOT the other way round: a subscription called "Big model" is not
+// what somebody asking for "big" asked for.
 //
-// The adapter is a label written in cwcloud's own catalogue ("strong-fish big
-// model", "coach (claude)"), so the containment runs the caller's way round:
-// the ADAPTER carries the subscription's name or id, not the other way. "big"
-// does not find "Big model" - somebody asking for "big" did not ask for it -
-// but "ask the big model please" does.
+// Several subscriptions can be carried by one label, so the tiers run from the
+// most certain to the least: the adapter IS the id, the adapter IS the name, the
+// adapter contains the id, then the longest name it contains — "daily driver"
+// carries both "daily driver" and "driver" and means the longer one. Within a
+// tier the list's own order decides, which keeps the pick stable. A blank name is
+// never contained by anything, or it would answer every adapter.
 //
-// Most certain first: the adapter IS an id, then IS a name (case-insensitive),
-// then CONTAINS an id, then CONTAINS a name - the longest such name, so an
-// adapter carrying "my daily driver setup" takes "Daily driver" over "driver".
-// Ties below the longest-name rule fall to the list order (own before shared,
-// then position). A blank name matches nothing, so it is never read as carried
-// by every adapter. Nothing matching leaves "" - the default subscription stands.
-func matchAdapterConnection(adapter string, connections []models.AIConnection) string {
+// Resolving in Go (not SQL) means a non-uuid adapter name never reaches a uuid
+// cast, and a name holding a `%` or `_` is matched as those characters rather
+// than as a pattern. "" when nothing matches at all, which leaves the default
+// subscription to answer.
+func pickAdapterConnection(connections []models.AIConnection, adapter string) string {
 	adapter = strings.TrimSpace(adapter)
 	if adapter == "" {
 		return ""
 	}
-	lower := strings.ToLower(adapter)
+	label := strings.ToLower(adapter)
 
-	var exactName, containsID, longestName string
-	longestLen := 0
+	var exactName, carriedID, carriedName string
+	carriedNameLen := 0
 	for _, c := range connections {
-		// The adapter IS the id: a uuid is unique, so this is the answer.
-		if strings.EqualFold(c.ID, adapter) {
+		if c.ID == adapter {
 			return c.ID
 		}
 		name := strings.TrimSpace(c.Name)
-		switch {
-		case name != "" && strings.EqualFold(name, adapter):
-			if exactName == "" {
-				exactName = c.ID
-			}
-		case c.ID != "" && strings.Contains(lower, strings.ToLower(c.ID)):
-			if containsID == "" {
-				containsID = c.ID
-			}
-		case name != "" && strings.Contains(lower, strings.ToLower(name)):
-			if len(name) > longestLen {
-				longestLen, longestName = len(name), c.ID
-			}
+		lowerName := strings.ToLower(name)
+		if name != "" && lowerName == label && exactName == "" {
+			exactName = c.ID
+		}
+		if id := strings.ToLower(strings.TrimSpace(c.ID)); id != "" &&
+			strings.Contains(label, id) && carriedID == "" {
+			carriedID = c.ID
+		}
+		// The longest name the label carries wins, so a label holding "daily
+		// driver" is not answered by a subscription merely called "driver".
+		if name != "" && strings.Contains(label, lowerName) && len(lowerName) > carriedNameLen {
+			carriedName, carriedNameLen = c.ID, len(lowerName)
 		}
 	}
-	switch {
-	case exactName != "":
-		return exactName
-	case containsID != "":
-		return containsID
-	default:
-		return longestName
+	for _, id := range []string{exactName, carriedID, carriedName} {
+		if id != "" {
+			return id
+		}
 	}
+	return ""
 }
 
 // answeredWith is which model to record against an answer: the one the
